@@ -72,3 +72,67 @@ For optimization, the hub can pre-filter and only publish events a renderer is l
 ### Room and scope filtering for controllers
 
 Controllers should only receive data for rooms/scopes they are allowed to work on. Their announced location/scope data allows the hub to decide what room information and controls to expose to each controller connection.
+
+---
+
+## Data schema
+
+Events are packets sent from the hub to renderers inside a message envelope.
+
+```json
+{
+  "message": {
+    "location": [8.5417, 47.3769],
+    "events": [
+      {
+        "type": "light",
+        "scheduled": 1767225600000,
+        "position": [1.2, 0.0, -3.5],
+        "params": {
+          "color": { "x": 0.32, "y": 0.34, "Y": 0.8 },
+          "layer": 100,
+          "blend": "ADD",
+          "alpha": 1
+        }
+      }
+    ]
+  }
+}
+```
+
+Another valid message shape is a config packet (for example, hub -> renderer/controller):
+
+```json
+{
+  "message": {
+    "location": [8.5417, 47.3769],
+    "config": {
+      "type": "renderer",
+      "payload": {
+        "...": "config data"
+      }
+    }
+  }
+}
+```
+
+### Envelope and coordinate meaning
+
+- `location`: coarse planet coordinates (`[lon, lat]`) for the packet context.
+- `position`: local XYZ offset relative to `location` (not absolute planet coordinates).
+- `events`: ordered list of event objects to be interpreted by the renderer.
+- `config`: optional config envelope used for pushing effective module configuration.
+
+### Layering and blend behavior
+
+- `params.layer` controls compositing priority.
+- Higher layer numbers win and are overlaid on lower layers.
+- Final visual output still depends on `params.blend` (for example `ADD`, `ALPHA`, `MULTIPLY`) and `params.alpha`.
+- In short: layer decides draw order/precedence, blend mode decides how overlapping layers are mathematically combined.
+
+### Event dispatch model
+
+- `type` maps to an event handler class (for example, `LightEvent` for `type: "light"`).
+- The class defines and validates the expected `params` shape for that event kind.
+- The renderer dispatches each event to its class and executes behavior using the parsed `params`.
+- `scheduled` is the execution timestamp used by the renderer queue/scheduler.

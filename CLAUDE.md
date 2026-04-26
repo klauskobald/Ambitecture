@@ -230,3 +230,40 @@ All server-side processes must be supervised:
 - **Mobile-first CSS.** Base styles target small screens; breakpoints add desktop layout.
 - Config in YAML (not hardcoded). Listen port/host always come from `server.yml`.
 - `Logger` (`src/Logger.ts`) is the shared logging utility for hub-side code.
+- **Modules are self-contained.** No `../../` cross-module imports. Duplication is acceptable for now — shared utilities will be extracted into a proper shared package later.
+
+---
+
+## Coding Style
+
+### Structure and dispatch
+
+- Entry points (`index.ts`, `main.js`) are thin orchestrators — they wire things up and delegate; no business logic lives there.
+- Each WebSocket message type is handled by a dedicated class/file. The entry point routes by `type` using a handler map, never inline logic.
+- Event classes (`class: "light"`, etc.) are **imported dynamically** so new event types can be added without touching the dispatcher.
+
+```ts
+// dynamic event dispatch example
+const handler = await import(`./events/${event.class}Event`);
+handler.default.handle(event);
+```
+
+### Interfaces and types
+
+- Define proper interfaces or class hierarchies wherever the shape of data is non-trivial. Don't use anonymous object types for anything that crosses a function boundary.
+
+### Helper files
+
+- Formatting, color math (CIE conversions, gamut mapping), geo/spatial math, and DMX utilities each live in their own reusable file or class. No ad-hoc helpers scattered in business logic files.
+
+### Function design
+
+- Keep functions small and single-purpose. Prefer more functions with long, descriptive names over fewer large ones.
+- Use `switch`/`case` for any multi-branch dispatch on a discriminator value. Avoid `if / else if / else` chains.
+- Break complex boolean expressions into named constants before using them:
+
+```ts
+const isWithinRange = position.x > bounds.x0 && position.x < bounds.x1;
+const isActiveLayer  = event.params.layer >= currentLayer;
+if (isWithinRange && isActiveLayer) { ... }
+```

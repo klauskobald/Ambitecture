@@ -69,7 +69,7 @@ export class EventsHandler {
         const channelMap = fixture.fixtureProfile.params.dmx;
         for (const [offsetStr, channelDef] of Object.entries(channelMap)) {
             const offset = parseInt(offsetStr, 10);
-            const dmxChannel = fixture.dmxBaseChannel + offset + 1;
+            const dmxChannel = fixture.dmxBaseChannel + offset;
 
             switch (channelDef.function) {
                 case 'red':

@@ -2,9 +2,10 @@ host: localhost:3000
 
 testParams:
   001-blinker.ts:
-    # loop thru events array with interval and schedule them with time 0 (immediately shown when arriving at renderer) 
+    # Each cycle: send all events in one message. `scheduled` is ms relative to cycle start (converted to epoch ms: batchStart + scheduled).
+    # `interval` is ms between cycles.
     location: [0,0] # somewhere in the ocean
-    interval: 1000 # ms
+    interval: 1500 # ms between batches
     events:
       - class: light
         scheduled: 0
@@ -15,7 +16,7 @@ testParams:
           blend: ADD
           alpha: 1
       - class: light
-        scheduled: 0
+        scheduled: 500
         position: [0,0,0]
         params:
           color: {"rgb": [0,255,255]}
@@ -23,7 +24,7 @@ testParams:
           blend: ADD
           alpha: 1 
       - class: light
-        scheduled: 0
+        scheduled: 1000
         position: [0,0,0]
         params:
           color: {"rgb": [255,0,255]}

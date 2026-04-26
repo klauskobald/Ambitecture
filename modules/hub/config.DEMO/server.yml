@@ -1,3 +1,7 @@
 LISTEN_PORT: 3000
 LISTEN_HOST: 0.0.0.0
 
+projectsPath: ../../var/projects
+fixturesPath: ../../var/fixtures
+
+defaultProject: test

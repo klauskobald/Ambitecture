@@ -2,10 +2,12 @@
   "name": "ambitecture",
   "version": "1.0.0",
   "description": "Ambitecture project workspace",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "start": "ts-node src/index.ts",
     "dev": "ts-node --respawn src/index.ts",
+    "build": "tsc",
     "typecheck": "tsc --noEmit"
   },
   "repository": {
@@ -19,7 +21,12 @@
     "url": "https://github.com/klauskobald/Ambitecture/issues"
   },
   "homepage": "https://github.com/klauskobald/Ambitecture#readme",
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "js-yaml": "^4.1.0"
+  },
   "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.6.0",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.3"

@@ -1,0 +1,1 @@
+// simple log wrapper to console.log

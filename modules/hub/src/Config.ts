@@ -121,6 +121,9 @@ export class Config {
 
         const targetConfigName = parts[1];
         const targetKey = parts[2];
+        if (!targetConfigName || !targetKey) {
+            throw new Error(`Invalid CONFIG reference format: ${configRef}. Expected: CONFIG:configName:key`);
+        }
 
         // Always create a fresh config instance to get latest values
         const targetConfig = targetConfigName === this.configName ? this : new Config(targetConfigName);

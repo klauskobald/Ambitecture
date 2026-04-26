@@ -20,6 +20,35 @@ The hub is the **single source of truth** for system-wide configuration. It subs
 
 **Note:** Express on port 80 and a WebSocket on `/ws` describe the **intended** public surface; wire that up in `src/index.ts` and keep listen port/host in YAML (as in the demo) rather than hard-coding.
 
+### Hub-hosted setup GUI
+
+All setup should be possible through the hub's own web GUI, served from `hub/public`.
+
+- `GET /api/*`: REST endpoints for CRUD-style operations and snapshots.
+- `GET /ws`: WebSocket endpoint for realtime updates, module sessions, and command forwarding.
+- Any non-API/non-WS route should serve frontend assets from `public` via a generic catch-all route (SPA-friendly).
+
+The GUI should use a mobile-first layout with:
+
+- a generic navigation shell
+- pane-based sections (system, projects, fixtures, zones, modules, etc.)
+- fast pane switching without full page reloads
+
+### Renderer setup panes (remote-provided UI)
+
+The GUI includes a pane for connected renderers and their specific setup tools.
+
+When a renderer connects, it announces available setup pane identifiers (for example `usb-hardware`). Because renderers may only be reachable over WebSocket, the hub requests pane HTML snippets through the socket channel.
+
+Flow:
+
+1. Renderer connects and publishes capability metadata (including setup pane IDs).
+2. Hub requests snippet content for a pane (for example `usb-hardware`) over `/ws`.
+3. Renderer returns the HTML snippet payload.
+4. Hub injects/displays this snippet inside the renderer setup pane in the web GUI.
+5. User actions in that pane are sent to the hub.
+6. Hub validates/routes the command and forwards it to the target renderer over WebSocket.
+
 ---
 
 ## `modules/renderers`
@@ -29,6 +58,13 @@ The hub is the **single source of truth** for system-wide configuration. It subs
 **`renderers/dmx-ts/`** — TypeScript renderer package (scaffold: `package.json`, `tsconfig.json`). Intended to schedule timed events and drive a DMX bus once `src/` is filled in.
 
 Renderers receive configuration changes via WebSocket whenever the hub decides to publish them. A renderer module must wait for a valid config before starting normal operation; in the common path, this config arrives immediately after connection.
+
+Renderer data authority model:
+
+- The hub is always the source of truth for renderer-relevant data.
+- A renderer may cache hub data for short periods (performance optimization), but cache is non-authoritative.
+- Renderer config is pushed from the hub (not locally self-authored at runtime).
+- Event queues/state are kept in renderer memory for now (no persistent event store yet).
 
 ---
 
@@ -43,6 +79,22 @@ Controllers also receive configuration changes via WebSocket whenever the hub de
 ---
 
 ## General features
+
+### Frontend markup and styling policy
+
+All HTML should be intentionally minimal and mostly unstyled at module level.
+
+- HTML should contain only semantic structure plus reusable global class names.
+- Inline styles and module-local visual styling should be avoided by default.
+- Visual design authority lives in the hub frontend styles under `hub/public`.
+
+Stylesheets should be split by concern, for example:
+
+- `layout` / positioning (flow, spacing, grid/flex helpers, pane sizing)
+- form/input controls (buttons, inputs, selects, sliders, focus states)
+- theme tokens (CSS variables for colors, typography, radii, shadows)
+
+Initial baseline is a single dark theme. Theme values should be defined via variables so additional themes can be added later without changing component HTML.
 
 ### Global location model per module
 
@@ -75,6 +127,43 @@ Controllers should only receive data for rooms/scopes they are allowed to work o
 
 ---
 
+## Demo data and zone routing
+
+The repository includes demo fixture/project data under `var/` that the hub can use as initial runtime content.
+
+### Demo fixture definition
+
+`var/fixtures/rgb_simple.yml` defines a simple RGB DMX fixture profile:
+
+- Fixture class: `dmx_light_static`
+- DMX channel mapping:
+  - channel `0` -> `brightness`
+  - channel `1` -> `red`
+  - channel `2` -> `green`
+  - channel `3` -> `blue`
+
+### Demo project definition
+
+`var/projects/test.yml` defines a project with zones and fixtures. In the sample:
+
+- Project: `Test Project`
+- Zone: `Zone 1`
+- Bound renderer: `rendererGUID: renderer-1234567890`
+- Fixture instance: references fixture profile `rgb_simple`
+- Fixture spatial data includes `location`, `target` (or `rotation`), and `range`
+
+### Default project loading and sync
+
+`modules/hub/config.DEMO/server.yml` sets:
+
+- `projectsPath: ../../var/projects`
+- `fixturesPath: ../../var/fixtures`
+- `defaultProject: test`
+
+At runtime, the hub loads `defaultProject` and treats its zone structure as authoritative scene assignment data. When a renderer connects (or when project data updates), the hub transfers the relevant zone info plus referenced fixtures to matching renderer(s), primarily by `rendererGUID` and, where applicable, spatial/filter rules.
+
+---
+
 ## Data schema
 
 Events are packets sent from the hub to renderers inside a message envelope.
@@ -85,7 +174,7 @@ Events are packets sent from the hub to renderers inside a message envelope.
     "location": [8.5417, 47.3769],
     "events": [
       {
-        "type": "light",
+        "class": "light",
         "scheduled": 1767225600000,
         "position": [1.2, 0.0, -3.5],
         "params": {
@@ -132,7 +221,61 @@ Another valid message shape is a config packet (for example, hub -> renderer/con
 
 ### Event dispatch model
 
-- `type` maps to an event handler class (for example, `LightEvent` for `type: "light"`).
+- `class` maps to an event handler class (for example, `LightEvent` for `type: "light"`).
 - The class defines and validates the expected `params` shape for that event kind.
 - The renderer dispatches each event to its class and executes behavior using the parsed `params`.
 - `scheduled` is the execution timestamp used by the renderer queue/scheduler.
+
+---
+
+## WebSocket reliability
+
+All long-lived module connections (renderers and controllers) must be treated as mission-critical and self-healing.
+
+### Heartbeat contract
+
+- Use explicit `ping`/`pong` keepalive messages every 10 seconds.
+- Both sides track last successful heartbeat timestamp.
+- Missing heartbeat beyond timeout window is treated as a dead connection.
+
+### Reconnect behavior
+
+- If socket closes, errors, or heartbeat fails, module must reconnect immediately.
+- Reconnect is infinite: no terminal timeout, no "give up" state.
+- Backoff may be used to protect the network, but retry loop must continue forever.
+- After reconnect, module re-registers identity/capabilities and waits for fresh valid config before resuming normal operation.
+
+---
+
+## Service self-healing policy
+
+All server-side runtime processes must be self-healing.
+
+- On crash, the service must restart immediately via a supervisor/runtime manager.
+- No permanent failure mode: services should not stop after N retries.
+- On restart, service reinitializes config, restores required subscriptions/sockets, and resumes operation automatically.
+- Errors should be logged with enough context to debug, but runtime behavior must prioritize continuity.
+
+---
+
+## Optional realtime monitoring panes
+
+Renderers and controllers may provide realtime monitoring/status data on demand.
+
+### Request/stream model
+
+- Hub can request a module status pane stream (for example: "renderer, send status pane data").
+- Module starts a cyclic WebSocket message chain with status updates.
+- Hub acts as relay/orchestrator and forwards stream messages to the matching web GUI pane.
+- Hub does not need to understand pane payload internals; pane-specific logic stays module-owned.
+
+### Pane aggregation in hub GUI
+
+- Hub can display many module status panes inside one global status view.
+- Each module pane is responsible for rendering/interpreting its own data contract.
+
+### Listener acknowledgement and auto-stop
+
+- Status pane listeners should periodically acknowledge they are still listening.
+- If a module does not receive listener acknowledgements for a defined timeout window, it may stop sending cyclic status updates to save bandwidth/CPU.
+- When a listener re-subscribes, module can resume the status stream.

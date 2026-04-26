@@ -12,6 +12,7 @@ testParams:
         position: [0,0,0]
         params:
           color: {"rgb": [255,255,0]}
+          strobe: 0
           layer: 100
           blend: ADD
           alpha: 1
@@ -20,6 +21,7 @@ testParams:
         position: [0,0,0]
         params:
           color: {"rgb": [0,255,255]}
+          strobe: 0
           layer: 100
           blend: ADD
           alpha: 1 
@@ -28,6 +30,7 @@ testParams:
         position: [0,0,0]
         params:
           color: {"rgb": [255,0,255]}
+          strobe: 0
           layer: 100
           blend: ADD
           alpha: 1 

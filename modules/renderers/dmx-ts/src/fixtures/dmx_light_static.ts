@@ -37,16 +37,18 @@ class DmxLightStatic implements IFixtureClass {
         const color = new Color(colorData.x, colorData.y, colorData.Y);
         const { r, g, b } = color.toRGB();
         const strobe = (event.params as LightParams | undefined)?.strobe;
-        if (strobe) {
-            this.writeFunction(fixture, 'strobe-off', strobe, dmxUniverse);
-            this.writeFunction(fixture, 'strobe-on', 1, dmxUniverse);
+        if (strobe !== undefined) {
+            if (strobe == 0) {
+                this.writeFunction(fixture, 'strobe-off', 0, dmxUniverse);
+            } else {
+                this.writeFunction(fixture, 'strobe-on', strobe, dmxUniverse);
+            }
         }
 
         this.writeFunction(fixture, 'red', r / 255, dmxUniverse);
         this.writeFunction(fixture, 'green', g / 255, dmxUniverse);
         this.writeFunction(fixture, 'blue', b / 255, dmxUniverse);
         this.writeFunction(fixture, 'brightness', colorData.Y, dmxUniverse);
-        this.writeFunction(fixture, 'strobe-off', 0, dmxUniverse);
     }
 
     private getDmxMap(fixture: ConfiguredFixture): DmxMap {

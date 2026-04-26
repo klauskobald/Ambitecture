@@ -49,8 +49,6 @@ export class Server {
     this.registry.add(ws);
     this.lastPongTimes.set(ws, Date.now());
 
-    ws.send(JSON.stringify({ message: { type: 'ping' } }));
-
     const heartbeatTimer = setInterval(() => this.checkHeartbeat(ws), HEARTBEAT_INTERVAL_MS);
 
     ws.on('message', (raw) => this.onMessage(ws, raw.toString()));

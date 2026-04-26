@@ -75,7 +75,7 @@ String values can reference other configs: `CONFIG:env:MY_KEY` — resolved at l
 
 Tests are live integration scripts that talk to a running hub (HTTP API, WebSocket, or both). There are no unit test mocks.
 
-**Runner:** `tests/runtest.ts` (executed via `ts-node`) — uses `js-yaml` (already a dep) to parse `test.yml` and Node's child_process for spawning test files.
+**Runner:** `tests/runtest.ts` (executed via `ts-node`) — loads `test.yml` via `Config('test')` and runs test files in-process via `require()`.
 
 ```bash
 # run one test with args
@@ -96,13 +96,13 @@ ts-node tests/runtest.ts
 **`tests/test.yml` shape:**
 
 ```yaml
-url: localhost:3000
+host: localhost:3000
 
 testParams:
-  001-blinker:
-    channel: 1
-    color: [0.32, 0.34, 0.8]
-  002-zone:
+  001-blinker.ts:
+    location: [0, 0]
+    interval: 1000
+  002-zone.ts:
     zone: Zone 1
 ```
 
@@ -158,8 +158,8 @@ new WebSocketServer({
 ```
 
 ### Heartbeat contract
-- `ping`/`pong` every 10 s.
-- Missing heartbeat beyond timeout = dead connection.
+- WS-level ping/pong frames every 10 s (handled by the `ws` library automatically — no application message needed).
+- Missing pong beyond timeout = dead connection, socket terminated.
 
 ### Reconnect behavior
 - Reconnect immediately on close/error/heartbeat failure.
@@ -180,7 +180,7 @@ Every WebSocket message uses this unified shape:
 }
 ```
 
-`type` is the sole routing key — no switch/case needed, just a handler map keyed by `type`. `location` is optional for non-spatial messages (e.g. `ping`/`pong`).
+`type` is the sole routing key — no switch/case needed, just a handler map keyed by `type`. `location` is optional for non-spatial messages.
 
 ### Message types
 
@@ -237,13 +237,6 @@ Controllers use `role: "controller"` and include `scope` (rooms/areas) instead o
     "payload": { "...": "config data" }
   }
 }
-```
-
-**`ping`** / **`pong`** — heartbeat (no `location` or `payload` needed):
-
-```json
-{ "message": { "type": "ping" } }
-{ "message": { "type": "pong" } }
 ```
 
 ### Field semantics

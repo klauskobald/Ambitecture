@@ -4,7 +4,6 @@ import { Server } from './Server';
 import { ConnectionRegistry } from './ConnectionRegistry';
 import { MessageRouter } from './MessageRouter';
 import { RegisterHandler } from './handlers/RegisterHandler';
-import { PingHandler } from './handlers/PingHandler';
 import { EventsHandler } from './handlers/EventsHandler';
 import { Logger } from './Logger';
 
@@ -16,7 +15,6 @@ const registry = new ConnectionRegistry();
 const router = new MessageRouter(registry);
 
 router.register('register', new RegisterHandler(registry));
-router.register('ping', new PingHandler());
 router.register('events', new EventsHandler(registry));
 
 const server = new Server(registry, router);

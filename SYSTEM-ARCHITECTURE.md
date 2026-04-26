@@ -178,7 +178,7 @@ Every WebSocket message uses a unified envelope:
 }
 ```
 
-`type` is the sole routing key — receivers use a handler map keyed by `type`. `location` is optional for non-spatial messages (e.g. `ping`/`pong`).
+`type` is the sole routing key — receivers use a handler map keyed by `type`. `location` is optional for non-spatial messages.
 
 ### Message types
 
@@ -239,13 +239,6 @@ Controllers use `role: "controller"` and include `scope` (rooms/areas) instead o
 }
 ```
 
-**`ping`** / **`pong`** — heartbeat:
-
-```json
-{ "message": { "type": "ping" } }
-{ "message": { "type": "pong" } }
-```
-
 ### Envelope and coordinate meaning
 
 - `location`: coarse planet coordinates (`[lon, lat]`) for the packet context. Optional on non-spatial messages.
@@ -275,9 +268,8 @@ All long-lived module connections (renderers and controllers) must be treated as
 
 ### Heartbeat contract
 
-- Use explicit `ping`/`pong` keepalive messages every 10 seconds.
-- Both sides track last successful heartbeat timestamp.
-- Missing heartbeat beyond timeout window is treated as a dead connection.
+- WS-level ping/pong frames every 10 s (handled by the `ws` library — no application message needed).
+- Hub tracks last pong timestamp per connection; missing pong beyond timeout = socket terminated.
 
 ### Reconnect behavior
 

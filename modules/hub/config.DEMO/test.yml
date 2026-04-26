@@ -10,7 +10,7 @@ testParams:
         scheduled: 0
         position: [0,0,0]
         params:
-          color: {"rgb": [255,0,0]}
+          color: {"rgb": [255,255,0]}
           layer: 100
           blend: ADD
           alpha: 1
@@ -18,7 +18,7 @@ testParams:
         scheduled: 0
         position: [0,0,0]
         params:
-          color: {"rgb": [0,255,0]}
+          color: {"rgb": [0,255,255]}
           layer: 100
           blend: ADD
           alpha: 1 
@@ -26,7 +26,7 @@ testParams:
         scheduled: 0
         position: [0,0,0]
         params:
-          color: {"rgb": [0,0,255]}
+          color: {"rgb": [255,0,255]}
           layer: 100
           blend: ADD
           alpha: 1 

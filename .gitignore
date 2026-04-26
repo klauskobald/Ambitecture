@@ -1,3 +1,7 @@
 node_modules/
 dist/
 var/
+.claude/
+.env
+.cursor/
+.vscode/

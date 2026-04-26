@@ -6,7 +6,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "start": "ts-node src/index.ts",
-    "dev": "ts-node --respawn src/index.ts",
+    "dev": "node --watch --watch-path=src --require ts-node/register src/index.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit"
   },
@@ -23,11 +23,13 @@
   "homepage": "https://github.com/klauskobald/Ambitecture#readme",
   "dependencies": {
     "dotenv": "^17.2.3",
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^4.1.0",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.6.0",
+    "@types/ws": "^8.5.14",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.3"
   }

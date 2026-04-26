@@ -12,7 +12,7 @@ export interface FixtureProfile {
   name: string;
   class: string;
   params: {
-    dmx: Record<string, FixtureChannelDef>;
+    dmx: Record<string, FixtureChannelDef[]>;
   };
 }
 

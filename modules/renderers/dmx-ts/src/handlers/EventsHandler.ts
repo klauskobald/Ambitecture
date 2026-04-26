@@ -1,9 +1,9 @@
 import WebSocket from 'ws';
 import { Logger } from '../Logger';
-import { Color } from '../color';
 import { DmxUniverse } from '../DmxUniverse';
-import { ConfigHandler, ConfiguredFixture } from './ConfigHandler';
+import { ConfigHandler } from './ConfigHandler';
 import { EventQueue } from '../EventQueue';
+import { IFixtureClass, RendererEvent } from '../fixtures/IFixtureClass';
 
 interface WsMessage {
     type: string;
@@ -11,39 +11,20 @@ interface WsMessage {
     payload?: unknown;
 }
 
-interface LightEventColor {
-    x: number;
-    y: number;
-    Y: number;
-}
-
-interface LightEventParams {
-    color?: LightEventColor;
-    layer?: number;
-    blend?: string;
-    alpha?: number;
-}
-
-interface LightEvent {
-    class: string;
-    scheduled?: number;
-    position?: [number, number, number];
-    params?: LightEventParams;
-}
-
 export class EventsHandler {
     private configHandler: ConfigHandler;
     private dmxUniverse: DmxUniverse;
-    private queue: EventQueue<LightEvent>;
+    private queue: EventQueue<RendererEvent>;
+    private fixtureClassCache = new Map<string, IFixtureClass>();
 
     constructor(configHandler: ConfigHandler, dmxUniverse: DmxUniverse) {
         this.configHandler = configHandler;
         this.dmxUniverse = dmxUniverse;
-        this.queue = new EventQueue<LightEvent>((event) => this.processEvent(event));
+        this.queue = new EventQueue<RendererEvent>((event) => this.processEvent(event));
     }
 
     handle(_ws: WebSocket, message: WsMessage): void {
-        const events = message.payload as LightEvent[];
+        const events = message.payload as RendererEvent[];
         if (!Array.isArray(events)) return;
 
         for (const event of events) {
@@ -53,45 +34,24 @@ export class EventsHandler {
         Logger.debug(`[events] queued ${events.length} event(s)`);
     }
 
-    private processEvent(event: LightEvent): void {
-        if (event.class !== 'light') return;
-        const colorData = event.params?.color;
-        if (!colorData) return;
+    private async getFixtureClass(className: string): Promise<IFixtureClass> {
+        if (!this.fixtureClassCache.has(className)) {
+            const mod = await import(`../fixtures/${className}`);
+            this.fixtureClassCache.set(className, mod.default as IFixtureClass);
+        }
+        return this.fixtureClassCache.get(className)!;
+    }
 
+    private async processEvent(event: RendererEvent): Promise<void> {
         const fixtures = this.configHandler.getFixtures();
         if (fixtures.length === 0) {
             Logger.warn('[events] no fixtures configured yet, dropping event');
             return;
         }
 
-        const color = new Color(colorData.x, colorData.y, colorData.Y);
-        const { r, g, b } = color.toRGB();
-
         for (const fixture of fixtures) {
-            this.writeColorToFixture(fixture, r, g, b, colorData.Y);
-        }
-    }
-
-    private writeColorToFixture(fixture: ConfiguredFixture, r: number, g: number, b: number, Y: number): void {
-        const channelMap = fixture.fixtureProfile.params.dmx;
-        for (const [offsetStr, channelDef] of Object.entries(channelMap)) {
-            const offset = parseInt(offsetStr, 10);
-            const dmxChannel = fixture.dmxBaseChannel + offset;
-
-            switch (channelDef.function) {
-                case 'red':
-                    this.dmxUniverse.setChannel(dmxChannel, r);
-                    break;
-                case 'green':
-                    this.dmxUniverse.setChannel(dmxChannel, g);
-                    break;
-                case 'blue':
-                    this.dmxUniverse.setChannel(dmxChannel, b);
-                    break;
-                case 'brightness':
-                    this.dmxUniverse.setChannel(dmxChannel, Math.round(Y * 255));
-                    break;
-            }
+            const handler = await this.getFixtureClass(fixture.fixtureProfile.class);
+            handler.handleEvent(event, fixture, this.dmxUniverse);
         }
     }
 }

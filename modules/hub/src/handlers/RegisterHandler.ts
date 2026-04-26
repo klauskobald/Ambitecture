@@ -2,6 +2,7 @@ import { WebSocket } from 'ws';
 import { Logger } from '../Logger';
 import { ConnectionRegistry } from '../ConnectionRegistry';
 import { MessageHandler, WsMessage } from '../MessageRouter';
+import { ProjectManager } from '../ProjectManager';
 
 interface RegisterPayload {
   role: 'renderer' | 'controller';
@@ -22,9 +23,11 @@ function isRegisterPayload(payload: unknown): payload is RegisterPayload {
 
 export class RegisterHandler implements MessageHandler {
   private registry: ConnectionRegistry;
+  private projectManager: ProjectManager;
 
-  constructor(registry: ConnectionRegistry) {
+  constructor(registry: ConnectionRegistry, projectManager: ProjectManager) {
     this.registry = registry;
+    this.projectManager = projectManager;
   }
 
   handle(ws: WebSocket, message: WsMessage, _registry: ConnectionRegistry): void {
@@ -52,7 +55,12 @@ export class RegisterHandler implements MessageHandler {
     }
 
     this.registry.update(ws, update);
-
     Logger.info(`[register] ${role} ${guid}`);
+
+    if (role === 'renderer' && ws.readyState === ws.OPEN) {
+      const config = this.projectManager.buildRendererConfig(guid);
+      ws.send(JSON.stringify({ message: { type: 'config', payload: config } }));
+      Logger.info(`[register] pushed config to renderer ${guid}`);
+    }
   }
 }

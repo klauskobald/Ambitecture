@@ -1,8 +1,9 @@
 import WebSocket from 'ws';
 import { Logger } from './Logger';
 import { Config } from './Config';
-import { EventsHandler } from './handlers/EventsHandler';
+import { DmxUniverse } from './DmxUniverse';
 import { ConfigHandler } from './handlers/ConfigHandler';
+import { EventsHandler } from './handlers/EventsHandler';
 
 interface WsMessage {
     type: string;
@@ -21,11 +22,16 @@ interface MessageHandler {
 export class HubConnection {
     private ws: WebSocket | null = null;
     private handlers: Map<string, MessageHandler>;
+    private dmxUniverse: DmxUniverse;
 
     constructor() {
+        this.dmxUniverse = new DmxUniverse();
+        const configHandler = new ConfigHandler(this.dmxUniverse);
+        const eventsHandler = new EventsHandler(configHandler, this.dmxUniverse);
+
         this.handlers = new Map<string, MessageHandler>([
-            ['events', new EventsHandler()],
-            ['config', new ConfigHandler()],
+            ['config', configHandler],
+            ['events', eventsHandler],
         ]);
     }
 
@@ -52,7 +58,6 @@ export class HubConnection {
 
         ws.on('error', (err: Error) => {
             Logger.warn('[ws] error, reconnecting', err.message);
-            // 'close' fires after 'error' in ws, but guard against double-reconnect
             ws.terminate();
         });
     }

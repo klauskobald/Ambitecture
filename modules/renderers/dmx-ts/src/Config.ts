@@ -22,4 +22,8 @@ export class Config {
         const parts = raw.split(/\s+/).map(Number);
         return [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0, parts[3] ?? 10, parts[4] ?? 4, parts[5] ?? 10];
     }
+    static get dmxDriver(): string { return (process.env['DMX_DRIVER'] ?? 'null').replace(/'/g, ''); }
+    static get dmxPort(): string { return (process.env['DMX_DEVICE'] ?? '').replace(/'/g, ''); }
+    static get dmxUniverseName(): string { return process.env['DMX_UNIVERSE'] ?? 'main'; }
+    static get dmxFrameRate(): number { return parseInt(process.env['DMX_FRAME_RATE'] ?? '30', 10); }
 }

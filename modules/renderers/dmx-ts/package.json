@@ -20,6 +20,7 @@
   },
   "homepage": "https://github.com/klauskobald/Ambitecture#readme",
   "dependencies": {
+    "dmx": "^0.25.1",
     "dotenv": "^16.0.0",
     "ws": "^8.18.3"
   },

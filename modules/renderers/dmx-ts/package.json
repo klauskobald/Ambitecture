@@ -1,0 +1,27 @@
+{
+  "name": "ambitecture",
+  "version": "1.0.0",
+  "description": "Ambitecture project workspace",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "ts-node src/index.ts",
+    "dev": "ts-node --respawn src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/klauskobald/Ambitecture.git"
+  },
+  "keywords": [],
+  "author": "Klaus P Kobald Gmbh",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/klauskobald/Ambitecture/issues"
+  },
+  "homepage": "https://github.com/klauskobald/Ambitecture#readme",
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.3"
+  }
+}

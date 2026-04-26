@@ -1,5 +1,22 @@
 # Ambitecture: Core Concept & Architecture
 
+**Author:** Klaus P Kobald GmbH  
+**Website:** [https://kobald.com](https://kobald.com)
+
+Ambitecture is an open source project, and developers are warmly invited to contribute.
+Project is in early stage - basics must work exactly on May 20th, 2026 because I am creating a live show. So stay tuned!
+
+## TypeScript Runtime Setup (ts-node first)
+
+This repository is configured to run TypeScript directly with `ts-node` for now, without a build step.
+
+
+### Type-check only
+
+```bash
+npm run typecheck
+```
+
 ## 1. Executive Summary
 
 **Ambitecture** (Ambient Architecture Engine) is a distributed framework for the **live orchestration** of physical environments.

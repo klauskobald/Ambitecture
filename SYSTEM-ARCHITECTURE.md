@@ -166,13 +166,49 @@ At runtime, the hub loads `defaultProject` and treats its zone structure as auth
 
 ## Data schema
 
-Events are packets sent from the hub to renderers inside a message envelope.
+Every WebSocket message uses a unified envelope:
 
 ```json
 {
   "message": {
+    "type": "<message-type>",
     "location": [8.5417, 47.3769],
-    "events": [
+    "payload": {}
+  }
+}
+```
+
+`type` is the sole routing key — receivers use a handler map keyed by `type`. `location` is optional for non-spatial messages (e.g. `ping`/`pong`).
+
+### Message types
+
+**`register`** — module → hub on connect:
+
+```json
+{
+  "message": {
+    "type": "register",
+    "location": [8.5417, 47.3769],
+    "payload": {
+      "role": "renderer",
+      "guid": "renderer-1234567890",
+      "positionOrigin": [0, 0, 0],
+      "boundingBox": [0, 0, 0, 10, 5, 3]
+    }
+  }
+}
+```
+
+Controllers use `role: "controller"` and include `scope` (rooms/areas) instead of `boundingBox`.
+
+**`events`** — hub → renderer:
+
+```json
+{
+  "message": {
+    "type": "events",
+    "location": [8.5417, 47.3769],
+    "payload": [
       {
         "class": "light",
         "scheduled": 1767225600000,
@@ -189,28 +225,33 @@ Events are packets sent from the hub to renderers inside a message envelope.
 }
 ```
 
-Another valid message shape is a config packet (for example, hub -> renderer/controller):
+**`config`** — hub → renderer/controller:
 
 ```json
 {
   "message": {
+    "type": "config",
     "location": [8.5417, 47.3769],
-    "config": {
-      "type": "renderer",
-      "payload": {
-        "...": "config data"
-      }
+    "payload": {
+      "...": "config data"
     }
   }
 }
 ```
 
+**`ping`** / **`pong`** — heartbeat:
+
+```json
+{ "message": { "type": "ping" } }
+{ "message": { "type": "pong" } }
+```
+
 ### Envelope and coordinate meaning
 
-- `location`: coarse planet coordinates (`[lon, lat]`) for the packet context.
-- `position`: local XYZ offset relative to `location` (not absolute planet coordinates).
-- `events`: ordered list of event objects to be interpreted by the renderer.
-- `config`: optional config envelope used for pushing effective module configuration.
+- `location`: coarse planet coordinates (`[lon, lat]`) for the packet context. Optional on non-spatial messages.
+- `position` (inside an event): local XYZ offset relative to `location` anchor — not absolute planet coordinates.
+- `type`: message kind; drives handler routing on both hub and modules.
+- `payload`: message body — shape depends on `type`.
 
 ### Layering and blend behavior
 
@@ -221,9 +262,9 @@ Another valid message shape is a config packet (for example, hub -> renderer/con
 
 ### Event dispatch model
 
-- `class` maps to an event handler class (for example, `LightEvent` for `type: "light"`).
+- `class` (inside an event object) maps to an event handler (for example, `LightEvent` for `class: "light"`).
 - The class defines and validates the expected `params` shape for that event kind.
-- The renderer dispatches each event to its class and executes behavior using the parsed `params`.
+- The renderer dispatches each event to its handler and executes behavior using the parsed `params`.
 - `scheduled` is the execution timestamp used by the renderer queue/scheduler.
 
 ---

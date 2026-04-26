@@ -94,6 +94,16 @@ When a renderer connects it announces setup pane identifiers. The hub fetches HT
 
 All module connections are long-lived and self-healing.
 
+### Compression
+
+The hub enables `perMessageDeflate` with a threshold of 1024 bytes — messages smaller than that (heartbeats, acks) are sent uncompressed automatically. Compression is negotiated at the WS handshake level, so constrained clients (ESP32, etc.) that don't offer the extension simply get uncompressed frames. No application-level logic needed.
+
+```ts
+new WebSocketServer({
+  perMessageDeflate: { threshold: 1024 }
+});
+```
+
 ### Heartbeat contract
 - `ping`/`pong` every 10 s.
 - Missing heartbeat beyond timeout = dead connection.

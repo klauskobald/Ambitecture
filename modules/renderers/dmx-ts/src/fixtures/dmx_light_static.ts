@@ -1,7 +1,8 @@
 import { Color } from '../color';
 import { DmxUniverse } from '../DmxUniverse';
-import { ConfiguredFixture, FixtureChannelDef, FixtureProfile } from '../handlers/ConfigHandler';
+import { ConfiguredFixture } from '../handlers/ConfigHandler';
 import { IFixtureClass, RendererEvent } from './IFixtureClass';
+import { DmxMap } from './DmxMap';
 
 interface LightColor {
     x: number;
@@ -11,6 +12,7 @@ interface LightColor {
 
 interface LightParams {
     color?: LightColor;
+    strobe?: number;
     layer?: number;
     blend?: string;
     alpha?: number;
@@ -24,21 +26,9 @@ function normalizedToDmxRange(normalized: number, range: string): number {
     return Math.round(min + (max - min) * clamped);
 }
 
-function findChannel(
-    profile: FixtureProfile,
-    functionName: string
-): { offset: number; def: FixtureChannelDef } | null {
-    for (const [offsetStr, defs] of Object.entries(profile.params.dmx)) {
-        for (const def of defs) {
-            if (def.function === functionName) {
-                return { offset: parseInt(offsetStr, 10), def };
-            }
-        }
-    }
-    return null;
-}
-
 class DmxLightStatic implements IFixtureClass {
+    private readonly dmxMaps = new WeakMap<ConfiguredFixture, DmxMap>();
+
     handleEvent(event: RendererEvent, fixture: ConfiguredFixture, dmxUniverse: DmxUniverse): void {
         if (event.class !== 'light') return;
         const colorData = (event.params as LightParams | undefined)?.color;
@@ -46,12 +36,26 @@ class DmxLightStatic implements IFixtureClass {
 
         const color = new Color(colorData.x, colorData.y, colorData.Y);
         const { r, g, b } = color.toRGB();
+        const strobe = (event.params as LightParams | undefined)?.strobe;
+        if (strobe) {
+            this.writeFunction(fixture, 'strobe-off', strobe, dmxUniverse);
+            this.writeFunction(fixture, 'strobe-on', 1, dmxUniverse);
+        }
 
-        this.writeFunction(fixture, 'red',        r / 255,      dmxUniverse);
-        this.writeFunction(fixture, 'green',      g / 255,      dmxUniverse);
-        this.writeFunction(fixture, 'blue',       b / 255,      dmxUniverse);
-        this.writeFunction(fixture, 'brightness', colorData.Y,  dmxUniverse);
-        this.writeFunction(fixture, 'strobe-off', 0,            dmxUniverse);
+        this.writeFunction(fixture, 'red', r / 255, dmxUniverse);
+        this.writeFunction(fixture, 'green', g / 255, dmxUniverse);
+        this.writeFunction(fixture, 'blue', b / 255, dmxUniverse);
+        this.writeFunction(fixture, 'brightness', colorData.Y, dmxUniverse);
+        this.writeFunction(fixture, 'strobe-off', 0, dmxUniverse);
+    }
+
+    private getDmxMap(fixture: ConfiguredFixture): DmxMap {
+        let dmxMap = this.dmxMaps.get(fixture);
+        if (!dmxMap) {
+            dmxMap = new DmxMap(fixture.fixtureProfile);
+            this.dmxMaps.set(fixture, dmxMap);
+        }
+        return dmxMap;
     }
 
     private writeFunction(
@@ -60,10 +64,10 @@ class DmxLightStatic implements IFixtureClass {
         normalizedValue: number,
         dmxUniverse: DmxUniverse
     ): void {
-        const result = findChannel(fixture.fixtureProfile, functionName);
-        if (!result) return;
-        const dmxChannel = fixture.dmxBaseChannel + result.offset;
-        const dmxValue = normalizedToDmxRange(normalizedValue, result.def.range);
+        const channel = this.getDmxMap(fixture).lookup(functionName);
+        if (!channel) return;
+        const dmxChannel = fixture.dmxBaseChannel + channel.offset;
+        const dmxValue = normalizedToDmxRange(normalizedValue, channel.def.range);
         dmxUniverse.setChannel(dmxChannel, dmxValue);
     }
 }

@@ -71,6 +71,59 @@ String values can reference other configs: `CONFIG:env:MY_KEY` — resolved at l
 - `ts-node` is the runtime — no compiled output needed for development.
 - **Types must be declared in the module where they belong. No shared `types.d.ts` files.**
 
+### Integration tests (`modules/hub/tests/`)
+
+Tests are live integration scripts that talk to a running hub (HTTP API, WebSocket, or both). There are no unit test mocks.
+
+**Runner:** `tests/runtest.ts` (executed via `ts-node`) — uses `js-yaml` (already a dep) to parse `test.yml` and Node's child_process for spawning test files.
+
+```bash
+# run one test with args
+ts-node tests/runtest.ts 001-blinker.ts arg1 arg2
+
+# run one test with a timeout (runner kills the process after N seconds)
+ts-node tests/runtest.ts 001-blinker.ts --timeout 5 arg1 arg2
+
+# run all tests (each uses its own defaultArgs)
+ts-node tests/runtest.ts
+```
+
+`runtest.ts` reads `tests/test.yml` for shared options (hub URL, etc.) and per-test config. It builds two objects passed to every test:
+
+- `data` — CLI-provided: `{ args: string[], timeout: number }`
+- `options` — from `test.yml`: `{ url: string, testconfig: Record<string, unknown> }` where `testconfig` is the `testParams[FILENAME]` block for that specific test file
+
+**`tests/test.yml` shape:**
+
+```yaml
+url: localhost:3000
+
+testParams:
+  001-blinker:
+    channel: 1
+    color: [0.32, 0.34, 0.8]
+  002-zone:
+    zone: Zone 1
+```
+
+When run with no arguments, `runtest.ts` discovers all `*.ts` files in `tests/` (excluding itself), launches them, and prints a consolidated CLI report: test name, status (`PASS` / `FAIL` / `TIMEOUT`), and elapsed time.
+
+**Test file contract:**
+
+```ts
+export const defaultArgs = ['value1', 'value2'];  // used when no CLI args given
+
+export async function main(
+  data: { args: string[], timeout: number },
+  options: { url: string, testconfig: Record<string, unknown> }
+) {
+  // connect to options.url, send messages, assert responses
+  // throw to fail; return to pass
+}
+```
+
+Test files are lightweight — all hub coordinates, URLs, and shared config come from `options`. No hardcoded addresses, no local config reads inside test files.
+
 ---
 
 ## Web GUI (`hub/public`)

@@ -1,0 +1,5 @@
+host: localhost:3000
+
+testParams:
+  001-blinker.ts:
+    myCoolSetting: 123

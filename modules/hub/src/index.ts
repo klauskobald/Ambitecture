@@ -12,13 +12,26 @@ const serverConfig = new Config('server');
 const port = serverConfig.get<number>('LISTEN_PORT');
 const host = serverConfig.getOrDefault<string>('LISTEN_HOST', '127.0.0.1');
 
-const projectManager = new ProjectManager(serverConfig);
+const projectManager = new ProjectManager(
+  serverConfig.get<string>('projectsPath'),
+  serverConfig.get<string>('fixturesPath')
+);
 
 const registry = new ConnectionRegistry();
 const router = new MessageRouter(registry);
 
 router.register('register', new RegisterHandler(registry, projectManager));
 router.register('events', new EventsHandler(registry));
+
+projectManager.useProject(serverConfig.get<string>('defaultProject'), () => {
+  for (const ws of registry.getByRole('renderer')) {
+    const info = registry.get(ws);
+    if (info && ws.readyState === ws.OPEN) {
+      const config = projectManager.buildRendererConfig(info.guid);
+      ws.send(JSON.stringify({ message: { type: 'config', payload: config } }));
+    }
+  }
+});
 
 const server = new Server(registry, router);
 server.listen(port, host);

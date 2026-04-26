@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import * as path from 'path';
 import { Config } from './Config';
 import { Logger } from './Logger';
@@ -39,16 +40,64 @@ interface Project {
 export class ProjectManager {
   private projectsPath: string;
   private fixturesPath: string;
-  private project: Project;
+  private project: Project | null = null;
   private fixtureProfiles: Map<string, FixtureProfile> = new Map();
+  private watchers: fs.FSWatcher[] = [];
 
-  constructor(serverConfig: Config) {
-    this.projectsPath = serverConfig.get<string>('projectsPath');
-    this.fixturesPath = serverConfig.get<string>('fixturesPath');
-    const defaultProject = serverConfig.get<string>('defaultProject');
-    this.project = this.loadProject(defaultProject);
+  constructor(projectsPath: string, fixturesPath: string) {
+    this.projectsPath = projectsPath;
+    this.fixturesPath = fixturesPath;
+  }
+
+  useProject(name: string, callback: () => void): void {
+    this.reloadProject(name);
+    callback();
+    this.watchAll(name, callback);
+  }
+
+  private reloadProject(name: string): void {
+    const filePath = this.resolvePath(this.projectsPath, `${name}.yml`);
+    this.project = new Config(filePath).getAll() as Project;
+    this.fixtureProfiles.clear();
     this.loadReferencedFixtures();
     Logger.info(`[project] loaded "${this.project.name}" with ${this.project.zones.length} zone(s)`);
+  }
+
+  private watchAll(name: string, callback: () => void): void {
+    for (const watcher of this.watchers) {
+      watcher.close();
+    }
+    this.watchers = [];
+
+    const onChange = (trigger: string) => {
+      Logger.info(`[project] change detected in "${trigger}", reloading...`);
+      this.reloadProject(name);
+      this.watchAll(name, callback);
+      callback();
+    };
+
+    const projectFile = this.resolvePath(this.projectsPath, `${name}.yml`);
+    this.watchers.push(fs.watch(projectFile, (eventType) => {
+      if (eventType === 'change' || eventType === 'rename') {
+        onChange(`${name}.yml`);
+      }
+    }));
+
+    const fixtureNames = new Set<string>();
+    for (const zone of this.project!.zones) {
+      for (const fi of zone.fixtures) {
+        fixtureNames.add(fi.fixture);
+      }
+    }
+    Logger.info(`[project] watching ${fixtureNames.size} fixture file(s): ${[...fixtureNames].join(', ')}`);
+    for (const fixtureName of fixtureNames) {
+      const fixtureFile = this.resolvePath(this.fixturesPath, `${fixtureName}.yml`);
+      this.watchers.push(fs.watch(fixtureFile, (eventType) => {
+        if (eventType === 'change' || eventType === 'rename') {
+          onChange(`${fixtureName}.yml`);
+        }
+      }));
+    }
   }
 
   private resolvePath(base: string, file: string): string {
@@ -58,34 +107,38 @@ export class ProjectManager {
     return path.join(resolvedBase, file);
   }
 
-  private loadProject(name: string): Project {
-    const filePath = this.resolvePath(this.projectsPath, `${name}.yml`);
-    return new Config(filePath).getAll() as Project;
-  }
-
   private loadReferencedFixtures(): void {
     const fixtureNames = new Set<string>();
-    for (const zone of this.project.zones) {
+    for (const zone of this.project!.zones) {
       for (const fi of zone.fixtures) {
         fixtureNames.add(fi.fixture);
       }
     }
+    Logger.info(`[project] loading ${fixtureNames.size} unique fixture profile(s) for ${this.project!.zones.reduce((n, z) => n + z.fixtures.length, 0)} fixture instance(s)`);
     for (const name of fixtureNames) {
       const filePath = this.resolvePath(this.fixturesPath, `${name}.yml`);
-      this.fixtureProfiles.set(name, new Config(filePath).getAll() as FixtureProfile);
-      Logger.info(`[project] loaded fixture profile "${name}"`);
+      const profile = new Config(filePath).getAll() as FixtureProfile;
+      this.fixtureProfiles.set(name, profile);
+      Logger.info(`[project] loaded fixture profile "${name}" (class: ${profile.class})`);
     }
   }
 
   buildRendererConfig(rendererGuid: string): object {
+    if (!this.project) {
+      throw new Error('[project] No project loaded — call useProject() first');
+    }
     const zones = this.project.zones.filter(z => z.rendererGUID === rendererGuid);
-    return {
+    const result = {
       zones: zones.map(zone => ({
         name: zone.name,
         fixtures: zone.fixtures.map(fi => {
+          const profile = this.fixtureProfiles.get(fi.fixture);
+          if (!profile) {
+            Logger.warn(`[project] fixture instance "${fi.name}" references unknown profile "${fi.fixture}"`);
+          }
           const entry: Record<string, unknown> = {
             name: fi.name,
-            fixtureProfile: this.fixtureProfiles.get(fi.fixture),
+            fixtureProfile: profile,
             dmxBaseChannel: fi.dmxBaseChannel,
             location: fi.location,
             range: fi.range,
@@ -96,5 +149,7 @@ export class ProjectManager {
         }),
       })),
     };
+    Logger.info(`[project] buildRendererConfig(${rendererGuid}): ${result.zones.length} zone(s), ${result.zones.reduce((n, z) => n + z.fixtures.length, 0)} fixture(s)`);
+    return result;
   }
 }

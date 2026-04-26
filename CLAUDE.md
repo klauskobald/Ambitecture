@@ -258,13 +258,27 @@ Controllers use `role: "controller"` and include `scope` (rooms/areas) instead o
 
 ## Color: CIE 1931 $xyY$
 
-All color in the system is expressed as `{ x, y, Y }` (CIE 1931):
+CIE 1931 `{ x, y, Y }` is the internal truth for all color in the system:
 - `x`, `y` — chromaticity (device-independent hue/saturation).
 - `Y` — luminance (perceived brightness).
 
 Renderers convert $xyY$ → device RGB using their gamut map. If a requested $xy$ is outside a fixture's gamut, the renderer snaps to the nearest point on the spectral locus.
 
 Blending: additive mixing sums `Y` values and takes weighted average of `xy`.
+
+### `Color` class
+
+A single `Color` class (lives in a shared `color.ts` helper file per module) manages all color formats. It stores CIE 1931 internally and accepts any supported input format via the factory method:
+
+```ts
+Color.createFromObject({ x: 0.32, y: 0.34, Y: 0.8 })  // CIE 1931
+Color.createFromObject({ rgb: '#112233' })               // hex string
+Color.createFromObject({ r: 11, g: 22, b: 33 })         // RGB components (0-255)
+```
+
+`createFromObject` detects the format by inspecting which keys are present and converts to $xyY$ on construction. Adding a new input format means adding one detection branch and one conversion function — nothing else changes.
+
+The class exposes conversion outputs as needed (e.g. `toRGB()`, `toXYY()`) for renderer-side gamut mapping and DMX output.
 
 ---
 

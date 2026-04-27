@@ -1,36 +1,37 @@
 import { Color } from '../color';
 import { DmxUniverse } from '../DmxUniverse';
 import { ConfiguredFixture } from '../handlers/ConfigHandler';
-import { IFixtureClass, RendererEvent } from './IFixtureClass';
-import { DmxMap } from './DmxMap';
+import { RendererEvent } from './IFixtureClass';
+import { DmxFixtureBase } from './DmxFixtureBase';
+import { LightParams, MasterParams } from './lightEventParams';
 
-interface LightColor {
-    x: number;
-    y: number;
-    Y: number;
-}
+class DmxLightStatic extends DmxFixtureBase {
 
-interface LightParams {
-    color?: LightColor;
-    strobe?: number;
-    layer?: number;
-    blend?: string;
-    alpha?: number;
-}
-
-function normalizedToDmxRange(normalized: number, range: string): number {
-    const parts = range.split('-');
-    const min = parseInt(parts[0] ?? '0', 10);
-    const max = parseInt(parts[1] ?? '255', 10);
-    const clamped = Math.max(0, Math.min(1, normalized));
-    return Math.round(min + (max - min) * clamped);
-}
-
-class DmxLightStatic implements IFixtureClass {
-    private readonly dmxMaps = new WeakMap<ConfiguredFixture, DmxMap>();
+    private masterBrightness: number = 1;
+    private masterBlackout: boolean = false;
 
     handleEvent(event: RendererEvent, fixture: ConfiguredFixture, dmxUniverse: DmxUniverse): void {
-        if (event.class !== 'light') return;
+        switch (event.class) {
+            case 'light':
+                this.handleLightEvent(event, fixture, dmxUniverse);
+                break;
+            case 'master':
+                this.handleMasterEvent(event, fixture, dmxUniverse);
+                break;
+            default:
+                return;
+        }
+    }
+    private handleMasterEvent(event: RendererEvent, fixture: ConfiguredFixture, dmxUniverse: DmxUniverse): void {
+        const masterParams = (event.params as MasterParams | undefined);
+        if (masterParams) {
+            this.masterBrightness = masterParams.brightness || this.masterBrightness;
+            this.masterBlackout = masterParams.blackout || this.masterBlackout;
+        }
+
+    }
+
+    private handleLightEvent(event: RendererEvent, fixture: ConfiguredFixture, dmxUniverse: DmxUniverse): void {
         const colorData = (event.params as LightParams | undefined)?.color;
         if (!colorData) return;
 
@@ -48,29 +49,7 @@ class DmxLightStatic implements IFixtureClass {
         this.writeFunction(fixture, 'red', r / 255, dmxUniverse);
         this.writeFunction(fixture, 'green', g / 255, dmxUniverse);
         this.writeFunction(fixture, 'blue', b / 255, dmxUniverse);
-        this.writeFunction(fixture, 'brightness', colorData.Y, dmxUniverse);
-    }
-
-    private getDmxMap(fixture: ConfiguredFixture): DmxMap {
-        let dmxMap = this.dmxMaps.get(fixture);
-        if (!dmxMap) {
-            dmxMap = new DmxMap(fixture.fixtureProfile);
-            this.dmxMaps.set(fixture, dmxMap);
-        }
-        return dmxMap;
-    }
-
-    private writeFunction(
-        fixture: ConfiguredFixture,
-        functionName: string,
-        normalizedValue: number,
-        dmxUniverse: DmxUniverse
-    ): void {
-        const channel = this.getDmxMap(fixture).lookup(functionName);
-        if (!channel) return;
-        const dmxChannel = fixture.dmxBaseChannel + channel.offset;
-        const dmxValue = normalizedToDmxRange(normalizedValue, channel.def.range);
-        dmxUniverse.setChannel(dmxChannel, dmxValue);
+        this.writeFunction(fixture, 'brightness', colorData.Y * this.masterBrightness * (this.masterBlackout ? 0 : 1), dmxUniverse);
     }
 }
 

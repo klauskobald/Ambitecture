@@ -5,8 +5,13 @@ testParams:
     # Each cycle: send all events in one message. `scheduled` is ms relative to cycle start (converted to epoch ms: batchStart + scheduled).
     # `interval` is ms between cycles.
     location: [0,0] # somewhere in the ocean
-    interval: 1500 # ms between batches
+    interval: 5000 # ms between batches
     events:
+      - class: master
+        scheduled: 0
+        params:
+          brightness: 1
+
       - class: light
         scheduled: 0
         position: [0,0,0]
@@ -34,3 +39,7 @@ testParams:
           layer: 100
           blend: ADD
           alpha: 1 
+      - class: master
+        scheduled: 1500
+        params:
+          brightness: 0.2

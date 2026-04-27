@@ -1,8 +1,10 @@
-import { FixtureChannelDef, FixtureProfile } from '../handlers/ConfigHandler';
+import { FixtureProfile } from '../handlers/ConfigHandler';
 
 export interface DmxChannel {
     offset: number;
-    def: FixtureChannelDef;
+    functionName: string;
+    rangeMin: number;
+    rangeMax: number;
 }
 
 export class DmxMap {
@@ -13,7 +15,10 @@ export class DmxMap {
         for (const [offsetStr, defs] of Object.entries(profile.params.dmx)) {
             const offset = parseInt(offsetStr, 10);
             for (const def of defs) {
-                this.map.set(def.function, { offset, def });
+                const parts = def.range.split('-');
+                const rangeMin = parseInt(parts[0] ?? '0', 10);
+                const rangeMax = parseInt(parts[1] ?? '255', 10);
+                this.map.set(def.function, { offset, functionName: def.function, rangeMin, rangeMax });
             }
         }
     }

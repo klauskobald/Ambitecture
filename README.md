@@ -1,83 +1,165 @@
-# Ambitecture: Core Concept & Architecture
+# Ambitecture
 
-**Author:** Klaus P Kobald GmbH  
-**Website:** [https://kobald.com](https://kobald.com)
+Distributed framework for live orchestration of physical environments (lights, DMX hardware, and spatial objects), with creative intent decoupled from hardware execution.
 
-Ambitecture is an open source project, and developers are warmly invited to contribute.
-Project is in early stage - basics must work exactly on May 20th, 2026 because I am creating a live show. So stay tuned!
+Ambitecture is open source and currently focused on production readiness for a live show deadline on **May 20, 2026**.
 
-## TypeScript Runtime Setup (ts-node first)
+## Repository Layout
 
-This repository is configured to run TypeScript directly with `ts-node` for now, without a build step.
-
-
-### Type-check only
-
-```bash
-npm run typecheck
+```text
+modules/
+  hub/                 Central authority (WebSocket/HTTP, config/project distribution)
+  renderers/dmx-ts/    DMX renderer implementation (TypeScript)
+  controllers/         Controller modules (scaffold for now)
+var/
+  projects/            Project and zone definitions (YAML)
+  fixtures/            Fixture profiles (YAML)
 ```
 
-## 1. Executive Summary
+Each module is self-contained with its own `package.json` and scripts.
 
-**Ambitecture** (Ambient Architecture Engine) is a distributed framework for the **live orchestration** of physical environments.
+## Current Runtime Model
 
-### "Open spatial control of objects for the rest of us."
+- Hub and renderer are both TypeScript-first runtimes using `ts-node`.
+- The hub accepts WebSocket clients and routes messages by `message.type`.
+- Renderers self-register, receive project-derived fixture config, and process event streams.
+- Event color payloads are normalized to CIE 1931 `xyY` in the hub before forwarding.
+- Renderer side uses a scheduled event queue and dynamic fixture class loading.
 
-Ambitecture moves beyond traditional lighting desks and proprietary hardware by decoupling creative **Intent** from execution. It democratizes complex spatial math, allowing creators to treat a physical venue as a dynamic canvas. Instead of managing channels and faders, Ambitecture allows for composition using **Spatial Objects** and **Volumes**, where hardware nodes (Renderers) autonomously interpret high-level performance data based on their physical location.
+## WebSocket Message Envelope
 
-## 2. The Three Pillars
+All module messages use one envelope:
 
-### A. The Hub (The Conductor)
+```json
+{
+  "message": {
+    "type": "events",
+    "location": [8.5417, 47.3769],
+    "payload": {}
+  }
+}
+```
 
-The Hub is the persistent central authority managing the global coordinate system and the master "Score."
+Common message types in the current code:
 
-* **State Compositor:** Manages the 3D scene graph and the real-time z-index layer stack.
-* **Spatial Broadcasting:** When a controller requests "Light at Coordinate A," the Hub broadcasts this intent to all Renderers whose Bounding Boxes overlap that coordinate.
-* **Clock Master:** Provides a master sync signal (via PTP/NTP) so all Renderers execute events at the exact same millisecond.
+- `register`: module announces role and identity
+- `config`: hub -> renderer project/fixture assignment
+- `events`: controller/hub -> renderer timed event batches
 
-### B. The Renderers (The Intelligent Performers)
+## Color Pipeline (Current)
 
-A Renderer is a spatial gateway (e.g., a Raspberry Pi, ESP32, or PC).
+- Internal exchange color format is CIE 1931 `xyY`.
+- Hub accepts multiple input formats and converts to `xyY`:
+  - `{ x, y, Y }`
+  - `{ rgb: "#112233" }`
+  - `{ rgb: [r, g, b] }`
+  - `{ r, g, b }`
+- Renderer converts `xyY` to RGB for DMX channel output.
 
-* **Self-Description (The Handshake):** Renderers connect and define their presence via a Bounding Box (min/max XYZ) and a list of internal Assets.
-* **Spatial Interpretation:** The Renderer calculates how its assets interact with spatial events based on local geometry.
-* **Autonomous Sequence Player (ASP):** Renderers buffer timed events locally to eliminate network jitter.
-* **JavaScript Runtime:** Renderers receive JS functions from the Hub to update logic (e.g., custom easing) without a firmware flash.
+## Quick Start
 
-### C. The Controllers (The Composers)
+### 1) Start Hub
 
-Controllers are the triggers for spatial actions (Unity Twins, iPad LiDAR, AI Agents).
+```bash
+cd modules/hub
+npm install
+cp .env.DEMO .env
+npm run dev
+```
 
-* **Intent Broadcasting:** High-level actions like "Light at [x,y,z] with 1m radius."
-* **Discovery:** Controllers query the Hub for available Rooms and Volumes.
+`.env.DEMO` sets:
 
-## 3. The Color Philosophy: CIE 1931
+```env
+CONFIG_PATH=./config.DEMO
+```
 
-Ambitecture uses the **CIE 1931 Chromaticity Space ($xyY$)** as its native color language. This ensures that the Hub speaks "Human Perception" while the Renderer speaks "Hardware."
+The default demo server config is in `modules/hub/config.DEMO/server.yml` and points at:
 
-### Why CIE 1931?
+- `var/projects`
+- `var/fixtures`
+- default project `test`
 
-Standard RGB is device-dependent. A value of `(255, 0, 0)` looks different on an LED strip than on a laser or a TV. $xyY$ provides a mathematical standard:
+### 2) Start DMX Renderer
 
-* **$x, y$ (Chromaticity):** Defines the color point regardless of brightness.
-* **$Y$ (Luminance):** Defines the perceived brightness.
+```bash
+cd modules/renderers/dmx-ts
+npm install
+npm run dev
+```
 
-### The Math of Spatial Blending
+Renderer settings come from environment variables (examples):
 
-When two spatial objects overlap, their colors must mix. Traditional RGB mixing often results in "muddy" or mathematically incorrect transitions. In Ambitecture, blending occurs in the CIE space:
+- `AMBITECTURE_HUB_URL` (default `http://localhost:3000`, converted to `ws://...`)
+- `GUID`
+- `GEO_LOCATION`
+- `POSITION_ORIGIN`
+- `BOUNDING_BOX`
+- `DMX_DRIVER`
+- `DMX_DEVICE`
+- `DMX_UNIVERSE`
+- `DMX_FRAME_RATE`
 
-1. **Additive Mixing:** If two lights hit the same point, the Renderer adds their $Y$ values and calculates the weighted average of their $xy$ coordinates.
-2. **Gamut Mapping:** Each Renderer maintains a "Gamut Map" of its fixtures. If the Hub requests a coordinate outside the fixture's capability (e.g., a highly saturated teal that a cheap LED cannot hit), the Renderer uses a local algorithm to snap to the closest reachable point on the **Spectral Locus**.
+## Module Commands
 
-## 4. The Logic of Spatial Intent
+### `modules/hub`
 
-* **Intersection Model:** Every frame, a Renderer checks the intersection of its assets and the active "Intent Volumes."
-* **Atmos-style Mapping:** Just as Atmos maps sound to speakers, Ambitecture maps "Light Intent" to physical emitters based on their 3D orientation.
-* **Non-Destructive Layers:** A z-indexed stack allows for complex layering. Removing a "Flash" event layer instantly restores the "Ambient Sunset" layer beneath it without state-tracking overhead.
+```bash
+npm run start      # one-shot ts-node run
+npm run dev        # watch mode
+npm run build      # tsc compile
+npm run typecheck  # tsc --noEmit
+```
 
-## 5. Minimum Implementation Goals (The Scaffold)
+### `modules/renderers/dmx-ts`
 
-1. **The Handshake:** Renderer registers its 3D Bounding Box.
-2. **The Spatial Event:** Hub sends $xyY$ color data to a coordinate. Renderer triggers local assets if they "see" that coordinate.
-3. **The Autonomous Queue:** Hub sends a sequence of three timed movements. Renderer buffers and plays them in sync.
-4. **The Logic Update:** Hub pushes a JS function to the Renderer to change the "Falloff Curve" (e.g., Linear to Inverse Square) in real-time.
+```bash
+npm run start      # one-shot ts-node run
+npm run dev        # watch mode
+npm run typecheck  # tsc --noEmit
+```
+
+## Project + Fixture Config Flow
+
+- Project YAML (`var/projects/*.yml`) defines zones, target renderer GUID, and fixture instances.
+- Fixture profile YAML (`var/fixtures/*.yml`) defines fixture class and DMX channel-function mappings.
+- On renderer registration, hub builds renderer-specific config and sends `message.type = "config"`.
+- Hub watches project and referenced fixture files and pushes updated config after reload.
+
+Demo files:
+
+- `var/projects/test.yml`
+- `var/fixtures/rgb_simple.yml`
+
+## Integration Test Runner (Hub)
+
+Integration tests in `modules/hub/tests` are runnable via:
+
+```bash
+cd modules/hub
+ts-node tests/runtest.ts
+```
+
+Run one test:
+
+```bash
+ts-node tests/runtest.ts 001-blinker.ts --timeout 10
+```
+
+Config source:
+
+- `modules/hub/config.DEMO/test.yml`
+
+`001-blinker.ts` acts as a controller client, registers via WebSocket, and sends timed event batches.
+
+## Resilience Notes
+
+- Hub WebSocket server heartbeat:
+  - ping every 10s
+  - terminate if pong timeout exceeds 15s
+- Hub enables `perMessageDeflate` (threshold 1024 bytes).
+- Renderer reconnects to hub immediately after close/error.
+- DMX universe driver includes recovery logic and automatic reconnect retries on device/driver failures.
+
+## Contributing
+
+Contributions are welcome. Keep module boundaries clear and prefer module-local types/utilities over shared global type files while the architecture is still stabilizing.

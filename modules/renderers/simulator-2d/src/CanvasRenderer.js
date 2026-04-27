@@ -33,17 +33,15 @@ class CanvasRenderer {
             console.warn('[CanvasRenderer] setSpatialFromZones: no zones');
             return;
         }
-        const boxes = [];
-        for (const z of zones) {
-            if (z && typeof z === 'object' && Array.isArray(z.boundingBox) && z.boundingBox.length >= 6) {
-                boxes.push(z.boundingBox.map(Number));
-            }
-        }
-        if (boxes.length === 0) {
+        const validZones = zones.filter(
+            z => z && typeof z === 'object' && Array.isArray(z.boundingBox) && z.boundingBox.length >= 6
+        );
+        if (validZones.length === 0) {
             console.warn('[CanvasRenderer] setSpatialFromZones: no boundingBox on zones');
             return;
         }
-        const u = CanvasRenderer._unionBoundingBoxes(boxes);
+        this._zones = validZones.map(z => ({ name: z.name, bbox: z.boundingBox.map(Number) }));
+        const u = CanvasRenderer._unionBoundingBoxes(this._zones.map(z => z.bbox));
         this.x1 = u[0];
         this.y1 = u[1];
         this.z1 = u[2];
@@ -133,24 +131,44 @@ class CanvasRenderer {
     }
 
     _drawGrid() {
-        const { ctx, canvas, ppm, x1, z1, x2, z2 } = this;
+        for (const zone of this._zones) {
+            this._drawZoneGrid(zone);
+        }
+    }
+
+    _drawZoneGrid(zone) {
+        const { ctx, ppm, x1, z1 } = this;
+        const [zx1, , zz1, zx2, , zz2] = zone.bbox;
+
+        const px1 = (zx1 - x1) * ppm;
+        const pz1 = (zz1 - z1) * ppm;
+        const pw  = (zx2 - zx1) * ppm;
+        const ph  = (zz2 - zz1) * ppm;
+
         ctx.strokeStyle = '#1a1a1a';
         ctx.lineWidth = 1;
-
-        for (let x = Math.ceil(x1); x <= x2; x++) {
+        for (let x = Math.ceil(zx1); x <= zx2; x++) {
             const cx = (x - x1) * ppm;
             ctx.beginPath();
-            ctx.moveTo(cx, 0);
-            ctx.lineTo(cx, canvas.height);
+            ctx.moveTo(cx, pz1);
+            ctx.lineTo(cx, pz1 + ph);
+            ctx.stroke();
+        }
+        for (let z = Math.ceil(zz1); z <= zz2; z++) {
+            const cy = (z - z1) * ppm;
+            ctx.beginPath();
+            ctx.moveTo(px1, cy);
+            ctx.lineTo(px1 + pw, cy);
             ctx.stroke();
         }
 
-        for (let z = Math.ceil(z1); z <= z2; z++) {
-            const cy = (z - z1) * ppm;
-            ctx.beginPath();
-            ctx.moveTo(0, cy);
-            ctx.lineTo(canvas.width, cy);
-            ctx.stroke();
-        }
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(px1, pz1, pw, ph);
+
+        ctx.fillStyle = '#444';
+        ctx.font = '11px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(zone.name, px1 + 4, pz1 + 14);
     }
 }

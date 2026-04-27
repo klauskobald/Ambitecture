@@ -18,6 +18,7 @@ class ConfigHandler {
 
         this.fixtures = [];
         for (const zone of message.payload.zones) {
+            const origin = zone.boundingBox;
             for (const fixtureData of zone.fixtures) {
                 const { fixtureProfile, name, location, params, range, target, rotation } = fixtureData;
                 const FixtureClass = this.fixtureClasses[fixtureProfile.class];
@@ -25,7 +26,12 @@ class ConfigHandler {
                     console.warn(`[config] unknown fixture class: ${fixtureProfile.class}`);
                     continue;
                 }
-                const instanceConfig = { name, location, params, range, target, rotation };
+                const worldLocation = [
+                    origin[0] + location[0],
+                    origin[1] + location[1],
+                    origin[2] + location[2],
+                ];
+                const instanceConfig = { name, location: worldLocation, params, range, target, rotation };
                 this.fixtures.push(new FixtureClass(fixtureProfile, instanceConfig, this.drawConfig));
             }
         }

@@ -40,6 +40,10 @@ testParams:
           blend: ADD
           alpha: 1 
       - class: master
-        scheduled: 1500
+        scheduled: 3000
+        params:
+          brightness: 0.5
+      - class: master
+        scheduled: 4000
         params:
           brightness: 0.2

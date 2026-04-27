@@ -9,6 +9,7 @@ class DmxLightStatic extends DmxFixtureBase {
 
     private masterBrightness: number = 1;
     private masterBlackout: boolean = false;
+    private myBrightness: number = 1;
 
     handleEvent(event: RendererEvent, fixture: ConfiguredFixture, dmxUniverse: DmxUniverse): void {
         switch (event.class) {
@@ -27,6 +28,7 @@ class DmxLightStatic extends DmxFixtureBase {
         if (masterParams) {
             this.masterBrightness = masterParams.brightness || this.masterBrightness;
             this.masterBlackout = masterParams.blackout || this.masterBlackout;
+            this.write(fixture, dmxUniverse);
         }
 
     }
@@ -49,7 +51,13 @@ class DmxLightStatic extends DmxFixtureBase {
         this.writeFunction(fixture, 'red', r / 255, dmxUniverse);
         this.writeFunction(fixture, 'green', g / 255, dmxUniverse);
         this.writeFunction(fixture, 'blue', b / 255, dmxUniverse);
-        this.writeFunction(fixture, 'brightness', colorData.Y * this.masterBrightness * (this.masterBlackout ? 0 : 1), dmxUniverse);
+        this.myBrightness = colorData.Y
+        this.write(fixture, dmxUniverse);
+    }
+
+    private write(fixture: ConfiguredFixture, dmxUniverse: DmxUniverse): void {
+        this.writeFunction(fixture, 'brightness', this.myBrightness * this.masterBrightness * (this.masterBlackout ? 0 : 1), dmxUniverse);
+
     }
 }
 

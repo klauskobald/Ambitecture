@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Ambitecture — Simulator 2D</title>
+  <style>
+    body {
+      background: #111;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      gap: 8px;
+    }
+    canvas { display: block; }
+    #status { color: #555; font: 11px/1 monospace; }
+  </style>
+</head>
+<body>
+  <canvas id="sim-canvas"></canvas>
+  <div id="status">loading…</div>
+
+  <script src="src/color.js"></script>
+  <script src="src/EventQueue.js"></script>
+  <script src="src/CanvasRenderer.js"></script>
+  <script src="src/fixtures/dmx_light_static.js"></script>
+  <script src="src/handlers/ConfigHandler.js"></script>
+  <script src="src/handlers/EventsHandler.js"></script>
+  <script src="src/HubConnection.js"></script>
+  <script>
+    (async () => {
+      const config = await fetch('./src/config.json').then(r => r.json());
+      const canvas = document.getElementById('sim-canvas');
+      const renderer = new CanvasRenderer(canvas, config);
+      renderer.start();
+      const hub = new HubConnection(config, renderer);
+      hub.connect();
+    })();
+  </script>
+</body>
+</html>

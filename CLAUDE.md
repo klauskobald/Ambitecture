@@ -132,7 +132,8 @@ The hub will serve its own setup GUI from `hub/public` as a static SPA.
 
 - **Vanilla JS only — no frameworks, no bundler, no build step.**
 - **Mobile-first layout, fully responsive.**
-- Routes: `GET /api/*` (REST), `GET /ws` (WebSocket), all other routes → `hub/public/index.html`.
+- Target routes (once HTTP/static wiring is enabled on the same server): `GET /api/*` (REST), `GET /ws` (WebSocket), all other routes → `hub/public/index.html`.
+- Current implementation note: hub currently runs WebSocket on the HTTP server without a `path` restriction and does not yet wire REST/static handlers.
 - CSS must be split by concern: `layout.css`, `controls.css`, `theme.css` (CSS variables for a dark base theme).
 - HTML: semantic structure only; no inline styles; use global class names.
 - Pane-based navigation — switch sections without full page reloads.

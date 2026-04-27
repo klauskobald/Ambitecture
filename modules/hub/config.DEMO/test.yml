@@ -6,60 +6,60 @@ testParams:
     # `interval` is ms between cycles.
     location: [0,0] # somewhere in the ocean
     interval: 5000 # ms between batches
+    # events:
+    #   - class: master
+    #     scheduled: 0
+    #     params:
+    #       brightness: 1
+    #   - class: light
+    #     scheduled: 0
+    #     position: [0,0,0]
+    #     params:
+    #       color: {"rgb": [255,0,255]}
+    #       strobe: 0
+    #       layer: 100
+    #       blend: ADD
+    #       alpha: 1
+
+
     events:
       - class: master
         scheduled: 0
         params:
           brightness: 1
+
       - class: light
         scheduled: 0
+        position: [0,0,0]
+        params:
+          color: {"rgb": [255,255,0]}
+          strobe: 0
+          layer: 100
+          blend: ADD
+          alpha: 1
+      - class: light
+        scheduled: 500
+        position: [0,0,0]
+        params:
+          color: {"rgb": [0,255,255]}
+          strobe: 0
+          layer: 100
+          blend: ADD
+          alpha: 1 
+      - class: light
+        scheduled: 1000
         position: [0,0,0]
         params:
           color: {"rgb": [255,0,255]}
           strobe: 0
           layer: 100
           blend: ADD
-          alpha: 1
-
-
-#    events:
-#       - class: master
-#         scheduled: 0
-#         params:
-#           brightness: 1
-
-#       - class: light
-#         scheduled: 0
-#         position: [0,0,0]
-#         params:
-#           color: {"rgb": [255,255,0]}
-#           strobe: 0
-#           layer: 100
-#           blend: ADD
-#           alpha: 1
-#       - class: light
-#         scheduled: 500
-#         position: [0,0,0]
-#         params:
-#           color: {"rgb": [0,255,255]}
-#           strobe: 0
-#           layer: 100
-#           blend: ADD
-#           alpha: 1 
-#       - class: light
-#         scheduled: 1000
-#         position: [0,0,0]
-#         params:
-#           color: {"rgb": [255,0,255]}
-#           strobe: 0
-#           layer: 100
-#           blend: ADD
-#           alpha: 1 
-#       - class: master
-#         scheduled: 3000
-#         params:
-#           brightness: 0.5
-#       - class: master
-#         scheduled: 4000
-#         params:
-#           brightness: 0.2
+          alpha: 1 
+      - class: master
+        scheduled: 3000
+        params:
+          brightness: 0.5
+      - class: master
+        scheduled: 4000
+        params:
+          brightness: 0.2

@@ -25,6 +25,7 @@ Each module is self-contained with its own `package.json` and scripts.
 
 - Hub and renderer are both TypeScript-first runtimes using `ts-node`.
 - The hub accepts WebSocket clients and routes messages by `message.type`.
+- Current hub runtime is WebSocket-first; REST endpoints and static `public` serving are target surface and not yet wired.
 - Renderers self-register, receive project-derived fixture config, and process event streams.
 - Event color payloads are normalized to CIE 1931 `xyY` in the hub before forwarding.
 - Renderer side uses a scheduled event queue and dynamic fixture class loading.

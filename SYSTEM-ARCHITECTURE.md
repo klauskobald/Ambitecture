@@ -31,9 +31,10 @@ Status: **planned surface, mostly placeholder files today** (`public/index.html`
 
 All setup should be possible through the hub's own web GUI, served from `hub/public`.
 
-- `GET /api/*`: REST endpoints for CRUD-style operations and snapshots.
-- `GET /ws`: WebSocket endpoint for realtime updates, module sessions, and command forwarding.
-- Any non-API/non-WS route should serve frontend assets from `public` via a generic catch-all route (SPA-friendly).
+- Target routing (once HTTP layer is wired on the same server host/port):
+  - `GET /api/*`: REST endpoints for CRUD-style operations and snapshots.
+  - `GET /ws`: WebSocket endpoint for realtime updates, module sessions, and command forwarding.
+  - Any non-API/non-WS route should serve frontend assets from `public` via a generic catch-all route (SPA-friendly).
 
 The GUI should use a mobile-first layout with:
 
@@ -52,7 +53,7 @@ When a renderer connects, it announces available setup pane identifiers (for exa
 Flow:
 
 1. Renderer connects and publishes capability metadata (including setup pane IDs).
-2. Hub requests snippet content for a pane (for example `usb-hardware`) over `/ws`.
+2. Hub requests snippet content for a pane (for example `usb-hardware`) over the WebSocket channel (target route: `/ws` once path-restricted WS is wired).
 3. Renderer returns the HTML snippet payload.
 4. Hub injects/displays this snippet inside the renderer setup pane in the web GUI.
 5. User actions in that pane are sent to the hub.

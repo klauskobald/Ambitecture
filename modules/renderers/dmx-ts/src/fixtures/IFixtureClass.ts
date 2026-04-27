@@ -1,5 +1,6 @@
 import { ConfiguredFixture } from '../handlers/ConfigHandler';
 import { DmxUniverse } from '../DmxUniverse';
+import { Vector3 } from '../Vector3';
 
 export interface RendererEvent {
     class: string;
@@ -9,5 +10,5 @@ export interface RendererEvent {
 }
 
 export interface IFixtureClass {
-    handleEvent(event: RendererEvent, fixture: ConfiguredFixture, dmxUniverse: DmxUniverse): void;
+    handleEvent(event: RendererEvent, fixture: ConfiguredFixture, dmxUniverse: DmxUniverse, spatial: Vector3 | null): void;
 }

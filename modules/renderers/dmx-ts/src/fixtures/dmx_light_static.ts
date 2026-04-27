@@ -4,16 +4,17 @@ import { ConfiguredFixture } from '../handlers/ConfigHandler';
 import { RendererEvent } from './IFixtureClass';
 import { DmxFixtureBase } from './DmxFixtureBase';
 import { LightParams, MasterParams } from './lightEventParams';
+import { Vector3 } from '../Vector3';
 
 class DmxLightStatic extends DmxFixtureBase {
 
     private masterBrightness: number = 1;
     private masterBlackout: boolean = false;
 
-    handleEvent(event: RendererEvent, fixture: ConfiguredFixture, dmxUniverse: DmxUniverse): void {
+    handleEvent(event: RendererEvent, fixture: ConfiguredFixture, dmxUniverse: DmxUniverse, spatial: Vector3 | null): void {
         switch (event.class) {
             case 'light':
-                this.handleLightEvent(event, fixture, dmxUniverse);
+                this.handleLightEvent(event, fixture, dmxUniverse, spatial);
                 break;
             case 'master':
                 this.handleMasterEvent(event, fixture, dmxUniverse);
@@ -22,17 +23,17 @@ class DmxLightStatic extends DmxFixtureBase {
                 return;
         }
     }
+
     private handleMasterEvent(event: RendererEvent, fixture: ConfiguredFixture, dmxUniverse: DmxUniverse): void {
         const masterParams = (event.params as MasterParams | undefined);
         if (masterParams) {
             this.masterBrightness = masterParams.brightness || this.masterBrightness;
             this.masterBlackout = masterParams.blackout || this.masterBlackout;
-            this.write(fixture, dmxUniverse);
+            this.write(fixture, dmxUniverse, 1);
         }
-
     }
 
-    private handleLightEvent(event: RendererEvent, fixture: ConfiguredFixture, dmxUniverse: DmxUniverse): void {
+    private handleLightEvent(event: RendererEvent, fixture: ConfiguredFixture, dmxUniverse: DmxUniverse, spatial: Vector3 | null): void {
         const colorData = (event.params as LightParams | undefined)?.color;
         if (!colorData) return;
 
@@ -50,14 +51,19 @@ class DmxLightStatic extends DmxFixtureBase {
         this.writeFunction(fixture, 'green', g, dmxUniverse);
         this.writeFunction(fixture, 'blue', b, dmxUniverse);
 
-        // colorData.Y describes the brightness of the light. questions is how we use that value, because it actually tells us, that if we want eg, green and blue with the same brightness we would have to set the brightness of green lower than the brightness of blue.
-
-        this.write(fixture, dmxUniverse);
+        const spatialFactor = this.computeSpatialFactor(spatial, fixture.range);
+        this.write(fixture, dmxUniverse, spatialFactor);
     }
 
-    private write(fixture: ConfiguredFixture, dmxUniverse: DmxUniverse): void {
-        this.writeFunction(fixture, 'brightness', this.masterBrightness * (this.masterBlackout ? 0 : 1), dmxUniverse);
+    private computeSpatialFactor(spatial: Vector3 | null, range: number): number {
+        if (!spatial || range <= 0) return 1;
+        const distance = spatial.magnitude();
+        return Math.max(0, 1 - distance / range);
+    }
 
+    private write(fixture: ConfiguredFixture, dmxUniverse: DmxUniverse, spatialFactor: number): void {
+        const brightness = this.masterBrightness * (this.masterBlackout ? 0 : 1) * spatialFactor;
+        this.writeFunction(fixture, 'brightness', brightness, dmxUniverse);
     }
 }
 

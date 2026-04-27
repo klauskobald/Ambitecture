@@ -3,11 +3,12 @@ import { Logger } from '../Logger';
 import { DmxUniverse } from '../DmxUniverse';
 import { IFixtureClass, RendererEvent } from './IFixtureClass';
 import { DmxMap } from './DmxMap';
+import { Vector3 } from '../Vector3';
 
 export abstract class DmxFixtureBase implements IFixtureClass {
     private readonly dmxMaps = new WeakMap<ConfiguredFixture, DmxMap>();
 
-    abstract handleEvent(event: RendererEvent, fixture: ConfiguredFixture, dmxUniverse: DmxUniverse): void;
+    abstract handleEvent(event: RendererEvent, fixture: ConfiguredFixture, dmxUniverse: DmxUniverse, spatial: Vector3 | null): void;
 
     protected getDmxBaseChannel(fixture: ConfiguredFixture): number | null {
         const v = fixture.params['dmxBaseChannel'];

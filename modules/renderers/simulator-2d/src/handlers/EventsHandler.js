@@ -1,6 +1,7 @@
 class EventsHandler {
-    constructor(configHandler) {
+    constructor(configHandler, renderer) {
         this.configHandler = configHandler;
+        this._renderer = renderer;
         this.queue = new EventQueue(event => this.processEvent(event));
     }
 
@@ -19,5 +20,6 @@ class EventsHandler {
         for (const fixture of fixtures) {
             fixture.handleEvent(event);
         }
+        this._renderer.handleEvent(event);
     }
 }

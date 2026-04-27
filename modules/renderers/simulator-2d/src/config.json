@@ -15,5 +15,10 @@
       "highFrequency": 10,
       "onTime": 0.02
     }
+  },
+  "EVENT_DRAW": {
+    "square": {
+      "size": 0.3
+    }
   }
 }

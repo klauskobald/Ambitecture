@@ -4,7 +4,7 @@ class HubConnection {
         this.ws = null;
 
         const configHandler = new ConfigHandler(renderer, config);
-        const eventsHandler = new EventsHandler(configHandler);
+        const eventsHandler = new EventsHandler(configHandler, renderer);
 
         this.handlers = {
             config: configHandler,

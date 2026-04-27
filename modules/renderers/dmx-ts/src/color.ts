@@ -50,9 +50,9 @@ export class Color {
         };
 
         return {
-            r: Math.round(gamma(rLin)),
-            g: Math.round(gamma(gLin)),
-            b: Math.round(gamma(bLin)),
+            r: (gamma(rLin)),
+            g: (gamma(gLin)),
+            b: (gamma(bLin)),
         };
     }
 

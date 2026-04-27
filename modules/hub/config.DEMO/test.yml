@@ -10,40 +10,56 @@ testParams:
       - class: master
         scheduled: 0
         params:
-          brightness: 1
-
+          brightness: 2
       - class: light
         scheduled: 0
         position: [0,0,0]
         params:
-          color: {"rgb": [255,255,0]}
+          color: {"rgb": [255,33,60]}
           strobe: 0
           layer: 100
           blend: ADD
           alpha: 1
-      - class: light
-        scheduled: 500
-        position: [0,0,0]
-        params:
-          color: {"rgb": [0,255,255]}
-          strobe: 0
-          layer: 100
-          blend: ADD
-          alpha: 1 
-      - class: light
-        scheduled: 1000
-        position: [0,0,0]
-        params:
-          color: {"rgb": [255,0,255]}
-          strobe: 0
-          layer: 100
-          blend: ADD
-          alpha: 1 
-      - class: master
-        scheduled: 3000
-        params:
-          brightness: 0.5
-      - class: master
-        scheduled: 4000
-        params:
-          brightness: 0.2
+
+
+#    events:
+#       - class: master
+#         scheduled: 0
+#         params:
+#           brightness: 1
+
+#       - class: light
+#         scheduled: 0
+#         position: [0,0,0]
+#         params:
+#           color: {"rgb": [255,255,0]}
+#           strobe: 0
+#           layer: 100
+#           blend: ADD
+#           alpha: 1
+#       - class: light
+#         scheduled: 500
+#         position: [0,0,0]
+#         params:
+#           color: {"rgb": [0,255,255]}
+#           strobe: 0
+#           layer: 100
+#           blend: ADD
+#           alpha: 1 
+#       - class: light
+#         scheduled: 1000
+#         position: [0,0,0]
+#         params:
+#           color: {"rgb": [255,0,255]}
+#           strobe: 0
+#           layer: 100
+#           blend: ADD
+#           alpha: 1 
+#       - class: master
+#         scheduled: 3000
+#         params:
+#           brightness: 0.5
+#       - class: master
+#         scheduled: 4000
+#         params:
+#           brightness: 0.2

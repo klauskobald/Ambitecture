@@ -12,6 +12,7 @@ Ambitecture is open source and currently focused on production readiness for a l
 ```text
 modules/
   hub/                 Central authority (WebSocket/HTTP, config/project distribution)
+  deliver/             Allowlisted static HTTP host for browser-only UIs (deliver.yml mounts)
   renderers/dmx-ts/    DMX renderer implementation (TypeScript)
   controllers/         Controller modules (scaffold for now)
 var/
@@ -29,6 +30,7 @@ Each module is self-contained with its own `package.json` and scripts.
 - Renderers self-register, receive project-derived fixture config, and process event streams.
 - Event color payloads are normalized to CIE 1931 `xyY` in the hub before forwarding.
 - Renderer side uses a scheduled event queue and dynamic fixture class loading.
+- Optional **`modules/deliver`** serves static HTML/JS for browser-only tools (for example `simulator-2d`) on configured URL prefixes; it is separate from the hub process (see [SYSTEM-ARCHITECTURE.md](SYSTEM-ARCHITECTURE.md)).
 
 ## WebSocket Message Envelope
 
@@ -103,6 +105,18 @@ Renderer settings come from environment variables (examples):
 - `DMX_UNIVERSE`
 - `DMX_FRAME_RATE`
 
+### 3) Optional: static web UIs (`deliver`)
+
+Use when you want browser apps (for example the 2D simulator under `modules/renderers/simulator-2d`) on one origin without each folder running its own server:
+
+```bash
+cd modules/deliver
+npm install
+npm start
+```
+
+Mounts and listen address/port are defined in `modules/deliver/deliver.yml`. Override the config file with `DELIVER_CONFIG` or `node src/index.js --config /path/to/deliver.yml`.
+
 ## Module Commands
 
 ### `modules/hub`
@@ -120,6 +134,13 @@ npm run typecheck  # tsc --noEmit
 npm run start      # one-shot ts-node run
 npm run dev        # watch mode
 npm run typecheck  # tsc --noEmit
+```
+
+### `modules/deliver`
+
+```bash
+npm start   # node src/index.js
+npm run dev # node --watch src/index.js
 ```
 
 ## Project + Fixture Config Flow

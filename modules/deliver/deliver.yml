@@ -1,0 +1,8 @@
+# Static mounts: only listed ids are served. Paths in `root` are relative to this file's directory.
+listen:
+  host: 0.0.0.0
+  port: 8080
+
+mounts:
+  simulator-2d:
+    root: ../renderers/simulator-2d

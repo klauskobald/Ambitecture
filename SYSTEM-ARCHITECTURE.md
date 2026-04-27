@@ -1,6 +1,6 @@
 # System layout (`modules/`)
 
-The `modules/` tree holds **runnable components** grouped by role: one central **hub**, many **renderers** (hardware or protocol outputs), and **controllers** (operator UIs). Each folder is meant to be developed and run somewhat independently. For the product vision (Hub as conductor, spatial intent, CIE color), see the main [README.md](README.md).
+The `modules/` tree holds **runnable components** grouped by role: one central **hub**, many **renderers** (hardware or protocol outputs), **controllers** (operator UIs), and optionally **`deliver`** (static HTTP only for browser assets). Each folder is meant to be developed and run somewhat independently. For the product vision (Hub as conductor, spatial intent, CIE color), see the main [README.md](README.md).
 
 ---
 
@@ -94,6 +94,25 @@ Renderer data authority model:
 **`controllers/web-test/`** — Minimal static web client skeleton (`src/index.html`, `main.js`, `styles.css`). `src/config.json` exists but the runtime controller logic is still placeholder (`main.js` is currently empty).
 
 Controller config push is part of intended design, but the current hub handler pushes `config` only to renderers.
+
+---
+
+## `modules/deliver`
+
+**Role:** Optional **static HTTP host** for browser-only assets (HTML/CSS/JS). It does not participate in WebSocket routing or hub APIs; hub and renderers/controllers still connect to the hub the same way. Use it when you want one listen port and stable URL prefixes for tools that have no bundler or backend of their own.
+
+**Stack:** Node.js, ESM (`"type": "module"`), `js-yaml`. No TypeScript build step.
+
+**Configuration:** `modules/deliver/deliver.yml` (or another file via `DELIVER_CONFIG` or `node src/index.js --config <path>`). Each key under `mounts` is a public path segment; `root` is resolved relative to the YAML file’s directory. Only listed mounts are served.
+
+**Behavior (v1):**
+
+- `GET /` returns a small HTML index linking to known mounts.
+- `GET /{mountId}` redirects to `GET /{mountId}/` so relative URLs in pages resolve correctly.
+- `GET /{mountId}/…` serves files under that mount’s `root`, with path traversal rejected and `realpath` checks so resolved files cannot escape the mount directory.
+- Requests for a directory with an `index.html` serve that file.
+
+Example: a mount `simulator-2d` with `root` pointing at `modules/renderers/simulator-2d` serves the simulator at `http://<listen>/simulator-2d/`.
 
 ---
 

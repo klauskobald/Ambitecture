@@ -48,9 +48,9 @@ class DmxLightStatic extends DmxFixtureBase {
             }
         }
 
-        this.writeFunction(fixture, 'red', r / 255, dmxUniverse);
-        this.writeFunction(fixture, 'green', g / 255, dmxUniverse);
-        this.writeFunction(fixture, 'blue', b / 255, dmxUniverse);
+        this.writeFunction(fixture, 'red', r, dmxUniverse);
+        this.writeFunction(fixture, 'green', g, dmxUniverse);
+        this.writeFunction(fixture, 'blue', b, dmxUniverse);
         this.myBrightness = colorData.Y
         this.write(fixture, dmxUniverse);
     }

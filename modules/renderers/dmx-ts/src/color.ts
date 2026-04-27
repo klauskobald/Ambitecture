@@ -5,7 +5,7 @@ export class Color {
         public readonly x: number,
         public readonly y: number,
         public readonly Y: number
-    ) {}
+    ) { }
 
     blend(other: Color, mode: BlendMode, alpha: number): Color {
         switch (mode) {
@@ -40,9 +40,9 @@ export class Color {
         const Z = (Y / y) * (1 - x - y);
 
         // XYZ → linear sRGB (D65)
-        const rLin =  3.2406 * X - 1.5372 * Y - 0.4986 * Z;
+        const rLin = 3.2406 * X - 1.5372 * Y - 0.4986 * Z;
         const gLin = -0.9689 * X + 1.8758 * Y + 0.0415 * Z;
-        const bLin =  0.0557 * X - 0.2040 * Y + 1.0570 * Z;
+        const bLin = 0.0557 * X - 0.2040 * Y + 1.0570 * Z;
 
         const gamma = (v: number): number => {
             const c = Math.max(0, Math.min(1, v));
@@ -50,9 +50,9 @@ export class Color {
         };
 
         return {
-            r: Math.round(gamma(rLin) * 255),
-            g: Math.round(gamma(gLin) * 255),
-            b: Math.round(gamma(bLin) * 255),
+            r: Math.round(gamma(rLin)),
+            g: Math.round(gamma(gLin)),
+            b: Math.round(gamma(bLin)),
         };
     }
 

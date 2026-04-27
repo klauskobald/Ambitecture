@@ -12,10 +12,21 @@ class CanvasRenderer {
 
         this.canvas.width  = (this.x2 - this.x1) * this.ppm + 2 * this.padding;
         this.canvas.height = (this.z2 - this.z1) * this.ppm + 2 * this.padding;
+
+        this._events = new Map();
+        this._eventDrawConfig = config.EVENT_DRAW;
+        this._eventClasses = { light: EventLight, master: EventMaster };
     }
 
     setFixtures(fixtures) {
         this.fixtures = fixtures;
+    }
+
+    handleEvent(event) {
+        const EventClass = this._eventClasses[event.class];
+        if (!EventClass) return;
+        const layer = event.params?.layer ?? 0;
+        this._events.set(layer, new EventClass(event, this._eventDrawConfig));
     }
 
     start() {
@@ -39,6 +50,11 @@ class CanvasRenderer {
             fixture.update(nowSec);
             const { cx, cy } = this.worldToCanvas(fixture.location[0], fixture.location[2]);
             fixture.draw(ctx, cx, cy, this.ppm);
+        }
+
+        for (const [, ev] of this._events) {
+            const { cx, cy } = this.worldToCanvas(ev._position[0], ev._position[2]);
+            ev.draw(ctx, cx, cy, this.ppm);
         }
     }
 

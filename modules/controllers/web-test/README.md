@@ -1,6 +1,6 @@
 # Controller web test
 
-Static shell that embeds **simulator-2d** in an iframe (hub-driven renderer), connects to the hub as a **controller**, receives **project `config`** (per-zone `boundingBox` and fixtures from [`var/projects`](../../../var/projects)), and draws touch/pointer traces on a **transparent overlay canvas**. Pointer positions use the **same on-screen rect** as `#sim-canvas` and **linear** mapping into meters along the zone bbox XZ span (see `#spatial-readout`). The iframe has `pointer-events: none` so local input does not reach the simulator.
+Static shell that embeds **simulator-2d** in an iframe (hub-driven renderer), connects to the hub as a **controller**, receives **project `config`** (per-zone `boundingBox` and fixtures from [`var/projects`](../../../var/projects)), and draws touch/pointer traces on a **transparent overlay canvas** (`#touch-overlay` over `.sim-stack`). Pointer **viewport** positions are mapped **linearly** over that overlay’s client rect into normalized **u,v** (0–1) and zone-bbox **meters** XZ (see `#spatial-readout`). The iframe has `pointer-events: none` so local input does not reach the simulator.
 
 ## Config (`config.json`)
 

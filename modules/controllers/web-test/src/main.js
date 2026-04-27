@@ -14,7 +14,7 @@
  */
 
 /**
- * Zone bounding box in meters (hub `config`); canvas maps 1:1 to XZ span on screen.
+ * Zone bounding box in meters (hub `config`); the touch overlay maps linearly to XZ over its client rect.
  * @typedef {object} HubSpatialState
  * @property {number} x1
  * @property {number} y1
@@ -183,23 +183,15 @@ function spatialStateFromControllerConfig(payload, rendererGuid) {
 }
 
 /**
- * Map client coords to meters using the same on-screen rect as `#sim-canvas` and the zone bbox (linear XZ).
+ * Map viewport `clientX`/`clientY` to meters using the touch-overlay canvas client rect and zone bbox (linear XZ).
  * @param {number} clientX
  * @param {number} clientY
- * @param {HTMLIFrameElement} iframe
+ * @param {HTMLCanvasElement} overlayCanvas `#touch-overlay` (covers `.sim-stack`)
  * @param {HubSpatialState} s
- * @returns {{ wx: number; wy: number; wz: number } | null}
+ * @returns {{ wx: number; wy: number; wz: number; nx: number; ny: number } | null}
  */
-function simCanvasClientToBboxMeters(clientX, clientY, iframe, s) {
-  const doc = iframe.contentDocument;
-  if (!doc) {
-    return null;
-  }
-  const simCanvas = doc.getElementById('sim-canvas');
-  if (!(simCanvas instanceof HTMLCanvasElement)) {
-    return null;
-  }
-  const r = simCanvas.getBoundingClientRect();
+function overlayClientToBboxMeters(clientX, clientY, overlayCanvas, s) {
+  const r = overlayCanvas.getBoundingClientRect();
   if (r.width <= 0 || r.height <= 0) {
     return null;
   }
@@ -211,17 +203,16 @@ function simCanvasClientToBboxMeters(clientX, clientY, iframe, s) {
   const wx = s.x1 + nx * (s.x2 - s.x1);
   const wz = s.z1 + ny * (s.z2 - s.z1);
   const wy = s.y1;
-  return { wx, wy, wz };
+  return { wx, wy, wz, nx, ny };
 }
 
 /**
  * @param {LayoutConfig} L
  * @param {HTMLCanvasElement} canvas
  * @param {HTMLElement} stack
- * @param {HTMLIFrameElement} iframe
  * @param {() => HubSpatialState | null} getSpatial
  */
-function setupOverlayCanvas(L, canvas, stack, iframe, getSpatial) {
+function setupOverlayCanvas(L, canvas, stack, getSpatial) {
   const ctx = canvas.getContext('2d');
   if (!ctx) {
     showConfigError('Canvas 2D context unavailable.');
@@ -266,14 +257,14 @@ function setupOverlayCanvas(L, canvas, stack, iframe, getSpatial) {
       setSpatialReadout('hub config (zone bbox) not yet received');
       return;
     }
-    const m = simCanvasClientToBboxMeters(clientX, clientY, iframe, spatial);
+    const m = overlayClientToBboxMeters(clientX, clientY, canvas, spatial);
     if (!m) {
-      setSpatialReadout('outside simulator canvas');
+      setSpatialReadout('outside touch overlay');
       return;
     }
-    const { wx, wy, wz } = m;
+    const { wx, wy, wz, nx, ny } = m;
     setSpatialReadout(
-      `meters (inside zone bbox)  x=${wx.toFixed(3)}  y=${wy.toFixed(3)}  z=${wz.toFixed(3)}`
+      `overlay u=${nx.toFixed(3)} v=${ny.toFixed(3)}  |  meters x=${wx.toFixed(3)} y=${wy.toFixed(3)} z=${wz.toFixed(3)}`
     );
   }
 
@@ -428,7 +419,7 @@ async function main() {
     const next = spatialStateFromControllerConfig(message.payload, cfg.SIMULATOR_RENDERER_GUID);
     if (next) {
       hubSpatial = next;
-      setSpatialReadout('hub config received — drag over simulator');
+      setSpatialReadout('hub config received — drag on the touch overlay');
     } else {
       setSpatialReadout('config received but no zone for SIMULATOR_RENDERER_GUID');
     }
@@ -438,7 +429,7 @@ async function main() {
     setSpatialReadout('WebSocket error');
   });
 
-  setupOverlayCanvas(L, canvas, stack, iframe, () => hubSpatial);
+  setupOverlayCanvas(L, canvas, stack, () => hubSpatial);
 }
 
 main();

@@ -6,7 +6,7 @@ The `modules/` tree holds **runnable components** grouped by role: one central *
 
 ## `modules/hub`
 
-**Role:** Central process: configuration authority, and (as the stack grows) the HTTP API and real-time channel for controllers and renderers.
+**Role:** Central process: configuration authority and real-time channel for controllers and renderers.
 
 The hub is the **single source of truth** for system-wide configuration. It subscribes to configuration file changes (implemented in `src/Config.ts`) and is responsible for pushing effective config updates to all connected modules.
 
@@ -16,11 +16,18 @@ The hub is the **single source of truth** for system-wide configuration. It subs
 
 - **`src/Config.ts`** — Loads YAML from a config directory (`CONFIG_PATH` env, default `config/` under the process cwd), or a named `.yml` / `.yaml` path. Supports optional configs, dot-notation `get()`, `CONFIG:otherConfig:key` string indirection, and `fs.watch` reload with subscriber callbacks.
 - **`src/Logger.ts`** — Shared logging.
+- **`src/Server.ts`** — HTTP server + WebSocket server (`perMessageDeflate` enabled, heartbeat ping/pong supervision).
+- **`src/MessageRouter.ts`** — Message dispatch by `message.type`.
+- **`src/handlers/RegisterHandler.ts`** — Accepts `register`, stores module identity/metadata, and pushes `config` to renderers.
+- **`src/handlers/EventsHandler.ts`** — Accepts `events`, normalizes event color to CIE 1931 `xyY`, forwards to connected renderers.
+- **`src/ProjectManager.ts`** — Loads project + referenced fixtures, watches files, builds per-renderer config payloads.
 - **Profile example:** `config.DEMO/server.yml` defines `LISTEN_PORT` and `LISTEN_HOST` (demo uses `3000` and `0.0.0.0`). Use `.env` / `.env.DEMO` to point `CONFIG_PATH` at a profile such as `config.DEMO`.
 
-**Note:** Express on port 80 and a WebSocket on `/ws` describe the **intended** public surface; wire that up in `src/index.ts` and keep listen port/host in YAML (as in the demo) rather than hard-coding.
+**Current runtime note:** The hub currently runs on Node's `http` server directly (not Express). WebSocket is attached to that server without a path restriction (not limited to `/ws` yet).
 
 ### Hub-hosted setup GUI
+
+Status: **planned surface, mostly placeholder files today** (`public/index.html`, `public/main.js`, `public/styles.css` currently exist but are empty).
 
 All setup should be possible through the hub's own web GUI, served from `hub/public`.
 
@@ -35,6 +42,8 @@ The GUI should use a mobile-first layout with:
 - fast pane switching without full page reloads
 
 ### Renderer setup panes (remote-provided UI)
+
+Status: **planned protocol direction**, not implemented in current hub handlers yet.
 
 The GUI includes a pane for connected renderers and their specific setup tools.
 
@@ -55,14 +64,23 @@ Flow:
 
 **Role:** Programs that turn hub timing and intent into concrete outputs (DMX universes, devices, etc.). Add one subdirectory per renderer implementation.
 
-**`renderers/dmx-ts/`** — TypeScript renderer package (scaffold: `package.json`, `tsconfig.json`). Intended to schedule timed events and drive a DMX bus once `src/` is filled in.
+**`renderers/dmx-ts/`** — TypeScript DMX renderer implementation (active runtime, not scaffold-only).
 
-Renderers receive configuration changes via WebSocket whenever the hub decides to publish them. A renderer module must wait for a valid config before starting normal operation; in the common path, this config arrives immediately after connection.
+Current behavior:
+
+- Connects to hub WebSocket, auto-reconnects immediately on close/error.
+- Sends `register` payload as `role: "renderer"` with `guid`, `location`, `positionOrigin`, `boundingBox`.
+- Handles `config` to cache fixtures and initialize DMX output.
+- Handles `events` via an in-memory scheduled queue (`scheduled` timestamp aware).
+- Dynamically loads fixture class handlers from `src/fixtures` based on fixture profile `class`.
+- Writes DMX frames continuously at configured frame rate, with DMX recovery/reconnect logic.
+
+Renderers receive configuration over WebSocket from the hub. In the common path this arrives immediately after renderer registration.
 
 Renderer data authority model:
 
 - The hub is always the source of truth for renderer-relevant data.
-- A renderer may cache hub data for short periods (performance optimization), but cache is non-authoritative.
+- A renderer may cache hub data in memory for operation/performance, but cache is non-authoritative.
 - Renderer config is pushed from the hub (not locally self-authored at runtime).
 - Event queues/state are kept in renderer memory for now (no persistent event store yet).
 
@@ -72,9 +90,9 @@ Renderer data authority model:
 
 **Role:** Front ends and tools that send control or scene data to the hub.
 
-**`controllers/web-test/`** — Minimal static web client (`src/index.html`, `main.js`, `styles.css`). `src/config.json` holds `AMBITECTURE_HUB_URL` so the page knows which hub instance to talk to.
+**`controllers/web-test/`** — Minimal static web client skeleton (`src/index.html`, `main.js`, `styles.css`). `src/config.json` exists but the runtime controller logic is still placeholder (`main.js` is currently empty).
 
-Controllers also receive configuration changes via WebSocket whenever the hub decides to publish them. A controller module should wait for a valid config before starting operation; this usually happens immediately after connecting.
+Controller config push is part of intended design, but the current hub handler pushes `config` only to renderers.
 
 ---
 
@@ -117,13 +135,13 @@ The hub keeps this as authoritative runtime metadata and can update it if the mo
 
 ### Spatial event routing for renderers
 
-Renderers receive spatial objects/events from the hub and then evaluate what intersects with their own bounding box before producing output (for example, deciding which fixtures should emit light).
+Renderers receive events from the hub and apply them to configured fixtures. In the current implementation, fixture handlers process events for configured fixtures; full spatial intersection filtering against renderer bounding boxes is not yet performed in hub routing.
 
-For optimization, the hub can pre-filter and only publish events a renderer is likely interested in, based on the registered bounding box and location metadata.
+Hub pre-filtering by bounding box/location is intended optimization, not current default behavior. Current `events` forwarding is broadcast to all connected renderers.
 
 ### Room and scope filtering for controllers
 
-Controllers should only receive data for rooms/scopes they are allowed to work on. Their announced location/scope data allows the hub to decide what room information and controls to expose to each controller connection.
+Controllers should eventually receive room/scope-filtered data based on announced metadata. This filtering is not implemented yet.
 
 ---
 
@@ -160,7 +178,7 @@ The repository includes demo fixture/project data under `var/` that the hub can 
 - `fixturesPath: ../../var/fixtures`
 - `defaultProject: test`
 
-At runtime, the hub loads `defaultProject` and treats its zone structure as authoritative scene assignment data. When a renderer connects (or when project data updates), the hub transfers the relevant zone info plus referenced fixtures to matching renderer(s), primarily by `rendererGUID` and, where applicable, spatial/filter rules.
+At runtime, the hub loads `defaultProject` and treats its zone structure as authoritative scene assignment data. When a renderer connects (or when project/fixture data updates), the hub transfers relevant zone info plus referenced fixture profiles to matching renderer(s) by `rendererGUID`.
 
 ---
 
@@ -201,7 +219,7 @@ Every WebSocket message uses a unified envelope:
 
 Controllers use `role: "controller"` and include `scope` (rooms/areas) instead of `boundingBox`.
 
-**`events`** — hub → renderer:
+**`events`** — controller → hub and hub → renderer:
 
 ```json
 {
@@ -225,7 +243,7 @@ Controllers use `role: "controller"` and include `scope` (rooms/areas) instead o
 }
 ```
 
-**`config`** — hub → renderer/controller:
+**`config`** — hub → renderer (controller config is planned):
 
 ```json
 {
@@ -255,10 +273,10 @@ Controllers use `role: "controller"` and include `scope` (rooms/areas) instead o
 
 ### Event dispatch model
 
-- `class` (inside an event object) maps to an event handler (for example, `LightEvent` for `class: "light"`).
-- The class defines and validates the expected `params` shape for that event kind.
-- The renderer dispatches each event to its handler and executes behavior using the parsed `params`.
-- `scheduled` is the execution timestamp used by the renderer queue/scheduler.
+- Hub normalizes `params.color` into CIE 1931 `xyY` before forwarding events.
+- `class` (inside an event object) maps to renderer fixture handlers through fixture profile `class` resolution.
+- Renderer dynamically imports the fixture class module and runs `handleEvent(...)` for configured fixtures.
+- `scheduled` is an absolute execution timestamp used by the renderer queue/scheduler (past timestamps execute immediately).
 
 ---
 

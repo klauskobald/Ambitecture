@@ -10,6 +10,7 @@ const DmxLightStatic = {
         const colorData = event.params?.color;
         if (!colorData) return;
         fixture._rawColor = Color.fromXYY(colorData).toRGB();
+        if (event.params?.strobe !== undefined) fixture._strobe = event.params.strobe;
         this._applyMaster(fixture);
     },
 

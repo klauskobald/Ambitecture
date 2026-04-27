@@ -19,6 +19,7 @@ class ConfigHandler {
                     _rawColor:         null,
                     _masterBrightness: 1,
                     _masterBlackout:   false,
+                    _strobe:           0,
                 });
             }
         }

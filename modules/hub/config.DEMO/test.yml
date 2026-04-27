@@ -10,12 +10,12 @@ testParams:
       - class: master
         scheduled: 0
         params:
-          brightness: 2
+          brightness: 1
       - class: light
         scheduled: 0
         position: [0,0,0]
         params:
-          color: {"rgb": [255,33,60]}
+          color: {"rgb": [255,0,255]}
           strobe: 0
           layer: 100
           blend: ADD

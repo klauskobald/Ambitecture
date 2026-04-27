@@ -9,7 +9,6 @@ class DmxLightStatic extends DmxFixtureBase {
 
     private masterBrightness: number = 1;
     private masterBlackout: boolean = false;
-    private myBrightness: number = 1;
 
     handleEvent(event: RendererEvent, fixture: ConfiguredFixture, dmxUniverse: DmxUniverse): void {
         switch (event.class) {
@@ -47,16 +46,17 @@ class DmxLightStatic extends DmxFixtureBase {
                 this.writeFunction(fixture, 'strobe-on', strobe, dmxUniverse);
             }
         }
-
         this.writeFunction(fixture, 'red', r, dmxUniverse);
         this.writeFunction(fixture, 'green', g, dmxUniverse);
         this.writeFunction(fixture, 'blue', b, dmxUniverse);
-        this.myBrightness = colorData.Y
+
+        // colorData.Y describes the brightness of the light. questions is how we use that value, because it actually tells us, that if we want eg, green and blue with the same brightness we would have to set the brightness of green lower than the brightness of blue.
+
         this.write(fixture, dmxUniverse);
     }
 
     private write(fixture: ConfiguredFixture, dmxUniverse: DmxUniverse): void {
-        this.writeFunction(fixture, 'brightness', this.myBrightness * this.masterBrightness * (this.masterBlackout ? 0 : 1), dmxUniverse);
+        this.writeFunction(fixture, 'brightness', this.masterBrightness * (this.masterBlackout ? 0 : 1), dmxUniverse);
 
     }
 }

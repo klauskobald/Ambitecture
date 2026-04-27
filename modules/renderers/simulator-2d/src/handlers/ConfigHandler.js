@@ -1,7 +1,11 @@
 class ConfigHandler {
-    constructor(renderer) {
+    constructor(renderer, config) {
         this.renderer = renderer;
+        this.drawConfig = config.FIXTURE_DRAW;
         this.fixtures = [];
+        this.fixtureClasses = {
+            dmx_light_static: DmxLightStatic,
+        };
     }
 
     handle(message) {
@@ -12,15 +16,14 @@ class ConfigHandler {
 
         this.fixtures = [];
         for (const zone of message.payload.zones) {
-            for (const fixture of zone.fixtures) {
-                this.fixtures.push({
-                    ...fixture,
-                    currentColor:      null,
-                    _rawColor:         null,
-                    _masterBrightness: 1,
-                    _masterBlackout:   false,
-                    _strobe:           0,
-                });
+            for (const fixtureData of zone.fixtures) {
+                const { fixtureProfile, name, location } = fixtureData;
+                const FixtureClass = this.fixtureClasses[fixtureProfile.class];
+                if (!FixtureClass) {
+                    console.warn(`[config] unknown fixture class: ${fixtureProfile.class}`);
+                    continue;
+                }
+                this.fixtures.push(new FixtureClass(fixtureProfile, { name, location }, this.drawConfig));
             }
         }
 

@@ -6,9 +6,14 @@
   "POSITION_ORIGIN": "0 0 0",
   "BOUNDING_BOX": "0 0 0 10 4 10",
   "PIXEL_PER_METER": 50,
-  "STROBE": {
-    "lowFrequency": 0.5,
-    "highFrequency": 10,
-    "onTime": 0.02
+  "FIXTURE_DRAW": {
+    "lamp": {
+      "radius": 0.2
+    },
+    "strobe": {
+      "lowFrequency": 0.5,
+      "highFrequency": 10,
+      "onTime": 0.02
+    }
   }
 }

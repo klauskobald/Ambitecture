@@ -9,7 +9,6 @@ class CanvasRenderer {
         this.x1 = bb[0]; this.y1 = bb[1]; this.z1 = bb[2];
         this.x2 = bb[3]; this.y2 = bb[4]; this.z2 = bb[5];
         this.ppm = config.PIXEL_PER_METER;
-        this.strobeConfig = config.STROBE ?? { lowFrequency: 0.5, highFrequency: 10, onTime: 0.02 };
 
         this.canvas.width  = (this.x2 - this.x1) * this.ppm + 2 * this.padding;
         this.canvas.height = (this.z2 - this.z1) * this.ppm + 2 * this.padding;
@@ -28,7 +27,7 @@ class CanvasRenderer {
     }
 
     draw() {
-        const { ctx, canvas, ppm, padding, x1, z1, x2, z2 } = this;
+        const { ctx, canvas } = this;
         const nowSec = performance.now() / 1000;
 
         ctx.fillStyle = '#111';
@@ -36,41 +35,11 @@ class CanvasRenderer {
 
         this._drawGrid();
 
-        const radius = 0.1 * ppm;
-
         for (const fixture of this.fixtures) {
+            fixture.update(nowSec);
             const { cx, cy } = this.worldToCanvas(fixture.location[0], fixture.location[2]);
-            const c = fixture.currentColor;
-            const strobeOn = this._isStrobeOn(fixture, nowSec);
-
-            ctx.beginPath();
-            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-
-            if (c && strobeOn) {
-                ctx.fillStyle = `rgb(${Math.round(c.r * 255)},${Math.round(c.g * 255)},${Math.round(c.b * 255)})`;
-            } else {
-                ctx.fillStyle = '#2a2a2a';
-            }
-            ctx.fill();
-
-            ctx.strokeStyle = '#444';
-            ctx.lineWidth = 1;
-            ctx.stroke();
-
-            ctx.fillStyle = '#666';
-            ctx.font = '10px monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText(fixture.name, cx, cy + radius + 12);
+            fixture.draw(ctx, cx, cy, this.ppm);
         }
-    }
-
-    _isStrobeOn(fixture, nowSec) {
-        const strobe = fixture._strobe;
-        if (!strobe || strobe === 0) return true;
-        const { lowFrequency, highFrequency, onTime } = this.strobeConfig;
-        const freq = lowFrequency + strobe * (highFrequency - lowFrequency);
-        const period = 1 / freq;
-        return (nowSec % period) < onTime;
     }
 
     worldToCanvas(wx, wz) {

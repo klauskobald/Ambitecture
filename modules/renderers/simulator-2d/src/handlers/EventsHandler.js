@@ -2,9 +2,6 @@ class EventsHandler {
     constructor(configHandler) {
         this.configHandler = configHandler;
         this.queue = new EventQueue(event => this.processEvent(event));
-        this.fixtureClasses = {
-            dmx_light_static: DmxLightStatic,
-        };
     }
 
     handle(message) {
@@ -20,8 +17,7 @@ class EventsHandler {
             return;
         }
         for (const fixture of fixtures) {
-            const handler = this.fixtureClasses[fixture.fixtureProfile.class];
-            if (handler) handler.handleEvent(event, fixture);
+            fixture.handleEvent(event);
         }
     }
 }

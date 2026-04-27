@@ -5,6 +5,8 @@ class EventBase {
         this._drawConfig = drawConfig;
     }
 
+    get position() { return this._position; }
+
     draw(_ctx, _cx, _cy, _ppm) {
         throw new Error(`${this.constructor.name} must implement draw()`);
     }

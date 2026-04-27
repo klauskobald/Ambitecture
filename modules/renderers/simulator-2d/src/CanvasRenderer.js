@@ -53,7 +53,7 @@ class CanvasRenderer {
         }
 
         for (const [, ev] of this._events) {
-            const { cx, cy } = this.worldToCanvas(ev._position[0], ev._position[2]);
+            const { cx, cy } = this.worldToCanvas(ev.position[0], ev.position[2]);
             ev.draw(ctx, cx, cy, this.ppm);
         }
     }

@@ -12,12 +12,7 @@ class EventsHandler {
     }
 
     processEvent(event) {
-        const fixtures = this.configHandler.getFixtures();
-        if (fixtures.length === 0) {
-            console.warn('[events] no fixtures configured yet, dropping event');
-            return;
-        }
-        for (const fixture of fixtures) {
+        for (const fixture of this.configHandler.getFixtures()) {
             fixture.handleEvent(event);
         }
         this._renderer.handleEvent(event);

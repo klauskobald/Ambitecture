@@ -29,13 +29,13 @@ interface FixtureInstance {
 
 export interface Zone {
   name: string;
-  rendererGUID: string;
   boundingBox?: [number, number, number, number, number, number];
   fixtures: FixtureInstance[];
 }
 
 interface Project {
   name: string;
+  'zone-to-renderer': Record<string, string[]>;
   zones: Zone[];
 }
 
@@ -147,7 +147,6 @@ export class ProjectManager {
   private serializeZone(zone: Zone): Record<string, unknown> {
     const out: Record<string, unknown> = {
       name: zone.name,
-      rendererGUID: zone.rendererGUID,
       fixtures: zone.fixtures.map((fi) => this.serializeFixtureInstance(fi)),
     };
     if (zone.boundingBox !== undefined) {
@@ -160,7 +159,13 @@ export class ProjectManager {
     if (!this.project) {
       throw new Error('[project] No project loaded — call useProject() first');
     }
-    const zones = this.project.zones.filter(z => z.rendererGUID === rendererGuid);
+    const zoneToRenderer = this.project['zone-to-renderer'] ?? {};
+    const assignedZoneNames = new Set(
+      Object.entries(zoneToRenderer)
+        .filter(([, renderers]) => renderers.includes(rendererGuid))
+        .map(([zoneName]) => zoneName)
+    );
+    const zones = this.project.zones.filter(z => assignedZoneNames.has(z.name));
     const result = {
       projectName: this.project.name,
       zones: zones.map((z) => this.serializeZone(z)),
@@ -176,6 +181,7 @@ export class ProjectManager {
     }
     const result = {
       projectName: this.project.name,
+      zoneToRenderer: this.project['zone-to-renderer'] ?? {},
       zones: this.project.zones.map((z) => this.serializeZone(z)),
     };
     Logger.info(`[project] buildControllerConfig(): ${this.project.zones.length} zone(s)`);

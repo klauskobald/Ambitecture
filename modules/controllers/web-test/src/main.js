@@ -136,6 +136,7 @@ function spatialStateFromControllerConfig(payload, rendererGuid) {
   if (!Array.isArray(zones)) {
     return null;
   }
+  const zoneToRenderer = /** @type {Record<string, string[]>} */ (p.zoneToRenderer ?? {});
   /** @type {number[][]} */
   const matched = [];
   for (const z of zones) {
@@ -143,7 +144,9 @@ function spatialStateFromControllerConfig(payload, rendererGuid) {
       continue;
     }
     const zone = /** @type {Record<string, unknown>} */ (z);
-    if (zone.rendererGUID !== rendererGuid) {
+    const zoneName = /** @type {string} */ (zone.name);
+    const assignedRenderers = zoneToRenderer[zoneName];
+    if (!Array.isArray(assignedRenderers) || !assignedRenderers.includes(rendererGuid)) {
       continue;
     }
     const bb = zone.boundingBox;

@@ -3,6 +3,7 @@ class ConfigHandler {
         this.renderer = renderer;
         this.drawConfig = config.FIXTURE_DRAW;
         this.fixtures = [];
+        this.zones = [];
         this.fixtureClasses = {
             dmx_light_static: DmxLightStatic,
         };
@@ -17,8 +18,12 @@ class ConfigHandler {
         this.renderer.setSpatialFromZones(message.payload.zones);
 
         this.fixtures = [];
+        this.zones = [];
+
         for (const zone of message.payload.zones) {
-            const origin = zone.boundingBox;
+            const bbox = zone.boundingBox;
+            const zoneFixtures = [];
+
             for (const fixtureData of zone.fixtures) {
                 const { fixtureProfile, name, location, params, range, target, rotation } = fixtureData;
                 const FixtureClass = this.fixtureClasses[fixtureProfile.class];
@@ -27,20 +32,28 @@ class ConfigHandler {
                     continue;
                 }
                 const worldLocation = [
-                    origin[0] + location[0],
-                    origin[1] + location[1],
-                    origin[2] + location[2],
+                    bbox[0] + location[0],
+                    bbox[1] + location[1],
+                    bbox[2] + location[2],
                 ];
                 const instanceConfig = { name, location: worldLocation, params, range, target, rotation };
-                this.fixtures.push(new FixtureClass(fixtureProfile, instanceConfig, this.drawConfig));
+                const instance = new FixtureClass(fixtureProfile, instanceConfig, this.drawConfig);
+                this.fixtures.push(instance);
+                zoneFixtures.push(instance);
             }
+
+            this.zones.push({ bbox, fixtures: zoneFixtures });
         }
 
         this.renderer.setFixtures(this.fixtures);
-        console.log(`[config] ${this.fixtures.length} fixture(s) across ${message.payload.zones.length} zone(s)`);
+        console.log(`[config] ${this.fixtures.length} fixture(s) across ${this.zones.length} zone(s)`);
     }
 
     getFixtures() {
         return this.fixtures;
+    }
+
+    getZones() {
+        return this.zones;
     }
 }

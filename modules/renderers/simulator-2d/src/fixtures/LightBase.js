@@ -2,6 +2,7 @@ class LightBase {
     constructor(profile, instanceConfig, drawConfig) {
         this.name = instanceConfig.name;
         this.location = instanceConfig.location;
+        this.range = instanceConfig.range;
         this.fixtureProfile = profile;
         this._strobeConfig = drawConfig.strobe;
         this._nowSec = 0;
@@ -15,7 +16,7 @@ class LightBase {
         throw new Error(`${this.constructor.name} must implement draw()`);
     }
 
-    handleEvent(_event) {
+    handleEvent(_event, _spatial) {
         throw new Error(`${this.constructor.name} must implement handleEvent()`);
     }
 

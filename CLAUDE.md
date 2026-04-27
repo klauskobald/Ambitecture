@@ -327,6 +327,24 @@ handler.default.handle(event);
 
 - Formatting, color math (CIE conversions, gamut mapping), geo/spatial math, and DMX utilities each live in their own reusable file or class. No ad-hoc helpers scattered in business logic files.
 
+### Fixture / device abstraction pattern
+
+Whenever a concept has multiple concrete types (fixture classes, event kinds, device protocols), apply this three-layer structure:
+
+1. **Utility helper** — stateless plain object of reusable primitives (e.g. `CanvasDraw`). No state, no constructor. Imported and called directly by subclasses.
+
+2. **Base class** — owns the lifecycle interface the orchestrator depends on and the shared helpers all subclasses need. Abstract methods use throw stubs with `_`-prefixed params:
+   ```js
+   draw(_ctx, _cx, _cy, _ppm) { throw new Error(`${this.constructor.name} must implement draw()`); }
+   ```
+   Takes a **config bag** (`drawConfig`, `deviceConfig`, etc.) and stores only the slice it needs.
+
+3. **Derived class** — `class Foo extends Base`. Implements only what is specific to this type. Accesses type-specific config via `this._drawConfig.<key>` (e.g. `this._drawConfig.lamp.radius`). Calls utility helpers directly.
+
+**Orchestrator rule:** the caller (renderer, dispatcher, etc.) depends only on the base class interface — `update()`, `draw()`, `handleEvent()`. Zero type-specific branches or fixture-property reads.
+
+**Config bag rule:** pass the full typed config object at construction; each subclass picks what it needs. Adding a new fixture type requires no changes to the orchestrator or config structure.
+
 ### Function design
 
 - Keep functions small and single-purpose. Prefer more functions with long, descriptive names over fewer large ones.

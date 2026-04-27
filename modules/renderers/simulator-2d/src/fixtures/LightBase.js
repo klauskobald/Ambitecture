@@ -11,11 +11,11 @@ class LightBase {
         this._nowSec = nowSec;
     }
 
-    draw(ctx, cx, cy, ppm) {
+    draw(_ctx, _cx, _cy, _ppm) {
         throw new Error(`${this.constructor.name} must implement draw()`);
     }
 
-    handleEvent(event) {
+    handleEvent(_event) {
         throw new Error(`${this.constructor.name} must implement handleEvent()`);
     }
 

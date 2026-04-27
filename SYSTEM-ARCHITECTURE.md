@@ -185,7 +185,7 @@ The repository includes demo fixture/project data under `var/` that the hub can 
 - Zone: `Zone 1`
 - Bound renderer: `rendererGUID: renderer-1234567890`
 - Fixture instance: references fixture profile `rgb_simple`
-- Fixture spatial data includes `location`, `target` (or `rotation`), and `range`
+- Fixture spatial data includes `location`, `target` (or `rotation`), and `range`; DMX binding uses `params.dmxBaseChannel`.
 
 ### Default project loading and sync
 

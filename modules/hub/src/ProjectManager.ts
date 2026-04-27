@@ -16,14 +16,15 @@ export interface FixtureProfile {
   };
 }
 
+/** Per-instance fields from project YAML; class-specific keys live in `params`. */
 interface FixtureInstance {
   name: string;
   fixture: string;
-  dmxBaseChannel: number;
   location: [number, number, number];
   target?: [number, number, number];
   rotation?: [number, number, number];
   range: number;
+  params?: Record<string, unknown>;
 }
 
 export interface Zone {
@@ -132,10 +133,12 @@ export class ProjectManager {
     const entry: Record<string, unknown> = {
       name: fi.name,
       fixtureProfile: profile,
-      dmxBaseChannel: fi.dmxBaseChannel,
       location: fi.location,
       range: fi.range,
     };
+    if (fi.params !== undefined && Object.keys(fi.params).length > 0) {
+      entry['params'] = fi.params;
+    }
     if (fi.target !== undefined) entry['target'] = fi.target;
     if (fi.rotation !== undefined) entry['rotation'] = fi.rotation;
     return entry;

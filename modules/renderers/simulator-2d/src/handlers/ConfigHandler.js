@@ -19,13 +19,14 @@ class ConfigHandler {
         this.fixtures = [];
         for (const zone of message.payload.zones) {
             for (const fixtureData of zone.fixtures) {
-                const { fixtureProfile, name, location } = fixtureData;
+                const { fixtureProfile, name, location, params, range, target, rotation } = fixtureData;
                 const FixtureClass = this.fixtureClasses[fixtureProfile.class];
                 if (!FixtureClass) {
                     console.warn(`[config] unknown fixture class: ${fixtureProfile.class}`);
                     continue;
                 }
-                this.fixtures.push(new FixtureClass(fixtureProfile, { name, location }, this.drawConfig));
+                const instanceConfig = { name, location, params, range, target, rotation };
+                this.fixtures.push(new FixtureClass(fixtureProfile, instanceConfig, this.drawConfig));
             }
         }
 

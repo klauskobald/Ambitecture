@@ -278,7 +278,7 @@ The class exposes conversion outputs as needed (e.g. `toRGB()`, `toXYY()`) for r
 ## Projects and Fixtures
 
 - **Fixtures** (`var/fixtures/*.yml`): define DMX channel → function mappings and class (e.g. `dmx_light_static`).
-- **Projects** (`var/projects/*.yml`): define zones, each bound to a `rendererGUID`, with fixture instances carrying `location`, `target`/`rotation`, and `range`.
+- **Projects** (`var/projects/*.yml`): define zones, each bound to a `rendererGUID`, with fixture instances carrying `location`, `target`/`rotation`, and `range`; class-specific instance fields (e.g. `dmxBaseChannel` for DMX) live under a `params` object on each instance.
 - `server.yml` keys `projectsPath`, `fixturesPath`, `defaultProject` tell the hub where to load data from.
 - At runtime the hub loads `defaultProject` and pushes zone + fixture data to matching renderers on connect.
 

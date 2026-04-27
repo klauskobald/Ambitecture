@@ -1,4 +1,5 @@
 import { ConfiguredFixture } from '../handlers/ConfigHandler';
+import { Logger } from '../Logger';
 import { DmxUniverse } from '../DmxUniverse';
 import { IFixtureClass, RendererEvent } from './IFixtureClass';
 import { DmxMap } from './DmxMap';
@@ -8,15 +9,34 @@ export abstract class DmxFixtureBase implements IFixtureClass {
 
     abstract handleEvent(event: RendererEvent, fixture: ConfiguredFixture, dmxUniverse: DmxUniverse): void;
 
+    protected getDmxBaseChannel(fixture: ConfiguredFixture): number | null {
+        const v = fixture.params['dmxBaseChannel'];
+        if (typeof v === 'number' && Number.isFinite(v)) {
+            return v;
+        }
+        if (typeof v === 'string') {
+            const n = Number(v);
+            if (Number.isFinite(n)) {
+                return n;
+            }
+        }
+        return null;
+    }
+
     protected writeFunction(
         fixture: ConfiguredFixture,
         functionName: string,
         normalizedValue: number,
         dmxUniverse: DmxUniverse
     ): void {
+        const base = this.getDmxBaseChannel(fixture);
+        if (base === null) {
+            Logger.warn(`[dmx] fixture "${fixture.name}" missing or invalid params.dmxBaseChannel`);
+            return;
+        }
         const channel = this.getDmxMap(fixture).lookup(functionName);
         if (!channel) return;
-        const dmxChannel = fixture.dmxBaseChannel + channel.offset;
+        const dmxChannel = base + channel.offset;
         const dmxValue = DmxFixtureBase.normalizedToDmxRange(normalizedValue, channel.rangeMin, channel.rangeMax);
         dmxUniverse.setChannel(dmxChannel, dmxValue);
     }

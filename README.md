@@ -1,5 +1,8 @@
 # Ambitecture
 
+**Author:** Klaus P Kobald GmbH  
+**Website:** [https://kobald.com](https://kobald.com)
+
 Distributed framework for live orchestration of physical environments (lights, DMX hardware, and spatial objects), with creative intent decoupled from hardware execution.
 
 Ambitecture is open source and currently focused on production readiness for a live show deadline on **May 20, 2026**.

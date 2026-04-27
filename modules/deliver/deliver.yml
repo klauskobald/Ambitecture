@@ -6,3 +6,6 @@ listen:
 mounts:
   simulator-2d:
     root: ../renderers/simulator-2d
+
+  controller-test:
+    root: ../controllers/web-test

@@ -38,7 +38,7 @@ testParams:
           blend: ADD
           alpha: 1
       - class: light
-        scheduled: 500
+        scheduled: 1000
         position: [1,0,3]
         params:
           color: {"rgb": [0,255,255]}
@@ -47,8 +47,8 @@ testParams:
           blend: ADD
           alpha: 1 
       - class: light
-        scheduled: 1000
-        position: [2,0,2]
+        scheduled: 2000
+        position: [5,0,5]
         params:
           color: {"rgb": [255,0,255]}
           strobe: 0.1

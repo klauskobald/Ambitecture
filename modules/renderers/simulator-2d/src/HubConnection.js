@@ -47,8 +47,6 @@ class HubConnection {
 
     _sendRegister(ws) {
         const [geoLon, geoLat] = this.config.GEO_LOCATION.split(' ').map(Number);
-        const positionOrigin   = this.config.POSITION_ORIGIN.split(' ').map(Number);
-        const boundingBox      = this.config.BOUNDING_BOX.split(' ').map(Number);
 
         ws.send(JSON.stringify({
             message: {
@@ -57,8 +55,6 @@ class HubConnection {
                 payload: {
                     role: 'renderer',
                     guid: this.config.GUID,
-                    positionOrigin,
-                    boundingBox,
                 },
             },
         }));

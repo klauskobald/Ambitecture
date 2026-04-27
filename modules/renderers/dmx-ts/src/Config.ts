@@ -12,11 +12,6 @@ export class Config {
         const parts = raw.split(/\s+/).map(Number);
         return [parts[0] ?? 0, parts[1] ?? 0];
     }
-    static get positionOrigin(): [number, number, number] {
-        const raw = (process.env['POSITION_ORIGIN'] ?? '0 0 0').replace(/'/g, '').trim();
-        const parts = raw.split(/\s+/).map(Number);
-        return [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0];
-    }
     static get boundingBox(): [number, number, number, number, number, number] {
         const raw = (process.env['BOUNDING_BOX'] ?? '0 0 0 10 4 10').replace(/'/g, '').trim();
         const parts = raw.split(/\s+/).map(Number);

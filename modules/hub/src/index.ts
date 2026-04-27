@@ -31,6 +31,12 @@ projectManager.useProject(serverConfig.get<string>('defaultProject'), () => {
       ws.send(JSON.stringify({ message: { type: 'config', payload: config } }));
     }
   }
+  const controllerPayload = projectManager.buildControllerConfig();
+  for (const ws of registry.getByRole('controller')) {
+    if (ws.readyState === ws.OPEN) {
+      ws.send(JSON.stringify({ message: { type: 'config', payload: controllerPayload } }));
+    }
+  }
 });
 
 const server = new Server(registry, router);

@@ -8,7 +8,6 @@ interface RegisterPayload {
   role: 'renderer' | 'controller';
   guid: string;
   location?: [number, number];
-  positionOrigin?: unknown;
   boundingBox?: unknown;
   scope?: unknown;
 }
@@ -36,12 +35,9 @@ export class RegisterHandler implements MessageHandler {
       return;
     }
 
-    const { role, guid, location, positionOrigin, boundingBox, scope } = message.payload;
+    const { role, guid, location, boundingBox, scope } = message.payload;
 
     const meta: Record<string, unknown> = {};
-    if (positionOrigin !== undefined) {
-      meta['positionOrigin'] = positionOrigin;
-    }
     if (boundingBox !== undefined) {
       meta['boundingBox'] = boundingBox;
     }
@@ -57,10 +53,18 @@ export class RegisterHandler implements MessageHandler {
     this.registry.update(ws, update);
     Logger.info(`[register] ${role} ${guid}`);
 
-    if (role === 'renderer' && ws.readyState === ws.OPEN) {
+    if (ws.readyState !== ws.OPEN) {
+      return;
+    }
+
+    if (role === 'renderer') {
       const config = this.projectManager.buildRendererConfig(guid);
       ws.send(JSON.stringify({ message: { type: 'config', payload: config } }));
       Logger.info(`[register] pushed config to renderer ${guid}`);
+    } else if (role === 'controller') {
+      const config = this.projectManager.buildControllerConfig();
+      ws.send(JSON.stringify({ message: { type: 'config', payload: config } }));
+      Logger.info(`[register] pushed config to controller ${guid}`);
     }
   }
 }

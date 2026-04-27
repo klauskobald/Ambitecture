@@ -70,7 +70,7 @@ Flow:
 Current behavior:
 
 - Connects to hub WebSocket, auto-reconnects immediately on close/error.
-- Sends `register` payload as `role: "renderer"` with `guid`, `location`, `positionOrigin`, `boundingBox`.
+- Sends `register` payload as `role: "renderer"` with `guid`, `location`, and `boundingBox` (optional metadata until hub `config` is authoritative for spatial bounds).
 - Handles `config` to cache fixtures and initialize DMX output.
 - Handles `events` via an in-memory scheduled queue (`scheduled` timestamp aware).
 - Dynamically loads fixture class handlers from `src/fixtures` based on fixture profile `class`.
@@ -91,9 +91,7 @@ Renderer data authority model:
 
 **Role:** Front ends and tools that send control or scene data to the hub.
 
-**`controllers/web-test/`** — Minimal static web client skeleton (`src/index.html`, `main.js`, `styles.css`). `src/config.json` exists but the runtime controller logic is still placeholder (`main.js` is currently empty).
-
-Controller config push is part of intended design, but the current hub handler pushes `config` only to renderers.
+**`controllers/web-test/`** — Static controller shell: [`index.html`](modules/controllers/web-test/index.html) embeds simulator-2d in an iframe, opens a WebSocket to the hub as **`role: controller`**, receives **`config`** (full project zones from [`ProjectManager.buildControllerConfig`](modules/hub/src/ProjectManager.ts)), and maps overlay touches to **meters inside the selected zone’s `boundingBox`** (see [`src/main.js`](modules/controllers/web-test/src/main.js)). Tunable layout lives in [`config.json`](modules/controllers/web-test/config.json) next to `index.html`.
 
 ---
 
@@ -139,8 +137,7 @@ Initial baseline is a single dark theme. Theme values should be defined via vari
 Every renderer and controller module carries location metadata so the hub can make spatially scoped decisions. Current examples in repo configs include:
 
 - `GEO_LOCATION` (planet-level reference point)
-- `POSITION_ORIGIN` (local XYZ offset from geo anchor)
-- `BOUNDING_BOX` (local 3D extent: `x0 y0 z0 x1 y1 z1`)
+- `BOUNDING_BOX` (local 3D extent: `x0 y0 z0 x1 y1 z1`) for register metadata where needed; project zones carry **`boundingBox`** for scene layout; event `position` is local inside that zone box.
 
 This metadata can be stored in module-local config (`.env`, JSON) and then treated as connection-time capabilities.
 
@@ -148,8 +145,8 @@ This metadata can be stored in module-local config (`.env`, JSON) and then treat
 
 When a module connects, it should announce its location/capability data to the hub.
 
-- **Renderer -> Hub:** announces geo + origin + bounding box
-- **Controller -> Hub:** announces geo + origin + working area (rooms/scope)
+- **Renderer -> Hub:** announces geo + optional `boundingBox` metadata + `guid`; spatial truth for the scene comes from hub **`config`** (project zones, each with `boundingBox`).
+- **Controller -> Hub:** announces geo + `guid` + `scope` (rooms/areas); receives hub **`config`** with full project zone data including `boundingBox` and fixtures (view density such as `PIXEL_PER_METER` stays renderer-local).
 
 The hub keeps this as authoritative runtime metadata and can update it if the module reconnects or republishes.
 
@@ -230,7 +227,6 @@ Every WebSocket message uses a unified envelope:
     "payload": {
       "role": "renderer",
       "guid": "renderer-1234567890",
-      "positionOrigin": [0, 0, 0],
       "boundingBox": [0, 0, 0, 10, 5, 3]
     }
   }

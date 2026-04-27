@@ -1,21 +1,81 @@
 class CanvasRenderer {
-    constructor(canvasEl, config) {
+    constructor(canvasEl, bootConfig) {
         this.canvas = canvasEl;
         this.ctx = canvasEl.getContext('2d');
         this.fixtures = [];
-        this.padding = 40;
+        this.x1 = 0;
+        this.y1 = 0;
+        this.z1 = 0;
+        this.x2 = 1;
+        this.y2 = 1;
+        this.z2 = 1;
+        this.ppm = 1;
+        this._spatialReady = false;
 
-        const bb = config.BOUNDING_BOX.split(' ').map(Number);
-        this.x1 = bb[0]; this.y1 = bb[1]; this.z1 = bb[2];
-        this.x2 = bb[3]; this.y2 = bb[4]; this.z2 = bb[5];
-        this.ppm = config.PIXEL_PER_METER;
+        this.canvas.width = 1;
+        this.canvas.height = 1;
 
-        this.canvas.width  = (this.x2 - this.x1) * this.ppm + 2 * this.padding;
-        this.canvas.height = (this.z2 - this.z1) * this.ppm + 2 * this.padding;
+        const ppmRaw = bootConfig.PIXEL_PER_METER;
+        this.ppm =
+            typeof ppmRaw === 'number' && Number.isFinite(ppmRaw) && ppmRaw > 0 ? ppmRaw : 50;
 
         this._events = new Map();
-        this._eventDrawConfig = config.EVENT_DRAW;
+        this._eventDrawConfig = bootConfig.EVENT_DRAW;
         this._eventClasses = { light: EventLight, master: EventMaster };
+    }
+
+    /**
+     * Hub zones supply boundingBox only; canvas pixel size = bbox span × local PIXEL_PER_METER (no padding).
+     * @param {unknown} zones hub config zones
+     */
+    setSpatialFromZones(zones) {
+        if (!Array.isArray(zones) || zones.length === 0) {
+            console.warn('[CanvasRenderer] setSpatialFromZones: no zones');
+            return;
+        }
+        const boxes = [];
+        for (const z of zones) {
+            if (z && typeof z === 'object' && Array.isArray(z.boundingBox) && z.boundingBox.length >= 6) {
+                boxes.push(z.boundingBox.map(Number));
+            }
+        }
+        if (boxes.length === 0) {
+            console.warn('[CanvasRenderer] setSpatialFromZones: no boundingBox on zones');
+            return;
+        }
+        const u = CanvasRenderer._unionBoundingBoxes(boxes);
+        this.x1 = u[0];
+        this.y1 = u[1];
+        this.z1 = u[2];
+        this.x2 = u[3];
+        this.y2 = u[4];
+        this.z2 = u[5];
+
+        this.canvas.width = (this.x2 - this.x1) * this.ppm;
+        this.canvas.height = (this.z2 - this.z1) * this.ppm;
+        this._spatialReady = true;
+    }
+
+    /**
+     * @param {number[][]} boxes
+     * @returns {number[]}
+     */
+    static _unionBoundingBoxes(boxes) {
+        let x1 = Infinity;
+        let y1 = Infinity;
+        let z1 = Infinity;
+        let x2 = -Infinity;
+        let y2 = -Infinity;
+        let z2 = -Infinity;
+        for (const b of boxes) {
+            x1 = Math.min(x1, b[0]);
+            y1 = Math.min(y1, b[1]);
+            z1 = Math.min(z1, b[2]);
+            x2 = Math.max(x2, b[3]);
+            y2 = Math.max(y2, b[4]);
+            z2 = Math.max(z2, b[5]);
+        }
+        return [x1, y1, z1, x2, y2, z2];
     }
 
     setFixtures(fixtures) {
@@ -44,6 +104,13 @@ class CanvasRenderer {
         ctx.fillStyle = '#111';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+        if (!this._spatialReady) {
+            ctx.fillStyle = '#555';
+            ctx.font = '12px monospace';
+            ctx.fillText('waiting for hub config…', 8, 20);
+            return;
+        }
+
         this._drawGrid();
 
         for (const fixture of this.fixtures) {
@@ -60,18 +127,18 @@ class CanvasRenderer {
 
     worldToCanvas(wx, wz) {
         return {
-            cx: (wx - this.x1) * this.ppm + this.padding,
-            cy: (wz - this.z1) * this.ppm + this.padding,
+            cx: (wx - this.x1) * this.ppm,
+            cy: (wz - this.z1) * this.ppm,
         };
     }
 
     _drawGrid() {
-        const { ctx, canvas, ppm, padding, x1, z1, x2, z2 } = this;
+        const { ctx, canvas, ppm, x1, z1, x2, z2 } = this;
         ctx.strokeStyle = '#1a1a1a';
         ctx.lineWidth = 1;
 
         for (let x = Math.ceil(x1); x <= x2; x++) {
-            const cx = (x - x1) * ppm + padding;
+            const cx = (x - x1) * ppm;
             ctx.beginPath();
             ctx.moveTo(cx, 0);
             ctx.lineTo(cx, canvas.height);
@@ -79,7 +146,7 @@ class CanvasRenderer {
         }
 
         for (let z = Math.ceil(z1); z <= z2; z++) {
-            const cy = (z - z1) * ppm + padding;
+            const cy = (z - z1) * ppm;
             ctx.beginPath();
             ctx.moveTo(0, cy);
             ctx.lineTo(canvas.width, cy);

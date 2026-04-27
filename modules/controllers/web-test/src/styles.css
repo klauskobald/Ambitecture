@@ -37,6 +37,13 @@ body {
   margin: 0;
 }
 
+.spatial-readout {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  color: #8a8;
+  font-family: ui-monospace, monospace;
+}
+
 .app-main {
   display: flex;
   flex-direction: column;

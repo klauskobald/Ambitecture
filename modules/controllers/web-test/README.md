@@ -1,14 +1,17 @@
 # Controller web test
 
-Static shell that embeds **simulator-2d** in an iframe (hub-driven renderer) and draws touch/pointer traces on a **transparent overlay canvas** in the parent page. The iframe has `pointer-events: none` so local input does not reach the simulator; overlay input is visual only in this version.
+Static shell that embeds **simulator-2d** in an iframe (hub-driven renderer), connects to the hub as a **controller**, receives **project `config`** (per-zone `boundingBox` and fixtures from [`var/projects`](../../../var/projects)), and draws touch/pointer traces on a **transparent overlay canvas**. Pointer positions use the **same on-screen rect** as `#sim-canvas` and **linear** mapping into meters along the zone bbox XZ span (see `#spatial-readout`). The iframe has `pointer-events: none` so local input does not reach the simulator.
 
 ## Config (`config.json`)
 
-All tunable layout and overlay drawing values live next to `index.html` in **`config.json`** (no hardcoded layout numbers in `src/main.js` / `src/styles.css`). Required keys:
+Tunable layout and overlay drawing values live next to `index.html` in **`config.json`** (no hardcoded layout numbers in `src/main.js` / `src/styles.css`). Required keys:
 
 | Key | Meaning |
 |-----|--------|
-| `AMBITECTURE_HUB_URL` | Hub HTTP URL (reserved for a future parent WebSocket client). |
+| `AMBITECTURE_HUB_URL` | Hub HTTP URL (used to open the WebSocket). |
+| `GEO_LOCATION` | Two numbers as in renderer config (`"lon lat"`) for the register envelope. |
+| `CONTROLLER_GUID` | `guid` sent with `role: controller`. |
+| `SIMULATOR_RENDERER_GUID` | Which project zone’s `boundingBox` to use for touch→meters (must match the embedded simulator’s renderer GUID). |
 | `SIMULATOR_IFRAME_URL` | Path or URL for the simulator document (e.g. `/simulator-2d/` on the same deliver host). |
 | `LAYOUT.pagePaddingPx` | Root `body` padding in px. |
 | `LAYOUT.mainGapPx` | Gap between simulator stack and control strip. |

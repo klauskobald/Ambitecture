@@ -26,9 +26,10 @@ interface FixtureInstance {
   range: number;
 }
 
-interface Zone {
+export interface Zone {
   name: string;
   rendererGUID: string;
+  boundingBox?: [number, number, number, number, number, number];
   fixtures: FixtureInstance[];
 }
 
@@ -123,33 +124,58 @@ export class ProjectManager {
     }
   }
 
+  private serializeFixtureInstance(fi: FixtureInstance): Record<string, unknown> {
+    const profile = this.fixtureProfiles.get(fi.fixture);
+    if (!profile) {
+      Logger.warn(`[project] fixture instance "${fi.name}" references unknown profile "${fi.fixture}"`);
+    }
+    const entry: Record<string, unknown> = {
+      name: fi.name,
+      fixtureProfile: profile,
+      dmxBaseChannel: fi.dmxBaseChannel,
+      location: fi.location,
+      range: fi.range,
+    };
+    if (fi.target !== undefined) entry['target'] = fi.target;
+    if (fi.rotation !== undefined) entry['rotation'] = fi.rotation;
+    return entry;
+  }
+
+  private serializeZone(zone: Zone): Record<string, unknown> {
+    const out: Record<string, unknown> = {
+      name: zone.name,
+      rendererGUID: zone.rendererGUID,
+      fixtures: zone.fixtures.map((fi) => this.serializeFixtureInstance(fi)),
+    };
+    if (zone.boundingBox !== undefined) {
+      out['boundingBox'] = zone.boundingBox;
+    }
+    return out;
+  }
+
   buildRendererConfig(rendererGuid: string): object {
     if (!this.project) {
       throw new Error('[project] No project loaded — call useProject() first');
     }
     const zones = this.project.zones.filter(z => z.rendererGUID === rendererGuid);
     const result = {
-      zones: zones.map(zone => ({
-        name: zone.name,
-        fixtures: zone.fixtures.map(fi => {
-          const profile = this.fixtureProfiles.get(fi.fixture);
-          if (!profile) {
-            Logger.warn(`[project] fixture instance "${fi.name}" references unknown profile "${fi.fixture}"`);
-          }
-          const entry: Record<string, unknown> = {
-            name: fi.name,
-            fixtureProfile: profile,
-            dmxBaseChannel: fi.dmxBaseChannel,
-            location: fi.location,
-            range: fi.range,
-          };
-          if (fi.target !== undefined) entry['target'] = fi.target;
-          if (fi.rotation !== undefined) entry['rotation'] = fi.rotation;
-          return entry;
-        }),
-      })),
+      projectName: this.project.name,
+      zones: zones.map((z) => this.serializeZone(z)),
     };
-    Logger.info(`[project] buildRendererConfig(${rendererGuid}): ${result.zones.length} zone(s), ${result.zones.reduce((n, z) => n + z.fixtures.length, 0)} fixture(s)`);
+    Logger.info(`[project] buildRendererConfig(${rendererGuid}): ${zones.length} zone(s), ${zones.reduce((n, z) => n + z.fixtures.length, 0)} fixture(s)`);
+    return result;
+  }
+
+  /** Full project snapshot for controllers (all zones, profiles embedded per fixture). */
+  buildControllerConfig(): object {
+    if (!this.project) {
+      throw new Error('[project] No project loaded — call useProject() first');
+    }
+    const result = {
+      projectName: this.project.name,
+      zones: this.project.zones.map((z) => this.serializeZone(z)),
+    };
+    Logger.info(`[project] buildControllerConfig(): ${this.project.zones.length} zone(s)`);
     return result;
   }
 }

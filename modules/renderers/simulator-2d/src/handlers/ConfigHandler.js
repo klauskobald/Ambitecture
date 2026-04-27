@@ -14,6 +14,8 @@ class ConfigHandler {
             return;
         }
 
+        this.renderer.setSpatialFromZones(message.payload.zones);
+
         this.fixtures = [];
         for (const zone of message.payload.zones) {
             for (const fixtureData of zone.fixtures) {

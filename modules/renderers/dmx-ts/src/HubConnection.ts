@@ -93,7 +93,6 @@ export class HubConnection {
                 payload: {
                     role: 'renderer',
                     guid: Config.guid,
-                    positionOrigin: Config.positionOrigin,
                     boundingBox: Config.boundingBox,
                 },
             },

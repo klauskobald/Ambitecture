@@ -195,14 +195,13 @@ Every WebSocket message uses this unified shape:
     "payload": {
       "role": "renderer",
       "guid": "renderer-1234567890",
-      "positionOrigin": [0, 0, 0],
       "boundingBox": [0, 0, 0, 10, 5, 3]
     }
   }
 }
 ```
 
-Controllers use `role: "controller"` and include `scope` (rooms/areas) instead of `boundingBox`.
+Controllers use `role: "controller"` and include `scope` (rooms/areas). Optional `boundingBox` on register is metadata only; **spatial bounds for the scene** come from hub **`config`** (project zones, each with `boundingBox`). Event `position` is **local XYZ inside the relevant zone bounding box**.
 
 **`events`** — hub → renderer:
 

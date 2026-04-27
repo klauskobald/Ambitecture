@@ -98,7 +98,6 @@ Renderer settings come from environment variables (examples):
 - `AMBITECTURE_HUB_URL` (default `http://localhost:3000`, converted to `ws://...`)
 - `GUID`
 - `GEO_LOCATION`
-- `POSITION_ORIGIN`
 - `BOUNDING_BOX`
 - `DMX_DRIVER`
 - `DMX_DEVICE`

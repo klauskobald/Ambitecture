@@ -1,5 +1,5 @@
 {
-    "AMBITECTURE_HUB_URL": "http://localhost:3000",
+    "AMBITECTURE_HUB_URL": "http://klausmacbookm4.local:3000",
     "GEO_LOCATION": "0.000 0.000",
     "CONTROLLER_GUID": "controller-web-test-001",
     "SIMULATOR_RENDERER_GUID": "simulator-1234567890",

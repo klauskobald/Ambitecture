@@ -213,8 +213,9 @@ function overlayClientToBboxMeters(clientX, clientY, overlayCanvas, s) {
  * @param {() => HubSpatialState | null} getSpatial
  * @param {() => Map<number, unknown>} getIntents
  * @param {(layer: number, wx: number, wz: number) => void} onIntentDrag
+ * @param {HTMLIFrameElement} iframe
  */
-function setupOverlayCanvas(L, canvas, stack, getSpatial, getIntents, onIntentDrag) {
+function setupOverlayCanvas(L, canvas, stack, getSpatial, getIntents, onIntentDrag, iframe) {
   const ctx = canvas.getContext('2d');
   if (!ctx) {
     showConfigError('Canvas 2D context unavailable.');
@@ -230,15 +231,31 @@ function setupOverlayCanvas(L, canvas, stack, getSpatial, getIntents, onIntentDr
   let draggedLayer = null;
   const DRAG_HIT_RADIUS_PX = 28;
 
-  function findIntentAtCanvas(cx, cy, spatial, rect) {
+  function getSimCanvasRect() {
+    const simCanvas = iframe.contentDocument?.getElementById('sim-canvas');
+    if (!simCanvas) return null;
+    const inner = simCanvas.getBoundingClientRect();
+    const outer = iframe.getBoundingClientRect();
+    return new DOMRect(
+      outer.left + inner.left,
+      outer.top + inner.top,
+      inner.width,
+      inner.height
+    );
+  }
+
+  function findIntentAtCanvas(cx, cy, spatial) {
     const intents = getIntents();
+    const simRect = getSimCanvasRect();
+    if (!simRect) return null;
+    const overlayRect = canvas.getBoundingClientRect();
     let nearest = null;
     let nearestDist = DRAG_HIT_RADIUS_PX;
     for (const [layer, intent] of intents) {
       const i = /** @type {Record<string, unknown>} */ (intent);
       const pos = /** @type {number[]} */ (i.position);
       if (!pos) continue;
-      const { px, py } = worldToCanvas(pos[0], pos[2], spatial, rect);
+      const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, overlayRect);
       const dist = Math.hypot(cx - px, cy - py);
       if (dist < nearestDist) { nearest = layer; nearestDist = dist; }
     }
@@ -293,8 +310,7 @@ function setupOverlayCanvas(L, canvas, stack, getSpatial, getIntents, onIntentDr
     const { x, y } = canvasPointFromEvent(ev);
     const spatial = getSpatial();
     if (spatial) {
-      const rect = canvas.getBoundingClientRect();
-      const hit = findIntentAtCanvas(x, y, spatial, rect);
+      const hit = findIntentAtCanvas(x, y, spatial);
       if (hit !== null) {
         draggedLayer = hit;
         activePointers.add(ev.pointerId);
@@ -311,8 +327,9 @@ function setupOverlayCanvas(L, canvas, stack, getSpatial, getIntents, onIntentDr
     if (!activePointers.has(ev.pointerId)) return;
     if (draggedLayer !== null) {
       const spatial = getSpatial();
-      if (!spatial) return;
-      const m = overlayClientToBboxMeters(ev.clientX, ev.clientY, canvas, spatial);
+      const simRect = getSimCanvasRect();
+      if (!spatial || !simRect) return;
+      const m = clientToWorldViaSimCanvas(ev.clientX, ev.clientY, spatial, simRect);
       if (!m) return;
       onIntentDrag(draggedLayer, m.wx, m.wz);
       return;
@@ -358,25 +375,26 @@ function setupOverlayCanvas(L, canvas, stack, getSpatial, getIntents, onIntentDr
     }
     ctx.globalAlpha = 1;
 
-    const spatial = getSpatial();
-    const intents = getIntents();
-    if (spatial && intents.size > 0) {
-      ctx.save();
-      for (const intent of intents.values()) {
-        const i = /** @type {Record<string, unknown>} */ (intent);
+    if (draggedLayer !== null) {
+      const spatial = getSpatial();
+      const simRect = getSimCanvasRect();
+      const draggedIntent = getIntents().get(draggedLayer);
+      if (spatial && simRect && draggedIntent) {
+        const i = /** @type {Record<string, unknown>} */ (draggedIntent);
         const pos = /** @type {number[]} */ (i.position);
-        if (!pos) continue;
-        const { px, py } = worldToCanvas(pos[0], pos[2], spatial, rect);
-        if (px < 0 || px > rect.width || py < 0 || py > rect.height) continue;
-        ctx.beginPath();
-        ctx.arc(px, py, L.overlayFingerRadiusPx * 1.4, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(255, 220, 80, 0.9)';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        ctx.fillStyle = 'rgba(255, 220, 80, 0.25)';
-        ctx.fill();
+        if (pos) {
+          const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, rect);
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(px, py, L.overlayFingerRadiusPx * 1.4, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(255, 220, 80, 0.9)';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.fillStyle = 'rgba(255, 220, 80, 0.25)';
+          ctx.fill();
+          ctx.restore();
+        }
       }
-      ctx.restore();
     }
   }
   requestAnimationFrame(frame);
@@ -390,16 +408,39 @@ function toWsUrl(httpUrl) {
 }
 
 /**
+ * Maps world XZ to overlay canvas pixel coords using the simulator canvas's actual screen rect.
  * @param {number} wx
  * @param {number} wz
  * @param {HubSpatialState} spatial
- * @param {DOMRect} canvasRect
+ * @param {DOMRect} simRect  getBoundingClientRect() of the simulator's #sim-canvas
+ * @param {DOMRect} overlayRect  getBoundingClientRect() of the overlay canvas
  * @returns {{ px: number, py: number }}
  */
-function worldToCanvas(wx, wz, spatial, canvasRect) {
+function worldToCanvas(wx, wz, spatial, simRect, overlayRect) {
   const nx = (wx - spatial.x1) / (spatial.x2 - spatial.x1);
   const ny = (wz - spatial.z1) / (spatial.z2 - spatial.z1);
-  return { px: nx * canvasRect.width, py: ny * canvasRect.height };
+  return {
+    px: (simRect.left - overlayRect.left) + nx * simRect.width,
+    py: (simRect.top - overlayRect.top) + ny * simRect.height,
+  };
+}
+
+/**
+ * Maps a client pointer position to world XZ using the simulator canvas's screen rect.
+ * @param {number} clientX
+ * @param {number} clientY
+ * @param {HubSpatialState} spatial
+ * @param {DOMRect} simRect
+ * @returns {{ wx: number, wz: number } | null}
+ */
+function clientToWorldViaSimCanvas(clientX, clientY, spatial, simRect) {
+  const nx = (clientX - simRect.left) / simRect.width;
+  const ny = (clientY - simRect.top) / simRect.height;
+  if (nx < 0 || nx > 1 || ny < 0 || ny > 1) return null;
+  return {
+    wx: spatial.x1 + nx * (spatial.x2 - spatial.x1),
+    wz: spatial.z1 + ny * (spatial.z2 - spatial.z1),
+  };
 }
 
 /**
@@ -629,7 +670,7 @@ async function main() {
     setSpatialReadout('WebSocket error');
   });
 
-  setupOverlayCanvas(L, canvas, stack, () => hubSpatial, () => intentState, onIntentDrag);
+  setupOverlayCanvas(L, canvas, stack, () => hubSpatial, () => intentState, onIntentDrag, iframe);
 }
 
 main();

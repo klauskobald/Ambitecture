@@ -17,6 +17,7 @@ class LayerIntentEngine {
                 }
 
                 const spatialFactor = this._computeSpatialFactor(
+                    context.fixture,
                     context.fixtureWorldPos,
                     intent.position,
                     context.fixture.range
@@ -109,10 +110,12 @@ class LayerIntentEngine {
             && pos[2] >= bbox[2] && pos[2] <= bbox[5];
     }
 
-    _computeSpatialFactor(fixtureWorldPos, intentPos, range) {
+    _computeSpatialFactor(fixture, fixtureWorldPos, intentPos, range) {
         if (!intentPos || range <= 0) return 1;
         const distance = Vector3.fromTo(fixtureWorldPos, intentPos).magnitude();
-        return Math.max(0, 1 - distance / range);
+        const normalized = Math.max(0, 1 - distance / range);
+        const curveName = fixture?.params?.rangeFunction ?? fixture?.params?.rangeFn;
+        return FnCurve.evaluate(curveName, normalized);
     }
 
     _sampleTopLayerNumber(intentsByLayer, intentType, fieldName) {

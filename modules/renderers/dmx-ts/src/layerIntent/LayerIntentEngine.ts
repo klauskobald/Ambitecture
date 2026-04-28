@@ -2,6 +2,7 @@ import { Color, BlendMode } from '../color';
 import { Vector3 } from '../Vector3';
 import { ConfiguredFixture, ConfiguredZone } from '../handlers/ConfigHandler';
 import { RendererEvent } from '../fixtures/IFixtureClass';
+import { FnCurve } from '../FnCurve';
 
 export interface IntentRecord {
     layer: number;
@@ -135,7 +136,12 @@ export class LayerIntentEngine {
                 continue;
             }
 
-            const spatialFactor = this.computeSpatialFactor(context.fixtureWorldPos, intent.position, context.fixture.range);
+            const spatialFactor = this.computeSpatialFactor(
+                context.fixture,
+                context.fixtureWorldPos,
+                intent.position,
+                context.fixture.range
+            );
             const layerColor = new Color(colorData.x, colorData.y, Math.max(0, Math.min(1, colorData.Y * spatialFactor)));
             mixed = mixed.blend(layerColor, intent.blend ?? 'ADD', intent.alpha ?? 1);
         }
@@ -173,13 +179,16 @@ export class LayerIntentEngine {
     }
 
     private computeSpatialFactor(
+        fixture: ConfiguredFixture,
         fixtureWorldPos: [number, number, number],
         intentPos: [number, number, number] | undefined,
         range: number
     ): number {
         if (!intentPos || range <= 0) return 1;
         const distance = Vector3.fromTo(fixtureWorldPos, intentPos).magnitude();
-        return Math.max(0, 1 - distance / range);
+        const normalized = Math.max(0, 1 - distance / range);
+        const curveName = fixture.params['rangeFunction'] ?? fixture.params['rangeFn'];
+        return FnCurve.evaluate(curveName, normalized);
     }
 }
 

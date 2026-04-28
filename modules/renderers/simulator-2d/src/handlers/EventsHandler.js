@@ -1,13 +1,8 @@
-function isPositionInZone(pos, bbox) {
-    return pos[0] >= bbox[0] && pos[0] <= bbox[3]
-        && pos[1] >= bbox[1] && pos[1] <= bbox[4]
-        && pos[2] >= bbox[2] && pos[2] <= bbox[5];
-}
-
 class EventsHandler {
     constructor(configHandler, renderer) {
         this.configHandler = configHandler;
         this._renderer = renderer;
+        this._layerIntentEngine = new LayerIntentEngine();
         this.queue = new EventQueue(event => this.processEvent(event));
     }
 
@@ -19,37 +14,26 @@ class EventsHandler {
 
     processEvent(event) {
         const zones = this.configHandler.getZones();
-        const eventPos = event.position;
-
-        if (!eventPos) {
-            this._broadcastToAll(event, zones);
-        } else {
-            this._dispatchToZones(event, eventPos, zones);
+        const changed = this._layerIntentEngine.applyEvent(event, zones);
+        if (!changed && event.position) {
+            console.debug(`[events] position [${event.position.join(', ')}] matched no zones`);
+            return;
         }
 
-        this._renderer.handleEvent(event);
-    }
-
-    _broadcastToAll(event, zones) {
+        const intentsByLayer = this._layerIntentEngine.getActiveIntentsByLayer();
         for (const zone of zones) {
             for (const fixture of zone.fixtures) {
-                fixture.handleEvent(event, null);
+                const context = {
+                    fixture,
+                    fixtureWorldPos: fixture.location,
+                };
+                const snapshot = {
+                    intentsByLayer,
+                    sample: capabilityKey => this._layerIntentEngine.sample(context, capabilityKey),
+                };
+                fixture.applyIntentSnapshot(context, snapshot);
             }
         }
-    }
-
-    _dispatchToZones(event, eventPos, zones) {
-        let dispatched = 0;
-        for (const zone of zones) {
-            if (!isPositionInZone(eventPos, zone.bbox)) continue;
-            for (const fixture of zone.fixtures) {
-                const spatial = Vector3.fromTo(fixture.location, eventPos);
-                fixture.handleEvent(event, spatial);
-                dispatched++;
-            }
-        }
-        if (dispatched === 0) {
-            console.debug(`[events] position [${eventPos.join(', ')}] matched no zones`);
-        }
+        this._renderer.setIntentLayers(intentsByLayer);
     }
 }

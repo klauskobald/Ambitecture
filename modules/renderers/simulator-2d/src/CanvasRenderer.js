@@ -80,11 +80,13 @@ class CanvasRenderer {
         this.fixtures = fixtures;
     }
 
-    handleEvent(event) {
-        const EventClass = this._eventClasses[event.class];
-        if (!EventClass) return;
-        const layer = event.params?.layer ?? 0;
-        this._events.set(layer, new EventClass(event, this._eventDrawConfig));
+    setIntentLayers(intentsByLayer) {
+        this._events = new Map();
+        for (const [layer, intent] of intentsByLayer) {
+            const EventClass = this._eventClasses[intent.intentType];
+            if (!EventClass) continue;
+            this._events.set(layer, new EventClass(intent, this._eventDrawConfig));
+        }
     }
 
     start() {

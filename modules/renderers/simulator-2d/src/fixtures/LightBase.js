@@ -16,8 +16,8 @@ class LightBase {
         throw new Error(`${this.constructor.name} must implement draw()`);
     }
 
-    handleEvent(_event, _spatial) {
-        throw new Error(`${this.constructor.name} must implement handleEvent()`);
+    applyIntentSnapshot(_context, _snapshot) {
+        throw new Error(`${this.constructor.name} must implement applyIntentSnapshot()`);
     }
 
     _isStrobeOn(strobeValue) {

@@ -1,6 +1,6 @@
 import { ConfiguredFixture } from '../handlers/ConfigHandler';
 import { DmxUniverse } from '../DmxUniverse';
-import { Vector3 } from '../Vector3';
+import { FixtureSampleContext, IntentRecord } from '../layerIntent/LayerIntentEngine';
 
 export interface RendererEvent {
     class: string;
@@ -9,6 +9,16 @@ export interface RendererEvent {
     params?: Record<string, unknown>;
 }
 
+export interface FixtureIntentSnapshot {
+    intentsByLayer: ReadonlyMap<number, IntentRecord>;
+    sample<TValue>(capabilityKey: string): TValue | undefined;
+}
+
 export interface IFixtureClass {
-    handleEvent(event: RendererEvent, fixture: ConfiguredFixture, dmxUniverse: DmxUniverse, spatial: Vector3 | null): void;
+    applyIntentSnapshot(
+        fixture: ConfiguredFixture,
+        context: FixtureSampleContext,
+        snapshot: FixtureIntentSnapshot,
+        dmxUniverse: DmxUniverse
+    ): void;
 }

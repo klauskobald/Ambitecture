@@ -1,7 +1,7 @@
 class EventMaster extends EventBase {
-    constructor(event, drawConfig) {
-        super(event, drawConfig);
-        console.log('[EventMaster]', event);
+    constructor(intent, drawConfig) {
+        super(intent, drawConfig);
+        console.log('[EventMaster]', intent);
     }
 
     draw(_ctx, _cx, _cy, _ppm) {}

@@ -1,7 +1,7 @@
 class EventLight extends EventBase {
-    constructor(event, drawConfig) {
-        super(event, drawConfig);
-        const colorData = event.params?.color;
+    constructor(intent, drawConfig) {
+        super(intent, drawConfig);
+        const colorData = this._payload?.color;
         if (colorData) {
             const { r, g, b } = Color.fromXYY(colorData).toRGB();
             this._fillColor = `rgb(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)})`;

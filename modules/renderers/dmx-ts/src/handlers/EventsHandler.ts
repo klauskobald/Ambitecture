@@ -3,22 +3,13 @@ import { Logger } from '../Logger';
 import { DmxUniverse } from '../DmxUniverse';
 import { ConfigHandler, ConfiguredFixture, ConfiguredZone } from './ConfigHandler';
 import { EventQueue } from '../EventQueue';
-import { IFixtureClass, RendererEvent } from '../fixtures/IFixtureClass';
-import { Vector3 } from '../Vector3';
+import { FixtureIntentSnapshot, IFixtureClass, RendererEvent } from '../fixtures/IFixtureClass';
+import { FixtureSampleContext, LayerIntentEngine } from '../layerIntent/LayerIntentEngine';
 
 interface WsMessage {
     type: string;
     location?: [number, number];
     payload?: unknown;
-}
-
-function isPositionInZone(
-    pos: [number, number, number],
-    bbox: [number, number, number, number, number, number]
-): boolean {
-    return pos[0] >= bbox[0] && pos[0] <= bbox[3]
-        && pos[1] >= bbox[1] && pos[1] <= bbox[4]
-        && pos[2] >= bbox[2] && pos[2] <= bbox[5];
 }
 
 function fixtureWorldPosition(
@@ -33,6 +24,7 @@ export class EventsHandler {
     private dmxUniverse: DmxUniverse;
     private queue: EventQueue<RendererEvent>;
     private fixtureClassCache = new Map<string, IFixtureClass>();
+    private layerIntentEngine = new LayerIntentEngine();
 
     constructor(configHandler: ConfigHandler, dmxUniverse: DmxUniverse) {
         this.configHandler = configHandler;
@@ -66,43 +58,30 @@ export class EventsHandler {
             return;
         }
 
-        const eventPos = event.position;
-
-        if (!eventPos) {
-            await this.broadcastToAllFixtures(event, zones);
+        const changed = this.layerIntentEngine.applyEvent(event, zones);
+        if (!changed && event.position) {
+            Logger.debug(`[events] position [${event.position.join(', ')}] matched no zones`);
             return;
         }
-
-        await this.dispatchToZoneFixtures(event, eventPos, zones);
+        await this.applyAllFixtures(zones);
     }
 
-    private async broadcastToAllFixtures(event: RendererEvent, zones: ConfiguredZone[]): Promise<void> {
+    private async applyAllFixtures(zones: ConfiguredZone[]): Promise<void> {
+        const intentsByLayer = this.layerIntentEngine.getActiveIntentsByLayer();
         for (const zone of zones) {
-            for (const fixture of zone.fixtures) {
-                const handler = await this.getFixtureClass(fixture.fixtureProfile.class);
-                handler.handleEvent(event, fixture, this.dmxUniverse, null);
-            }
-        }
-    }
-
-    private async dispatchToZoneFixtures(
-        event: RendererEvent,
-        eventPos: [number, number, number],
-        zones: ConfiguredZone[]
-    ): Promise<void> {
-        let dispatched = 0;
-        for (const zone of zones) {
-            if (!isPositionInZone(eventPos, zone.boundingBox)) continue;
             for (const fixture of zone.fixtures) {
                 const worldPos = fixtureWorldPosition(fixture, zone.boundingBox);
-                const spatial = Vector3.fromTo(worldPos, eventPos);
+                const context: FixtureSampleContext = {
+                    fixture,
+                    fixtureWorldPos: worldPos,
+                };
+                const snapshot: FixtureIntentSnapshot = {
+                    intentsByLayer,
+                    sample: <TValue>(capabilityKey: string) => this.layerIntentEngine.sample<TValue>(context, capabilityKey),
+                };
                 const handler = await this.getFixtureClass(fixture.fixtureProfile.class);
-                handler.handleEvent(event, fixture, this.dmxUniverse, spatial);
-                dispatched++;
+                handler.applyIntentSnapshot(fixture, context, snapshot, this.dmxUniverse);
             }
-        }
-        if (dispatched === 0) {
-            Logger.debug(`[events] position [${eventPos.join(', ')}] matched no zones`);
         }
     }
 }

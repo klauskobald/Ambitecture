@@ -5,21 +5,7 @@ export const defaultArgs: string[] = [];
 interface BlinkerConfig {
   location: [number, number];
   interval: number;
-  events: unknown[];
-}
-
-/** YAML `scheduled` is ms relative to `baseMs`; hub/renderer receive absolute epoch ms. */
-function withAbsoluteScheduled(event: unknown, baseMs: number): unknown {
-  if (event === null || typeof event !== 'object' || Array.isArray(event)) {
-    return event;
-  }
-  const e = event as Record<string, unknown>;
-  const raw = e['scheduled'];
-  const rel =
-    typeof raw === 'number' && Number.isFinite(raw)
-      ? raw
-      : 0;
-  return { ...e, scheduled: baseMs + rel };
+  intents: unknown[];
 }
 
 function buildEnvelope(type: string, location: [number, number], payload: unknown): string {
@@ -34,22 +20,22 @@ function buildRegisterPayload(location: [number, number]): string {
   });
 }
 
-function buildEventsPayload(location: [number, number], eventsPayload: unknown[]): string {
-  return buildEnvelope('events', location, eventsPayload);
+function buildIntentsPayload(location: [number, number], intents: unknown[]): string {
+  return buildEnvelope('intents', location, intents);
 }
 
 function readConfig(testconfig: Record<string, unknown>): BlinkerConfig {
   const location = testconfig['location'] as [number, number];
   const interval = testconfig['interval'] as number;
-  const events = testconfig['events'] as unknown[];
-  return { location, interval, events };
+  const intents = testconfig['intents'] as unknown[];
+  return { location, interval, intents };
 }
 
-function maxRelativeScheduledMs(events: unknown[]): number {
+function maxRelativeScheduledMs(intents: unknown[]): number {
   let max = 0;
-  for (const ev of events) {
-    if (ev === null || typeof ev !== 'object' || Array.isArray(ev)) continue;
-    const raw = (ev as Record<string, unknown>)['scheduled'];
+  for (const intent of intents) {
+    if (intent === null || typeof intent !== 'object' || Array.isArray(intent)) continue;
+    const raw = (intent as Record<string, unknown>)['scheduled'];
     if (typeof raw === 'number' && Number.isFinite(raw) && raw > max) max = raw;
   }
   return max;
@@ -57,14 +43,14 @@ function maxRelativeScheduledMs(events: unknown[]): number {
 
 function computeTimeoutMs(
   dataTimeout: number,
-  eventCount: number,
+  intentCount: number,
   interval: number,
   scheduleSpanMs: number
 ): number {
   const isFiniteTimeout = isFinite(dataTimeout);
   if (isFiniteTimeout) return dataTimeout * 1000;
   const perCycle = scheduleSpanMs + interval;
-  return Math.max(3 * eventCount * interval, perCycle * 2);
+  return Math.max(3 * intentCount * interval, perCycle * 2);
 }
 
 export async function main(
@@ -72,9 +58,9 @@ export async function main(
   options: { url: string; testconfig: Record<string, unknown> }
 ): Promise<void> {
   const config = readConfig(options.testconfig);
-  const { location, interval, events } = config;
-  const scheduleSpanMs = maxRelativeScheduledMs(events);
-  const timeoutMs = computeTimeoutMs(data.timeout, events.length, interval, scheduleSpanMs);
+  const { location, interval, intents } = config;
+  const scheduleSpanMs = maxRelativeScheduledMs(intents);
+  const timeoutMs = computeTimeoutMs(data.timeout, intents.length, interval, scheduleSpanMs);
 
   return new Promise<void>((resolve, reject) => {
     const ws = new WebSocket(options.url);
@@ -85,9 +71,7 @@ export async function main(
         ws.send(buildRegisterPayload(location));
 
         while (Date.now() - startedAt < timeoutMs) {
-          const batchStart = Date.now();
-          const absoluteEvents = events.map(ev => withAbsoluteScheduled(ev, batchStart));
-          ws.send(buildEventsPayload(location, absoluteEvents));
+          ws.send(buildIntentsPayload(location, intents));
           await new Promise<void>(res => setTimeout(res, interval));
         }
 

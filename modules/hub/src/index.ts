@@ -5,6 +5,8 @@ import { ConnectionRegistry } from './ConnectionRegistry';
 import { MessageRouter } from './MessageRouter';
 import { RegisterHandler } from './handlers/RegisterHandler';
 import { EventsHandler } from './handlers/EventsHandler';
+import { IntentsHandler } from './handlers/IntentsHandler';
+import { EventQueue } from './EventQueue';
 import { ProjectManager } from './ProjectManager';
 import { Logger } from './Logger';
 
@@ -21,8 +23,10 @@ const registry = new ConnectionRegistry();
 const router = new MessageRouter(registry);
 
 const rateLimitEventsPerSecond = serverConfig.get<number>('rateLimitEventsPerSecond');
+const eventQueue = new EventQueue(registry);
 router.register('register', new RegisterHandler(registry, projectManager, rateLimitEventsPerSecond));
 router.register('events', new EventsHandler(registry));
+router.register('intents', new IntentsHandler(registry, projectManager, eventQueue));
 
 projectManager.useProject(serverConfig.get<string>('defaultProject'), () => {
   for (const ws of registry.getByRole('renderer')) {

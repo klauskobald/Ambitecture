@@ -227,7 +227,7 @@ function setupOverlayCanvas(L, canvas, stack, getSpatial, getIntents, onIntentDr
 
   /** @type {Set<number>} */
   const activePointers = new Set();
-  /** @type {Map<number, number>} pointerId → layer */
+  /** @type {Map<number, string>} pointerId → intent guid */
   const draggedPointers = new Map();
   const DRAG_HIT_RADIUS_PX = 28;
 
@@ -252,14 +252,14 @@ function setupOverlayCanvas(L, canvas, stack, getSpatial, getIntents, onIntentDr
     const alreadyGrabbed = new Set(draggedPointers.values());
     let nearest = null;
     let nearestDist = DRAG_HIT_RADIUS_PX;
-    for (const [layer, intent] of intents) {
-      if (alreadyGrabbed.has(layer)) continue;
+    for (const [guid, intent] of intents) {
+      if (alreadyGrabbed.has(guid)) continue;
       const i = /** @type {Record<string, unknown>} */ (intent);
       const pos = /** @type {number[]} */ (i.position);
       if (!pos) continue;
       const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, overlayRect);
       const dist = Math.hypot(cx - px, cy - py);
-      if (dist < nearestDist) { nearest = layer; nearestDist = dist; }
+      if (dist < nearestDist) { nearest = guid; nearestDist = dist; }
     }
     return nearest;
   }
@@ -327,14 +327,14 @@ function setupOverlayCanvas(L, canvas, stack, getSpatial, getIntents, onIntentDr
 
   function onPointerMove(ev) {
     if (!activePointers.has(ev.pointerId)) return;
-    const layer = draggedPointers.get(ev.pointerId);
-    if (layer !== undefined) {
+    const guid = draggedPointers.get(ev.pointerId);
+    if (guid !== undefined) {
       const spatial = getSpatial();
       const simRect = getSimCanvasRect();
       if (!spatial || !simRect) return;
       const m = clientToWorldViaSimCanvas(ev.clientX, ev.clientY, spatial, simRect);
       if (!m) return;
-      onIntentDrag(layer, m.wx, m.wz);
+      onIntentDrag(guid, m.wx, m.wz);
       return;
     }
     const { x, y } = canvasPointFromEvent(ev);
@@ -382,8 +382,8 @@ function setupOverlayCanvas(L, canvas, stack, getSpatial, getIntents, onIntentDr
       const spatial = getSpatial();
       const simRect = getSimCanvasRect();
       if (spatial && simRect) {
-        for (const layer of draggedPointers.values()) {
-          const draggedIntent = getIntents().get(layer);
+        for (const guid of draggedPointers.values()) {
+          const draggedIntent = getIntents().get(guid);
           if (!draggedIntent) continue;
           const i = /** @type {Record<string, unknown>} */ (draggedIntent);
           const pos = /** @type {number[]} */ (i.position);
@@ -450,6 +450,16 @@ function clientToWorldViaSimCanvas(clientX, clientY, spatial, simRect) {
 
 /**
  * @param {unknown} intent
+ * @returns {string}
+ */
+function intentGuid(intent) {
+  return (intent !== null && typeof intent === 'object' && !Array.isArray(intent))
+    ? String(/** @type {Record<string, unknown>} */ (intent).guid ?? '')
+    : '';
+}
+
+/**
+ * @param {unknown} intent
  * @returns {number}
  */
 function intentLayer(intent) {
@@ -462,34 +472,19 @@ function intentLayer(intent) {
 }
 
 /**
- * @param {unknown} intent
- * @returns {object}
- */
-function intentToEvent(intent) {
-  const i = /** @type {Record<string, unknown>} */ (intent);
-  return {
-    class: i.class,
-    scheduled: 0,
-    position: i.position,
-    params: i.params,
-  };
-}
-
-/**
  * @param {unknown[]} intents
  * @param {WebSocket} ws
  * @param {number[]} location
  */
 function fireIntentEvents(intents, ws, location) {
   if (ws.readyState !== WebSocket.OPEN) return;
-  const payload = intents.map(intentToEvent);
-  ws.send(JSON.stringify({ message: { type: 'events', location, payload } }));
+  ws.send(JSON.stringify({ message: { type: 'intents', location, payload: intents } }));
 }
 
-/** @type {Map<number, unknown>} */
+/** @type {Map<string, unknown>} intentState keyed by intent guid */
 const intentState = new Map();
 
-/** @type {Map<number, unknown>} */
+/** @type {Map<string, unknown>} outboundMap keyed by intent guid */
 const outboundMap = new Map();
 let lastSentAt = 0;
 let sendPending = false;
@@ -503,9 +498,9 @@ let activeLocation = null;
  * @param {unknown} intent
  */
 function queueIntentUpdate(intent) {
-  const layer = intentLayer(intent);
-  if (!Number.isFinite(layer)) return;
-  outboundMap.set(layer, intent);
+  const guid = intentGuid(intent);
+  if (!guid) return;
+  outboundMap.set(guid, intent);
   scheduleFlush();
 }
 
@@ -537,22 +532,22 @@ function flushOutbound() {
 function reconcileIntents(incomingIntents) {
   const incoming = new Map();
   for (const intent of incomingIntents) {
-    const layer = intentLayer(intent);
-    if (!Number.isFinite(layer)) continue;
-    incoming.set(layer, intent);
+    const guid = intentGuid(intent);
+    if (!guid) continue;
+    incoming.set(guid, intent);
   }
 
-  for (const [layer, intent] of incoming) {
-    const existing = intentState.get(layer);
+  for (const [guid, intent] of incoming) {
+    const existing = intentState.get(guid);
     if (!existing || JSON.stringify(existing) !== JSON.stringify(intent)) {
-      intentState.set(layer, intent);
+      intentState.set(guid, intent);
       queueIntentUpdate(intent);
     }
   }
 
-  for (const layer of intentState.keys()) {
-    if (!incoming.has(layer)) {
-      intentState.delete(layer);
+  for (const guid of intentState.keys()) {
+    if (!incoming.has(guid)) {
+      intentState.delete(guid);
     }
   }
 }
@@ -605,17 +600,17 @@ async function main() {
   const location = [geoLon, geoLat];
 
   /**
-   * @param {number} layer
+   * @param {string} guid
    * @param {number} wx
    * @param {number} wz
    */
-  function onIntentDrag(layer, wx, wz) {
-    const intent = intentState.get(layer);
+  function onIntentDrag(guid, wx, wz) {
+    const intent = intentState.get(guid);
     if (!intent) return;
     const i = /** @type {Record<string, unknown>} */ (intent);
     const pos = /** @type {number[]} */ (i.position);
     const updated = { ...i, position: [wx, pos[1] ?? 0, wz] };
-    intentState.set(layer, updated);
+    intentState.set(guid, updated);
     queueIntentUpdate(updated);
   }
 

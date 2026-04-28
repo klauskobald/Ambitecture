@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { randomUUID } from 'crypto';
 import { Config } from './Config';
 import { Logger } from './Logger';
 
@@ -16,9 +17,11 @@ export interface FixtureProfile {
   };
 }
 
-interface ControllerIntent {
-  name: string;
-  position: [number, number, number];
+export interface ControllerIntent {
+  guid?: string;
+  name?: string;
+  scheduled?: number;
+  position?: [number, number, number];
   class: string;
   params: Record<string, unknown>;
 }
@@ -59,6 +62,7 @@ export class ProjectManager {
   private project: Project | null = null;
   private fixtureProfiles: Map<string, FixtureProfile> = new Map();
   private watchers: fs.FSWatcher[] = [];
+  private intentCache: Map<string, Map<string, ControllerIntent>> = new Map();
 
   constructor(projectsPath: string, fixturesPath: string) {
     this.projectsPath = projectsPath;
@@ -74,9 +78,27 @@ export class ProjectManager {
   private reloadProject(name: string): void {
     const filePath = this.resolvePath(this.projectsPath, `${name}.yml`);
     this.project = new Config(filePath).getAll() as Project;
+    this.intentCache.clear();
+    for (const controller of this.project.controller ?? []) {
+      for (const intent of controller.intents) {
+        if (!intent.guid) {
+          intent.guid = randomUUID();
+        }
+      }
+    }
     this.fixtureProfiles.clear();
     this.loadReferencedFixtures();
     Logger.info(`[project] loaded "${this.project.name}" with ${this.project.zones.length} zone(s)`);
+  }
+
+  updateIntents(controllerGuid: string, updatedIntents: ControllerIntent[]): void {
+    const withGuids = updatedIntents.filter(i => i.guid);
+    if (withGuids.length === 0) return;
+    const cache = this.intentCache.get(controllerGuid) ?? new Map<string, ControllerIntent>();
+    for (const intent of withGuids) {
+      cache.set(intent.guid!, intent);
+    }
+    this.intentCache.set(controllerGuid, cache);
   }
 
   private watchAll(name: string, callback: () => void): void {
@@ -194,7 +216,8 @@ export class ProjectManager {
     }
     const controllers = this.project.controller ?? [];
     const match = controllers.find(c => c.guid === guid);
-    const intents = match?.intents ?? [];
+    const cached = this.intentCache.get(guid);
+    const intents = cached ? [...cached.values()] : (match?.intents ?? []);
     Logger.info(`[project] buildControllerConfig(${guid}): ${this.project.zones.length} zone(s), ${intents.length} intent(s)`);
     return {
       projectName: this.project.name,

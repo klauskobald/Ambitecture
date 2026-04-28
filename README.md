@@ -29,7 +29,7 @@ Ambitecture is intentionally modular: you can pair many controller types with ma
 
 - **Controllers** can be touch UIs, automation surfaces, timelines, or sensor-driven tools.
 - **Renderers** can be DMX fixtures, visual simulators, or custom output protocols.
-- **Hub** keeps shared project state and distributes runtime config/events.
+- **Hub** keeps shared project + intent state, distributes runtime config, and emits renderer-facing events from controller intents.
 - **Deliver** is an optional static host for browser-based controllers/renderers.
 
 Detailed protocol and runtime internals live in [SYSTEM-ARCHITECTURE.md](SYSTEM-ARCHITECTURE.md).
@@ -170,7 +170,14 @@ Config source:
 
 - `modules/hub/config.DEMO/test.yml`
 
-`001-blinker.ts` acts as a controller client, registers via WebSocket, and sends timed event batches.
+`001-blinker.ts` acts as a controller client, registers via WebSocket, and sends timed intent batches.
+
+## Intent Workflow
+
+- Controllers send `message.type = "intents"` to the hub (not direct renderer `events`).
+- Hub updates per-controller intent state and includes that state in controller `config` payloads.
+- Hub normalizes intent color into CIE 1931 `xyY`, converts relative `scheduled` offsets into absolute times, and queues renderer-facing `events`.
+- Renderers consume queued `events` and apply them through their layer/capability engines.
 
 ## Resilience Notes
 

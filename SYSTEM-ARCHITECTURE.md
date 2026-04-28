@@ -19,8 +19,10 @@ The hub is the **single source of truth** for system-wide configuration. It subs
 - **`src/Server.ts`** — HTTP server + WebSocket server (`perMessageDeflate` enabled, heartbeat ping/pong supervision).
 - **`src/MessageRouter.ts`** — Message dispatch by `message.type`.
 - **`src/handlers/RegisterHandler.ts`** — Accepts `register`, stores module identity/metadata, pushes `config` to renderers and controllers, and emits `refresh` to controllers when renderer topology changes.
-- **`src/handlers/EventsHandler.ts`** — Accepts `events`, normalizes event color to CIE 1931 `xyY`, forwards to connected renderers.
-- **`src/ProjectManager.ts`** — Loads project + referenced fixtures, watches files, builds per-renderer config payloads.
+- **`src/handlers/EventsHandler.ts`** — Legacy/direct `events` forwarder kept for compatibility paths.
+- **`src/handlers/IntentsHandler.ts`** — Accepts controller `intents`, updates controller intent state, normalizes color, schedules renderer-facing `events`, and syncs intent state to peer controllers.
+- **`src/EventQueue.ts`** — Buckets/schedules generated renderer `events` by execution timestamp and dispatches to connected renderers.
+- **`src/ProjectManager.ts`** — Loads project + referenced fixtures, watches files, builds renderer/controller config payloads, and keeps per-controller runtime intent cache.
 - **Profile example:** `config.DEMO/server.yml` defines `LISTEN_PORT` and `LISTEN_HOST` (demo uses `3000` and `0.0.0.0`). Use `.env` / `.env.DEMO` to point `CONFIG_PATH` at a profile such as `config.DEMO`.
 
 **Current runtime note:** The hub currently runs on Node's `http` server directly (not Express). WebSocket is attached to that server without a path restriction (not limited to `/ws` yet).
@@ -89,7 +91,7 @@ Renderer data authority model:
 
 ## `modules/controllers`
 
-**Role:** Front ends and tools that send control or scene data to the hub.
+**Role:** Front ends and tools that send control intent/state to the hub.
 
 **`controllers/web-test/`** — Static controller shell: [`index.html`](modules/controllers/web-test/index.html) embeds simulator-2d in an iframe, opens a WebSocket to the hub as **`role: controller`**, receives **`config`** (full project zones from [`ProjectManager.buildControllerConfig`](modules/hub/src/ProjectManager.ts)), and maps overlay touches to **meters inside the selected zone’s `boundingBox`** (see [`src/main.js`](modules/controllers/web-test/src/main.js)). Tunable layout lives in [`config.json`](modules/controllers/web-test/config.json) next to `index.html`.
 
@@ -150,11 +152,11 @@ When a module connects, it should announce its location/capability data to the h
 
 The hub keeps this as authoritative runtime metadata and can update it if the module reconnects or republishes.
 
-### Spatial event routing for renderers
+### Intent-to-event routing for renderers
 
-Renderers receive events from the hub and apply them through a capability-based layer engine. In the current implementation, renderers keep per-layer intent state and fixtures sample capabilities from snapshots (`light.color.xyY`, `light.strobe`, `master.brightness`, `master.blackout`) instead of handling each event directly.
+Controllers submit `intents` to the hub. The hub updates controller intent state and converts those intents into scheduled renderer-facing `events` via the queue. Renderers then apply received events through a capability-based layer engine. In the current implementation, renderers keep per-layer intent state and fixtures sample capabilities from snapshots (`light.color.xyY`, `light.strobe`, `master.brightness`, `master.blackout`) instead of handling each event directly.
 
-Hub pre-filtering by bounding box/location is intended optimization, not current default behavior. Current `events` forwarding is broadcast to all connected renderers.
+Hub pre-filtering by bounding box/location is intended optimization, not current default behavior. Current queue dispatch of generated `events` is broadcast to all connected renderers.
 
 ### Room and scope filtering for controllers
 
@@ -236,7 +238,34 @@ Every WebSocket message uses a unified envelope:
 
 Controllers use `role: "controller"` and include `scope` (rooms/areas) instead of `boundingBox`.
 
-**`events`** — controller → hub and hub → renderer:
+**`intents`** — controller → hub:
+
+```json
+{
+  "message": {
+    "type": "intents",
+    "location": [8.5417, 47.3769],
+    "payload": [
+      {
+        "guid": "intent-42",
+        "class": "light",
+        "scheduled": 250,
+        "position": [1.2, 0.0, -3.5],
+        "params": {
+          "color": { "x": 0.32, "y": 0.34, "Y": 0.8 },
+          "layer": 100,
+          "blend": "ADD",
+          "alpha": 1
+        }
+      }
+    ]
+  }
+}
+```
+
+`scheduled` in controller `intents` is relative milliseconds from "now" and is resolved by the hub into absolute event timestamps.
+
+**`events`** — hub → renderer:
 
 ```json
 {
@@ -290,8 +319,9 @@ Controllers use `role: "controller"` and include `scope` (rooms/areas) instead o
 
 ### Event dispatch model
 
-- Hub normalizes `params.color` into CIE 1931 `xyY` before forwarding events.
-- Current hub forwarding accepts valid `events` arrays from connected clients and broadcasts them to renderers.
+- Hub accepts controller `intents`, updates per-controller intent state in `ProjectManager`, normalizes `params.color` into CIE 1931 `xyY`, and emits scheduled renderer `events` through `EventQueue`.
+- Current queue dispatch broadcasts generated `events` to connected renderers.
+- Hub also re-broadcasts merged current `intents` to other connected controllers for state sync.
 - `class` (inside an event object) is stored as layer intent type and consumed by renderer capability resolvers.
 - Renderer dynamically imports fixture class modules and runs `applyIntentSnapshot(...)` for configured fixtures.
 - `scheduled` is an absolute execution timestamp used by the renderer queue/scheduler (past timestamps execute immediately).

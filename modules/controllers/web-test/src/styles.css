@@ -12,6 +12,9 @@ body {
   background: #0a0a0a;
   color: #ccc;
   font-family: system-ui, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .app {

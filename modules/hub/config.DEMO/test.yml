@@ -1,4 +1,4 @@
-host: localhost:3000
+host: http://klausmacbookm4.local:3000
 
 testParams:
   001-blinker.ts:

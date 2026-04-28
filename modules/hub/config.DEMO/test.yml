@@ -32,9 +32,9 @@ testParams:
         scheduled: 0
         position: [1,0,2]
         params:
-          color: {"rgb": [255,255,0]}
+          color: {"rgb": [111,111,111]}
           strobe: 0
-          layer: 100
+          layer: 10
           blend: ADD
           alpha: 1
 
@@ -42,53 +42,53 @@ testParams:
         scheduled: 500
         position: [2,0,3]
         params:
-          color: {"rgb": [255,255,0]}
+          color: {"rgb": [111,111,111]}
           strobe: 0
-          layer: 100
+          layer: 10
           blend: ADD
           alpha: 1
       - class: light
         scheduled: 1000
         position: [3,0,4]
         params:
-          color: {"rgb": [255,255,0]}
+          color: {"rgb": [111,111,111]}
           strobe: 0
-          layer: 100
+          layer: 10
           blend: ADD
           alpha: 1
       - class: light
         scheduled: 1500
         position: [4,0,5]
         params:
-          color: {"rgb": [255,255,0]}
+          color: {"rgb": [111,111,111]}
           strobe: 0
-          layer: 100
+          layer: 10
           blend: ADD
           alpha: 1  
       - class: light
         scheduled: 2000
         position: [5,0,6]
         params:
-          color: {"rgb": [255,255,0]}
+          color: {"rgb": [111,111,111]}
           strobe: 0
-          layer: 100
+          layer: 10
           blend: ADD
           alpha: 1  
       - class: light
         scheduled: 2500
         position: [6,0,7]
         params:
-          color: {"rgb": [255,255,0]}
+          color: {"rgb": [111,111,111]}
           strobe: 0
-          layer: 100
+          layer: 10
           blend: ADD
           alpha: 1  
       - class: light
         scheduled: 3000
         position: [7,0,8]
         params:
-          color: {"rgb": [255,255,0]}
+          color: {"rgb": [111,111,111]}
           strobe: 0
-          layer: 100
+          layer: 10
           blend: ADD
           alpha: 1  

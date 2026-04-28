@@ -18,7 +18,7 @@ The hub is the **single source of truth** for system-wide configuration. It subs
 - **`src/Logger.ts`** — Shared logging.
 - **`src/Server.ts`** — HTTP server + WebSocket server (`perMessageDeflate` enabled, heartbeat ping/pong supervision).
 - **`src/MessageRouter.ts`** — Message dispatch by `message.type`.
-- **`src/handlers/RegisterHandler.ts`** — Accepts `register`, stores module identity/metadata, and pushes `config` to renderers.
+- **`src/handlers/RegisterHandler.ts`** — Accepts `register`, stores module identity/metadata, pushes `config` to renderers and controllers, and emits `refresh` to controllers when renderer topology changes.
 - **`src/handlers/EventsHandler.ts`** — Accepts `events`, normalizes event color to CIE 1931 `xyY`, forwards to connected renderers.
 - **`src/ProjectManager.ts`** — Loads project + referenced fixtures, watches files, builds per-renderer config payloads.
 - **Profile example:** `config.DEMO/server.yml` defines `LISTEN_PORT` and `LISTEN_HOST` (demo uses `3000` and `0.0.0.0`). Use `.env` / `.env.DEMO` to point `CONFIG_PATH` at a profile such as `config.DEMO`.
@@ -152,7 +152,7 @@ The hub keeps this as authoritative runtime metadata and can update it if the mo
 
 ### Spatial event routing for renderers
 
-Renderers receive events from the hub and apply them to configured fixtures. In the current implementation, fixture handlers process events for configured fixtures; full spatial intersection filtering against renderer bounding boxes is not yet performed in hub routing.
+Renderers receive events from the hub and apply them through a capability-based layer engine. In the current implementation, renderers keep per-layer intent state and fixtures sample capabilities from snapshots (`light.color.xyY`, `light.strobe`, `master.brightness`, `master.blackout`) instead of handling each event directly.
 
 Hub pre-filtering by bounding box/location is intended optimization, not current default behavior. Current `events` forwarding is broadcast to all connected renderers.
 
@@ -186,6 +186,7 @@ The repository includes demo fixture/project data under `var/` that the hub can 
 - Bound renderer: `rendererGUID: renderer-1234567890`
 - Fixture instance: references fixture profile `rgb_simple`
 - Fixture spatial data includes `location`, `target` (or `rotation`), and `range`; DMX binding uses `params.dmxBaseChannel`.
+- Range falloff curve is configured under `params.rangeFunction` (or alias `params.rangeFn`), not a top-level fixture field.
 
 ### Default project loading and sync
 
@@ -259,7 +260,7 @@ Controllers use `role: "controller"` and include `scope` (rooms/areas) instead o
 }
 ```
 
-**`config`** — hub → renderer (controller config is planned):
+**`config`** — hub → renderer and hub → controller:
 
 ```json
 {
@@ -283,16 +284,21 @@ Controllers use `role: "controller"` and include `scope` (rooms/areas) instead o
 ### Layering and blend behavior
 
 - `params.layer` controls compositing priority.
-- Higher layer numbers win and are overlaid on lower layers.
-- Final visual output still depends on `params.blend` (for example `ADD`, `ALPHA`, `MULTIPLY`) and `params.alpha`.
-- In short: layer decides draw order/precedence, blend mode decides how overlapping layers are mathematically combined.
+- `light.color.xyY` is composited in ascending layer order using each intent's `blend` (`ADD`, `ALPHA`, `MULTIPLY`) and `alpha`.
+- Scalar and boolean capabilities (`light.strobe`, `master.brightness`, `master.blackout`) resolve by highest layer carrying a typed value.
+- Spatial attenuation uses fixture range and a named function curve (`linear`, `quadratic`, `cubic`, `sqrt`, `smoothstep`), defaulting to `quadratic`.
 
 ### Event dispatch model
 
 - Hub normalizes `params.color` into CIE 1931 `xyY` before forwarding events.
-- `class` (inside an event object) maps to renderer fixture handlers through fixture profile `class` resolution.
-- Renderer dynamically imports the fixture class module and runs `handleEvent(...)` for configured fixtures.
+- Current hub forwarding accepts valid `events` arrays from connected clients and broadcasts them to renderers.
+- `class` (inside an event object) is stored as layer intent type and consumed by renderer capability resolvers.
+- Renderer dynamically imports fixture class modules and runs `applyIntentSnapshot(...)` for configured fixtures.
 - `scheduled` is an absolute execution timestamp used by the renderer queue/scheduler (past timestamps execute immediately).
+
+### Refresh message
+
+`refresh` is hub → controller and signals browser controllers to re-send current intent state (used when renderer registration or topology changes).
 
 ---
 
@@ -307,10 +313,9 @@ All long-lived module connections (renderers and controllers) must be treated as
 
 ### Reconnect behavior
 
-- If socket closes, errors, or heartbeat fails, module must reconnect immediately.
-- Reconnect is infinite: no terminal timeout, no "give up" state.
-- Backoff may be used to protect the network, but retry loop must continue forever.
-- After reconnect, module re-registers identity/capabilities and waits for fresh valid config before resuming normal operation.
+- DMX and simulator renderers reconnect immediately on close/error and re-register.
+- Controller reconnect behavior is module-specific; `controllers/web-test` currently does not implement automatic reconnect.
+- After reconnect, modules should re-register identity/capabilities and wait for fresh config before resuming normal operation.
 
 ---
 

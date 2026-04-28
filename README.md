@@ -11,56 +11,48 @@ Ambitecture is open source and currently focused on production readiness for a l
 
 ```text
 modules/
-  hub/                 Central authority (WebSocket/HTTP, config/project distribution)
+  hub/                 Central authority (WebSocket, config/project distribution)
   deliver/             Allowlisted static HTTP host for browser-only UIs (deliver.yml mounts)
   renderers/dmx-ts/    DMX renderer implementation (TypeScript)
-  controllers/         Controller modules (scaffold for now)
+  renderers/simulator-2d/ Browser renderer (2D simulator)
+  controllers/web-test/ Browser controller test surface
 var/
   projects/            Project and zone definitions (YAML)
   fixtures/            Fixture profiles (YAML)
 ```
 
-Each module is self-contained with its own `package.json` and scripts.
+Not every module has a Node package. `hub`, `renderers/dmx-ts`, and `deliver` have `package.json`; browser modules are static HTML/JS.
 
-## Current Runtime Model
+## What You Can Build
 
-- Hub and renderer are both TypeScript-first runtimes using `ts-node`.
-- The hub accepts WebSocket clients and routes messages by `message.type`.
-- Current hub runtime is WebSocket-first; REST endpoints and static `public` serving are target surface and not yet wired.
-- Renderers self-register, receive project-derived fixture config, and process event streams.
-- Event color payloads are normalized to CIE 1931 `xyY` in the hub before forwarding.
-- Renderer side uses a scheduled event queue and dynamic fixture class loading.
-- Optional **`modules/deliver`** serves static HTML/JS for browser-only tools (for example `simulator-2d`) on configured URL prefixes; it is separate from the hub process (see [SYSTEM-ARCHITECTURE.md](SYSTEM-ARCHITECTURE.md)).
+Ambitecture is intentionally modular: you can pair many controller types with many renderer types.
 
-## WebSocket Message Envelope
+- **Controllers** can be touch UIs, automation surfaces, timelines, or sensor-driven tools.
+- **Renderers** can be DMX fixtures, visual simulators, or custom output protocols.
+- **Hub** keeps shared project state and distributes runtime config/events.
+- **Deliver** is an optional static host for browser-based controllers/renderers.
 
-All module messages use one envelope:
+Detailed protocol and runtime internals live in [SYSTEM-ARCHITECTURE.md](SYSTEM-ARCHITECTURE.md).
 
-```json
-{
-  "message": {
-    "type": "events",
-    "location": [8.5417, 47.3769],
-    "payload": {}
-  }
-}
-```
+## Example: Fixture Profile
 
-Common message types in the current code:
+`var/fixtures/rgb_simple.yml` defines a reusable fixture capability:
 
-- `register`: module announces role and identity
-- `config`: hub -> renderer project/fixture assignment
-- `events`: controller/hub -> renderer timed event batches
+- Class: `dmx_light_static`
+- DMX channel/function mapping for `brightness`, `red`, `green`, `blue`, and strobe functions
+- This profile can be reused by many fixture instances in different zones/projects
 
-## Color Pipeline (Current)
+## Example: Project Scene
 
-- Internal exchange color format is CIE 1931 `xyY`.
-- Hub accepts multiple input formats and converts to `xyY`:
-  - `{ x, y, Y }`
-  - `{ rgb: "#112233" }`
-  - `{ rgb: [r, g, b] }`
-  - `{ r, g, b }`
-- Renderer converts `xyY` to RGB for DMX channel output.
+`var/projects/test.yml` shows how a scene is assembled:
+
+- **Zone to renderer mapping** (`zone-to-renderer`) routes one zone to one or more renderer GUIDs
+- **Controller presets/intents** define interactive defaults (for example layered light colors)
+- **Fixture instances** reference fixture profiles (`fixture: rgb_simple`) and define spatial placement:
+  - `location`, `target`/`rotation`, `range`
+  - DMX instance binding via `params.dmxBaseChannel`
+
+This is the core pattern: profiles define what a fixture can do, projects define where and when it is used.
 
 ## Quick Start
 
@@ -114,7 +106,12 @@ npm install
 npm start
 ```
 
-Mounts and listen address/port are defined in `modules/deliver/deliver.yml`. Override the config file with `DELIVER_CONFIG` or `node src/index.js --config /path/to/deliver.yml`.
+Then open browser modules from mounted paths (defaults from `modules/deliver/deliver.yml`):
+
+- `http://127.0.0.1:8080/simulator-2d/`
+- `http://127.0.0.1:8080/controller-test/`
+
+Mounts and listen address/port are defined in `modules/deliver/deliver.yml`. Override with `DELIVER_CONFIG` or `node src/index.js --config /path/to/deliver.yml`.
 
 ## Module Commands
 
@@ -177,12 +174,9 @@ Config source:
 
 ## Resilience Notes
 
-- Hub WebSocket server heartbeat:
-  - ping every 10s
-  - terminate if pong timeout exceeds 15s
-- Hub enables `perMessageDeflate` (threshold 1024 bytes).
-- Renderer reconnects to hub immediately after close/error.
-- DMX universe driver includes recovery logic and automatic reconnect retries on device/driver failures.
+- Hub uses WebSocket heartbeat supervision and compression.
+- DMX and simulator renderers reconnect automatically after close/error.
+- DMX universe driver includes recovery logic and reconnect retries on device/driver failures.
 
 ## Contributing
 

@@ -101,6 +101,13 @@ export class ProjectManager {
     this.intentCache.set(controllerGuid, cache);
   }
 
+  getControllerIntents(controllerGuid: string): ControllerIntent[] {
+    const cached = this.intentCache.get(controllerGuid);
+    if (cached) return [...cached.values()];
+    const match = (this.project?.controller ?? []).find(c => c.guid === controllerGuid);
+    return match?.intents ?? [];
+  }
+
   private watchAll(name: string, callback: () => void): void {
     for (const watcher of this.watchers) {
       watcher.close();

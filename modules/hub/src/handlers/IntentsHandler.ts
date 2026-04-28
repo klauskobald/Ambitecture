@@ -50,6 +50,18 @@ export class IntentsHandler implements MessageHandler {
 
     this.eventQueue.schedule(entries, message.location);
 
-    Logger.info(`[intents] ${intents.length} intent(s) from ${info.guid} queued`);
+    const openControllers = this.registry.getByRole('controller')
+      .filter(c => c !== ws && c.readyState === WebSocket.OPEN);
+    if (openControllers.length > 0) {
+      const fullIntents = this.projectManager.getControllerIntents(info.guid);
+      if (fullIntents.length > 0) {
+        const syncMessage = JSON.stringify({ message: { type: 'intents', payload: fullIntents } });
+        for (const controllerWs of openControllers) {
+          controllerWs.send(syncMessage);
+        }
+      }
+    }
+
+    Logger.info(`[intents] ${intents.length} intent(s) from ${info.guid} queued, synced to ${openControllers.length} other controller(s)`);
   }
 }

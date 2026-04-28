@@ -528,8 +528,9 @@ function flushOutbound() {
 
 /**
  * @param {unknown[]} incomingIntents
+ * @param {{ sendToHub?: boolean }} [opts]
  */
-function reconcileIntents(incomingIntents) {
+function reconcileIntents(incomingIntents, { sendToHub = true } = {}) {
   const incoming = new Map();
   for (const intent of incomingIntents) {
     const guid = intentGuid(intent);
@@ -541,7 +542,9 @@ function reconcileIntents(incomingIntents) {
     const existing = intentState.get(guid);
     if (!existing || JSON.stringify(existing) !== JSON.stringify(intent)) {
       intentState.set(guid, intent);
-      queueIntentUpdate(intent);
+      if (sendToHub) {
+        queueIntentUpdate(intent);
+      }
     }
   }
 
@@ -662,6 +665,12 @@ async function main() {
       if (allIntents.length > 0) {
         fireIntentEvents(allIntents, ws, location);
       }
+      return;
+    }
+
+    if (message.type === 'intents') {
+      const incoming = Array.isArray(message.payload) ? message.payload : [];
+      reconcileIntents(incoming, { sendToHub: false });
       return;
     }
   });

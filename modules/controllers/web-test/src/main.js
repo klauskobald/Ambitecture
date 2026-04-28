@@ -227,8 +227,8 @@ function setupOverlayCanvas(L, canvas, stack, getSpatial, getIntents, onIntentDr
 
   /** @type {Set<number>} */
   const activePointers = new Set();
-  /** @type {number | null} */
-  let draggedLayer = null;
+  /** @type {Map<number, number>} pointerId → layer */
+  const draggedPointers = new Map();
   const DRAG_HIT_RADIUS_PX = 28;
 
   function getSimCanvasRect() {
@@ -249,9 +249,11 @@ function setupOverlayCanvas(L, canvas, stack, getSpatial, getIntents, onIntentDr
     const simRect = getSimCanvasRect();
     if (!simRect) return null;
     const overlayRect = canvas.getBoundingClientRect();
+    const alreadyGrabbed = new Set(draggedPointers.values());
     let nearest = null;
     let nearestDist = DRAG_HIT_RADIUS_PX;
     for (const [layer, intent] of intents) {
+      if (alreadyGrabbed.has(layer)) continue;
       const i = /** @type {Record<string, unknown>} */ (intent);
       const pos = /** @type {number[]} */ (i.position);
       if (!pos) continue;
@@ -312,7 +314,7 @@ function setupOverlayCanvas(L, canvas, stack, getSpatial, getIntents, onIntentDr
     if (spatial) {
       const hit = findIntentAtCanvas(x, y, spatial);
       if (hit !== null) {
-        draggedLayer = hit;
+        draggedPointers.set(ev.pointerId, hit);
         activePointers.add(ev.pointerId);
         try { canvas.setPointerCapture(ev.pointerId); } catch { /* ignore */ }
         return;
@@ -325,13 +327,14 @@ function setupOverlayCanvas(L, canvas, stack, getSpatial, getIntents, onIntentDr
 
   function onPointerMove(ev) {
     if (!activePointers.has(ev.pointerId)) return;
-    if (draggedLayer !== null) {
+    const layer = draggedPointers.get(ev.pointerId);
+    if (layer !== undefined) {
       const spatial = getSpatial();
       const simRect = getSimCanvasRect();
       if (!spatial || !simRect) return;
       const m = clientToWorldViaSimCanvas(ev.clientX, ev.clientY, spatial, simRect);
       if (!m) return;
-      onIntentDrag(draggedLayer, m.wx, m.wz);
+      onIntentDrag(layer, m.wx, m.wz);
       return;
     }
     const { x, y } = canvasPointFromEvent(ev);
@@ -340,8 +343,8 @@ function setupOverlayCanvas(L, canvas, stack, getSpatial, getIntents, onIntentDr
 
   function onPointerUp(ev) {
     activePointers.delete(ev.pointerId);
+    draggedPointers.delete(ev.pointerId);
     try { canvas.releasePointerCapture(ev.pointerId); } catch { /* ignore */ }
-    draggedLayer = null;
   }
 
   canvas.addEventListener('pointerdown', onPointerDown);
@@ -375,14 +378,16 @@ function setupOverlayCanvas(L, canvas, stack, getSpatial, getIntents, onIntentDr
     }
     ctx.globalAlpha = 1;
 
-    if (draggedLayer !== null) {
+    if (draggedPointers.size > 0) {
       const spatial = getSpatial();
       const simRect = getSimCanvasRect();
-      const draggedIntent = getIntents().get(draggedLayer);
-      if (spatial && simRect && draggedIntent) {
-        const i = /** @type {Record<string, unknown>} */ (draggedIntent);
-        const pos = /** @type {number[]} */ (i.position);
-        if (pos) {
+      if (spatial && simRect) {
+        for (const layer of draggedPointers.values()) {
+          const draggedIntent = getIntents().get(layer);
+          if (!draggedIntent) continue;
+          const i = /** @type {Record<string, unknown>} */ (draggedIntent);
+          const pos = /** @type {number[]} */ (i.position);
+          if (!pos) continue;
           const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, rect);
           ctx.save();
           ctx.beginPath();

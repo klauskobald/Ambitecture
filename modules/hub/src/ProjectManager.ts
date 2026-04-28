@@ -16,6 +16,19 @@ export interface FixtureProfile {
   };
 }
 
+interface ControllerIntent {
+  name: string;
+  position: [number, number, number];
+  class: string;
+  params: Record<string, unknown>;
+}
+
+interface ControllerDef {
+  name: string;
+  guid: string;
+  intents: ControllerIntent[];
+}
+
 /** Per-instance fields from project YAML; class-specific keys live in `params`. */
 interface FixtureInstance {
   name: string;
@@ -37,6 +50,7 @@ interface Project {
   name: string;
   'zone-to-renderer': Record<string, string[]>;
   zones: Zone[];
+  controller?: ControllerDef[];
 }
 
 export class ProjectManager {
@@ -174,17 +188,19 @@ export class ProjectManager {
     return result;
   }
 
-  /** Full project snapshot for controllers (all zones, profiles embedded per fixture). */
-  buildControllerConfig(): object {
+  buildControllerConfig(guid: string): object {
     if (!this.project) {
       throw new Error('[project] No project loaded — call useProject() first');
     }
-    const result = {
+    const controllers = this.project.controller ?? [];
+    const match = controllers.find(c => c.guid === guid);
+    const intents = match?.intents ?? [];
+    Logger.info(`[project] buildControllerConfig(${guid}): ${this.project.zones.length} zone(s), ${intents.length} intent(s)`);
+    return {
       projectName: this.project.name,
       zoneToRenderer: this.project['zone-to-renderer'] ?? {},
       zones: this.project.zones.map((z) => this.serializeZone(z)),
+      intents,
     };
-    Logger.info(`[project] buildControllerConfig(): ${this.project.zones.length} zone(s)`);
-    return result;
   }
 }

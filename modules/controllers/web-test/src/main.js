@@ -211,8 +211,10 @@ function overlayClientToBboxMeters(clientX, clientY, overlayCanvas, s) {
  * @param {HTMLCanvasElement} canvas
  * @param {HTMLElement} stack
  * @param {() => HubSpatialState | null} getSpatial
+ * @param {() => Map<number, unknown>} getIntents
+ * @param {(layer: number, wx: number, wz: number) => void} onIntentDrag
  */
-function setupOverlayCanvas(L, canvas, stack, getSpatial) {
+function setupOverlayCanvas(L, canvas, stack, getSpatial, getIntents, onIntentDrag) {
   const ctx = canvas.getContext('2d');
   if (!ctx) {
     showConfigError('Canvas 2D context unavailable.');
@@ -224,6 +226,24 @@ function setupOverlayCanvas(L, canvas, stack, getSpatial) {
 
   /** @type {Set<number>} */
   const activePointers = new Set();
+  /** @type {number | null} */
+  let draggedLayer = null;
+  const DRAG_HIT_RADIUS_PX = 28;
+
+  function findIntentAtCanvas(cx, cy, spatial, rect) {
+    const intents = getIntents();
+    let nearest = null;
+    let nearestDist = DRAG_HIT_RADIUS_PX;
+    for (const [layer, intent] of intents) {
+      const i = /** @type {Record<string, unknown>} */ (intent);
+      const pos = /** @type {number[]} */ (i.position);
+      if (!pos) continue;
+      const { px, py } = worldToCanvas(pos[0], pos[2], spatial, rect);
+      const dist = Math.hypot(cx - px, cy - py);
+      if (dist < nearestDist) { nearest = layer; nearestDist = dist; }
+    }
+    return nearest;
+  }
 
   function resizeCanvas() {
     const rect = stack.getBoundingClientRect();
@@ -269,21 +289,32 @@ function setupOverlayCanvas(L, canvas, stack, getSpatial) {
   }
 
   function onPointerDown(ev) {
-    if (ev.button !== undefined && ev.button !== 0) {
-      return;
+    if (ev.button !== undefined && ev.button !== 0) return;
+    const { x, y } = canvasPointFromEvent(ev);
+    const spatial = getSpatial();
+    if (spatial) {
+      const rect = canvas.getBoundingClientRect();
+      const hit = findIntentAtCanvas(x, y, spatial, rect);
+      if (hit !== null) {
+        draggedLayer = hit;
+        activePointers.add(ev.pointerId);
+        try { canvas.setPointerCapture(ev.pointerId); } catch { /* ignore */ }
+        return;
+      }
     }
     activePointers.add(ev.pointerId);
-    try {
-      canvas.setPointerCapture(ev.pointerId);
-    } catch {
-      // ignore if capture unsupported
-    }
-    const { x, y } = canvasPointFromEvent(ev);
+    try { canvas.setPointerCapture(ev.pointerId); } catch { /* ignore */ }
     pushSample(ev.clientX, ev.clientY, x, y);
   }
 
   function onPointerMove(ev) {
-    if (!activePointers.has(ev.pointerId)) {
+    if (!activePointers.has(ev.pointerId)) return;
+    if (draggedLayer !== null) {
+      const spatial = getSpatial();
+      if (!spatial) return;
+      const m = overlayClientToBboxMeters(ev.clientX, ev.clientY, canvas, spatial);
+      if (!m) return;
+      onIntentDrag(draggedLayer, m.wx, m.wz);
       return;
     }
     const { x, y } = canvasPointFromEvent(ev);
@@ -292,11 +323,8 @@ function setupOverlayCanvas(L, canvas, stack, getSpatial) {
 
   function onPointerUp(ev) {
     activePointers.delete(ev.pointerId);
-    try {
-      canvas.releasePointerCapture(ev.pointerId);
-    } catch {
-      // ignore if not captured
-    }
+    try { canvas.releasePointerCapture(ev.pointerId); } catch { /* ignore */ }
+    draggedLayer = null;
   }
 
   canvas.addEventListener('pointerdown', onPointerDown);
@@ -329,6 +357,27 @@ function setupOverlayCanvas(L, canvas, stack, getSpatial) {
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
+
+    const spatial = getSpatial();
+    const intents = getIntents();
+    if (spatial && intents.size > 0) {
+      ctx.save();
+      for (const intent of intents.values()) {
+        const i = /** @type {Record<string, unknown>} */ (intent);
+        const pos = /** @type {number[]} */ (i.position);
+        if (!pos) continue;
+        const { px, py } = worldToCanvas(pos[0], pos[2], spatial, rect);
+        if (px < 0 || px > rect.width || py < 0 || py > rect.height) continue;
+        ctx.beginPath();
+        ctx.arc(px, py, L.overlayFingerRadiusPx * 1.4, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255, 220, 80, 0.9)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(255, 220, 80, 0.25)';
+        ctx.fill();
+      }
+      ctx.restore();
+    }
   }
   requestAnimationFrame(frame);
 }
@@ -338,6 +387,128 @@ function setupOverlayCanvas(L, canvas, stack, getSpatial) {
  */
 function toWsUrl(httpUrl) {
   return httpUrl.replace(/^http/, 'ws');
+}
+
+/**
+ * @param {number} wx
+ * @param {number} wz
+ * @param {HubSpatialState} spatial
+ * @param {DOMRect} canvasRect
+ * @returns {{ px: number, py: number }}
+ */
+function worldToCanvas(wx, wz, spatial, canvasRect) {
+  const nx = (wx - spatial.x1) / (spatial.x2 - spatial.x1);
+  const ny = (wz - spatial.z1) / (spatial.z2 - spatial.z1);
+  return { px: nx * canvasRect.width, py: ny * canvasRect.height };
+}
+
+/**
+ * @param {unknown} intent
+ * @returns {number}
+ */
+function intentLayer(intent) {
+  const params = (intent !== null && typeof intent === 'object' && !Array.isArray(intent))
+    ? /** @type {Record<string, unknown>} */ (intent).params
+    : undefined;
+  return (params !== null && typeof params === 'object' && !Array.isArray(params))
+    ? Number(/** @type {Record<string, unknown>} */ (params).layer)
+    : NaN;
+}
+
+/**
+ * @param {unknown} intent
+ * @returns {object}
+ */
+function intentToEvent(intent) {
+  const i = /** @type {Record<string, unknown>} */ (intent);
+  return {
+    class: i.class,
+    scheduled: 0,
+    position: i.position,
+    params: i.params,
+  };
+}
+
+/**
+ * @param {unknown[]} intents
+ * @param {WebSocket} ws
+ * @param {number[]} location
+ */
+function fireIntentEvents(intents, ws, location) {
+  if (ws.readyState !== WebSocket.OPEN) return;
+  const payload = intents.map(intentToEvent);
+  ws.send(JSON.stringify({ message: { type: 'events', location, payload } }));
+}
+
+/** @type {Map<number, unknown>} */
+const intentState = new Map();
+
+/** @type {Map<number, unknown>} */
+const outboundMap = new Map();
+let lastSentAt = 0;
+let sendPending = false;
+let minIntervalMs = 40;
+/** @type {WebSocket | null} */
+let activeWs = null;
+/** @type {number[] | null} */
+let activeLocation = null;
+
+/**
+ * @param {unknown} intent
+ */
+function queueIntentUpdate(intent) {
+  const layer = intentLayer(intent);
+  if (!Number.isFinite(layer)) return;
+  outboundMap.set(layer, intent);
+  scheduleFlush();
+}
+
+function scheduleFlush() {
+  if (sendPending) return;
+  const elapsed = Date.now() - lastSentAt;
+  if (elapsed >= minIntervalMs) {
+    flushOutbound();
+  } else {
+    sendPending = true;
+    setTimeout(() => {
+      sendPending = false;
+      flushOutbound();
+    }, minIntervalMs - elapsed);
+  }
+}
+
+function flushOutbound() {
+  if (outboundMap.size === 0 || !activeWs || !activeLocation) return;
+  const intents = [...outboundMap.values()];
+  outboundMap.clear();
+  lastSentAt = Date.now();
+  fireIntentEvents(intents, activeWs, activeLocation);
+}
+
+/**
+ * @param {unknown[]} incomingIntents
+ */
+function reconcileIntents(incomingIntents) {
+  const incoming = new Map();
+  for (const intent of incomingIntents) {
+    const layer = intentLayer(intent);
+    if (!Number.isFinite(layer)) continue;
+    incoming.set(layer, intent);
+  }
+
+  for (const [layer, intent] of incoming) {
+    const existing = intentState.get(layer);
+    if (!existing || JSON.stringify(existing) !== JSON.stringify(intent)) {
+      intentState.set(layer, intent);
+      queueIntentUpdate(intent);
+    }
+  }
+
+  for (const layer of intentState.keys()) {
+    if (!incoming.has(layer)) {
+      intentState.delete(layer);
+    }
+  }
 }
 
 async function main() {
@@ -384,24 +555,37 @@ async function main() {
   /** @type {HubSpatialState | null} */
   let hubSpatial = null;
 
+  const [geoLon, geoLat] = cfg.GEO_LOCATION.split(/\s+/).map(Number);
+  const location = [geoLon, geoLat];
+
+  /**
+   * @param {number} layer
+   * @param {number} wx
+   * @param {number} wz
+   */
+  function onIntentDrag(layer, wx, wz) {
+    const intent = intentState.get(layer);
+    if (!intent) return;
+    const i = /** @type {Record<string, unknown>} */ (intent);
+    const pos = /** @type {number[]} */ (i.position);
+    const updated = { ...i, position: [wx, pos[1] ?? 0, wz] };
+    intentState.set(layer, updated);
+    queueIntentUpdate(updated);
+  }
+
   const wsUrl = toWsUrl(cfg.AMBITECTURE_HUB_URL);
   const ws = new WebSocket(wsUrl);
+  activeWs = ws;
+  activeLocation = location;
 
   ws.addEventListener('open', () => {
-    const [geoLon, geoLat] = cfg.GEO_LOCATION.split(/\s+/).map(Number);
-    ws.send(
-      JSON.stringify({
-        message: {
-          type: 'register',
-          location: [geoLon, geoLat],
-          payload: {
-            role: 'controller',
-            guid: cfg.CONTROLLER_GUID,
-            scope: [],
-          },
-        },
-      })
-    );
+    ws.send(JSON.stringify({
+      message: {
+        type: 'register',
+        location,
+        payload: { role: 'controller', guid: cfg.CONTROLLER_GUID, scope: [] },
+      },
+    }));
     setSpatialReadout('registered as controller — waiting for config…');
   });
 
@@ -413,15 +597,31 @@ async function main() {
       return;
     }
     const message = envelope?.message;
-    if (!message?.type || message.type !== 'config') {
+    if (!message?.type) return;
+
+    if (message.type === 'config') {
+      const next = spatialStateFromControllerConfig(message.payload, cfg.SIMULATOR_RENDERER_GUID);
+      if (next) {
+        hubSpatial = next;
+        setSpatialReadout('hub config received — drag on the touch overlay');
+      } else {
+        setSpatialReadout('config received but no zone for SIMULATOR_RENDERER_GUID');
+      }
+      const rateLimit = message.payload?.rateLimitEventsPerSecond;
+      if (typeof rateLimit === 'number' && rateLimit > 0) {
+        minIntervalMs = 1000 / rateLimit;
+      }
+      const intents = Array.isArray(message.payload?.intents) ? message.payload.intents : [];
+      reconcileIntents(intents);
       return;
     }
-    const next = spatialStateFromControllerConfig(message.payload, cfg.SIMULATOR_RENDERER_GUID);
-    if (next) {
-      hubSpatial = next;
-      setSpatialReadout('hub config received — drag on the touch overlay');
-    } else {
-      setSpatialReadout('config received but no zone for SIMULATOR_RENDERER_GUID');
+
+    if (message.type === 'refresh') {
+      const allIntents = [...intentState.values()];
+      if (allIntents.length > 0) {
+        fireIntentEvents(allIntents, ws, location);
+      }
+      return;
     }
   });
 
@@ -429,7 +629,7 @@ async function main() {
     setSpatialReadout('WebSocket error');
   });
 
-  setupOverlayCanvas(L, canvas, stack, () => hubSpatial);
+  setupOverlayCanvas(L, canvas, stack, () => hubSpatial, () => intentState, onIntentDrag);
 }
 
 main();

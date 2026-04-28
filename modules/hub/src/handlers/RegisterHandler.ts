@@ -23,10 +23,12 @@ function isRegisterPayload(payload: unknown): payload is RegisterPayload {
 export class RegisterHandler implements MessageHandler {
   private registry: ConnectionRegistry;
   private projectManager: ProjectManager;
+  private rateLimitEventsPerSecond: number;
 
-  constructor(registry: ConnectionRegistry, projectManager: ProjectManager) {
+  constructor(registry: ConnectionRegistry, projectManager: ProjectManager, rateLimitEventsPerSecond: number) {
     this.registry = registry;
     this.projectManager = projectManager;
+    this.rateLimitEventsPerSecond = rateLimitEventsPerSecond;
   }
 
   handle(ws: WebSocket, message: WsMessage, _registry: ConnectionRegistry): void {
@@ -61,8 +63,20 @@ export class RegisterHandler implements MessageHandler {
       const config = this.projectManager.buildRendererConfig(guid);
       ws.send(JSON.stringify({ message: { type: 'config', payload: config } }));
       Logger.info(`[register] pushed config to renderer ${guid}`);
+
+      const controllers = this.registry.getByRole('controller');
+      const openControllers = controllers.filter(c => c.readyState === WebSocket.OPEN);
+      for (const controllerWs of openControllers) {
+        controllerWs.send(JSON.stringify({ message: { type: 'refresh', payload: {} } }));
+      }
+      if (openControllers.length > 0) {
+        Logger.info(`[register] sent refresh to ${openControllers.length} controller(s)`);
+      }
     } else if (role === 'controller') {
-      const config = this.projectManager.buildControllerConfig();
+      const config = {
+        ...(this.projectManager.buildControllerConfig(guid) as object),
+        rateLimitEventsPerSecond: this.rateLimitEventsPerSecond,
+      };
       ws.send(JSON.stringify({ message: { type: 'config', payload: config } }));
       Logger.info(`[register] pushed config to controller ${guid}`);
     }

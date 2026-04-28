@@ -20,7 +20,8 @@ const projectManager = new ProjectManager(
 const registry = new ConnectionRegistry();
 const router = new MessageRouter(registry);
 
-router.register('register', new RegisterHandler(registry, projectManager));
+const rateLimitEventsPerSecond = serverConfig.get<number>('rateLimitEventsPerSecond');
+router.register('register', new RegisterHandler(registry, projectManager, rateLimitEventsPerSecond));
 router.register('events', new EventsHandler(registry));
 
 projectManager.useProject(serverConfig.get<string>('defaultProject'), () => {
@@ -31,10 +32,11 @@ projectManager.useProject(serverConfig.get<string>('defaultProject'), () => {
       ws.send(JSON.stringify({ message: { type: 'config', payload: config } }));
     }
   }
-  const controllerPayload = projectManager.buildControllerConfig();
   for (const ws of registry.getByRole('controller')) {
-    if (ws.readyState === ws.OPEN) {
-      ws.send(JSON.stringify({ message: { type: 'config', payload: controllerPayload } }));
+    const info = registry.get(ws);
+    if (info && ws.readyState === ws.OPEN) {
+      const config = projectManager.buildControllerConfig(info.guid);
+      ws.send(JSON.stringify({ message: { type: 'config', payload: config } }));
     }
   }
 });

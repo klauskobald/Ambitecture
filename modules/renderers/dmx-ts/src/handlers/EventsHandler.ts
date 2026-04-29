@@ -74,6 +74,7 @@ export class EventsHandler {
                 const context: FixtureSampleContext = {
                     fixture,
                     fixtureWorldPos: worldPos,
+                    zoneName: zone.name,
                 };
                 const snapshot: FixtureIntentSnapshot = {
                     intentsByLayer,

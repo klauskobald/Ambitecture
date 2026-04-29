@@ -6,6 +6,7 @@ import { FnCurve } from '../FnCurve';
 
 export interface IntentRecord {
     layer: number;
+    zoneName?: string;
     intentType: string;
     position?: [number, number, number];
     blend?: BlendMode;
@@ -16,6 +17,7 @@ export interface IntentRecord {
 export interface FixtureSampleContext {
     fixture: ConfiguredFixture;
     fixtureWorldPos: [number, number, number];
+    zoneName: string;
 }
 
 export interface CapabilityResolver<TValue> {
@@ -104,12 +106,18 @@ export class LayerIntentEngine {
 
         const eventLayer = toLayer(event.params?.['layer']);
         const eventPos = event.position;
-        if (eventPos && !zones.some((zone) => isPositionInZone(eventPos, zone.boundingBox))) {
+        const matchedZone = eventPos
+            ? zones.find((zone) => isPositionInZone(eventPos, zone.boundingBox))
+            : undefined;
+        if (eventPos && !matchedZone) {
             const removed = this.intentsByLayer.delete(eventLayer);
             return removed;
         }
 
         const intent = toIntentRecord(event);
+        if (matchedZone) {
+            intent.zoneName = matchedZone.name;
+        }
         this.intentsByLayer.set(intent.layer, intent);
         return true;
     }
@@ -121,7 +129,11 @@ export class LayerIntentEngine {
     sample<TValue>(context: FixtureSampleContext, capabilityKey: string): TValue | undefined {
         const resolver = this.resolvers.get(capabilityKey);
         if (!resolver) return undefined;
-        return resolver.sample(context, this.intentsByLayer) as TValue | undefined;
+        const scopedIntentsByLayer = new Map(
+            [...this.intentsByLayer.entries()]
+                .filter(([, intent]) => intent.zoneName === undefined || intent.zoneName === context.zoneName)
+        );
+        return resolver.sample(context, scopedIntentsByLayer) as TValue | undefined;
     }
 
     private sampleLightColor(context: FixtureSampleContext, intentsByLayer: ReadonlyMap<number, IntentRecord>): Color {

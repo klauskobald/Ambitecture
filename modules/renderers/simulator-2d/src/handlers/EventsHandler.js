@@ -26,6 +26,7 @@ class EventsHandler {
                 const context = {
                     fixture,
                     fixtureWorldPos: fixture.location,
+                    zoneName: zone.name,
                 };
                 const snapshot = {
                     intentsByLayer,

@@ -23,6 +23,7 @@ class ConfigHandler {
         for (const zone of message.payload.zones) {
             const bbox = zone.boundingBox;
             const extend = typeof zone.extend === 'number' && Number.isFinite(zone.extend) ? zone.extend : 1;
+            const zoneName = typeof zone.name === 'string' ? zone.name : '';
             const zoneFixtures = [];
 
             for (const fixtureData of zone.fixtures) {
@@ -43,7 +44,7 @@ class ConfigHandler {
                 zoneFixtures.push(instance);
             }
 
-            this.zones.push({ bbox, extend, fixtures: zoneFixtures });
+            this.zones.push({ name: zoneName, bbox, extend, fixtures: zoneFixtures });
         }
 
         this.renderer.setFixtures(this.fixtures);

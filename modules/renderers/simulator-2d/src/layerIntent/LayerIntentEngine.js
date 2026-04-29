@@ -50,12 +50,18 @@ class LayerIntentEngine {
         if (!Array.isArray(zones) || zones.length === 0) return false;
         const eventLayer = this._toLayer(event?.params?.layer);
         const eventPos = event.position;
-        if (eventPos && !zones.some(zone => this._isPositionInZone(eventPos, zone.bbox))) {
+        const matchedZone = eventPos
+            ? zones.find(zone => this._isPositionInZone(eventPos, zone.bbox))
+            : null;
+        if (eventPos && !matchedZone) {
             const removed = this._intentsByLayer.delete(eventLayer);
             return removed;
         }
 
         const intent = this._toIntentRecord(event);
+        if (matchedZone) {
+            intent.zoneName = matchedZone.name;
+        }
         this._intentsByLayer.set(intent.layer, intent);
         return true;
     }
@@ -67,7 +73,11 @@ class LayerIntentEngine {
     sample(context, capabilityKey) {
         const resolver = this._resolvers.get(capabilityKey);
         if (!resolver) return undefined;
-        return resolver(context, this._intentsByLayer);
+        const scopedIntentsByLayer = new Map(
+            [...this._intentsByLayer.entries()]
+                .filter(([, intent]) => intent.zoneName === undefined || intent.zoneName === context.zoneName)
+        );
+        return resolver(context, scopedIntentsByLayer);
     }
 
     _toIntentRecord(event) {

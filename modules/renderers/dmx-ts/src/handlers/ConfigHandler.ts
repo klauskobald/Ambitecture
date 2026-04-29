@@ -132,9 +132,14 @@ function parseConfiguredZone(raw: unknown): ConfiguredZone | null {
 export class ConfigHandler {
     private zones: ConfiguredZone[] = [];
     private dmxUniverse: DmxUniverse;
+    private onConfigApplied: (() => void) | null = null;
 
     constructor(dmxUniverse: DmxUniverse) {
         this.dmxUniverse = dmxUniverse;
+    }
+
+    setOnConfigApplied(callback: () => void): void {
+        this.onConfigApplied = callback;
     }
 
     handle(_ws: WebSocket, message: WsMessage): void {
@@ -152,6 +157,9 @@ export class ConfigHandler {
 
         if (!this.dmxUniverse.isInitialized) {
             this.dmxUniverse.initialize();
+        }
+        if (this.onConfigApplied) {
+            this.onConfigApplied();
         }
     }
 

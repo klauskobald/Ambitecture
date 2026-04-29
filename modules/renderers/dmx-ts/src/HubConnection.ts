@@ -28,6 +28,7 @@ export class HubConnection {
         this.dmxUniverse = new DmxUniverse();
         const configHandler = new ConfigHandler(this.dmxUniverse);
         const eventsHandler = new EventsHandler(configHandler, this.dmxUniverse);
+        configHandler.setOnConfigApplied(() => eventsHandler.reapplyCurrentIntents());
 
         this.handlers = new Map<string, MessageHandler>([
             ['config', configHandler],

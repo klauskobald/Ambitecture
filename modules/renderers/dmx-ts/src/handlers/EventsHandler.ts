@@ -43,6 +43,14 @@ export class EventsHandler {
         Logger.debug(`[events] queued ${events.length} event(s)`);
     }
 
+    reapplyCurrentIntents(): void {
+        const zones = this.configHandler.getZones();
+        if (zones.length === 0) {
+            return;
+        }
+        void this.applyAllFixtures(zones);
+    }
+
     private async getFixtureClass(className: string): Promise<IFixtureClass> {
         if (!this.fixtureClassCache.has(className)) {
             const mod = await import(`../fixtures/${className}`);

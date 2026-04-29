@@ -4,9 +4,14 @@ class ConfigHandler {
         this.drawConfig = config.FIXTURE_DRAW;
         this.fixtures = [];
         this.zones = [];
+        this.onConfigApplied = null;
         this.fixtureClasses = {
             dmx_light_static: DmxLightStatic,
         };
+    }
+
+    setOnConfigApplied(callback) {
+        this.onConfigApplied = callback;
     }
 
     handle(message) {
@@ -49,6 +54,9 @@ class ConfigHandler {
 
         this.renderer.setFixtures(this.fixtures);
         console.log(`[config] ${this.fixtures.length} fixture(s) across ${this.zones.length} zone(s)`);
+        if (this.onConfigApplied) {
+            this.onConfigApplied();
+        }
     }
 
     getFixtures() {

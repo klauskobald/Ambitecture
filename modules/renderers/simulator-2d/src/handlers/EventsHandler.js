@@ -12,14 +12,11 @@ class EventsHandler {
         for (const event of events) this.queue.enqueue(event);
     }
 
-    processEvent(event) {
+    reapplyCurrentIntents() {
         const zones = this.configHandler.getZones();
-        const changed = this._layerIntentEngine.applyEvent(event, zones);
-        if (!changed && event.position) {
-            console.debug(`[events] position [${event.position.join(', ')}] matched no zones`);
+        if (!Array.isArray(zones) || zones.length === 0) {
             return;
         }
-
         const intentsByLayer = this._layerIntentEngine.getActiveIntentsByLayer();
         for (const zone of zones) {
             for (const fixture of zone.fixtures) {
@@ -36,5 +33,16 @@ class EventsHandler {
             }
         }
         this._renderer.setIntentLayers(intentsByLayer);
+    }
+
+    processEvent(event) {
+        const zones = this.configHandler.getZones();
+        const changed = this._layerIntentEngine.applyEvent(event, zones);
+        if (!changed && event.position) {
+            console.debug(`[events] position [${event.position.join(', ')}] matched no zones`);
+            return;
+        }
+
+        this.reapplyCurrentIntents();
     }
 }

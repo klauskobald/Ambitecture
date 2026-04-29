@@ -4,6 +4,7 @@ import { FixtureSampleContext, IntentRecord } from '../layerIntent/LayerIntentEn
 
 export interface RendererEvent {
     guid?: string;
+    layer?: number;
     class: string;
     scheduled?: number;
     position?: [number, number, number];

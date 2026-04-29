@@ -80,7 +80,7 @@ class LayerIntentEngine {
         const params = event.params && typeof event.params === 'object' ? event.params : {};
         return {
             guid: event.guid,
-            layer: this._toLayer(params.layer),
+            layer: this._toLayer(event.layer),
             name: typeof event.name === 'string' ? event.name : '',
             intentType: event.class,
             position: event.position,

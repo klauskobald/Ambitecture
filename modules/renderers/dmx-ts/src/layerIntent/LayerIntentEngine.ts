@@ -66,7 +66,7 @@ function toBlend(value: unknown): BlendMode {
 function toIntentRecord(event: RendererEvent): IntentRecord {
     const params = (event.params && typeof event.params === 'object' ? event.params : {}) as Record<string, unknown>;
     const record: IntentRecord = {
-        layer: toLayer(params['layer']),
+        layer: toLayer(event.layer),
         intentType: event.class,
         blend: toBlend(params['blend']),
         alpha: toAlpha(params['alpha']),

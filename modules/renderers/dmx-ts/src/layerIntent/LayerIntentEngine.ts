@@ -119,7 +119,7 @@ export class LayerIntentEngine {
 
         const eventPos = event.position;
         if (eventPos && !zones.some((zone) => isPositionInZone(eventPos, zone.boundingBox))) {
-            return false;
+            return this.intentsByLayer.delete(event.guid);
         }
 
         const intent = toIntentRecord(event);

@@ -55,7 +55,7 @@ class LayerIntentEngine {
         const intent = this._toIntentRecord(event);
         if (eventPos) {
             const matchedZone = zones.find(zone => this._isPositionInZone(eventPos, zone.bbox));
-            if (!matchedZone) return false;
+            if (!matchedZone) return this._intentsByLayer.delete(event.guid);
             intent.zoneName = matchedZone.name;
         }
         this._intentsByLayer.set(event.guid, intent);

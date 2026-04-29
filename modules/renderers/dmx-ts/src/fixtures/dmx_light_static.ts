@@ -18,6 +18,7 @@ class DmxLightStatic extends DmxFixtureBase {
         this.writeFunction(fixture, 'green', g, dmxUniverse);
         this.writeFunction(fixture, 'blue', b, dmxUniverse);
 
+        // aux writes after color; aux keys intentionally override color-pipeline channels
         const aux = snapshot.sample<Record<string, number>>('light.aux') ?? {};
         const strobeValue = aux['strobe'];
         if (strobeValue !== undefined) {

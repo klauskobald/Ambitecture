@@ -17,7 +17,8 @@ testParams:
     #     position: [0,0,0]
     #     params:
     #       color: {"rgb": [255,0,255]}
-    #       strobe: 0
+    #       aux:
+    #         strobe: 0
     #       layer: 100
     #       blend: ADD
     #       alpha: 1

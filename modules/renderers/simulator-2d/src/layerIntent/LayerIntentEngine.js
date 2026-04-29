@@ -28,8 +28,8 @@ class LayerIntentEngine {
             return mixed;
         });
 
-        this.registerResolver('light.strobe', (_context, intentsByLayer) =>
-            this._sampleTopLayerNumber(intentsByLayer, 'light', 'strobe')
+        this.registerResolver('light.aux', (_context, intentsByLayer) =>
+            this._sampleTopLayerAux(intentsByLayer, 'light')
         );
         this.registerResolver('master.brightness', (_context, intentsByLayer) =>
             this._sampleTopLayerNumber(intentsByLayer, 'master', 'brightness')
@@ -138,6 +138,23 @@ class LayerIntentEngine {
             if (typeof value === 'boolean') return value;
         }
         return undefined;
+    }
+
+    _sampleTopLayerAux(intentsByLayer, intentType) {
+        const layers = [...intentsByLayer.entries()]
+            .filter(([, intent]) => intent.intentType === intentType)
+            .sort(([a], [b]) => b - a);
+        const result = {};
+        for (const [, intent] of layers) {
+            const aux = intent.payload?.aux;
+            if (aux === null || typeof aux !== 'object' || Array.isArray(aux)) continue;
+            for (const [key, value] of Object.entries(aux)) {
+                if (!(key in result) && typeof value === 'number' && Number.isFinite(value)) {
+                    result[key] = value;
+                }
+            }
+        }
+        return result;
     }
 }
 

@@ -175,9 +175,11 @@ Config source:
 ## Intent Workflow
 
 - Controllers send `message.type = "intents"` to the hub (not direct renderer `events`).
+- Intents should carry a stable `guid` so updates can target/replace the same logical intent over time.
 - Hub updates per-controller intent state and includes that state in controller `config` payloads.
 - Hub normalizes intent color into CIE 1931 `xyY`, converts relative `scheduled` offsets into absolute times, and queues renderer-facing `events`.
-- Renderers consume queued `events` and apply them through their layer/capability engines.
+- Hub forwards intent `guid` into renderer `events`.
+- Renderers consume queued `events` and apply them through their layer/capability engines, storing active intents by `guid` (allowing multiple intents at the same `params.layer`).
 
 ## Resilience Notes
 

@@ -154,7 +154,7 @@ The hub keeps this as authoritative runtime metadata and can update it if the mo
 
 ### Intent-to-event routing for renderers
 
-Controllers submit `intents` to the hub. The hub updates controller intent state and converts those intents into scheduled renderer-facing `events` via the queue. Renderers then apply received events through a capability-based layer engine. In the current implementation, renderers keep per-layer intent state and fixtures sample capabilities from snapshots (`light.color.xyY`, `light.strobe`, `master.brightness`, `master.blackout`) instead of handling each event directly.
+Controllers submit `intents` to the hub. The hub updates controller intent state and converts those intents into scheduled renderer-facing `events` via the queue. Renderers then apply received events through a capability-based layer engine. In the current implementation, renderers keep intent state keyed by stable intent `guid` and fixtures sample capabilities from snapshots (`light.color.xyY`, `light.strobe`, `master.brightness`, `master.blackout`) instead of handling each event directly.
 
 Hub pre-filtering by bounding box/location is intended optimization, not current default behavior. Current queue dispatch of generated `events` is broadcast to all connected renderers.
 
@@ -274,6 +274,7 @@ Controllers use `role: "controller"` and include `scope` (rooms/areas) instead o
     "location": [8.5417, 47.3769],
     "payload": [
       {
+        "guid": "intent-42",
         "class": "light",
         "scheduled": 1767225600000,
         "position": [1.2, 0.0, -3.5],
@@ -312,16 +313,19 @@ Controllers use `role: "controller"` and include `scope` (rooms/areas) instead o
 
 ### Layering and blend behavior
 
+- Renderer intent storage is keyed by intent `guid` (not by `params.layer`), so multiple intents can coexist on the same layer.
 - `params.layer` controls compositing priority.
 - `light.color.xyY` is composited in ascending layer order using each intent's `blend` (`ADD`, `ALPHA`, `MULTIPLY`) and `alpha`.
 - Scalar and boolean capabilities (`light.strobe`, `master.brightness`, `master.blackout`) resolve by highest layer carrying a typed value.
 - Spatial attenuation uses fixture range and a named function curve (`linear`, `quadratic`, `cubic`, `sqrt`, `smoothstep`), defaulting to `quadratic`.
+- On spatial intents with `position`, renderer intent state is zone-stamped and filtered against configured zones; if an existing intent moves outside all zones, that intent `guid` is removed from active state.
 
 ### Event dispatch model
 
 - Hub accepts controller `intents`, updates per-controller intent state in `ProjectManager`, normalizes `params.color` into CIE 1931 `xyY`, and emits scheduled renderer `events` through `EventQueue`.
 - Current queue dispatch broadcasts generated `events` to connected renderers.
 - Hub also re-broadcasts merged current `intents` to other connected controllers for state sync.
+- Hub forwards controller intent `guid` into renderer `events`; renderers ignore events without `guid`.
 - `class` (inside an event object) is stored as layer intent type and consumed by renderer capability resolvers.
 - Renderer dynamically imports fixture class modules and runs `applyIntentSnapshot(...)` for configured fixtures.
 - `scheduled` is an absolute execution timestamp used by the renderer queue/scheduler (past timestamps execute immediately).

@@ -35,7 +35,7 @@ testParams:
         scheduled: 0
         position: [9.000,0,5.000]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -46,7 +46,7 @@ testParams:
         scheduled: 100
         position: [8.939,0,5.695]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -56,7 +56,7 @@ testParams:
         scheduled: 200
         position: [8.759,0,6.368]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -66,7 +66,7 @@ testParams:
         scheduled: 300
         position: [8.464,0,7.000]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -76,7 +76,7 @@ testParams:
         scheduled: 400
         position: [8.064,0,7.571]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -86,7 +86,7 @@ testParams:
         scheduled: 500
         position: [7.571,0,8.064]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -96,7 +96,7 @@ testParams:
         scheduled: 600
         position: [7.000,0,8.464]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -106,7 +106,7 @@ testParams:
         scheduled: 700
         position: [6.368,0,8.759]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -116,7 +116,7 @@ testParams:
         scheduled: 800
         position: [5.695,0,8.939]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -126,7 +126,7 @@ testParams:
         scheduled: 900
         position: [5.000,0,9.000]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -136,7 +136,7 @@ testParams:
         scheduled: 1000
         position: [4.305,0,8.939]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -146,7 +146,7 @@ testParams:
         scheduled: 1100
         position: [3.632,0,8.759]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -156,7 +156,7 @@ testParams:
         scheduled: 1200
         position: [3.000,0,8.464]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -166,7 +166,7 @@ testParams:
         scheduled: 1300
         position: [2.429,0,8.064]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -176,7 +176,7 @@ testParams:
         scheduled: 1400
         position: [1.936,0,7.571]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -186,7 +186,7 @@ testParams:
         scheduled: 1500
         position: [1.536,0,7.000]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -196,7 +196,7 @@ testParams:
         scheduled: 1600
         position: [1.241,0,6.368]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -206,7 +206,7 @@ testParams:
         scheduled: 1700
         position: [1.061,0,5.695]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -216,7 +216,7 @@ testParams:
         scheduled: 1800
         position: [1.000,0,5.000]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -226,7 +226,7 @@ testParams:
         scheduled: 1900
         position: [1.061,0,4.305]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -236,7 +236,7 @@ testParams:
         scheduled: 2000
         position: [1.241,0,3.632]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -246,7 +246,7 @@ testParams:
         scheduled: 2100
         position: [1.536,0,3.000]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -256,7 +256,7 @@ testParams:
         scheduled: 2200
         position: [1.936,0,2.429]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -266,7 +266,7 @@ testParams:
         scheduled: 2300
         position: [2.429,0,1.936]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -276,7 +276,7 @@ testParams:
         scheduled: 2400
         position: [3.000,0,1.536]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -286,7 +286,7 @@ testParams:
         scheduled: 2500
         position: [3.632,0,1.241]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -296,7 +296,7 @@ testParams:
         scheduled: 2600
         position: [4.305,0,1.061]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -306,7 +306,7 @@ testParams:
         scheduled: 2700
         position: [5.000,0,1.000]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -316,7 +316,7 @@ testParams:
         scheduled: 2800
         position: [5.695,0,1.061]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -326,7 +326,7 @@ testParams:
         scheduled: 2900
         position: [6.368,0,1.241]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -336,7 +336,7 @@ testParams:
         scheduled: 3000
         position: [7.000,0,1.536]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -346,7 +346,7 @@ testParams:
         scheduled: 3100
         position: [7.571,0,1.936]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -356,7 +356,7 @@ testParams:
         scheduled: 3200
         position: [8.064,0,2.429]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -366,7 +366,7 @@ testParams:
         scheduled: 3300
         position: [8.464,0,3.000]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -376,7 +376,7 @@ testParams:
         scheduled: 3400
         position: [8.759,0,3.632]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD
@@ -386,7 +386,7 @@ testParams:
         scheduled: 3500
         position: [8.939,0,4.305]
         params:
-          color: {"rgb": [111,111,111]}
+          color: {"rgb": [33,33,33]}
           strobe: 0
           layer: 10
           blend: ADD

@@ -118,11 +118,12 @@ export class LayerIntentEngine {
         if (!event.guid) return false;
 
         const eventPos = event.position;
-        if (eventPos && !zones.some((zone) => isPositionInZone(eventPos, zone.boundingBox))) {
-            return this.intentsByLayer.delete(event.guid);
-        }
-
         const intent = toIntentRecord(event);
+        if (eventPos) {
+            const matchedZone = zones.find((zone) => isPositionInZone(eventPos, zone.boundingBox));
+            if (!matchedZone) return this.intentsByLayer.delete(event.guid);
+            intent.zoneName = matchedZone.name;
+        }
         this.intentsByLayer.set(event.guid, intent);
         return true;
     }

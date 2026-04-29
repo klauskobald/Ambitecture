@@ -3,6 +3,7 @@ import { DmxUniverse } from '../DmxUniverse';
 import { FixtureSampleContext, IntentRecord } from '../layerIntent/LayerIntentEngine';
 
 export interface RendererEvent {
+    guid?: string;
     class: string;
     scheduled?: number;
     position?: [number, number, number];
@@ -12,7 +13,7 @@ export interface RendererEvent {
 }
 
 export interface FixtureIntentSnapshot {
-    intentsByLayer: ReadonlyMap<number, IntentRecord>;
+    intentsByLayer: ReadonlyMap<string, IntentRecord>;
     sample<TValue>(capabilityKey: string): TValue | undefined;
 }
 

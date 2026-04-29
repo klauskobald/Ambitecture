@@ -5,6 +5,7 @@ import { RendererEvent } from '../fixtures/IFixtureClass';
 import { FnCurve } from '../FnCurve';
 
 export interface IntentRecord {
+    guid?: string;
     layer: number;
     zoneName?: string;
     intentType: string;
@@ -23,7 +24,7 @@ export interface FixtureSampleContext {
 }
 
 export interface CapabilityResolver<TValue> {
-    sample(context: FixtureSampleContext, intentsByLayer: ReadonlyMap<number, IntentRecord>): TValue | undefined;
+    sample(context: FixtureSampleContext, intents: ReadonlyMap<string, IntentRecord>): TValue | undefined;
 }
 
 function isPositionInZone(
@@ -71,6 +72,9 @@ function toIntentRecord(event: RendererEvent): IntentRecord {
         alpha: toAlpha(params['alpha']),
         payload: params,
     };
+    if (event.guid !== undefined) {
+        record.guid = event.guid;
+    }
     if (event.position) {
         record.position = event.position;
     }
@@ -84,24 +88,24 @@ function toIntentRecord(event: RendererEvent): IntentRecord {
 }
 
 export class LayerIntentEngine {
-    private readonly intentsByLayer = new Map<number, IntentRecord>();
+    private readonly intentsByLayer = new Map<string, IntentRecord>();
     private readonly resolvers = new Map<string, CapabilityResolver<unknown>>();
 
     constructor() {
         this.registerResolver<Color>('light.color.xyY', {
-            sample: (context, intentsByLayer) => this.sampleLightColor(context, intentsByLayer),
+            sample: (context, intents) => this.sampleLightColor(context, intents),
         });
         this.registerResolver<number>('light.strobe', {
-            sample: (context, intentsByLayer) => this.sampleSpatialStrobe(context, intentsByLayer),
+            sample: (context, intents) => this.sampleSpatialStrobe(context, intents),
         });
         this.registerResolver<Record<string, number>>('light.aux', {
-            sample: (_context, intentsByLayer) => this.sampleTopLayerAux(intentsByLayer, 'light'),
+            sample: (_context, intents) => this.sampleTopLayerAux(intents, 'light'),
         });
         this.registerResolver<number>('master.brightness', {
-            sample: (_context, intentsByLayer) => this.sampleTopLayerNumber(intentsByLayer, 'master', 'brightness'),
+            sample: (_context, intents) => this.sampleTopLayerNumber(intents, 'master', 'brightness'),
         });
         this.registerResolver<boolean>('master.blackout', {
-            sample: (_context, intentsByLayer) => this.sampleTopLayerBoolean(intentsByLayer, 'master', 'blackout'),
+            sample: (_context, intents) => this.sampleTopLayerBoolean(intents, 'master', 'blackout'),
         });
     }
 
@@ -111,26 +115,19 @@ export class LayerIntentEngine {
 
     applyEvent(event: RendererEvent, zones: ConfiguredZone[]): boolean {
         if (zones.length === 0) return false;
+        if (!event.guid) return false;
 
-        const eventLayer = toLayer(event.params?.['layer']);
         const eventPos = event.position;
-        const matchedZone = eventPos
-            ? zones.find((zone) => isPositionInZone(eventPos, zone.boundingBox))
-            : undefined;
-        if (eventPos && !matchedZone) {
-            const removed = this.intentsByLayer.delete(eventLayer);
-            return removed;
+        if (eventPos && !zones.some((zone) => isPositionInZone(eventPos, zone.boundingBox))) {
+            return false;
         }
 
         const intent = toIntentRecord(event);
-        if (matchedZone) {
-            intent.zoneName = matchedZone.name;
-        }
-        this.intentsByLayer.set(intent.layer, intent);
+        this.intentsByLayer.set(event.guid, intent);
         return true;
     }
 
-    getActiveIntentsByLayer(): ReadonlyMap<number, IntentRecord> {
+    getActiveIntents(): ReadonlyMap<string, IntentRecord> {
         return this.intentsByLayer;
     }
 
@@ -144,10 +141,10 @@ export class LayerIntentEngine {
         return resolver.sample(context, scopedIntentsByLayer) as TValue | undefined;
     }
 
-    private sampleLightColor(context: FixtureSampleContext, intentsByLayer: ReadonlyMap<number, IntentRecord>): Color {
+    private sampleLightColor(context: FixtureSampleContext, intentsByLayer: ReadonlyMap<string, IntentRecord>): Color {
         const layers = [...intentsByLayer.entries()]
             .filter(([, intent]) => intent.intentType === 'light')
-            .sort(([a], [b]) => a - b);
+            .sort(([, a], [, b]) => a.layer - b.layer);
 
         let mixed = Color.black();
         for (const [, intent] of layers) {
@@ -177,11 +174,11 @@ export class LayerIntentEngine {
 
     private sampleSpatialStrobe(
         context: FixtureSampleContext,
-        intentsByLayer: ReadonlyMap<number, IntentRecord>
+        intentsByLayer: ReadonlyMap<string, IntentRecord>
     ): number {
         const layers = [...intentsByLayer.entries()]
             .filter(([, intent]) => intent.intentType === 'light')
-            .sort(([a], [b]) => a - b);
+            .sort(([, a], [, b]) => a.layer - b.layer);
 
         let result = 0;
         for (const [, intent] of layers) {
@@ -201,13 +198,13 @@ export class LayerIntentEngine {
     }
 
     private sampleTopLayerNumber(
-        intentsByLayer: ReadonlyMap<number, IntentRecord>,
+        intentsByLayer: ReadonlyMap<string, IntentRecord>,
         intentType: string,
         fieldName: string
     ): number | undefined {
         const layers = [...intentsByLayer.entries()]
             .filter(([, intent]) => intent.intentType === intentType)
-            .sort(([a], [b]) => b - a);
+            .sort(([, a], [, b]) => b.layer - a.layer);
         for (const [, intent] of layers) {
             const value = intent.payload[fieldName];
             if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -216,13 +213,13 @@ export class LayerIntentEngine {
     }
 
     private sampleTopLayerBoolean(
-        intentsByLayer: ReadonlyMap<number, IntentRecord>,
+        intentsByLayer: ReadonlyMap<string, IntentRecord>,
         intentType: string,
         fieldName: string
     ): boolean | undefined {
         const layers = [...intentsByLayer.entries()]
             .filter(([, intent]) => intent.intentType === intentType)
-            .sort(([a], [b]) => b - a);
+            .sort(([, a], [, b]) => b.layer - a.layer);
         for (const [, intent] of layers) {
             const value = intent.payload[fieldName];
             if (typeof value === 'boolean') return value;
@@ -231,12 +228,12 @@ export class LayerIntentEngine {
     }
 
     private sampleTopLayerAux(
-        intentsByLayer: ReadonlyMap<number, IntentRecord>,
+        intentsByLayer: ReadonlyMap<string, IntentRecord>,
         intentType: string
     ): Record<string, number> {
         const layers = [...intentsByLayer.entries()]
             .filter(([, intent]) => intent.intentType === intentType)
-            .sort(([a], [b]) => b - a);
+            .sort(([, a], [, b]) => b.layer - a.layer);
 
         const result: Record<string, number> = {};
         for (const [, intent] of layers) {

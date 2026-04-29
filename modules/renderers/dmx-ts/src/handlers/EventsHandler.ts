@@ -75,7 +75,7 @@ export class EventsHandler {
     }
 
     private async applyAllFixtures(zones: ConfiguredZone[]): Promise<void> {
-        const intentsByLayer = this.layerIntentEngine.getActiveIntentsByLayer();
+        const intentsByLayer = this.layerIntentEngine.getActiveIntents();
         for (const zone of zones) {
             for (const fixture of zone.fixtures) {
                 const worldPos = fixtureWorldPosition(fixture, zone.boundingBox);

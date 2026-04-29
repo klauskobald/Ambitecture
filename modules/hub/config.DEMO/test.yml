@@ -34,7 +34,8 @@ testParams:
         position: [9.000,0,5.000]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -44,7 +45,8 @@ testParams:
         position: [8.939,0,5.695]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -53,7 +55,8 @@ testParams:
         position: [8.759,0,6.368]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -62,7 +65,8 @@ testParams:
         position: [8.464,0,7.000]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -71,7 +75,8 @@ testParams:
         position: [8.064,0,7.571]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -80,7 +85,8 @@ testParams:
         position: [7.571,0,8.064]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -89,7 +95,8 @@ testParams:
         position: [7.000,0,8.464]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -98,7 +105,8 @@ testParams:
         position: [6.368,0,8.759]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -107,7 +115,8 @@ testParams:
         position: [5.695,0,8.939]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -116,7 +125,8 @@ testParams:
         position: [5.000,0,9.000]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -125,7 +135,8 @@ testParams:
         position: [4.305,0,8.939]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -134,7 +145,8 @@ testParams:
         position: [3.632,0,8.759]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -143,7 +155,8 @@ testParams:
         position: [3.000,0,8.464]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -152,7 +165,8 @@ testParams:
         position: [2.429,0,8.064]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -161,7 +175,8 @@ testParams:
         position: [1.936,0,7.571]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -170,7 +185,8 @@ testParams:
         position: [1.536,0,7.000]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -179,7 +195,8 @@ testParams:
         position: [1.241,0,6.368]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -188,7 +205,8 @@ testParams:
         position: [1.061,0,5.695]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -197,7 +215,8 @@ testParams:
         position: [1.000,0,5.000]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -206,7 +225,8 @@ testParams:
         position: [1.061,0,4.305]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -215,7 +235,8 @@ testParams:
         position: [1.241,0,3.632]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -224,7 +245,8 @@ testParams:
         position: [1.536,0,3.000]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -233,7 +255,8 @@ testParams:
         position: [1.936,0,2.429]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -242,7 +265,8 @@ testParams:
         position: [2.429,0,1.936]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -251,7 +275,8 @@ testParams:
         position: [3.000,0,1.536]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -260,7 +285,8 @@ testParams:
         position: [3.632,0,1.241]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -269,7 +295,8 @@ testParams:
         position: [4.305,0,1.061]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -278,7 +305,8 @@ testParams:
         position: [5.000,0,1.000]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -287,7 +315,8 @@ testParams:
         position: [5.695,0,1.061]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -296,7 +325,8 @@ testParams:
         position: [6.368,0,1.241]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -305,7 +335,8 @@ testParams:
         position: [7.000,0,1.536]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -314,7 +345,8 @@ testParams:
         position: [7.571,0,1.936]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -323,7 +355,8 @@ testParams:
         position: [8.064,0,2.429]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -332,7 +365,8 @@ testParams:
         position: [8.464,0,3.000]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -341,7 +375,8 @@ testParams:
         position: [8.759,0,3.632]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1
@@ -350,7 +385,8 @@ testParams:
         position: [8.939,0,4.305]
         params:
           color: {"rgb": [111,111,111]}
-          strobe: 0
+          aux:
+            strobe: 0
           layer: 10
           blend: ADD
           alpha: 1

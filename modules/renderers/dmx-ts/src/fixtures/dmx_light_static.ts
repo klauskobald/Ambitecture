@@ -18,15 +18,14 @@ class DmxLightStatic extends DmxFixtureBase {
         this.writeFunction(fixture, 'green', g, dmxUniverse);
         this.writeFunction(fixture, 'blue', b, dmxUniverse);
 
+        const spatialStrobe = snapshot.sample<number>('light.strobe') ?? 0;
         // aux writes after color; aux keys intentionally override color-pipeline channels
         const aux = snapshot.sample<Record<string, number>>('light.aux') ?? {};
-        const strobeValue = aux['strobe'];
-        if (strobeValue !== undefined) {
-            if (strobeValue === 0) {
-                this.writeFunction(fixture, 'strobe-off', 0, dmxUniverse);
-            } else {
-                this.writeFunction(fixture, 'strobe-on', strobeValue, dmxUniverse);
-            }
+        const strobeValue = aux['strobe'] !== undefined ? aux['strobe'] : spatialStrobe;
+        if (strobeValue === 0) {
+            this.writeFunction(fixture, 'strobe-off', 0, dmxUniverse);
+        } else {
+            this.writeFunction(fixture, 'strobe-on', strobeValue, dmxUniverse);
         }
         for (const [functionName, value] of Object.entries(aux)) {
             if (functionName === 'strobe') continue;

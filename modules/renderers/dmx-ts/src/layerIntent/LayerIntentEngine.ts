@@ -81,6 +81,9 @@ export class LayerIntentEngine {
         this.registerResolver<Color>('light.color.xyY', {
             sample: (context, intentsByLayer) => this.sampleLightColor(context, intentsByLayer),
         });
+        this.registerResolver<number>('light.strobe', {
+            sample: (context, intentsByLayer) => this.sampleSpatialStrobe(context, intentsByLayer),
+        });
         this.registerResolver<Record<string, number>>('light.aux', {
             sample: (_context, intentsByLayer) => this.sampleTopLayerAux(intentsByLayer, 'light'),
         });
@@ -146,6 +149,29 @@ export class LayerIntentEngine {
             mixed = mixed.blend(layerColor, intent.blend ?? 'ADD', intent.alpha ?? 1);
         }
         return mixed;
+    }
+
+    private sampleSpatialStrobe(
+        context: FixtureSampleContext,
+        intentsByLayer: ReadonlyMap<number, IntentRecord>
+    ): number {
+        const layers = [...intentsByLayer.entries()]
+            .filter(([, intent]) => intent.intentType === 'light')
+            .sort(([a], [b]) => a - b);
+
+        let result = 0;
+        for (const [, intent] of layers) {
+            const value = intent.payload['strobe'];
+            if (typeof value !== 'number' || !Number.isFinite(value) || value === 0) continue;
+            const spatialFactor = this.computeSpatialFactor(
+                context.fixture,
+                context.fixtureWorldPos,
+                intent.position,
+                context.fixture.range
+            );
+            result = Math.min(1, result + value * spatialFactor * (intent.alpha ?? 1));
+        }
+        return result;
     }
 
     private sampleTopLayerNumber(

@@ -28,6 +28,9 @@ class LayerIntentEngine {
             return mixed;
         });
 
+        this.registerResolver('light.strobe', (context, intentsByLayer) =>
+            this._sampleSpatialStrobe(context, intentsByLayer)
+        );
         this.registerResolver('light.aux', (_context, intentsByLayer) =>
             this._sampleTopLayerAux(intentsByLayer, 'light')
         );
@@ -116,6 +119,25 @@ class LayerIntentEngine {
         const normalized = Math.max(0, 1 - distance / range);
         const curveName = fixture?.params?.rangeFunction ?? fixture?.params?.rangeFn;
         return FnCurve.evaluate(curveName, normalized);
+    }
+
+    _sampleSpatialStrobe(context, intentsByLayer) {
+        const layers = [...intentsByLayer.entries()]
+            .filter(([, intent]) => intent.intentType === 'light')
+            .sort(([a], [b]) => a - b);
+        let result = 0;
+        for (const [, intent] of layers) {
+            const value = intent.payload?.strobe;
+            if (typeof value !== 'number' || !Number.isFinite(value) || value === 0) continue;
+            const spatialFactor = this._computeSpatialFactor(
+                context.fixture,
+                context.fixtureWorldPos,
+                intent.position,
+                context.fixture.range
+            );
+            result = Math.min(1, result + value * spatialFactor * (intent.alpha ?? 1));
+        }
+        return result;
     }
 
     _sampleTopLayerNumber(intentsByLayer, intentType, fieldName) {

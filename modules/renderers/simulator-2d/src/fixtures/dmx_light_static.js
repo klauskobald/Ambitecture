@@ -10,7 +10,9 @@ class DmxLightStatic extends LightBase {
     const color = snapshot.sample('light.color.xyY') || Color.black()
     const masterBrightness = snapshot.sample('master.brightness') ?? 1
     const masterBlackout = snapshot.sample('master.blackout') ?? false
-    this._strobe = (snapshot.sample('light.aux') ?? {})['strobe'] ?? 0
+    const spatialStrobe = snapshot.sample('light.strobe') ?? 0
+    const aux = snapshot.sample('light.aux') ?? {}
+    this._strobe = aux['strobe'] !== undefined ? aux['strobe'] : spatialStrobe
 
     const { r, g, b } = color.toRGB()
     const f = masterBrightness * (masterBlackout ? 0 : 1)

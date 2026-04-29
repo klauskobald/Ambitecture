@@ -6,6 +6,7 @@ import { Color } from '../color';
 
 interface EventParams {
   color?: unknown;
+  strobe?: unknown;
   aux?: Record<string, unknown>;
   layer?: number;
   blend?: string;

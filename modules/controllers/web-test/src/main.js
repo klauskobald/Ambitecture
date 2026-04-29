@@ -528,9 +528,9 @@ function flushOutbound() {
 
 /**
  * @param {unknown[]} incomingIntents
- * @param {{ sendToHub?: boolean }} [opts]
+ * @param {{ sendToHub?: boolean, pruneMissing?: boolean }} [opts]
  */
-function reconcileIntents(incomingIntents, { sendToHub = true } = {}) {
+function reconcileIntents(incomingIntents, { sendToHub = true, pruneMissing = true } = {}) {
   const incoming = new Map();
   for (const intent of incomingIntents) {
     const guid = intentGuid(intent);
@@ -548,9 +548,11 @@ function reconcileIntents(incomingIntents, { sendToHub = true } = {}) {
     }
   }
 
-  for (const guid of intentState.keys()) {
-    if (!incoming.has(guid)) {
-      intentState.delete(guid);
+  if (pruneMissing) {
+    for (const guid of intentState.keys()) {
+      if (!incoming.has(guid)) {
+        intentState.delete(guid);
+      }
     }
   }
 }
@@ -670,7 +672,7 @@ async function main() {
 
     if (message.type === 'intents') {
       const incoming = Array.isArray(message.payload) ? message.payload : [];
-      reconcileIntents(incoming, { sendToHub: false });
+      reconcileIntents(incoming, { sendToHub: false, pruneMissing: false });
       return;
     }
   });

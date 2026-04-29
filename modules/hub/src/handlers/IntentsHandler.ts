@@ -53,9 +53,8 @@ export class IntentsHandler implements MessageHandler {
     const openControllers = this.registry.getByRole('controller')
       .filter(c => c !== ws && c.readyState === WebSocket.OPEN);
     if (openControllers.length > 0) {
-      const fullIntents = this.projectManager.getControllerIntents(info.guid);
-      if (fullIntents.length > 0) {
-        const syncMessage = JSON.stringify({ message: { type: 'intents', payload: fullIntents } });
+      if (intents.length > 0) {
+        const syncMessage = JSON.stringify({ message: { type: 'intents', payload: intents } });
         for (const controllerWs of openControllers) {
           controllerWs.send(syncMessage);
         }

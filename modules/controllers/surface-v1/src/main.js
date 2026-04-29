@@ -35,91 +35,106 @@ const REQUIRED_LAYOUT_KEYS = /** @type {(keyof LayoutConfig)[]} */ ([
   'overlayFingerFillRgba',
   'overlayFingerStrokeRgba',
   'overlayLineWidthPx',
-  'overlayTrailFadeMs',
-]);
+  'overlayTrailFadeMs'
+])
 
 /**
  * @param {unknown} cfg
  * @returns {cfg is { SIMULATOR_IFRAME_URL: string, AMBITECTURE_HUB_URL: string, GEO_LOCATION: string, CONTROLLER_GUID: string, SIMULATOR_RENDERER_GUID: string, LAYOUT: LayoutConfig }}
  */
-function validateControllerConfig(cfg) {
+function validateControllerConfig (cfg) {
   if (cfg === null || typeof cfg !== 'object' || Array.isArray(cfg)) {
-    return false;
+    return false
   }
-  const o = /** @type {Record<string, unknown>} */ (cfg);
-  if (typeof o.SIMULATOR_IFRAME_URL !== 'string' || o.SIMULATOR_IFRAME_URL.trim() === '') {
-    return false;
+  const o = /** @type {Record<string, unknown>} */ (cfg)
+  if (
+    typeof o.SIMULATOR_IFRAME_URL !== 'string' ||
+    o.SIMULATOR_IFRAME_URL.trim() === ''
+  ) {
+    return false
   }
-  if (typeof o.AMBITECTURE_HUB_URL !== 'string' || o.AMBITECTURE_HUB_URL.trim() === '') {
-    return false;
+  if (
+    typeof o.AMBITECTURE_HUB_URL !== 'string' ||
+    o.AMBITECTURE_HUB_URL.trim() === ''
+  ) {
+    return false
   }
   if (typeof o.GEO_LOCATION !== 'string' || o.GEO_LOCATION.trim() === '') {
-    return false;
+    return false
   }
-  if (typeof o.CONTROLLER_GUID !== 'string' || o.CONTROLLER_GUID.trim() === '') {
-    return false;
+  if (
+    typeof o.CONTROLLER_GUID !== 'string' ||
+    o.CONTROLLER_GUID.trim() === ''
+  ) {
+    return false
   }
-  if (typeof o.SIMULATOR_RENDERER_GUID !== 'string' || o.SIMULATOR_RENDERER_GUID.trim() === '') {
-    return false;
+  if (
+    typeof o.SIMULATOR_RENDERER_GUID !== 'string' ||
+    o.SIMULATOR_RENDERER_GUID.trim() === ''
+  ) {
+    return false
   }
-  const layout = o.LAYOUT;
+  const layout = o.LAYOUT
   if (layout === null || typeof layout !== 'object' || Array.isArray(layout)) {
-    return false;
+    return false
   }
-  const L = /** @type {Record<string, unknown>} */ (layout);
+  const L = /** @type {Record<string, unknown>} */ (layout)
   for (const key of REQUIRED_LAYOUT_KEYS) {
     if (!(key in L)) {
-      return false;
+      return false
     }
-    const v = L[key];
+    const v = L[key]
     if (key === 'overlayFingerFillRgba' || key === 'overlayFingerStrokeRgba') {
       if (typeof v !== 'string' || v.trim() === '') {
-        return false;
+        return false
       }
     } else if (typeof v !== 'number' || !Number.isFinite(v)) {
-      return false;
+      return false
     }
   }
-  return true;
+  return true
 }
 
 /**
  * @param {LayoutConfig} L
  */
-function applyLayoutCssVars(L) {
-  const root = document.documentElement;
-  root.style.setProperty('--page-padding', `${L.pagePaddingPx}px`);
-  root.style.setProperty('--main-gap', `${L.mainGapPx}px`);
-  root.style.setProperty('--sim-stack-min-height', `${L.simStackMinHeightVh}vh`);
-  root.style.setProperty('--control-strip-min-height', `${L.controlStripMinHeightPx}px`);
-  root.style.setProperty('--iframe-z-index', String(L.iframeZIndex));
-  root.style.setProperty('--overlay-z-index', String(L.overlayZIndex));
+function applyLayoutCssVars (L) {
+  const root = document.documentElement
+  root.style.setProperty('--page-padding', `${L.pagePaddingPx}px`)
+  root.style.setProperty('--main-gap', `${L.mainGapPx}px`)
+  root.style.setProperty('--sim-stack-min-height', `${L.simStackMinHeightVh}vh`)
+  root.style.setProperty(
+    '--control-strip-min-height',
+    `${L.controlStripMinHeightPx}px`
+  )
+  root.style.setProperty('--iframe-z-index', String(L.iframeZIndex))
+  root.style.setProperty('--overlay-z-index', String(L.overlayZIndex))
 }
 
 /**
  * @param {string} message
  */
-function showConfigError(message) {
-  const el = document.getElementById('config-error');
+function showConfigError (message) {
+  const el = document.getElementById('config-error')
   if (!el) {
-    console.error('web-test:', message);
-    return;
+    console.error('web-test:', message)
+    return
   }
-  el.textContent = message;
-  el.hidden = false;
-  console.error('web-test:', message);
+  el.textContent = message
+  el.hidden = false
+  console.error('web-test:', message)
 }
 
 /**
  * @param {string} text
  */
-function setSpatialReadout(text) {
-  const el = document.getElementById('spatial-readout');
+function setSpatialReadout (text) {
+  const el = document.getElementById('spatial-readout')
   if (!el) {
-    return;
+    return
   }
-  el.textContent = text;
-  el.hidden = text === '';
+  el.textContent = text
+  el.hidden = text === ''
 }
 
 /**
@@ -127,50 +142,59 @@ function setSpatialReadout(text) {
  * @param {string} rendererGuid
  * @returns {HubSpatialState | null}
  */
-function spatialStateFromControllerConfig(payload, rendererGuid) {
-  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
-    return null;
+function spatialStateFromControllerConfig (payload, rendererGuid) {
+  if (
+    payload === null ||
+    typeof payload !== 'object' ||
+    Array.isArray(payload)
+  ) {
+    return null
   }
-  const p = /** @type {Record<string, unknown>} */ (payload);
-  const zones = p.zones;
+  const p = /** @type {Record<string, unknown>} */ (payload)
+  const zones = p.zones
   if (!Array.isArray(zones)) {
-    return null;
+    return null
   }
-  const zoneToRenderer = /** @type {Record<string, string[]>} */ (p.zoneToRenderer ?? {});
+  const zoneToRenderer = /** @type {Record<string, string[]>} */ (
+    p.zoneToRenderer ?? {}
+  )
   /** @type {number[][]} */
-  const matched = [];
+  const matched = []
   for (const z of zones) {
     if (z === null || typeof z !== 'object' || Array.isArray(z)) {
-      continue;
+      continue
     }
-    const zone = /** @type {Record<string, unknown>} */ (z);
-    const zoneName = /** @type {string} */ (zone.name);
-    const assignedRenderers = zoneToRenderer[zoneName];
-    if (!Array.isArray(assignedRenderers) || !assignedRenderers.includes(rendererGuid)) {
-      continue;
+    const zone = /** @type {Record<string, unknown>} */ (z)
+    const zoneName = /** @type {string} */ (zone.name)
+    const assignedRenderers = zoneToRenderer[zoneName]
+    if (
+      !Array.isArray(assignedRenderers) ||
+      !assignedRenderers.includes(rendererGuid)
+    ) {
+      continue
     }
-    const bb = zone.boundingBox;
+    const bb = zone.boundingBox
     if (!Array.isArray(bb) || bb.length < 6) {
-      continue;
+      continue
     }
-    matched.push(bb.map((n) => Number(n)));
+    matched.push(bb.map(n => Number(n)))
   }
   if (matched.length === 0) {
-    return null;
+    return null
   }
-  let x1 = Infinity;
-  let y1 = Infinity;
-  let z1 = Infinity;
-  let x2 = -Infinity;
-  let y2 = -Infinity;
-  let z2 = -Infinity;
+  let x1 = Infinity
+  let y1 = Infinity
+  let z1 = Infinity
+  let x2 = -Infinity
+  let y2 = -Infinity
+  let z2 = -Infinity
   for (const b of matched) {
-    x1 = Math.min(x1, b[0]);
-    y1 = Math.min(y1, b[1]);
-    z1 = Math.min(z1, b[2]);
-    x2 = Math.max(x2, b[3]);
-    y2 = Math.max(y2, b[4]);
-    z2 = Math.max(z2, b[5]);
+    x1 = Math.min(x1, b[0])
+    y1 = Math.min(y1, b[1])
+    z1 = Math.min(z1, b[2])
+    x2 = Math.max(x2, b[3])
+    y2 = Math.max(y2, b[4])
+    z2 = Math.max(z2, b[5])
   }
   return {
     x1,
@@ -178,8 +202,8 @@ function spatialStateFromControllerConfig(payload, rendererGuid) {
     z1,
     x2,
     y2,
-    z2,
-  };
+    z2
+  }
 }
 
 /**
@@ -187,35 +211,44 @@ function spatialStateFromControllerConfig(payload, rendererGuid) {
  * @param {string} rendererGuid
  * @returns {number[][]}
  */
-function zoneBoundingBoxesFromControllerConfig(payload, rendererGuid) {
-  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
-    return [];
+function zoneBoundingBoxesFromControllerConfig (payload, rendererGuid) {
+  if (
+    payload === null ||
+    typeof payload !== 'object' ||
+    Array.isArray(payload)
+  ) {
+    return []
   }
-  const p = /** @type {Record<string, unknown>} */ (payload);
-  const zones = p.zones;
+  const p = /** @type {Record<string, unknown>} */ (payload)
+  const zones = p.zones
   if (!Array.isArray(zones)) {
-    return [];
+    return []
   }
-  const zoneToRenderer = /** @type {Record<string, string[]>} */ (p.zoneToRenderer ?? {});
+  const zoneToRenderer = /** @type {Record<string, string[]>} */ (
+    p.zoneToRenderer ?? {}
+  )
   /** @type {number[][]} */
-  const matched = [];
+  const matched = []
   for (const z of zones) {
     if (z === null || typeof z !== 'object' || Array.isArray(z)) {
-      continue;
+      continue
     }
-    const zone = /** @type {Record<string, unknown>} */ (z);
-    const zoneName = /** @type {string} */ (zone.name);
-    const assignedRenderers = zoneToRenderer[zoneName];
-    if (!Array.isArray(assignedRenderers) || !assignedRenderers.includes(rendererGuid)) {
-      continue;
+    const zone = /** @type {Record<string, unknown>} */ (z)
+    const zoneName = /** @type {string} */ (zone.name)
+    const assignedRenderers = zoneToRenderer[zoneName]
+    if (
+      !Array.isArray(assignedRenderers) ||
+      !assignedRenderers.includes(rendererGuid)
+    ) {
+      continue
     }
-    const bb = zone.boundingBox;
+    const bb = zone.boundingBox
     if (!Array.isArray(bb) || bb.length < 6) {
-      continue;
+      continue
     }
-    matched.push(bb.map((n) => Number(n)));
+    matched.push(bb.map(n => Number(n)))
   }
-  return matched;
+  return matched
 }
 
 /**
@@ -223,52 +256,69 @@ function zoneBoundingBoxesFromControllerConfig(payload, rendererGuid) {
  * @param {string} rendererGuid
  * @returns {Map<string, { zoneName: string, fixtureName: string, position: [number, number, number] }>}
  */
-function fixturesFromControllerConfig(payload, rendererGuid) {
+function fixturesFromControllerConfig (payload, rendererGuid) {
   /** @type {Map<string, { zoneName: string, fixtureName: string, position: [number, number, number] }>} */
-  const fixtures = new Map();
-  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
-    return fixtures;
+  const fixtures = new Map()
+  if (
+    payload === null ||
+    typeof payload !== 'object' ||
+    Array.isArray(payload)
+  ) {
+    return fixtures
   }
-  const p = /** @type {Record<string, unknown>} */ (payload);
-  const zones = p.zones;
+  const p = /** @type {Record<string, unknown>} */ (payload)
+  const zones = p.zones
   if (!Array.isArray(zones)) {
-    return fixtures;
+    return fixtures
   }
-  const zoneToRenderer = /** @type {Record<string, string[]>} */ (p.zoneToRenderer ?? {});
+  const zoneToRenderer = /** @type {Record<string, string[]>} */ (
+    p.zoneToRenderer ?? {}
+  )
   for (const z of zones) {
     if (z === null || typeof z !== 'object' || Array.isArray(z)) {
-      continue;
+      continue
     }
-    const zone = /** @type {Record<string, unknown>} */ (z);
-    const zoneName = String(zone.name ?? '');
-    const assignedRenderers = zoneToRenderer[zoneName];
-    if (!Array.isArray(assignedRenderers) || !assignedRenderers.includes(rendererGuid)) {
-      continue;
+    const zone = /** @type {Record<string, unknown>} */ (z)
+    const zoneName = String(zone.name ?? '')
+    const assignedRenderers = zoneToRenderer[zoneName]
+    if (
+      !Array.isArray(assignedRenderers) ||
+      !assignedRenderers.includes(rendererGuid)
+    ) {
+      continue
     }
-    const bb = zone.boundingBox;
-    const zoneFixtures = zone.fixtures;
+    const bb = zone.boundingBox
+    const zoneFixtures = zone.fixtures
     if (!Array.isArray(bb) || bb.length < 6 || !Array.isArray(zoneFixtures)) {
-      continue;
+      continue
     }
     for (const fixtureRaw of zoneFixtures) {
-      if (fixtureRaw === null || typeof fixtureRaw !== 'object' || Array.isArray(fixtureRaw)) {
-        continue;
+      if (
+        fixtureRaw === null ||
+        typeof fixtureRaw !== 'object' ||
+        Array.isArray(fixtureRaw)
+      ) {
+        continue
       }
-      const fixture = /** @type {Record<string, unknown>} */ (fixtureRaw);
-      const fName = String(fixture.name ?? '');
-      const local = fixture.location;
+      const fixture = /** @type {Record<string, unknown>} */ (fixtureRaw)
+      const fName = String(fixture.name ?? '')
+      const local = fixture.location
       if (!fName || !Array.isArray(local) || local.length < 3) {
-        continue;
+        continue
       }
-      const id = fixtureId(zoneName, fName);
+      const id = fixtureId(zoneName, fName)
       fixtures.set(id, {
         zoneName,
         fixtureName: fName,
-        position: [Number(bb[0]) + Number(local[0]), Number(bb[1]) + Number(local[1]), Number(bb[2]) + Number(local[2])],
-      });
+        position: [
+          Number(bb[0]) + Number(local[0]),
+          Number(bb[1]) + Number(local[1]),
+          Number(bb[2]) + Number(local[2])
+        ]
+      })
     }
   }
-  return fixtures;
+  return fixtures
 }
 
 /**
@@ -276,12 +326,16 @@ function fixturesFromControllerConfig(payload, rendererGuid) {
  * @param {number[][]} zoneBoxes
  * @returns {boolean}
  */
-function isPositionInsideAnyZone(position, zoneBoxes) {
-  return zoneBoxes.some((zone) =>
-    position[0] >= zone[0] && position[0] <= zone[3]
-    && position[1] >= zone[1] && position[1] <= zone[4]
-    && position[2] >= zone[2] && position[2] <= zone[5]
-  );
+function isPositionInsideAnyZone (position, zoneBoxes) {
+  return zoneBoxes.some(
+    zone =>
+      position[0] >= zone[0] &&
+      position[0] <= zone[3] &&
+      position[1] >= zone[1] &&
+      position[1] <= zone[4] &&
+      position[2] >= zone[2] &&
+      position[2] <= zone[5]
+  )
 }
 
 /**
@@ -292,20 +346,25 @@ function isPositionInsideAnyZone(position, zoneBoxes) {
  * @param {HubSpatialState} s
  * @returns {{ wx: number; wy: number; wz: number; nx: number; ny: number } | null}
  */
-function overlayClientToBboxMeters(clientX, clientY, overlayCanvas, s) {
-  const r = overlayCanvas.getBoundingClientRect();
+function overlayClientToBboxMeters (clientX, clientY, overlayCanvas, s) {
+  const r = overlayCanvas.getBoundingClientRect()
   if (r.width <= 0 || r.height <= 0) {
-    return null;
+    return null
   }
-  if (clientX < r.left || clientX > r.right || clientY < r.top || clientY > r.bottom) {
-    return null;
+  if (
+    clientX < r.left ||
+    clientX > r.right ||
+    clientY < r.top ||
+    clientY > r.bottom
+  ) {
+    return null
   }
-  const nx = (clientX - r.left) / r.width;
-  const ny = (clientY - r.top) / r.height;
-  const wx = s.x1 + nx * (s.x2 - s.x1);
-  const wz = s.z1 + ny * (s.z2 - s.z1);
-  const wy = s.y1;
-  return { wx, wy, wz, nx, ny };
+  const nx = (clientX - r.left) / r.width
+  const ny = (clientY - r.top) / r.height
+  const wx = s.x1 + nx * (s.x2 - s.x1)
+  const wz = s.z1 + ny * (s.z2 - s.z1)
+  const wy = s.y1
+  return { wx, wy, wz, nx, ny }
 }
 
 /**
@@ -320,293 +379,391 @@ function overlayClientToBboxMeters(clientX, clientY, overlayCanvas, s) {
  * @param {(layer: number, wx: number, wz: number) => void} onIntentDrag
  * @param {HTMLIFrameElement} iframe
  */
-function setupOverlayCanvas(L, canvas, stack, getSpatial, getZoneBoxes, getFixtures, getIntents, onFixtureDrag, onIntentDrag, iframe) {
-  const ctx = canvas.getContext('2d');
+function setupOverlayCanvas (
+  L,
+  canvas,
+  stack,
+  getSpatial,
+  getZoneBoxes,
+  getFixtures,
+  getIntents,
+  onFixtureDrag,
+  onIntentDrag,
+  iframe
+) {
+  const ctx = canvas.getContext('2d')
   if (!ctx) {
-    showConfigError('Canvas 2D context unavailable.');
-    return;
+    showConfigError('Canvas 2D context unavailable.')
+    return
   }
 
   /** @type {{ x: number; y: number; t: number }[]} */
-  const samples = [];
+  const samples = []
 
   /** @type {Set<number>} */
-  const activePointers = new Set();
+  const activePointers = new Set()
   /** @type {Map<number, string>} pointerId → intent guid */
-  const draggedPointers = new Map();
+  const draggedPointers = new Map()
   /** @type {Map<number, string>} pointerId → fixture id */
-  const draggedFixtures = new Map();
-  const DRAG_HIT_RADIUS_PX = 28;
+  const draggedFixtures = new Map()
+  const DRAG_HIT_RADIUS_PX = 28
 
-  function getSimCanvasRect() {
-    const simCanvas = iframe.contentDocument?.getElementById('sim-canvas');
-    if (!simCanvas) return null;
-    const inner = simCanvas.getBoundingClientRect();
-    const outer = iframe.getBoundingClientRect();
+  function getSimCanvasRect () {
+    const simCanvas = iframe.contentDocument?.getElementById('sim-canvas')
+    if (!simCanvas) return null
+    const inner = simCanvas.getBoundingClientRect()
+    const outer = iframe.getBoundingClientRect()
     return new DOMRect(
       outer.left + inner.left,
       outer.top + inner.top,
       inner.width,
       inner.height
-    );
+    )
   }
 
-  function findFixtureAtCanvas(cx, cy, spatial) {
-    const fixtures = getFixtures();
-    const simRect = getSimCanvasRect();
-    if (!simRect) return null;
-    const overlayRect = canvas.getBoundingClientRect();
-    const alreadyGrabbed = new Set(draggedFixtures.values());
-    let nearest = null;
-    let nearestDist = DRAG_HIT_RADIUS_PX;
+  function findFixtureAtCanvas (cx, cy, spatial) {
+    const fixtures = getFixtures()
+    const simRect = getSimCanvasRect()
+    if (!simRect) return null
+    const overlayRect = canvas.getBoundingClientRect()
+    const alreadyGrabbed = new Set(draggedFixtures.values())
+    let nearest = null
+    let nearestDist = DRAG_HIT_RADIUS_PX
     for (const [fixtureId, fixture] of fixtures) {
-      if (alreadyGrabbed.has(fixtureId)) continue;
-      const f = /** @type {Record<string, unknown>} */ (fixture);
-      const pos = /** @type {number[]} */ (f.position);
-      if (!pos) continue;
-      const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, overlayRect);
-      const dist = Math.hypot(cx - px, cy - py);
-      if (dist < nearestDist) { nearest = fixtureId; nearestDist = dist; }
+      if (alreadyGrabbed.has(fixtureId)) continue
+      const f = /** @type {Record<string, unknown>} */ (fixture)
+      const pos = /** @type {number[]} */ (f.position)
+      if (!pos) continue
+      const { px, py } = worldToCanvas(
+        pos[0],
+        pos[2],
+        spatial,
+        simRect,
+        overlayRect
+      )
+      const dist = Math.hypot(cx - px, cy - py)
+      if (dist < nearestDist) {
+        nearest = fixtureId
+        nearestDist = dist
+      }
     }
-    return nearest;
+    return nearest
   }
 
-  function findIntentAtCanvas(cx, cy, spatial) {
-    const intents = getIntents();
-    const simRect = getSimCanvasRect();
-    if (!simRect) return null;
-    const overlayRect = canvas.getBoundingClientRect();
-    const alreadyGrabbed = new Set(draggedPointers.values());
-    let nearest = null;
-    let nearestDist = DRAG_HIT_RADIUS_PX;
+  function findIntentAtCanvas (cx, cy, spatial) {
+    const intents = getIntents()
+    const simRect = getSimCanvasRect()
+    if (!simRect) return null
+    const overlayRect = canvas.getBoundingClientRect()
+    const alreadyGrabbed = new Set(draggedPointers.values())
+    let nearest = null
+    let nearestDist = DRAG_HIT_RADIUS_PX
     for (const [guid, intent] of intents) {
-      if (alreadyGrabbed.has(guid)) continue;
-      const i = /** @type {Record<string, unknown>} */ (intent);
-      const pos = /** @type {number[]} */ (i.position);
-      if (!pos) continue;
-      const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, overlayRect);
-      const dist = Math.hypot(cx - px, cy - py);
-      if (dist < nearestDist) { nearest = guid; nearestDist = dist; }
+      if (alreadyGrabbed.has(guid)) continue
+      const i = /** @type {Record<string, unknown>} */ (intent)
+      const pos = /** @type {number[]} */ (i.position)
+      if (!pos) continue
+      const { px, py } = worldToCanvas(
+        pos[0],
+        pos[2],
+        spatial,
+        simRect,
+        overlayRect
+      )
+      const dist = Math.hypot(cx - px, cy - py)
+      if (dist < nearestDist) {
+        nearest = guid
+        nearestDist = dist
+      }
     }
-    return nearest;
+    return nearest
   }
 
-  function resizeCanvas() {
-    const rect = stack.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    const w = Math.max(1, Math.floor(rect.width * dpr));
-    const h = Math.max(1, Math.floor(rect.height * dpr));
-    canvas.width = w;
-    canvas.height = h;
-    canvas.style.width = `${rect.width}px`;
-    canvas.style.height = `${rect.height}px`;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  function resizeCanvas () {
+    const rect = stack.getBoundingClientRect()
+    const dpr = window.devicePixelRatio || 1
+    const w = Math.max(1, Math.floor(rect.width * dpr))
+    const h = Math.max(1, Math.floor(rect.height * dpr))
+    canvas.width = w
+    canvas.height = h
+    canvas.style.width = `${rect.width}px`
+    canvas.style.height = `${rect.height}px`
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   }
 
   const ro = new ResizeObserver(() => {
-    resizeCanvas();
-  });
-  ro.observe(stack);
-  resizeCanvas();
+    resizeCanvas()
+  })
+  ro.observe(stack)
+  resizeCanvas()
 
-  function canvasPointFromEvent(ev) {
-    const rect = canvas.getBoundingClientRect();
-    const x = ev.clientX - rect.left;
-    const y = ev.clientY - rect.top;
-    return { x, y };
+  function canvasPointFromEvent (ev) {
+    const rect = canvas.getBoundingClientRect()
+    const x = ev.clientX - rect.left
+    const y = ev.clientY - rect.top
+    return { x, y }
   }
 
-  function pushSample(clientX, clientY, x, y) {
-    samples.push({ x, y, t: performance.now() });
-    const spatial = getSpatial();
+  function pushSample (clientX, clientY, x, y) {
+    samples.push({ x, y, t: performance.now() })
+    const spatial = getSpatial()
     if (!spatial) {
-      setSpatialReadout('hub config (zone bbox) not yet received');
-      return;
+      setSpatialReadout('hub config (zone bbox) not yet received')
+      return
     }
-    const m = overlayClientToBboxMeters(clientX, clientY, canvas, spatial);
+    const m = overlayClientToBboxMeters(clientX, clientY, canvas, spatial)
     if (!m) {
-      setSpatialReadout('outside touch overlay');
-      return;
+      setSpatialReadout('outside touch overlay')
+      return
     }
-    const { wx, wy, wz, nx, ny } = m;
+    const { wx, wy, wz, nx, ny } = m
     setSpatialReadout(
-      `overlay u=${nx.toFixed(3)} v=${ny.toFixed(3)}  |  meters x=${wx.toFixed(3)} y=${wy.toFixed(3)} z=${wz.toFixed(3)}`
-    );
+      `overlay u=${nx.toFixed(3)} v=${ny.toFixed(3)}  |  meters x=${wx.toFixed(
+        3
+      )} y=${wy.toFixed(3)} z=${wz.toFixed(3)}`
+    )
   }
 
-  function onPointerDown(ev) {
-    if (ev.button !== undefined && ev.button !== 0) return;
-    const { x, y } = canvasPointFromEvent(ev);
-    const spatial = getSpatial();
+  function onPointerDown (ev) {
+    if (ev.button !== undefined && ev.button !== 0) return
+    const { x, y } = canvasPointFromEvent(ev)
+    const spatial = getSpatial()
     if (spatial) {
-      const fixtureHit = findFixtureAtCanvas(x, y, spatial);
+      const fixtureHit = findFixtureAtCanvas(x, y, spatial)
       if (fixtureHit !== null) {
-        draggedFixtures.set(ev.pointerId, fixtureHit);
-        activePointers.add(ev.pointerId);
-        try { canvas.setPointerCapture(ev.pointerId); } catch { /* ignore */ }
-        return;
+        draggedFixtures.set(ev.pointerId, fixtureHit)
+        activePointers.add(ev.pointerId)
+        try {
+          canvas.setPointerCapture(ev.pointerId)
+        } catch {
+          /* ignore */
+        }
+        return
       }
-      const hit = findIntentAtCanvas(x, y, spatial);
+      const hit = findIntentAtCanvas(x, y, spatial)
       if (hit !== null) {
-        draggedPointers.set(ev.pointerId, hit);
-        activePointers.add(ev.pointerId);
-        try { canvas.setPointerCapture(ev.pointerId); } catch { /* ignore */ }
-        return;
+        draggedPointers.set(ev.pointerId, hit)
+        activePointers.add(ev.pointerId)
+        try {
+          canvas.setPointerCapture(ev.pointerId)
+        } catch {
+          /* ignore */
+        }
+        return
       }
     }
-    activePointers.add(ev.pointerId);
-    try { canvas.setPointerCapture(ev.pointerId); } catch { /* ignore */ }
-    pushSample(ev.clientX, ev.clientY, x, y);
+    activePointers.add(ev.pointerId)
+    try {
+      canvas.setPointerCapture(ev.pointerId)
+    } catch {
+      /* ignore */
+    }
+    pushSample(ev.clientX, ev.clientY, x, y)
   }
 
-  function onPointerMove(ev) {
-    if (!activePointers.has(ev.pointerId)) return;
-    const fixtureId = draggedFixtures.get(ev.pointerId);
+  function onPointerMove (ev) {
+    if (!activePointers.has(ev.pointerId)) return
+    const fixtureId = draggedFixtures.get(ev.pointerId)
     if (fixtureId !== undefined) {
-      const spatial = getSpatial();
-      const simRect = getSimCanvasRect();
-      if (!spatial || !simRect) return;
-      const m = clientToWorldViaSimCanvas(ev.clientX, ev.clientY, spatial, simRect);
-      if (!m) return;
-      onFixtureDrag(fixtureId, m.wx, m.wz);
-      return;
+      const spatial = getSpatial()
+      const simRect = getSimCanvasRect()
+      if (!spatial || !simRect) return
+      const m = clientToWorldViaSimCanvas(
+        ev.clientX,
+        ev.clientY,
+        spatial,
+        simRect
+      )
+      if (!m) return
+      onFixtureDrag(fixtureId, m.wx, m.wz)
+      return
     }
-    const guid = draggedPointers.get(ev.pointerId);
+    const guid = draggedPointers.get(ev.pointerId)
     if (guid !== undefined) {
-      const spatial = getSpatial();
-      const simRect = getSimCanvasRect();
-      if (!spatial || !simRect) return;
-      const m = clientToWorldViaSimCanvas(ev.clientX, ev.clientY, spatial, simRect);
-      if (!m) return;
-      onIntentDrag(guid, m.wx, m.wz);
-      return;
+      const spatial = getSpatial()
+      const simRect = getSimCanvasRect()
+      if (!spatial || !simRect) return
+      const m = clientToWorldViaSimCanvas(
+        ev.clientX,
+        ev.clientY,
+        spatial,
+        simRect
+      )
+      if (!m) return
+      onIntentDrag(guid, m.wx, m.wz)
+      return
     }
-    const { x, y } = canvasPointFromEvent(ev);
-    pushSample(ev.clientX, ev.clientY, x, y);
+    const { x, y } = canvasPointFromEvent(ev)
+    pushSample(ev.clientX, ev.clientY, x, y)
   }
 
-  function onPointerUp(ev) {
-    activePointers.delete(ev.pointerId);
-    draggedPointers.delete(ev.pointerId);
-    draggedFixtures.delete(ev.pointerId);
-    try { canvas.releasePointerCapture(ev.pointerId); } catch { /* ignore */ }
+  function onPointerUp (ev) {
+    activePointers.delete(ev.pointerId)
+    draggedPointers.delete(ev.pointerId)
+    draggedFixtures.delete(ev.pointerId)
+    try {
+      canvas.releasePointerCapture(ev.pointerId)
+    } catch {
+      /* ignore */
+    }
   }
 
-  canvas.addEventListener('pointerdown', onPointerDown);
-  canvas.addEventListener('pointermove', onPointerMove);
-  canvas.addEventListener('pointerup', onPointerUp);
-  canvas.addEventListener('pointercancel', onPointerUp);
+  canvas.addEventListener('pointerdown', onPointerDown)
+  canvas.addEventListener('pointermove', onPointerMove)
+  canvas.addEventListener('pointerup', onPointerUp)
+  canvas.addEventListener('pointercancel', onPointerUp)
 
-  function frame(now) {
-    requestAnimationFrame(frame);
-    const fadeMs = L.overlayTrailFadeMs;
+  function frame (now) {
+    requestAnimationFrame(frame)
+    const fadeMs = L.overlayTrailFadeMs
     while (samples.length > 0 && now - samples[0].t > fadeMs) {
-      samples.shift();
+      samples.shift()
     }
-    const rect = canvas.getBoundingClientRect();
-    ctx.clearRect(0, 0, rect.width, rect.height);
-    const r = L.overlayFingerRadiusPx;
-    ctx.lineWidth = L.overlayLineWidthPx;
-    ctx.strokeStyle = L.overlayFingerStrokeRgba;
-    ctx.fillStyle = L.overlayFingerFillRgba;
+    const rect = canvas.getBoundingClientRect()
+    ctx.clearRect(0, 0, rect.width, rect.height)
+    const r = L.overlayFingerRadiusPx
+    ctx.lineWidth = L.overlayLineWidthPx
+    ctx.strokeStyle = L.overlayFingerStrokeRgba
+    ctx.fillStyle = L.overlayFingerFillRgba
     for (const s of samples) {
-      const age = now - s.t;
-      const a = 1 - age / fadeMs;
+      const age = now - s.t
+      const a = 1 - age / fadeMs
       if (a <= 0) {
-        continue;
+        continue
       }
-      ctx.globalAlpha = Math.min(1, Math.max(0, a));
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
+      ctx.globalAlpha = Math.min(1, Math.max(0, a))
+      ctx.beginPath()
+      ctx.arc(s.x, s.y, r, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.stroke()
     }
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = 1
 
     if (draggedPointers.size > 0) {
-      const spatial = getSpatial();
-      const simRect = getSimCanvasRect();
+      const spatial = getSpatial()
+      const simRect = getSimCanvasRect()
       if (spatial && simRect) {
         for (const guid of draggedPointers.values()) {
-          const draggedIntent = getIntents().get(guid);
-          if (!draggedIntent) continue;
-          const i = /** @type {Record<string, unknown>} */ (draggedIntent);
-          const pos = /** @type {number[]} */ (i.position);
-          if (!pos) continue;
-          const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, rect);
-          ctx.save();
-          ctx.beginPath();
-          ctx.arc(px, py, L.overlayFingerRadiusPx * 1.4, 0, Math.PI * 2);
-          ctx.strokeStyle = 'rgba(255, 220, 80, 0.9)';
-          ctx.lineWidth = 2;
-          ctx.stroke();
-          ctx.fillStyle = 'rgba(255, 220, 80, 0.25)';
-          ctx.fill();
-          ctx.restore();
+          const draggedIntent = getIntents().get(guid)
+          if (!draggedIntent) continue
+          const i = /** @type {Record<string, unknown>} */ (draggedIntent)
+          const pos = /** @type {number[]} */ (i.position)
+          if (!pos) continue
+          const { px, py } = worldToCanvas(
+            pos[0],
+            pos[2],
+            spatial,
+            simRect,
+            rect
+          )
+          ctx.save()
+          ctx.beginPath()
+          ctx.arc(px, py, L.overlayFingerRadiusPx * 1.4, 0, Math.PI * 2)
+          ctx.strokeStyle = 'rgba(255, 220, 80, 0.9)'
+          ctx.lineWidth = 2
+          ctx.stroke()
+          ctx.fillStyle = 'rgba(255, 220, 80, 0.25)'
+          ctx.fill()
+          ctx.restore()
         }
       }
     }
 
     if (draggedFixtures.size > 0) {
-      const spatial = getSpatial();
-      const simRect = getSimCanvasRect();
+      const spatial = getSpatial()
+      const simRect = getSimCanvasRect()
       if (spatial && simRect) {
         for (const fixtureId of draggedFixtures.values()) {
-          const draggedFixture = getFixtures().get(fixtureId);
-          if (!draggedFixture) continue;
-          const f = /** @type {Record<string, unknown>} */ (draggedFixture);
-          const pos = /** @type {number[]} */ (f.position);
-          if (!pos) continue;
-          const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, rect);
-          ctx.save();
-          ctx.strokeStyle = 'rgba(80, 220, 255, 0.95)';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(px - 10, py - 10, 20, 20);
-          ctx.restore();
+          const draggedFixture = getFixtures().get(fixtureId)
+          if (!draggedFixture) continue
+          const f = /** @type {Record<string, unknown>} */ (draggedFixture)
+          const pos = /** @type {number[]} */ (f.position)
+          if (!pos) continue
+          const { px, py } = worldToCanvas(
+            pos[0],
+            pos[2],
+            spatial,
+            simRect,
+            rect
+          )
+          ctx.save()
+          ctx.strokeStyle = 'rgba(80, 220, 255, 0.95)'
+          ctx.lineWidth = 2
+          ctx.strokeRect(px - 10, py - 10, 20, 20)
+          ctx.restore()
         }
       }
     }
 
-    const spatial = getSpatial();
-    const simRect = getSimCanvasRect();
+    const spatial = getSpatial()
+    const simRect = getSimCanvasRect()
     if (spatial && simRect) {
-      const zoneBoxes = getZoneBoxes();
+      const zoneBoxes = getZoneBoxes()
       for (const intent of getIntents().values()) {
-        const i = /** @type {Record<string, unknown>} */ (intent);
-        const pos = /** @type {number[] | undefined} */ (i.position);
+        const i = /** @type {Record<string, unknown>} */ (intent)
+        const pos = /** @type {number[] | undefined} */ (i.position)
+        const radius = intentRadius(intent)
+        if (!pos || pos.length < 3 || radius <= 0) {
+          continue
+        }
+        const center = worldToCanvas(pos[0], pos[2], spatial, simRect, rect)
+        const edge = worldToCanvas(
+          pos[0] + radius,
+          pos[2],
+          spatial,
+          simRect,
+          rect
+        )
+        const radiusPx = Math.abs(edge.px - center.px)
+        if (!Number.isFinite(radiusPx) || radiusPx <= 0) {
+          continue
+        }
+        ctx.save()
+        ctx.beginPath()
+        ctx.arc(center.px, center.py, radiusPx, 0, Math.PI * 2)
+        ctx.fillStyle = 'rgba(128, 128, 128, 0.02)'
+        ctx.fill()
+        ctx.strokeStyle = 'rgba(128, 128, 128, 0.1)'
+        ctx.lineWidth = 1
+        ctx.stroke()
+        ctx.restore()
+      }
+      for (const intent of getIntents().values()) {
+        const i = /** @type {Record<string, unknown>} */ (intent)
+        const pos = /** @type {number[] | undefined} */ (i.position)
         if (!pos || pos.length < 3) {
-          continue;
+          continue
         }
         if (isPositionInsideAnyZone(pos, zoneBoxes)) {
-          continue;
+          continue
         }
-        const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, rect);
-        const size = 12;
-        ctx.save();
-        ctx.fillStyle = 'rgba(120, 120, 120, 0.5)';
-        ctx.strokeStyle = 'rgba(170, 170, 170, 0.8)';
-        ctx.lineWidth = 1;
-        ctx.fillRect(px - size / 2, py - size / 2, size, size);
-        ctx.strokeRect(px - size / 2, py - size / 2, size, size);
-        const name = intentName(intent);
+        const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, rect)
+        const size = 12
+        ctx.save()
+        ctx.fillStyle = 'rgba(120, 120, 120, 0.5)'
+        ctx.strokeStyle = 'rgba(170, 170, 170, 0.8)'
+        ctx.lineWidth = 1
+        ctx.fillRect(px - size / 2, py - size / 2, size, size)
+        ctx.strokeRect(px - size / 2, py - size / 2, size, size)
+        const name = intentName(intent)
         if (name) {
-          ctx.fillStyle = 'rgba(170, 170, 170, 0.95)';
-          ctx.font = '11px monospace';
-          ctx.textAlign = 'center';
-          ctx.fillText(name, px, py + size / 2 + 12);
+          ctx.fillStyle = 'rgba(170, 170, 170, 0.95)'
+          ctx.font = '11px monospace'
+          ctx.textAlign = 'center'
+          ctx.fillText(name, px, py + size / 2 + 12)
         }
-        ctx.restore();
+        ctx.restore()
       }
     }
   }
-  requestAnimationFrame(frame);
+  requestAnimationFrame(frame)
 }
 
 /**
  * @param {string} httpUrl
  */
-function toWsUrl(httpUrl) {
-  return httpUrl.replace(/^http/, 'ws');
+function toWsUrl (httpUrl) {
+  return httpUrl.replace(/^http/, 'ws')
 }
 
 /**
@@ -618,13 +775,13 @@ function toWsUrl(httpUrl) {
  * @param {DOMRect} overlayRect  getBoundingClientRect() of the overlay canvas
  * @returns {{ px: number, py: number }}
  */
-function worldToCanvas(wx, wz, spatial, simRect, overlayRect) {
-  const nx = (wx - spatial.x1) / (spatial.x2 - spatial.x1);
-  const ny = (wz - spatial.z1) / (spatial.z2 - spatial.z1);
+function worldToCanvas (wx, wz, spatial, simRect, overlayRect) {
+  const nx = (wx - spatial.x1) / (spatial.x2 - spatial.x1)
+  const ny = (wz - spatial.z1) / (spatial.z2 - spatial.z1)
   return {
-    px: (simRect.left - overlayRect.left) + nx * simRect.width,
-    py: (simRect.top - overlayRect.top) + ny * simRect.height,
-  };
+    px: simRect.left - overlayRect.left + nx * simRect.width,
+    py: simRect.top - overlayRect.top + ny * simRect.height
+  }
 }
 
 /**
@@ -635,49 +792,62 @@ function worldToCanvas(wx, wz, spatial, simRect, overlayRect) {
  * @param {DOMRect} simRect
  * @returns {{ wx: number, wz: number } | null}
  */
-function clientToWorldViaSimCanvas(clientX, clientY, spatial, simRect) {
-  const nx = (clientX - simRect.left) / simRect.width;
-  const ny = (clientY - simRect.top) / simRect.height;
+function clientToWorldViaSimCanvas (clientX, clientY, spatial, simRect) {
+  const nx = (clientX - simRect.left) / simRect.width
+  const ny = (clientY - simRect.top) / simRect.height
   if (nx < 0 || nx > 1 || ny < 0 || ny > 1) {
-    return null;
+    return null
   }
   return {
     wx: spatial.x1 + nx * (spatial.x2 - spatial.x1),
-    wz: spatial.z1 + ny * (spatial.z2 - spatial.z1),
-  };
+    wz: spatial.z1 + ny * (spatial.z2 - spatial.z1)
+  }
 }
 
 /**
  * @param {unknown} intent
  * @returns {string}
  */
-function intentGuid(intent) {
-  return (intent !== null && typeof intent === 'object' && !Array.isArray(intent))
+function intentGuid (intent) {
+  return intent !== null && typeof intent === 'object' && !Array.isArray(intent)
     ? String(/** @type {Record<string, unknown>} */ (intent).guid ?? '')
-    : '';
+    : ''
 }
 
 /**
  * @param {unknown} intent
  * @returns {number}
  */
-function intentLayer(intent) {
-  const params = (intent !== null && typeof intent === 'object' && !Array.isArray(intent))
-    ? /** @type {Record<string, unknown>} */ (intent).params
-    : undefined;
-  return (params !== null && typeof params === 'object' && !Array.isArray(params))
+function intentLayer (intent) {
+  const params =
+    intent !== null && typeof intent === 'object' && !Array.isArray(intent)
+      ? /** @type {Record<string, unknown>} */ (intent).params
+      : undefined
+  return params !== null && typeof params === 'object' && !Array.isArray(params)
     ? Number(/** @type {Record<string, unknown>} */ (params).layer)
-    : NaN;
+    : NaN
 }
 
 /**
  * @param {unknown} intent
  * @returns {string}
  */
-function intentName(intent) {
-  return (intent !== null && typeof intent === 'object' && !Array.isArray(intent))
+function intentName (intent) {
+  return intent !== null && typeof intent === 'object' && !Array.isArray(intent)
     ? String(/** @type {Record<string, unknown>} */ (intent).name ?? '')
-    : '';
+    : ''
+}
+
+/**
+ * @param {unknown} intent
+ * @returns {number}
+ */
+function intentRadius (intent) {
+  if (intent === null || typeof intent !== 'object' || Array.isArray(intent)) {
+    return 0
+  }
+  const raw = /** @type {Record<string, unknown>} */ (intent).radius
+  return typeof raw === 'number' && Number.isFinite(raw) ? raw : 0
 }
 
 /**
@@ -685,18 +855,20 @@ function intentName(intent) {
  * @param {string} fixtureName
  * @returns {string}
  */
-function fixtureId(zoneName, fixtureName) {
-  return `${zoneName}::${fixtureName}`;
+function fixtureId (zoneName, fixtureName) {
+  return `${zoneName}::${fixtureName}`
 }
 
 /**
  * @param {unknown} fixture
  * @returns {string}
  */
-function fixtureName(fixture) {
-  return (fixture !== null && typeof fixture === 'object' && !Array.isArray(fixture))
+function fixtureName (fixture) {
+  return fixture !== null &&
+    typeof fixture === 'object' &&
+    !Array.isArray(fixture)
     ? String(/** @type {Record<string, unknown>} */ (fixture).name ?? '')
-    : '';
+    : ''
 }
 
 /**
@@ -704,9 +876,11 @@ function fixtureName(fixture) {
  * @param {WebSocket} ws
  * @param {number[]} location
  */
-function fireIntentEvents(intents, ws, location) {
-  if (ws.readyState !== WebSocket.OPEN) return;
-  ws.send(JSON.stringify({ message: { type: 'intents', location, payload: intents } }));
+function fireIntentEvents (intents, ws, location) {
+  if (ws.readyState !== WebSocket.OPEN) return
+  ws.send(
+    JSON.stringify({ message: { type: 'intents', location, payload: intents } })
+  )
 }
 
 /**
@@ -714,97 +888,104 @@ function fireIntentEvents(intents, ws, location) {
  * @param {WebSocket} ws
  * @param {number[]} location
  */
-function fireFixtureEvents(fixtures, ws, location) {
-  if (ws.readyState !== WebSocket.OPEN) return;
-  ws.send(JSON.stringify({ message: { type: 'fixtures', location, payload: fixtures } }));
+function fireFixtureEvents (fixtures, ws, location) {
+  if (ws.readyState !== WebSocket.OPEN) return
+  ws.send(
+    JSON.stringify({
+      message: { type: 'fixtures', location, payload: fixtures }
+    })
+  )
 }
 
 /** @type {Map<string, unknown>} intentState keyed by intent guid */
-const intentState = new Map();
+const intentState = new Map()
 /** @type {Map<string, unknown>} fixtureState keyed by zoneName::fixtureName */
-const fixtureState = new Map();
+const fixtureState = new Map()
 
 /** @type {Map<string, unknown>} outboundMap keyed by intent guid */
-const outboundMap = new Map();
+const outboundMap = new Map()
 /** @type {Map<string, unknown>} outbound fixtures keyed by fixture id */
-const outboundFixtureMap = new Map();
-let lastSentAt = 0;
-let sendPending = false;
-let minIntervalMs = 40;
+const outboundFixtureMap = new Map()
+let lastSentAt = 0
+let sendPending = false
+let minIntervalMs = 40
 /** @type {WebSocket | null} */
-let activeWs = null;
+let activeWs = null
 /** @type {number[] | null} */
-let activeLocation = null;
+let activeLocation = null
 
 /**
  * @param {unknown} intent
  */
-function queueIntentUpdate(intent) {
-  const guid = intentGuid(intent);
-  if (!guid) return;
-  outboundMap.set(guid, intent);
-  scheduleFlush();
+function queueIntentUpdate (intent) {
+  const guid = intentGuid(intent)
+  if (!guid) return
+  outboundMap.set(guid, intent)
+  scheduleFlush()
 }
 
-function scheduleFlush() {
-  if (sendPending) return;
-  const elapsed = Date.now() - lastSentAt;
+function scheduleFlush () {
+  if (sendPending) return
+  const elapsed = Date.now() - lastSentAt
   if (elapsed >= minIntervalMs) {
-    flushOutbound();
+    flushOutbound()
   } else {
-    sendPending = true;
+    sendPending = true
     setTimeout(() => {
-      sendPending = false;
-      flushOutbound();
-    }, minIntervalMs - elapsed);
+      sendPending = false
+      flushOutbound()
+    }, minIntervalMs - elapsed)
   }
 }
 
-function flushOutbound() {
-  if (!activeWs || !activeLocation) return;
-  const intents = [...outboundMap.values()];
-  const fixtures = [...outboundFixtureMap.values()];
-  if (intents.length === 0 && fixtures.length === 0) return;
-  outboundMap.clear();
-  outboundFixtureMap.clear();
-  lastSentAt = Date.now();
+function flushOutbound () {
+  if (!activeWs || !activeLocation) return
+  const intents = [...outboundMap.values()]
+  const fixtures = [...outboundFixtureMap.values()]
+  if (intents.length === 0 && fixtures.length === 0) return
+  outboundMap.clear()
+  outboundFixtureMap.clear()
+  lastSentAt = Date.now()
   if (intents.length > 0) {
-    fireIntentEvents(intents, activeWs, activeLocation);
+    fireIntentEvents(intents, activeWs, activeLocation)
   }
   if (fixtures.length > 0) {
-    fireFixtureEvents(fixtures, activeWs, activeLocation);
+    fireFixtureEvents(fixtures, activeWs, activeLocation)
   }
 }
 
 /**
  * @param {unknown} fixtureUpdate
  */
-function queueFixtureUpdate(fixtureUpdate) {
-  const f = /** @type {Record<string, unknown>} */ (fixtureUpdate);
-  const id = fixtureId(String(f.zoneName ?? ''), String(f.fixtureName ?? ''));
-  if (!id) return;
-  outboundFixtureMap.set(id, fixtureUpdate);
-  scheduleFlush();
+function queueFixtureUpdate (fixtureUpdate) {
+  const f = /** @type {Record<string, unknown>} */ (fixtureUpdate)
+  const id = fixtureId(String(f.zoneName ?? ''), String(f.fixtureName ?? ''))
+  if (!id) return
+  outboundFixtureMap.set(id, fixtureUpdate)
+  scheduleFlush()
 }
 
 /**
  * @param {unknown[]} incomingIntents
  * @param {{ sendToHub?: boolean, pruneMissing?: boolean }} [opts]
  */
-function reconcileIntents(incomingIntents, { sendToHub = true, pruneMissing = true } = {}) {
-  const incoming = new Map();
+function reconcileIntents (
+  incomingIntents,
+  { sendToHub = true, pruneMissing = true } = {}
+) {
+  const incoming = new Map()
   for (const intent of incomingIntents) {
-    const guid = intentGuid(intent);
-    if (!guid) continue;
-    incoming.set(guid, intent);
+    const guid = intentGuid(intent)
+    if (!guid) continue
+    incoming.set(guid, intent)
   }
 
   for (const [guid, intent] of incoming) {
-    const existing = intentState.get(guid);
+    const existing = intentState.get(guid)
     if (!existing || JSON.stringify(existing) !== JSON.stringify(intent)) {
-      intentState.set(guid, intent);
+      intentState.set(guid, intent)
       if (sendToHub) {
-        queueIntentUpdate(intent);
+        queueIntentUpdate(intent)
       }
     }
   }
@@ -812,76 +993,82 @@ function reconcileIntents(incomingIntents, { sendToHub = true, pruneMissing = tr
   if (pruneMissing) {
     for (const guid of intentState.keys()) {
       if (!incoming.has(guid)) {
-        intentState.delete(guid);
+        intentState.delete(guid)
       }
     }
   }
 }
 
-async function main() {
-  let res;
+async function main () {
+  let res
   try {
-    res = await fetch('./config.json', { cache: 'no-store' });
+    res = await fetch('./config.json', { cache: 'no-store' })
   } catch (e) {
-    showConfigError(`Could not load config.json (${/** @type {Error} */ (e).message}).`);
-    return;
+    showConfigError(
+      `Could not load config.json (${/** @type {Error} */ (e).message}).`
+    )
+    return
   }
   if (!res.ok) {
-    showConfigError(`config.json HTTP ${res.status}`);
-    return;
+    showConfigError(`config.json HTTP ${res.status}`)
+    return
   }
   /** @type {unknown} */
-  let cfg;
+  let cfg
   try {
-    cfg = await res.json();
+    cfg = await res.json()
   } catch {
-    showConfigError('config.json is not valid JSON.');
-    return;
+    showConfigError('config.json is not valid JSON.')
+    return
   }
   if (!validateControllerConfig(cfg)) {
     showConfigError(
       'config.json failed validation: see README for required keys (including CONTROLLER_GUID, SIMULATOR_RENDERER_GUID, GEO_LOCATION).'
-    );
-    return;
+    )
+    return
   }
 
-  const L = cfg.LAYOUT;
-  applyLayoutCssVars(L);
+  const L = cfg.LAYOUT
+  applyLayoutCssVars(L)
 
-  const iframe = /** @type {HTMLIFrameElement | null} */ (document.getElementById('sim-frame'));
-  const stack = document.getElementById('sim-stack');
-  const canvas = /** @type {HTMLCanvasElement | null} */ (document.getElementById('touch-overlay'));
+  const iframe = /** @type {HTMLIFrameElement | null} */ (
+    document.getElementById('sim-frame')
+  )
+  const stack = document.getElementById('sim-stack')
+  const canvas = /** @type {HTMLCanvasElement | null} */ (
+    document.getElementById('touch-overlay')
+  )
   if (!iframe || !stack || !canvas) {
-    showConfigError('Missing #sim-frame, #sim-stack, or #touch-overlay in DOM.');
-    return;
+    showConfigError('Missing #sim-frame, #sim-stack, or #touch-overlay in DOM.')
+    return
   }
 
-  const simUrl = new URL(cfg.SIMULATOR_IFRAME_URL, window.location.href).href;
-  iframe.src = simUrl;
+  const simUrl = new URL(cfg.SIMULATOR_IFRAME_URL, window.location.href).href
+  iframe.src = simUrl
 
   /** @type {HubSpatialState | null} */
-  let hubSpatial = null;
+  let hubSpatial = null
   /** @type {number[][]} */
-  let hubZoneBoxes = [];
+  let hubZoneBoxes = []
   /** @type {Map<string, { zoneName: string, fixtureName: string, position: [number, number, number] }>} */
-  let hubFixtures = new Map();
+  let hubFixtures = new Map()
 
-  const [geoLon, geoLat] = cfg.GEO_LOCATION.split(/\s+/).map(Number);
-  const location = [geoLon, geoLat];
+  const [geoLon, geoLat] = cfg.GEO_LOCATION.split(/\s+/).map(Number)
+  const location = [geoLon, geoLat]
 
   /**
    * @param {string} guid
    * @param {number} wx
    * @param {number} wz
    */
-  function onIntentDrag(guid, wx, wz) {
-    const intent = intentState.get(guid);
-    if (!intent) return;
-    const i = /** @type {Record<string, unknown>} */ (intent);
-    const pos = /** @type {number[]} */ (i.position);
-    const updated = { ...i, position: [wx, pos[1] ?? 0, wz] };
-    intentState.set(guid, updated);
-    queueIntentUpdate(updated);
+  function onIntentDrag (guid, wx, wz) {
+    const intent = intentState.get(guid)
+    if (!intent) return
+    const i = /** @type {Record<string, unknown>} */ (intent)
+    const pos = /** @type {number[]} */ (i.position)
+    const updated = { ...i, position: [wx, pos[1] ?? 0, wz] }
+    intentState.set(guid, updated)
+    queueIntentUpdate(updated)
   }
 
   /**
@@ -889,89 +1076,104 @@ async function main() {
    * @param {number} wx
    * @param {number} wz
    */
-  function onFixtureDrag(id, wx, wz) {
-    const fixture = hubFixtures.get(id);
-    if (!fixture) return;
+  function onFixtureDrag (id, wx, wz) {
+    const fixture = hubFixtures.get(id)
+    if (!fixture) return
     const updated = {
       ...fixture,
-      position: [wx, fixture.position[1] ?? 0, wz],
-    };
-    hubFixtures.set(id, updated);
-    fixtureState.set(id, updated);
+      position: [wx, fixture.position[1] ?? 0, wz]
+    }
+    hubFixtures.set(id, updated)
+    fixtureState.set(id, updated)
     queueFixtureUpdate({
       zoneName: fixture.zoneName,
       fixtureName: fixture.fixtureName,
-      position: updated.position,
-    });
+      position: updated.position
+    })
   }
 
-  const wsUrl = toWsUrl(cfg.AMBITECTURE_HUB_URL);
-  const ws = new WebSocket(wsUrl);
-  activeWs = ws;
-  activeLocation = location;
+  const wsUrl = toWsUrl(cfg.AMBITECTURE_HUB_URL)
+  const ws = new WebSocket(wsUrl)
+  activeWs = ws
+  activeLocation = location
 
   ws.addEventListener('open', () => {
-    ws.send(JSON.stringify({
-      message: {
-        type: 'register',
-        location,
-        payload: { role: 'controller', guid: cfg.CONTROLLER_GUID, scope: [] },
-      },
-    }));
-    setSpatialReadout('registered as controller — waiting for config…');
-  });
+    ws.send(
+      JSON.stringify({
+        message: {
+          type: 'register',
+          location,
+          payload: { role: 'controller', guid: cfg.CONTROLLER_GUID, scope: [] }
+        }
+      })
+    )
+    setSpatialReadout('registered as controller — waiting for config…')
+  })
 
-  ws.addEventListener('message', (evt) => {
-    let envelope;
+  ws.addEventListener('message', evt => {
+    let envelope
     try {
-      envelope = JSON.parse(/** @type {string} */ (evt.data));
+      envelope = JSON.parse(/** @type {string} */ (evt.data))
     } catch {
-      return;
+      return
     }
-    const message = envelope?.message;
-    if (!message?.type) return;
+    const message = envelope?.message
+    if (!message?.type) return
 
     if (message.type === 'config') {
-      const next = spatialStateFromControllerConfig(message.payload, cfg.SIMULATOR_RENDERER_GUID);
-      hubZoneBoxes = zoneBoundingBoxesFromControllerConfig(message.payload, cfg.SIMULATOR_RENDERER_GUID);
-      hubFixtures = fixturesFromControllerConfig(message.payload, cfg.SIMULATOR_RENDERER_GUID);
-      fixtureState.clear();
+      const next = spatialStateFromControllerConfig(
+        message.payload,
+        cfg.SIMULATOR_RENDERER_GUID
+      )
+      hubZoneBoxes = zoneBoundingBoxesFromControllerConfig(
+        message.payload,
+        cfg.SIMULATOR_RENDERER_GUID
+      )
+      hubFixtures = fixturesFromControllerConfig(
+        message.payload,
+        cfg.SIMULATOR_RENDERER_GUID
+      )
+      fixtureState.clear()
       for (const [id, fixture] of hubFixtures) {
-        fixtureState.set(id, fixture);
+        fixtureState.set(id, fixture)
       }
       if (next) {
-        hubSpatial = next;
-        setSpatialReadout('hub config received — drag on the touch overlay');
+        hubSpatial = next
+        setSpatialReadout('hub config received — drag on the touch overlay')
       } else {
-        setSpatialReadout('config received but no zone for SIMULATOR_RENDERER_GUID');
+        setSpatialReadout(
+          'config received but no zone for SIMULATOR_RENDERER_GUID'
+        )
       }
-      const rateLimit = message.payload?.rateLimitEventsPerSecond;
+      const rateLimit = message.payload?.rateLimitEventsPerSecond
       if (typeof rateLimit === 'number' && rateLimit > 0) {
-        minIntervalMs = 1000 / rateLimit;
+        minIntervalMs = 1000 / rateLimit
       }
-      const intents = Array.isArray(message.payload?.intents) ? message.payload.intents : [];
-      reconcileIntents(intents);
-      return;
+      const intents = Array.isArray(message.payload?.intents)
+        ? message.payload.intents
+        : []
+      reconcileIntents(intents)
+      return
     }
 
     if (message.type === 'refresh') {
-      const allIntents = [...intentState.values()];
+      const allIntents = [...intentState.values()]
       if (allIntents.length > 0) {
-        fireIntentEvents(allIntents, ws, location);
+        fireIntentEvents(allIntents, ws, location)
       }
-      return;
+      return
     }
 
     if (message.type === 'intents') {
-      const incoming = Array.isArray(message.payload) ? message.payload : [];
-      reconcileIntents(incoming, { sendToHub: false, pruneMissing: false });
-      return;
+      const incoming = Array.isArray(message.payload) ? message.payload : []
+      reconcileIntents(incoming, { sendToHub: false, pruneMissing: false })
+      return
     }
-  });
+  })
 
   ws.addEventListener('error', () => {
-    setSpatialReadout('WebSocket error');
-  });
+    setSpatialReadout('WebSocket error')
+  })
 
   setupOverlayCanvas(
     L,
@@ -984,7 +1186,7 @@ async function main() {
     onFixtureDrag,
     onIntentDrag,
     iframe
-  );
+  )
 }
 
-main();
+main()

@@ -17,6 +17,8 @@ function intentToEvent(intent: ControllerIntent, scheduledAt: number): object {
     class: intent.class,
     scheduled: scheduledAt,
     position: intent.position,
+    radius: intent.radius,
+    radiusFunction: intent.radiusFunction,
     params: intent.params,
   };
 }

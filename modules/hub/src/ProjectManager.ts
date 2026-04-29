@@ -22,6 +22,8 @@ export interface ControllerIntent {
   name?: string;
   scheduled?: number;
   position?: [number, number, number];
+  radius?: number;
+  radiusFunction?: string;
   class: string;
   params: Record<string, unknown>;
 }

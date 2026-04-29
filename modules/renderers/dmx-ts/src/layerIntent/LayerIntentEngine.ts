@@ -9,6 +9,8 @@ export interface IntentRecord {
     zoneName?: string;
     intentType: string;
     position?: [number, number, number];
+    radius?: number;
+    radiusFunction?: string;
     blend?: BlendMode;
     alpha?: number;
     payload: Record<string, unknown>;
@@ -71,6 +73,12 @@ function toIntentRecord(event: RendererEvent): IntentRecord {
     };
     if (event.position) {
         record.position = event.position;
+    }
+    if (typeof event.radius === 'number' && Number.isFinite(event.radius)) {
+        record.radius = event.radius;
+    }
+    if (typeof event.radiusFunction === 'string' && event.radiusFunction.trim() !== '') {
+        record.radiusFunction = event.radiusFunction;
     }
     return record;
 }
@@ -157,7 +165,9 @@ export class LayerIntentEngine {
                 context.fixture,
                 context.fixtureWorldPos,
                 intent.position,
-                context.fixture.range
+                context.fixture.range,
+                intent.radius,
+                intent.radiusFunction
             );
             const layerColor = new Color(colorData.x, colorData.y, Math.max(0, Math.min(1, colorData.Y * spatialFactor)));
             mixed = mixed.blend(layerColor, intent.blend ?? 'ADD', intent.alpha ?? 1);
@@ -181,7 +191,9 @@ export class LayerIntentEngine {
                 context.fixture,
                 context.fixtureWorldPos,
                 intent.position,
-                context.fixture.range
+                context.fixture.range,
+                intent.radius,
+                intent.radiusFunction
             );
             result = Math.min(1, result + value * spatialFactor * (intent.alpha ?? 1));
         }
@@ -243,13 +255,21 @@ export class LayerIntentEngine {
         fixture: ConfiguredFixture,
         fixtureWorldPos: [number, number, number],
         intentPos: [number, number, number] | undefined,
-        range: number
+        range: number,
+        intentRadius: number | undefined,
+        intentRadiusFunction: string | undefined
     ): number {
         if (!intentPos || range <= 0) return 1;
         const distance = Vector3.fromTo(fixtureWorldPos, intentPos).magnitude();
-        const normalized = Math.max(0, 1 - distance / range);
-        const curveName = fixture.params['rangeFunction'] ?? fixture.params['rangeFn'];
-        return FnCurve.evaluate(curveName, normalized);
+        const fixtureNormalized = Math.max(0, 1 - distance / range);
+        const fixtureCurveName = fixture.params['rangeFunction'] ?? fixture.params['rangeFn'];
+        const fixtureFactor = FnCurve.evaluate(fixtureCurveName, fixtureNormalized);
+        if (intentRadius === undefined || intentRadius <= 0) {
+            return fixtureFactor;
+        }
+        const intentNormalized = Math.max(0, 1 - distance / intentRadius);
+        const intentFactor = FnCurve.evaluate(intentRadiusFunction, intentNormalized);
+        return fixtureFactor * intentFactor;
     }
 }
 

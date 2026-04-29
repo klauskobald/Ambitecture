@@ -6,6 +6,8 @@ export interface RendererEvent {
     class: string;
     scheduled?: number;
     position?: [number, number, number];
+    radius?: number;
+    radiusFunction?: string;
     params?: Record<string, unknown>;
 }
 

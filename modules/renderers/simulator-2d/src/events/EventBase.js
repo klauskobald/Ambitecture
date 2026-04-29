@@ -1,6 +1,7 @@
 class EventBase {
     constructor(intent, drawConfig) {
         this._layer = intent.layer ?? 0;
+        this._name = typeof intent.name === 'string' ? intent.name : '';
         this._position = intent.position ?? [0, 0, 0];
         this._payload = intent.payload ?? {};
         this._drawConfig = drawConfig;

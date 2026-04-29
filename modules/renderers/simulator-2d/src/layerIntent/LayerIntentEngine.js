@@ -74,6 +74,7 @@ class LayerIntentEngine {
         const params = event.params && typeof event.params === 'object' ? event.params : {};
         return {
             layer: this._toLayer(params.layer),
+            name: typeof event.name === 'string' ? event.name : '',
             intentType: event.class,
             position: event.position,
             blend: this._toBlend(params.blend),

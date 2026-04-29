@@ -12,7 +12,13 @@ function normalizeIntentColor(intent: ControllerIntent): ControllerIntent {
 }
 
 function intentToEvent(intent: ControllerIntent, scheduledAt: number): object {
-  return { class: intent.class, scheduled: scheduledAt, position: intent.position, params: intent.params };
+  return {
+    name: intent.name,
+    class: intent.class,
+    scheduled: scheduledAt,
+    position: intent.position,
+    params: intent.params,
+  };
 }
 
 function isIntentArray(payload: unknown): payload is ControllerIntent[] {

@@ -17,6 +17,7 @@ class EventLight extends EventBase {
         ctx.strokeStyle = '#888';
         ctx.lineWidth = 1;
         ctx.strokeRect(cx - half, cy - half, half * 2, half * 2);
-        CanvasDraw.drawLabel(ctx, cx, cy, half, `L${this._layer}`);
+        const label = this._name ? `${this._name} (L${this._layer})` : `L${this._layer}`;
+        CanvasDraw.drawLabel(ctx, cx, cy, half, label);
     }
 }

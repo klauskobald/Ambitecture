@@ -473,6 +473,13 @@ function setupOverlayCanvas(L, canvas, stack, getSpatial, getZoneBoxes, getInten
         ctx.lineWidth = 1;
         ctx.fillRect(px - size / 2, py - size / 2, size, size);
         ctx.strokeRect(px - size / 2, py - size / 2, size, size);
+        const name = intentName(intent);
+        if (name) {
+          ctx.fillStyle = 'rgba(170, 170, 170, 0.95)';
+          ctx.font = '11px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText(name, px, py + size / 2 + 12);
+        }
         ctx.restore();
       }
     }
@@ -543,6 +550,16 @@ function intentLayer(intent) {
   return (params !== null && typeof params === 'object' && !Array.isArray(params))
     ? Number(/** @type {Record<string, unknown>} */ (params).layer)
     : NaN;
+}
+
+/**
+ * @param {unknown} intent
+ * @returns {string}
+ */
+function intentName(intent) {
+  return (intent !== null && typeof intent === 'object' && !Array.isArray(intent))
+    ? String(/** @type {Record<string, unknown>} */ (intent).name ?? '')
+    : '';
 }
 
 /**

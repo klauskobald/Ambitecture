@@ -219,6 +219,59 @@ function zoneBoundingBoxesFromControllerConfig(payload, rendererGuid) {
 }
 
 /**
+ * @param {unknown} payload
+ * @param {string} rendererGuid
+ * @returns {Map<string, { zoneName: string, fixtureName: string, position: [number, number, number] }>}
+ */
+function fixturesFromControllerConfig(payload, rendererGuid) {
+  /** @type {Map<string, { zoneName: string, fixtureName: string, position: [number, number, number] }>} */
+  const fixtures = new Map();
+  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
+    return fixtures;
+  }
+  const p = /** @type {Record<string, unknown>} */ (payload);
+  const zones = p.zones;
+  if (!Array.isArray(zones)) {
+    return fixtures;
+  }
+  const zoneToRenderer = /** @type {Record<string, string[]>} */ (p.zoneToRenderer ?? {});
+  for (const z of zones) {
+    if (z === null || typeof z !== 'object' || Array.isArray(z)) {
+      continue;
+    }
+    const zone = /** @type {Record<string, unknown>} */ (z);
+    const zoneName = String(zone.name ?? '');
+    const assignedRenderers = zoneToRenderer[zoneName];
+    if (!Array.isArray(assignedRenderers) || !assignedRenderers.includes(rendererGuid)) {
+      continue;
+    }
+    const bb = zone.boundingBox;
+    const zoneFixtures = zone.fixtures;
+    if (!Array.isArray(bb) || bb.length < 6 || !Array.isArray(zoneFixtures)) {
+      continue;
+    }
+    for (const fixtureRaw of zoneFixtures) {
+      if (fixtureRaw === null || typeof fixtureRaw !== 'object' || Array.isArray(fixtureRaw)) {
+        continue;
+      }
+      const fixture = /** @type {Record<string, unknown>} */ (fixtureRaw);
+      const fName = String(fixture.name ?? '');
+      const local = fixture.location;
+      if (!fName || !Array.isArray(local) || local.length < 3) {
+        continue;
+      }
+      const id = fixtureId(zoneName, fName);
+      fixtures.set(id, {
+        zoneName,
+        fixtureName: fName,
+        position: [Number(bb[0]) + Number(local[0]), Number(bb[1]) + Number(local[1]), Number(bb[2]) + Number(local[2])],
+      });
+    }
+  }
+  return fixtures;
+}
+
+/**
  * @param {number[]} position
  * @param {number[][]} zoneBoxes
  * @returns {boolean}
@@ -261,11 +314,13 @@ function overlayClientToBboxMeters(clientX, clientY, overlayCanvas, s) {
  * @param {HTMLElement} stack
  * @param {() => HubSpatialState | null} getSpatial
  * @param {() => number[][]} getZoneBoxes
+ * @param {() => Map<string, unknown>} getFixtures
  * @param {() => Map<number, unknown>} getIntents
+ * @param {(fixtureId: string, wx: number, wz: number) => void} onFixtureDrag
  * @param {(layer: number, wx: number, wz: number) => void} onIntentDrag
  * @param {HTMLIFrameElement} iframe
  */
-function setupOverlayCanvas(L, canvas, stack, getSpatial, getZoneBoxes, getIntents, onIntentDrag, iframe) {
+function setupOverlayCanvas(L, canvas, stack, getSpatial, getZoneBoxes, getFixtures, getIntents, onFixtureDrag, onIntentDrag, iframe) {
   const ctx = canvas.getContext('2d');
   if (!ctx) {
     showConfigError('Canvas 2D context unavailable.');
@@ -279,6 +334,8 @@ function setupOverlayCanvas(L, canvas, stack, getSpatial, getZoneBoxes, getInten
   const activePointers = new Set();
   /** @type {Map<number, string>} pointerId → intent guid */
   const draggedPointers = new Map();
+  /** @type {Map<number, string>} pointerId → fixture id */
+  const draggedFixtures = new Map();
   const DRAG_HIT_RADIUS_PX = 28;
 
   function getSimCanvasRect() {
@@ -292,6 +349,26 @@ function setupOverlayCanvas(L, canvas, stack, getSpatial, getZoneBoxes, getInten
       inner.width,
       inner.height
     );
+  }
+
+  function findFixtureAtCanvas(cx, cy, spatial) {
+    const fixtures = getFixtures();
+    const simRect = getSimCanvasRect();
+    if (!simRect) return null;
+    const overlayRect = canvas.getBoundingClientRect();
+    const alreadyGrabbed = new Set(draggedFixtures.values());
+    let nearest = null;
+    let nearestDist = DRAG_HIT_RADIUS_PX;
+    for (const [fixtureId, fixture] of fixtures) {
+      if (alreadyGrabbed.has(fixtureId)) continue;
+      const f = /** @type {Record<string, unknown>} */ (fixture);
+      const pos = /** @type {number[]} */ (f.position);
+      if (!pos) continue;
+      const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, overlayRect);
+      const dist = Math.hypot(cx - px, cy - py);
+      if (dist < nearestDist) { nearest = fixtureId; nearestDist = dist; }
+    }
+    return nearest;
   }
 
   function findIntentAtCanvas(cx, cy, spatial) {
@@ -362,6 +439,13 @@ function setupOverlayCanvas(L, canvas, stack, getSpatial, getZoneBoxes, getInten
     const { x, y } = canvasPointFromEvent(ev);
     const spatial = getSpatial();
     if (spatial) {
+      const fixtureHit = findFixtureAtCanvas(x, y, spatial);
+      if (fixtureHit !== null) {
+        draggedFixtures.set(ev.pointerId, fixtureHit);
+        activePointers.add(ev.pointerId);
+        try { canvas.setPointerCapture(ev.pointerId); } catch { /* ignore */ }
+        return;
+      }
       const hit = findIntentAtCanvas(x, y, spatial);
       if (hit !== null) {
         draggedPointers.set(ev.pointerId, hit);
@@ -377,6 +461,16 @@ function setupOverlayCanvas(L, canvas, stack, getSpatial, getZoneBoxes, getInten
 
   function onPointerMove(ev) {
     if (!activePointers.has(ev.pointerId)) return;
+    const fixtureId = draggedFixtures.get(ev.pointerId);
+    if (fixtureId !== undefined) {
+      const spatial = getSpatial();
+      const simRect = getSimCanvasRect();
+      if (!spatial || !simRect) return;
+      const m = clientToWorldViaSimCanvas(ev.clientX, ev.clientY, spatial, simRect);
+      if (!m) return;
+      onFixtureDrag(fixtureId, m.wx, m.wz);
+      return;
+    }
     const guid = draggedPointers.get(ev.pointerId);
     if (guid !== undefined) {
       const spatial = getSpatial();
@@ -394,6 +488,7 @@ function setupOverlayCanvas(L, canvas, stack, getSpatial, getZoneBoxes, getInten
   function onPointerUp(ev) {
     activePointers.delete(ev.pointerId);
     draggedPointers.delete(ev.pointerId);
+    draggedFixtures.delete(ev.pointerId);
     try { canvas.releasePointerCapture(ev.pointerId); } catch { /* ignore */ }
   }
 
@@ -447,6 +542,26 @@ function setupOverlayCanvas(L, canvas, stack, getSpatial, getZoneBoxes, getInten
           ctx.stroke();
           ctx.fillStyle = 'rgba(255, 220, 80, 0.25)';
           ctx.fill();
+          ctx.restore();
+        }
+      }
+    }
+
+    if (draggedFixtures.size > 0) {
+      const spatial = getSpatial();
+      const simRect = getSimCanvasRect();
+      if (spatial && simRect) {
+        for (const fixtureId of draggedFixtures.values()) {
+          const draggedFixture = getFixtures().get(fixtureId);
+          if (!draggedFixture) continue;
+          const f = /** @type {Record<string, unknown>} */ (draggedFixture);
+          const pos = /** @type {number[]} */ (f.position);
+          if (!pos) continue;
+          const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, rect);
+          ctx.save();
+          ctx.strokeStyle = 'rgba(80, 220, 255, 0.95)';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(px - 10, py - 10, 20, 20);
           ctx.restore();
         }
       }
@@ -566,6 +681,25 @@ function intentName(intent) {
 }
 
 /**
+ * @param {string} zoneName
+ * @param {string} fixtureName
+ * @returns {string}
+ */
+function fixtureId(zoneName, fixtureName) {
+  return `${zoneName}::${fixtureName}`;
+}
+
+/**
+ * @param {unknown} fixture
+ * @returns {string}
+ */
+function fixtureName(fixture) {
+  return (fixture !== null && typeof fixture === 'object' && !Array.isArray(fixture))
+    ? String(/** @type {Record<string, unknown>} */ (fixture).name ?? '')
+    : '';
+}
+
+/**
  * @param {unknown[]} intents
  * @param {WebSocket} ws
  * @param {number[]} location
@@ -575,11 +709,25 @@ function fireIntentEvents(intents, ws, location) {
   ws.send(JSON.stringify({ message: { type: 'intents', location, payload: intents } }));
 }
 
+/**
+ * @param {unknown[]} fixtures
+ * @param {WebSocket} ws
+ * @param {number[]} location
+ */
+function fireFixtureEvents(fixtures, ws, location) {
+  if (ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({ message: { type: 'fixtures', location, payload: fixtures } }));
+}
+
 /** @type {Map<string, unknown>} intentState keyed by intent guid */
 const intentState = new Map();
+/** @type {Map<string, unknown>} fixtureState keyed by zoneName::fixtureName */
+const fixtureState = new Map();
 
 /** @type {Map<string, unknown>} outboundMap keyed by intent guid */
 const outboundMap = new Map();
+/** @type {Map<string, unknown>} outbound fixtures keyed by fixture id */
+const outboundFixtureMap = new Map();
 let lastSentAt = 0;
 let sendPending = false;
 let minIntervalMs = 40;
@@ -613,11 +761,30 @@ function scheduleFlush() {
 }
 
 function flushOutbound() {
-  if (outboundMap.size === 0 || !activeWs || !activeLocation) return;
+  if (!activeWs || !activeLocation) return;
   const intents = [...outboundMap.values()];
+  const fixtures = [...outboundFixtureMap.values()];
+  if (intents.length === 0 && fixtures.length === 0) return;
   outboundMap.clear();
+  outboundFixtureMap.clear();
   lastSentAt = Date.now();
-  fireIntentEvents(intents, activeWs, activeLocation);
+  if (intents.length > 0) {
+    fireIntentEvents(intents, activeWs, activeLocation);
+  }
+  if (fixtures.length > 0) {
+    fireFixtureEvents(fixtures, activeWs, activeLocation);
+  }
+}
+
+/**
+ * @param {unknown} fixtureUpdate
+ */
+function queueFixtureUpdate(fixtureUpdate) {
+  const f = /** @type {Record<string, unknown>} */ (fixtureUpdate);
+  const id = fixtureId(String(f.zoneName ?? ''), String(f.fixtureName ?? ''));
+  if (!id) return;
+  outboundFixtureMap.set(id, fixtureUpdate);
+  scheduleFlush();
 }
 
 /**
@@ -696,6 +863,8 @@ async function main() {
   let hubSpatial = null;
   /** @type {number[][]} */
   let hubZoneBoxes = [];
+  /** @type {Map<string, { zoneName: string, fixtureName: string, position: [number, number, number] }>} */
+  let hubFixtures = new Map();
 
   const [geoLon, geoLat] = cfg.GEO_LOCATION.split(/\s+/).map(Number);
   const location = [geoLon, geoLat];
@@ -713,6 +882,27 @@ async function main() {
     const updated = { ...i, position: [wx, pos[1] ?? 0, wz] };
     intentState.set(guid, updated);
     queueIntentUpdate(updated);
+  }
+
+  /**
+   * @param {string} id
+   * @param {number} wx
+   * @param {number} wz
+   */
+  function onFixtureDrag(id, wx, wz) {
+    const fixture = hubFixtures.get(id);
+    if (!fixture) return;
+    const updated = {
+      ...fixture,
+      position: [wx, fixture.position[1] ?? 0, wz],
+    };
+    hubFixtures.set(id, updated);
+    fixtureState.set(id, updated);
+    queueFixtureUpdate({
+      zoneName: fixture.zoneName,
+      fixtureName: fixture.fixtureName,
+      position: updated.position,
+    });
   }
 
   const wsUrl = toWsUrl(cfg.AMBITECTURE_HUB_URL);
@@ -744,6 +934,11 @@ async function main() {
     if (message.type === 'config') {
       const next = spatialStateFromControllerConfig(message.payload, cfg.SIMULATOR_RENDERER_GUID);
       hubZoneBoxes = zoneBoundingBoxesFromControllerConfig(message.payload, cfg.SIMULATOR_RENDERER_GUID);
+      hubFixtures = fixturesFromControllerConfig(message.payload, cfg.SIMULATOR_RENDERER_GUID);
+      fixtureState.clear();
+      for (const [id, fixture] of hubFixtures) {
+        fixtureState.set(id, fixture);
+      }
       if (next) {
         hubSpatial = next;
         setSpatialReadout('hub config received — drag on the touch overlay');
@@ -778,7 +973,18 @@ async function main() {
     setSpatialReadout('WebSocket error');
   });
 
-  setupOverlayCanvas(L, canvas, stack, () => hubSpatial, () => hubZoneBoxes, () => intentState, onIntentDrag, iframe);
+  setupOverlayCanvas(
+    L,
+    canvas,
+    stack,
+    () => hubSpatial,
+    () => hubZoneBoxes,
+    () => fixtureState,
+    () => intentState,
+    onFixtureDrag,
+    onIntentDrag,
+    iframe
+  );
 }
 
 main();

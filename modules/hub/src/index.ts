@@ -6,6 +6,7 @@ import { MessageRouter } from './MessageRouter';
 import { RegisterHandler } from './handlers/RegisterHandler';
 import { EventsHandler } from './handlers/EventsHandler';
 import { IntentsHandler } from './handlers/IntentsHandler';
+import { FixturesHandler } from './handlers/FixturesHandler';
 import { EventQueue } from './EventQueue';
 import { ProjectManager } from './ProjectManager';
 import { Logger } from './Logger';
@@ -22,13 +23,7 @@ const projectManager = new ProjectManager(
 const registry = new ConnectionRegistry();
 const router = new MessageRouter(registry);
 
-const rateLimitEventsPerSecond = serverConfig.get<number>('rateLimitEventsPerSecond');
-const eventQueue = new EventQueue(registry);
-router.register('register', new RegisterHandler(registry, projectManager, rateLimitEventsPerSecond));
-router.register('events', new EventsHandler(registry));
-router.register('intents', new IntentsHandler(registry, projectManager, eventQueue));
-
-projectManager.useProject(serverConfig.get<string>('defaultProject'), () => {
+const pushConfigsToModules = () => {
   for (const ws of registry.getByRole('renderer')) {
     const info = registry.get(ws);
     if (info && ws.readyState === ws.OPEN) {
@@ -43,6 +38,17 @@ projectManager.useProject(serverConfig.get<string>('defaultProject'), () => {
       ws.send(JSON.stringify({ message: { type: 'config', payload: config } }));
     }
   }
+};
+
+const rateLimitEventsPerSecond = serverConfig.get<number>('rateLimitEventsPerSecond');
+const eventQueue = new EventQueue(registry);
+router.register('register', new RegisterHandler(registry, projectManager, rateLimitEventsPerSecond));
+router.register('events', new EventsHandler(registry));
+router.register('intents', new IntentsHandler(registry, projectManager, eventQueue));
+router.register('fixtures', new FixturesHandler(registry, projectManager, pushConfigsToModules));
+
+projectManager.useProject(serverConfig.get<string>('defaultProject'), () => {
+  pushConfigsToModules();
 });
 
 const server = new Server(registry, router);

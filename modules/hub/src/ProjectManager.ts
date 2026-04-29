@@ -43,6 +43,12 @@ interface FixtureInstance {
   params?: Record<string, unknown>;
 }
 
+export interface FixtureMoveUpdate {
+  zoneName: string;
+  fixtureName: string;
+  position: [number, number, number];
+}
+
 export interface Zone {
   name: string;
   boundingBox?: [number, number, number, number, number, number];
@@ -64,6 +70,7 @@ export class ProjectManager {
   private fixtureProfiles: Map<string, FixtureProfile> = new Map();
   private watchers: fs.FSWatcher[] = [];
   private intentCache: Map<string, Map<string, ControllerIntent>> = new Map();
+  private runtimeZones: Zone[] = [];
 
   constructor(projectsPath: string, fixturesPath: string) {
     this.projectsPath = projectsPath;
@@ -89,7 +96,80 @@ export class ProjectManager {
     }
     this.fixtureProfiles.clear();
     this.loadReferencedFixtures();
+    this.runtimeZones = this.project.zones.map((zone) => ({
+      ...zone,
+      fixtures: zone.fixtures.map((fixture) => this.cloneFixtureInstance(fixture)),
+    }));
     Logger.info(`[project] loaded "${this.project.name}" with ${this.project.zones.length} zone(s)`);
+  }
+
+  updateFixtures(updates: FixtureMoveUpdate[]): number {
+    let changed = 0;
+    for (const update of updates) {
+      if (this.updateFixture(update)) {
+        changed += 1;
+      }
+    }
+    return changed;
+  }
+
+  private updateFixture(update: FixtureMoveUpdate): boolean {
+    const sourceZone = this.runtimeZones.find((zone) => zone.name === update.zoneName);
+    const fallbackZone = this.runtimeZones.find((zone) =>
+      zone.fixtures.some((fixture) => fixture.name === update.fixtureName)
+    );
+    const fixtureZone = sourceZone ?? fallbackZone;
+    if (!fixtureZone || !fixtureZone.boundingBox) {
+      return false;
+    }
+    const fixtureIndex = fixtureZone.fixtures.findIndex((fixture) => fixture.name === update.fixtureName);
+    if (fixtureIndex < 0) {
+      return false;
+    }
+    const destinationZone = this.runtimeZones.find((zone) =>
+      zone.boundingBox !== undefined && this.isWithinBoundingBox(update.position, zone.boundingBox)
+    );
+    if (!destinationZone || !destinationZone.boundingBox) {
+      return false;
+    }
+    const fixture = fixtureZone.fixtures[fixtureIndex];
+    if (!fixture) {
+      return false;
+    }
+    const localPosition: [number, number, number] = [
+      update.position[0] - destinationZone.boundingBox[0],
+      update.position[1] - destinationZone.boundingBox[1],
+      update.position[2] - destinationZone.boundingBox[2],
+    ];
+    if (fixtureZone.name === destinationZone.name) {
+      fixtureZone.fixtures[fixtureIndex] = { ...fixture, location: localPosition };
+      return true;
+    }
+    fixtureZone.fixtures.splice(fixtureIndex, 1);
+    destinationZone.fixtures.push({ ...fixture, location: localPosition });
+    return true;
+  }
+
+  private cloneFixtureInstance(fixture: FixtureInstance): FixtureInstance {
+    const cloned: FixtureInstance = {
+      name: fixture.name,
+      fixture: fixture.fixture,
+      location: [...fixture.location] as [number, number, number],
+      range: fixture.range,
+      ...(fixture.target !== undefined ? { target: [...fixture.target] as [number, number, number] } : {}),
+      ...(fixture.rotation !== undefined ? { rotation: [...fixture.rotation] as [number, number, number] } : {}),
+      ...(fixture.params !== undefined ? { params: { ...fixture.params } } : {}),
+    };
+    return cloned;
+  }
+
+  private isWithinBoundingBox(
+    position: [number, number, number],
+    bbox: [number, number, number, number, number, number]
+  ): boolean {
+    return position[0] >= bbox[0] && position[0] <= bbox[3]
+      && position[1] >= bbox[1] && position[1] <= bbox[4]
+      && position[2] >= bbox[2] && position[2] <= bbox[5];
   }
 
   updateIntents(controllerGuid: string, updatedIntents: ControllerIntent[]): void {
@@ -213,7 +293,7 @@ export class ProjectManager {
         .filter(([, renderers]) => renderers.includes(rendererGuid))
         .map(([zoneName]) => zoneName)
     );
-    const zones = this.project.zones.filter(z => assignedZoneNames.has(z.name));
+    const zones = this.runtimeZones.filter(z => assignedZoneNames.has(z.name));
     const result = {
       projectName: this.project.name,
       zones: zones.map((z) => this.serializeZone(z)),
@@ -230,11 +310,11 @@ export class ProjectManager {
     const match = controllers.find(c => c.guid === guid);
     const cached = this.intentCache.get(guid);
     const intents = cached ? [...cached.values()] : (match?.intents ?? []);
-    Logger.info(`[project] buildControllerConfig(${guid}): ${this.project.zones.length} zone(s), ${intents.length} intent(s)`);
+    Logger.info(`[project] buildControllerConfig(${guid}): ${this.runtimeZones.length} zone(s), ${intents.length} intent(s)`);
     return {
       projectName: this.project.name,
       zoneToRenderer: this.project['zone-to-renderer'] ?? {},
-      zones: this.project.zones.map((z) => this.serializeZone(z)),
+      zones: this.runtimeZones.map((z) => this.serializeZone(z)),
       intents,
     };
   }

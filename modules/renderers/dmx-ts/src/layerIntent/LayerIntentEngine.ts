@@ -81,8 +81,8 @@ export class LayerIntentEngine {
         this.registerResolver<Color>('light.color.xyY', {
             sample: (context, intentsByLayer) => this.sampleLightColor(context, intentsByLayer),
         });
-        this.registerResolver<number>('light.strobe', {
-            sample: (_context, intentsByLayer) => this.sampleTopLayerNumber(intentsByLayer, 'light', 'strobe'),
+        this.registerResolver<Record<string, number>>('light.aux', {
+            sample: (_context, intentsByLayer) => this.sampleTopLayerAux(intentsByLayer, 'light'),
         });
         this.registerResolver<number>('master.brightness', {
             sample: (_context, intentsByLayer) => this.sampleTopLayerNumber(intentsByLayer, 'master', 'brightness'),
@@ -176,6 +176,27 @@ export class LayerIntentEngine {
             if (typeof value === 'boolean') return value;
         }
         return undefined;
+    }
+
+    private sampleTopLayerAux(
+        intentsByLayer: ReadonlyMap<number, IntentRecord>,
+        intentType: string
+    ): Record<string, number> {
+        const layers = [...intentsByLayer.entries()]
+            .filter(([, intent]) => intent.intentType === intentType)
+            .sort(([a], [b]) => b - a);
+
+        const result: Record<string, number> = {};
+        for (const [, intent] of layers) {
+            const aux = intent.payload['aux'];
+            if (aux === null || typeof aux !== 'object' || Array.isArray(aux)) continue;
+            for (const [key, value] of Object.entries(aux as Record<string, unknown>)) {
+                if (!(key in result) && typeof value === 'number' && Number.isFinite(value)) {
+                    result[key] = value;
+                }
+            }
+        }
+        return result;
     }
 
     private computeSpatialFactor(

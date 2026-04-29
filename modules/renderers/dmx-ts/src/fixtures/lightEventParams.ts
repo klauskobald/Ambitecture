@@ -6,7 +6,7 @@ export interface LightColor {
 
 export interface LightParams {
     color?: LightColor;
-    strobe?: number;
+    aux?: Record<string, number>;
     layer?: number;
     blend?: string;
     alpha?: number;

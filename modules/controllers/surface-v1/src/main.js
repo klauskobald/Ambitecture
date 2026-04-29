@@ -819,13 +819,8 @@ function intentGuid (intent) {
  * @returns {number}
  */
 function intentLayer (intent) {
-  const params =
-    intent !== null && typeof intent === 'object' && !Array.isArray(intent)
-      ? /** @type {Record<string, unknown>} */ (intent).params
-      : undefined
-  return params !== null && typeof params === 'object' && !Array.isArray(params)
-    ? Number(/** @type {Record<string, unknown>} */ (params).layer)
-    : NaN
+  if (intent === null || typeof intent !== 'object' || Array.isArray(intent)) return NaN
+  return Number(/** @type {Record<string, unknown>} */ (intent).layer)
 }
 
 /**

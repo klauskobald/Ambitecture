@@ -14,6 +14,7 @@ function normalizeIntentColor(intent: ControllerIntent): ControllerIntent {
 function intentToEvent(intent: ControllerIntent, scheduledAt: number): object {
   return {
     guid: intent.guid,
+    layer: intent.layer,
     name: intent.name,
     class: intent.class,
     scheduled: scheduledAt,

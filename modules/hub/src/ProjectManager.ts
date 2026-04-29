@@ -24,6 +24,7 @@ export interface ControllerIntent {
   position?: [number, number, number];
   radius?: number;
   radiusFunction?: string;
+  layer?: number;
   class: string;
   params: Record<string, unknown>;
 }

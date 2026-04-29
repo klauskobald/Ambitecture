@@ -183,6 +183,55 @@ function spatialStateFromControllerConfig(payload, rendererGuid) {
 }
 
 /**
+ * @param {unknown} payload
+ * @param {string} rendererGuid
+ * @returns {number[][]}
+ */
+function zoneBoundingBoxesFromControllerConfig(payload, rendererGuid) {
+  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
+    return [];
+  }
+  const p = /** @type {Record<string, unknown>} */ (payload);
+  const zones = p.zones;
+  if (!Array.isArray(zones)) {
+    return [];
+  }
+  const zoneToRenderer = /** @type {Record<string, string[]>} */ (p.zoneToRenderer ?? {});
+  /** @type {number[][]} */
+  const matched = [];
+  for (const z of zones) {
+    if (z === null || typeof z !== 'object' || Array.isArray(z)) {
+      continue;
+    }
+    const zone = /** @type {Record<string, unknown>} */ (z);
+    const zoneName = /** @type {string} */ (zone.name);
+    const assignedRenderers = zoneToRenderer[zoneName];
+    if (!Array.isArray(assignedRenderers) || !assignedRenderers.includes(rendererGuid)) {
+      continue;
+    }
+    const bb = zone.boundingBox;
+    if (!Array.isArray(bb) || bb.length < 6) {
+      continue;
+    }
+    matched.push(bb.map((n) => Number(n)));
+  }
+  return matched;
+}
+
+/**
+ * @param {number[]} position
+ * @param {number[][]} zoneBoxes
+ * @returns {boolean}
+ */
+function isPositionInsideAnyZone(position, zoneBoxes) {
+  return zoneBoxes.some((zone) =>
+    position[0] >= zone[0] && position[0] <= zone[3]
+    && position[1] >= zone[1] && position[1] <= zone[4]
+    && position[2] >= zone[2] && position[2] <= zone[5]
+  );
+}
+
+/**
  * Map viewport `clientX`/`clientY` to meters using the touch-overlay canvas client rect and zone bbox (linear XZ).
  * @param {number} clientX
  * @param {number} clientY
@@ -211,11 +260,12 @@ function overlayClientToBboxMeters(clientX, clientY, overlayCanvas, s) {
  * @param {HTMLCanvasElement} canvas
  * @param {HTMLElement} stack
  * @param {() => HubSpatialState | null} getSpatial
+ * @param {() => number[][]} getZoneBoxes
  * @param {() => Map<number, unknown>} getIntents
  * @param {(layer: number, wx: number, wz: number) => void} onIntentDrag
  * @param {HTMLIFrameElement} iframe
  */
-function setupOverlayCanvas(L, canvas, stack, getSpatial, getIntents, onIntentDrag, iframe) {
+function setupOverlayCanvas(L, canvas, stack, getSpatial, getZoneBoxes, getIntents, onIntentDrag, iframe) {
   const ctx = canvas.getContext('2d');
   if (!ctx) {
     showConfigError('Canvas 2D context unavailable.');
@@ -401,6 +451,31 @@ function setupOverlayCanvas(L, canvas, stack, getSpatial, getIntents, onIntentDr
         }
       }
     }
+
+    const spatial = getSpatial();
+    const simRect = getSimCanvasRect();
+    if (spatial && simRect) {
+      const zoneBoxes = getZoneBoxes();
+      for (const intent of getIntents().values()) {
+        const i = /** @type {Record<string, unknown>} */ (intent);
+        const pos = /** @type {number[] | undefined} */ (i.position);
+        if (!pos || pos.length < 3) {
+          continue;
+        }
+        if (isPositionInsideAnyZone(pos, zoneBoxes)) {
+          continue;
+        }
+        const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, rect);
+        const size = 12;
+        ctx.save();
+        ctx.fillStyle = 'rgba(120, 120, 120, 0.5)';
+        ctx.strokeStyle = 'rgba(170, 170, 170, 0.8)';
+        ctx.lineWidth = 1;
+        ctx.fillRect(px - size / 2, py - size / 2, size, size);
+        ctx.strokeRect(px - size / 2, py - size / 2, size, size);
+        ctx.restore();
+      }
+    }
   }
   requestAnimationFrame(frame);
 }
@@ -441,7 +516,6 @@ function worldToCanvas(wx, wz, spatial, simRect, overlayRect) {
 function clientToWorldViaSimCanvas(clientX, clientY, spatial, simRect) {
   const nx = (clientX - simRect.left) / simRect.width;
   const ny = (clientY - simRect.top) / simRect.height;
-  if (nx < 0 || nx > 1 || ny < 0 || ny > 1) return null;
   return {
     wx: spatial.x1 + nx * (spatial.x2 - spatial.x1),
     wz: spatial.z1 + ny * (spatial.z2 - spatial.z1),
@@ -600,6 +674,8 @@ async function main() {
 
   /** @type {HubSpatialState | null} */
   let hubSpatial = null;
+  /** @type {number[][]} */
+  let hubZoneBoxes = [];
 
   const [geoLon, geoLat] = cfg.GEO_LOCATION.split(/\s+/).map(Number);
   const location = [geoLon, geoLat];
@@ -647,6 +723,7 @@ async function main() {
 
     if (message.type === 'config') {
       const next = spatialStateFromControllerConfig(message.payload, cfg.SIMULATOR_RENDERER_GUID);
+      hubZoneBoxes = zoneBoundingBoxesFromControllerConfig(message.payload, cfg.SIMULATOR_RENDERER_GUID);
       if (next) {
         hubSpatial = next;
         setSpatialReadout('hub config received — drag on the touch overlay');
@@ -681,7 +758,7 @@ async function main() {
     setSpatialReadout('WebSocket error');
   });
 
-  setupOverlayCanvas(L, canvas, stack, () => hubSpatial, () => intentState, onIntentDrag, iframe);
+  setupOverlayCanvas(L, canvas, stack, () => hubSpatial, () => hubZoneBoxes, () => intentState, onIntentDrag, iframe);
 }
 
 main();

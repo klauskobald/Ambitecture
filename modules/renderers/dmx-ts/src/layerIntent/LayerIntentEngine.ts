@@ -102,9 +102,11 @@ export class LayerIntentEngine {
     applyEvent(event: RendererEvent, zones: ConfiguredZone[]): boolean {
         if (zones.length === 0) return false;
 
+        const eventLayer = toLayer(event.params?.['layer']);
         const eventPos = event.position;
         if (eventPos && !zones.some((zone) => isPositionInZone(eventPos, zone.boundingBox))) {
-            return false;
+            const removed = this.intentsByLayer.delete(eventLayer);
+            return removed;
         }
 
         const intent = toIntentRecord(event);

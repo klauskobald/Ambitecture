@@ -46,6 +46,7 @@ interface FixtureInstance {
 export interface Zone {
   name: string;
   boundingBox?: [number, number, number, number, number, number];
+  extend?: number;
   fixtures: FixtureInstance[];
 }
 
@@ -188,8 +189,12 @@ export class ProjectManager {
   }
 
   private serializeZone(zone: Zone): Record<string, unknown> {
+    const zoneExtend = typeof zone.extend === 'number' && Number.isFinite(zone.extend)
+      ? zone.extend
+      : 1;
     const out: Record<string, unknown> = {
       name: zone.name,
+      extend: zoneExtend,
       fixtures: zone.fixtures.map((fi) => this.serializeFixtureInstance(fi)),
     };
     if (zone.boundingBox !== undefined) {

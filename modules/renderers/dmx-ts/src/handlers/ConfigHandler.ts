@@ -35,6 +35,7 @@ export interface ConfiguredFixture {
 export interface ConfiguredZone {
     name: string;
     boundingBox: [number, number, number, number, number, number];
+    extend: number;
     fixtures: ConfiguredFixture[];
 }
 
@@ -124,7 +125,8 @@ function parseConfiguredZone(raw: unknown): ConfiguredZone | null {
     const fixtures = fixtureArr
         .map((f) => parseConfiguredFixture(f, o['name'] as string))
         .filter((f): f is ConfiguredFixture => f !== null);
-    return { name: o['name'], boundingBox: o['boundingBox'], fixtures };
+    const extend = typeof o['extend'] === 'number' && Number.isFinite(o['extend']) ? o['extend'] : 1;
+    return { name: o['name'], boundingBox: o['boundingBox'], extend, fixtures };
 }
 
 export class ConfigHandler {

@@ -48,9 +48,11 @@ class LayerIntentEngine {
 
     applyEvent(event, zones) {
         if (!Array.isArray(zones) || zones.length === 0) return false;
+        const eventLayer = this._toLayer(event?.params?.layer);
         const eventPos = event.position;
         if (eventPos && !zones.some(zone => this._isPositionInZone(eventPos, zone.bbox))) {
-            return false;
+            const removed = this._intentsByLayer.delete(eventLayer);
+            return removed;
         }
 
         const intent = this._toIntentRecord(event);

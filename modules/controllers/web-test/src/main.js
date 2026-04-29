@@ -523,6 +523,9 @@ function worldToCanvas(wx, wz, spatial, simRect, overlayRect) {
 function clientToWorldViaSimCanvas(clientX, clientY, spatial, simRect) {
   const nx = (clientX - simRect.left) / simRect.width;
   const ny = (clientY - simRect.top) / simRect.height;
+  if (nx < 0 || nx > 1 || ny < 0 || ny > 1) {
+    return null;
+  }
   return {
     wx: spatial.x1 + nx * (spatial.x2 - spatial.x1),
     wz: spatial.z1 + ny * (spatial.z2 - spatial.z1),

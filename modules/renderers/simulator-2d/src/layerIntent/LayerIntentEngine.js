@@ -50,25 +50,17 @@ class LayerIntentEngine {
 
     applyEvent(event, zones) {
         if (!Array.isArray(zones) || zones.length === 0) return false;
-        const eventLayer = this._toLayer(event?.params?.layer);
+        if (!event.guid) return false;
         const eventPos = event.position;
-        const matchedZone = eventPos
-            ? zones.find(zone => this._isPositionInZone(eventPos, zone.bbox))
-            : null;
-        if (eventPos && !matchedZone) {
-            const removed = this._intentsByLayer.delete(eventLayer);
-            return removed;
+        if (eventPos && !zones.some(zone => this._isPositionInZone(eventPos, zone.bbox))) {
+            return false;
         }
-
         const intent = this._toIntentRecord(event);
-        if (matchedZone) {
-            intent.zoneName = matchedZone.name;
-        }
-        this._intentsByLayer.set(intent.layer, intent);
+        this._intentsByLayer.set(event.guid, intent);
         return true;
     }
 
-    getActiveIntentsByLayer() {
+    getActiveIntents() {
         return this._intentsByLayer;
     }
 
@@ -85,6 +77,7 @@ class LayerIntentEngine {
     _toIntentRecord(event) {
         const params = event.params && typeof event.params === 'object' ? event.params : {};
         return {
+            guid: event.guid,
             layer: this._toLayer(params.layer),
             name: typeof event.name === 'string' ? event.name : '',
             intentType: event.class,

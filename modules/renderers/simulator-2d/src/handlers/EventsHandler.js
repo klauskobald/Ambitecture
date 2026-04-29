@@ -17,7 +17,7 @@ class EventsHandler {
         if (!Array.isArray(zones) || zones.length === 0) {
             return;
         }
-        const intentsByLayer = this._layerIntentEngine.getActiveIntentsByLayer();
+        const intentsByLayer = this._layerIntentEngine.getActiveIntents();
         for (const zone of zones) {
             for (const fixture of zone.fixtures) {
                 const context = {

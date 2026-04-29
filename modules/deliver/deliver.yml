@@ -7,5 +7,5 @@ mounts:
   simulator-2d:
     root: ../renderers/simulator-2d
 
-  controller-test:
-    root: ../controllers/web-test
+  surface-v1:
+    root: ../controllers/surface-v1

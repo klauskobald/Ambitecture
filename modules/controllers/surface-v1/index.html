@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1">
+    <title>Ambitecture — Surface V1</title>
+    <link rel="stylesheet"
+          href="src/styles.css">
+  </head>
+
+  <body>
+    <div id="app-root"
+         class="app">
+      <header class="app-header">
+        <h1 class="app-title">Surface V1</h1>
+        <p id="config-error"
+           class="config-error"
+           hidden></p>
+        <p id="spatial-readout"
+           class="spatial-readout"
+           hidden></p>
+      </header>
+      <main class="app-main">
+        <div class="sim-stack"
+             id="sim-stack">
+          <iframe id="sim-frame"
+                  title="Simulator 2D (hub-driven)"></iframe>
+          <canvas id="touch-overlay"
+                  aria-hidden="true"></canvas>
+        </div>
+        <aside class="control-strip"
+               aria-label="Future controls">
+          <p class="control-strip-placeholder">Controls (coming soon)</p>
+        </aside>
+      </main>
+    </div>
+    <script type="module"
+            src="src/main.js"></script>
+  </body>
+
+</html>

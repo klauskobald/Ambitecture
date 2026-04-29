@@ -6,7 +6,7 @@ class LayerIntentEngine {
         this.registerResolver('light.color.xyY', (context, intentsByLayer) => {
             const layers = [...intentsByLayer.entries()]
                 .filter(([, intent]) => intent.intentType === 'light')
-                .sort(([a], [b]) => a - b);
+                .sort(([, a], [, b]) => a.layer - b.layer);
 
             let mixed = Color.black();
             for (const [, intent] of layers) {
@@ -52,10 +52,12 @@ class LayerIntentEngine {
         if (!Array.isArray(zones) || zones.length === 0) return false;
         if (!event.guid) return false;
         const eventPos = event.position;
-        if (eventPos && !zones.some(zone => this._isPositionInZone(eventPos, zone.bbox))) {
-            return false;
-        }
         const intent = this._toIntentRecord(event);
+        if (eventPos) {
+            const matchedZone = zones.find(zone => this._isPositionInZone(eventPos, zone.bbox));
+            if (!matchedZone) return false;
+            intent.zoneName = matchedZone.name;
+        }
         this._intentsByLayer.set(event.guid, intent);
         return true;
     }
@@ -142,7 +144,7 @@ class LayerIntentEngine {
     _sampleSpatialStrobe(context, intentsByLayer) {
         const layers = [...intentsByLayer.entries()]
             .filter(([, intent]) => intent.intentType === 'light')
-            .sort(([a], [b]) => a - b);
+            .sort(([, a], [, b]) => a.layer - b.layer);
         let result = 0;
         for (const [, intent] of layers) {
             const value = intent.payload?.strobe;
@@ -163,7 +165,7 @@ class LayerIntentEngine {
     _sampleTopLayerNumber(intentsByLayer, intentType, fieldName) {
         const layers = [...intentsByLayer.entries()]
             .filter(([, intent]) => intent.intentType === intentType)
-            .sort(([a], [b]) => b - a);
+            .sort(([, a], [, b]) => b.layer - a.layer);
         for (const [, intent] of layers) {
             const value = intent.payload?.[fieldName];
             if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -174,7 +176,7 @@ class LayerIntentEngine {
     _sampleTopLayerBoolean(intentsByLayer, intentType, fieldName) {
         const layers = [...intentsByLayer.entries()]
             .filter(([, intent]) => intent.intentType === intentType)
-            .sort(([a], [b]) => b - a);
+            .sort(([, a], [, b]) => b.layer - a.layer);
         for (const [, intent] of layers) {
             const value = intent.payload?.[fieldName];
             if (typeof value === 'boolean') return value;
@@ -185,7 +187,7 @@ class LayerIntentEngine {
     _sampleTopLayerAux(intentsByLayer, intentType) {
         const layers = [...intentsByLayer.entries()]
             .filter(([, intent]) => intent.intentType === intentType)
-            .sort(([a], [b]) => b - a);
+            .sort(([, a], [, b]) => b.layer - a.layer);
         const result = {};
         for (const [, intent] of layers) {
             const aux = intent.payload?.aux;

@@ -100,21 +100,18 @@ export function sendSceneActivate (sceneName) {
 }
 
 /**
- * @param {Array<{ name: string, intents: string[] }>} scenes
+ * @param {string} key
+ * @param {unknown} data
  */
-export function sendSceneUpdate (scenes) {
+export function sendSaveProject (key, data) {
   if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation)
     return
-  const hubScenes = scenes.map(s => ({
-    name: s.name,
-    intents: s.intents.map(guid => ({ guid }))
-  }))
   activeWs.send(
     JSON.stringify({
       message: {
-        type: 'scene:update',
+        type: 'saveProject',
         location: activeLocation,
-        payload: { scenes: hubScenes }
+        payload: { key, data }
       }
     })
   )

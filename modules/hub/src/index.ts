@@ -8,6 +8,7 @@ import { EventsHandler } from './handlers/EventsHandler';
 import { IntentsHandler } from './handlers/IntentsHandler';
 import { FixturesHandler } from './handlers/FixturesHandler';
 import { SceneHandler } from './handlers/SceneHandler';
+import { SaveProjectHandler } from './handlers/SaveProjectHandler';
 import { EventQueue } from './EventQueue';
 import { ProjectManager } from './ProjectManager';
 import { Logger } from './Logger';
@@ -49,7 +50,7 @@ router.register('intents', new IntentsHandler(registry, projectManager, eventQue
 router.register('fixtures', new FixturesHandler(registry, projectManager, pushConfigsToModules));
 const sceneHandler = new SceneHandler(registry, projectManager, eventQueue, pushConfigsToModules);
 router.register('scene:activate', sceneHandler);
-router.register('scene:update', sceneHandler);
+router.register('saveProject', new SaveProjectHandler(projectManager, pushConfigsToModules));
 
 projectManager.useProject(serverConfig.get<string>('defaultProject'), () => {
   pushConfigsToModules();

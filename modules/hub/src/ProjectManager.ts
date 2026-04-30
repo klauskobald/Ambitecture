@@ -85,7 +85,7 @@ export class ProjectManager {
   private activeSceneName: string | null = null;
   private activeSceneIntents: ControllerIntent[] = [];
   private runtimeZones: Zone[] = [];
-  private runtimeScenes: Scene[] | null = null;
+  private overrides: Map<string, unknown> = new Map();
 
   constructor(projectsPath: string, fixturesPath: string) {
     this.projectsPath = projectsPath;
@@ -122,7 +122,7 @@ export class ProjectManager {
 
     this.activeSceneName = null;
     this.activeSceneIntents = [];
-    this.runtimeScenes = null;
+    this.overrides.clear();
 
     this.fixtureProfiles.clear();
     this.loadReferencedFixtures();
@@ -227,17 +227,45 @@ export class ProjectManager {
     return [...merged.values()];
   }
 
-  private getScenes(): Scene[] {
-    return this.runtimeScenes ?? (this.project?.scenes ?? []);
+  setOverride(key: string, data: unknown): void {
+    this.overrides.set(key, data);
+    Logger.info(`[project] override set for key "${key}"`);
   }
 
-  updateScenes(scenes: Scene[]): void {
-    this.runtimeScenes = scenes;
-    Logger.info(`[project] runtime scenes updated: ${scenes.length} scene(s)`);
+  private applyOverrides(base: Record<string, unknown>): Record<string, unknown> {
+    let result = base;
+    const keys = [...this.overrides.keys()].sort();
+    for (const key of keys) {
+      const value = this.overrides.get(key);
+      result = this._setAtPath(result, key.split('.'), value) as Record<string, unknown>;
+    }
+    return result;
+  }
+
+  private _setAtPath(current: unknown, segments: string[], value: unknown): unknown {
+    if (segments.length === 0) return value;
+    const first = segments[0]!;
+    const rest = segments.slice(1);
+
+    if (Array.isArray(current)) {
+      const idx = parseInt(first, 10);
+      if (isNaN(idx) || idx < 0) return current;
+      const clone = [...current];
+      clone[idx] = this._setAtPath(clone[idx], rest, value);
+      return clone;
+    }
+
+    if (current !== null && typeof current === 'object') {
+      const obj = current as Record<string, unknown>;
+      return { ...obj, [first]: this._setAtPath(obj[first], rest, value) };
+    }
+
+    return { [first]: this._setAtPath(undefined, rest, value) };
   }
 
   setActiveScene(sceneName: string): ControllerIntent[] {
-    const scene = this.getScenes().find(s => s.name === sceneName);
+    const scenes = this.project?.scenes ?? [];
+    const scene = scenes.find(s => s.name === sceneName);
     if (!scene) {
       Logger.warn(`[project] Scene "${sceneName}" not found`);
       return [];
@@ -259,7 +287,7 @@ export class ProjectManager {
   }
 
   getSceneNames(): string[] {
-    return this.getScenes().map(s => s.name);
+    return (this.project?.scenes ?? []).map(s => s.name);
   }
 
   private watchAll(name: string, callback: () => void): void {
@@ -375,7 +403,7 @@ export class ProjectManager {
     return result;
   }
 
-  buildControllerConfig(guid: string): object {
+  buildControllerConfig(guid: string): Record<string, unknown> {
     if (!this.project) {
       throw new Error('[project] No project loaded — call useProject() first');
     }
@@ -404,9 +432,9 @@ export class ProjectManager {
       }
     }
 
-    const scenes = this.getScenes();
+    const scenes = this.project.scenes ?? [];
     Logger.info(`[project] buildControllerConfig(${guid}): ${this.runtimeZones.length} zone(s), ${intents.length} intent(s), ${scenes.length} scene(s)`);
-    return {
+    const base = {
       projectName: this.project.name,
       zoneToRenderer: this.project['zone-to-renderer'] ?? {},
       zones: this.runtimeZones.map((z) => this.serializeZone(z)),
@@ -414,5 +442,6 @@ export class ProjectManager {
       scenes,
       ...passThrough,
     };
+    return this.applyOverrides(base);
   }
 }

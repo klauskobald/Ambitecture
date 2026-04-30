@@ -74,7 +74,7 @@ export class RegisterHandler implements MessageHandler {
       }
     } else if (role === 'controller') {
       const config = {
-        ...(this.projectManager.buildControllerConfig(guid) as object),
+        ...this.projectManager.buildControllerConfig(guid),
         rateLimitEventsPerSecond: this.rateLimitEventsPerSecond,
       };
       ws.send(JSON.stringify({ message: { type: 'config', payload: config } }));

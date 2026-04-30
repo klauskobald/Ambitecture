@@ -1,7 +1,7 @@
 import { ConfigSectionEditor } from '../core/ConfigSectionEditor.js'
 import { intentName } from '../core/stores.js'
 import { projectGraph } from '../core/projectGraph.js'
-import { sendSceneActivate, sendSceneUpdate } from '../core/outboundQueue.js'
+import { sendSceneActivate, sendSaveProject } from '../core/outboundQueue.js'
 
 export class ScenesPane {
   constructor () {
@@ -19,11 +19,11 @@ export class ScenesPane {
       onAdd: (name) => {
         const active = projectGraph.getActiveSceneName()
         projectGraph.addScene(name, active)
-        sendSceneUpdate(projectGraph.getScenesData())
+        sendSaveProject('scenes', toHubScenes(projectGraph.getScenesData()))
       },
       onRemove: (name) => {
         projectGraph.removeScene(name)
-        sendSceneUpdate(projectGraph.getScenesData())
+        sendSaveProject('scenes', toHubScenes(projectGraph.getScenesData()))
       },
       renderSection: (container, activeScene) => {
         this._renderIntentToggles(container, activeScene)
@@ -83,9 +83,17 @@ export class ScenesPane {
       btn.textContent = intentName(intent) || guid
       btn.addEventListener('click', () => {
         projectGraph.toggleSceneIntent(activeScene, guid)
-        sendSceneUpdate(projectGraph.getScenesData())
+        sendSaveProject('scenes', toHubScenes(projectGraph.getScenesData()))
       })
       container.appendChild(btn)
     }
   }
+}
+
+/**
+ * @param {Array<{ name: string, intents: string[] }>} scenes
+ * @returns {Array<{ name: string, intents: Array<{ guid: string }> }>}
+ */
+function toHubScenes (scenes) {
+  return scenes.map(s => ({ name: s.name, intents: s.intents.map(guid => ({ guid })) }))
 }

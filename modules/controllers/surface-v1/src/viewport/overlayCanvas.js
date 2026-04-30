@@ -18,6 +18,7 @@ import { noopPolicy } from './interactionPolicies.js'
 /**
  * @typedef {import('../core/stores.js').HubSpatialState} HubSpatialState
  * @typedef {import('./interactionPolicies.js').InteractionPolicy} InteractionPolicy
+ * @typedef {import('./selectionManager.js').SelectionManager<unknown>} AnySelectionManager
  */
 
 const DRAG_HIT_RADIUS_PX = 28
@@ -36,6 +37,8 @@ export class OverlayCanvas {
     this._L = layoutConfig
     /** @type {InteractionPolicy} */
     this._policy = noopPolicy
+    /** @type {AnySelectionManager | null} */
+    this._selectionManager = null
 
     const ctx = canvas.getContext('2d')
     if (!ctx) throw new Error('Canvas 2D context unavailable.')
@@ -62,6 +65,16 @@ export class OverlayCanvas {
     this._policy = policy
   }
 
+  /**
+   * When a SelectionManager is active it takes full control of pointer events
+   * (no dragging) and draws its bubbles on top of the normal canvas content.
+   * Pass null to deactivate.
+   * @param {AnySelectionManager | null} manager
+   */
+  setSelectionManager (manager) {
+    this._selectionManager = manager
+  }
+
   resize () {
     const rect = this._stack.getBoundingClientRect()
     const dpr = window.devicePixelRatio || 1
@@ -85,6 +98,17 @@ export class OverlayCanvas {
   _onPointerDown (ev) {
     if (ev.button !== undefined && ev.button !== 0) return
     const { x, y } = this._canvasPoint(ev)
+
+    // Selection mode: route taps to the manager, block all drag interaction
+    if (this._selectionManager) {
+      const spatial = getSpatial()
+      const simRect = this._viewport.getSimCanvasRect()
+      if (spatial && simRect) {
+        this._selectionManager.handleTap(x, y, spatial, simRect, this._canvas.getBoundingClientRect())
+      }
+      return
+    }
+
     const spatial = getSpatial()
     if (spatial) {
       const fixtureHit = this._findFixtureAt(x, y, spatial)
@@ -343,6 +367,11 @@ export class OverlayCanvas {
         ctx.fillText(name, px, py + size / 2 + 12)
       }
       ctx.restore()
+    }
+
+    // selection manager bubbles — drawn last so they appear on top
+    if (this._selectionManager) {
+      this._selectionManager.draw(ctx, spatial, simRect, rect)
     }
   }
 }

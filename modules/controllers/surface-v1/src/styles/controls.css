@@ -35,6 +35,42 @@
   }
 }
 
+/* ── Buttons ────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg-raised);
+  color: var(--color-text);
+  font-size: 0.85rem;
+  font-family: inherit;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+}
+
+.btn:hover {
+  background: #1e1e1e;
+  border-color: #555;
+}
+
+.btn--active {
+  background: var(--color-accent-dim);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.btn-mode-toggle {
+  margin: 0.5rem;
+  min-width: 8rem;
+  min-height: 2.5rem;
+}
+
 /* ── Intent list (Edit pane) ────────────────────────────────── */
 
 .intent-list {

@@ -1,24 +1,24 @@
-import { editPolicy } from '../viewport/interactionPolicies.js'
-import { getIntents, intentGuid, intentName, getAllowances, setAllowance, subscribeToStores } from '../core/stores.js'
+import { editPolicy, noopPolicy } from '../viewport/interactionPolicies.js'
+import { getIntents, intentGuid, getAllowances, setAllowance } from '../core/stores.js'
+import { SelectionManager } from '../viewport/selectionManager.js'
 
-/**
- * Edit pane — full drag access (intents + fixtures) plus per-intent Perform enable toggles.
- */
 export class EditPane {
   /**
    * @param {import('../viewport/overlayCanvas.js').OverlayCanvas} overlay
    */
   constructor (overlay) {
     this._overlay = overlay
-    this._unsubscribe = null
+    this._enableModeActive = false
 
     this._el = document.createElement('div')
     this._el.className = 'pane edit-pane'
     this._el.hidden = true
 
-    this._intentList = document.createElement('div')
-    this._intentList.className = 'intent-list'
-    this._el.appendChild(this._intentList)
+    this._toggleBtn = document.createElement('button')
+    this._toggleBtn.className = 'btn btn-mode-toggle'
+    this._toggleBtn.textContent = 'Perform Enable'
+    this._toggleBtn.addEventListener('click', () => this._toggleEnableMode())
+    this._el.appendChild(this._toggleBtn)
   }
 
   /** @param {HTMLElement} container */
@@ -30,53 +30,82 @@ export class EditPane {
     this._overlay.setPolicy(editPolicy)
     this._overlay.resize()
     this._el.hidden = false
-    this._unsubscribe = subscribeToStores(() => this._render())
-    this._render()
   }
 
   deactivate () {
-    this._unsubscribe?.()
-    this._unsubscribe = null
+    this._exitEnableMode()
     this._el.hidden = true
   }
 
-  _render () {
-    const intents = getIntents()
-    const allowances = getAllowances()
-    const list = this._intentList
-    list.innerHTML = ''
-
-    if (intents.size === 0) {
-      const empty = document.createElement('p')
-      empty.className = 'intent-list-empty'
-      empty.textContent = 'No intents received yet.'
-      list.appendChild(empty)
-      return
+  _toggleEnableMode () {
+    if (this._enableModeActive) {
+      this._exitEnableMode()
+    } else {
+      this._enterEnableMode()
     }
+  }
 
-    for (const intent of intents.values()) {
-      const guid = intentGuid(intent)
-      const name = intentName(intent) || guid
-      const performEnabled = !!(allowances[guid]?.performEnabled)
+  _enterEnableMode () {
+    this._enableModeActive = true
+    this._overlay.setPolicy(noopPolicy)
+    this._overlay.setSelectionManager(this._buildSelectionManager())
+    this._toggleBtn.classList.add('btn--active')
+    this._toggleBtn.textContent = 'Done'
+  }
 
-      const row = document.createElement('label')
-      row.className = 'intent-row'
+  _exitEnableMode () {
+    if (!this._enableModeActive) return
+    this._enableModeActive = false
+    this._overlay.setPolicy(editPolicy)
+    this._overlay.setSelectionManager(null)
+    this._toggleBtn.classList.remove('btn--active')
+    this._toggleBtn.textContent = 'Perform Enable'
+  }
 
-      const toggle = document.createElement('input')
-      toggle.type = 'checkbox'
-      toggle.className = 'intent-perform-toggle'
-      toggle.checked = performEnabled
-      toggle.addEventListener('change', () => {
-        setAllowance(guid, 'performEnabled', toggle.checked)
-      })
+  _buildSelectionManager () {
+    return new SelectionManager({
+      getObjects: () => getIntents().entries(),
 
-      const label = document.createElement('span')
-      label.className = 'intent-name'
-      label.textContent = name
+      getWorldPos (obj) {
+        const i = /** @type {Record<string, unknown>} */ (obj)
+        const pos = /** @type {number[] | undefined} */ (i.position)
+        if (!pos || pos.length < 3) return null
+        return { wx: pos[0], wz: pos[2] }
+      },
 
-      row.appendChild(toggle)
-      row.appendChild(label)
-      list.appendChild(row)
-    }
+      onTap (id, obj) {
+        const guid = intentGuid(obj)
+        const current = !!(getAllowances()[guid]?.performEnabled)
+        setAllowance(guid, 'performEnabled', !current)
+      },
+
+      drawBubble (ctx, px, py, id, obj) {
+        const guid = intentGuid(obj)
+        const enabled = !!(getAllowances()[guid]?.performEnabled)
+        const BUBBLE_R = 24
+
+        ctx.save()
+
+        // bubble fill
+        ctx.beginPath()
+        ctx.arc(px, py, BUBBLE_R, 0, Math.PI * 2)
+        ctx.fillStyle = enabled ? 'rgba(85, 170, 255, 0.88)' : 'rgba(30, 30, 30, 0.82)'
+        ctx.fill()
+
+        // bubble stroke
+        ctx.strokeStyle = enabled ? '#5af' : '#444'
+        ctx.lineWidth = 2
+        ctx.stroke()
+
+        // ON / OFF label
+        ctx.fillStyle = enabled ? '#fff' : '#777'
+        ctx.font = 'bold 11px system-ui, sans-serif'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(enabled ? 'ON' : 'OFF', px, py)
+
+        ctx.restore()
+      }
+    })
   }
 }

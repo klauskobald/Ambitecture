@@ -85,6 +85,7 @@ export class ProjectManager {
   private activeSceneName: string | null = null;
   private activeSceneIntents: ControllerIntent[] = [];
   private runtimeZones: Zone[] = [];
+  private runtimeScenes: Scene[] | null = null;
 
   constructor(projectsPath: string, fixturesPath: string) {
     this.projectsPath = projectsPath;
@@ -121,6 +122,7 @@ export class ProjectManager {
 
     this.activeSceneName = null;
     this.activeSceneIntents = [];
+    this.runtimeScenes = null;
 
     this.fixtureProfiles.clear();
     this.loadReferencedFixtures();
@@ -225,8 +227,17 @@ export class ProjectManager {
     return [...merged.values()];
   }
 
+  private getScenes(): Scene[] {
+    return this.runtimeScenes ?? (this.project?.scenes ?? []);
+  }
+
+  updateScenes(scenes: Scene[]): void {
+    this.runtimeScenes = scenes;
+    Logger.info(`[project] runtime scenes updated: ${scenes.length} scene(s)`);
+  }
+
   setActiveScene(sceneName: string): ControllerIntent[] {
-    const scene = (this.project?.scenes ?? []).find(s => s.name === sceneName);
+    const scene = this.getScenes().find(s => s.name === sceneName);
     if (!scene) {
       Logger.warn(`[project] Scene "${sceneName}" not found`);
       return [];
@@ -248,7 +259,7 @@ export class ProjectManager {
   }
 
   getSceneNames(): string[] {
-    return (this.project?.scenes ?? []).map(s => s.name);
+    return this.getScenes().map(s => s.name);
   }
 
   private watchAll(name: string, callback: () => void): void {
@@ -393,13 +404,14 @@ export class ProjectManager {
       }
     }
 
-    Logger.info(`[project] buildControllerConfig(${guid}): ${this.runtimeZones.length} zone(s), ${intents.length} intent(s), ${(this.project.scenes ?? []).length} scene(s)`);
+    const scenes = this.getScenes();
+    Logger.info(`[project] buildControllerConfig(${guid}): ${this.runtimeZones.length} zone(s), ${intents.length} intent(s), ${scenes.length} scene(s)`);
     return {
       projectName: this.project.name,
       zoneToRenderer: this.project['zone-to-renderer'] ?? {},
       zones: this.runtimeZones.map((z) => this.serializeZone(z)),
       intents,
-      scenes: this.project.scenes ?? [],
+      scenes,
       ...passThrough,
     };
   }

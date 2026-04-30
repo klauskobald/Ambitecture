@@ -38,11 +38,15 @@ export class ConfigSectionEditor {
       onAdd: (name) => options.onAdd?.(name),
       onRemove: (name) => options.onRemove?.(name),
     })
-    this._manager.mount(this._el)
 
     this._body = document.createElement('div')
     this._body.className = 'config-section-editor__body'
-    this._el.appendChild(this._body)
+
+    const content = document.createElement('div')
+    content.className = 'config-section-editor__content'
+    this._manager.mount(content)
+    content.appendChild(this._body)
+    this._el.appendChild(content)
   }
 
   /** @param {HTMLElement} container */

@@ -72,6 +72,9 @@ class ProjectGraph {
     return this._data.scenes.find(s => s.name === sceneName)?.intents ?? []
   }
 
+  /** @returns {Array<{ name: string, intents: string[] }>} */
+  getScenesData () { return this._data.scenes }
+
   /** @returns {string | null} */
   getActiveSceneName () { return this._data.activeSceneName }
 
@@ -85,6 +88,51 @@ class ProjectGraph {
   /** @param {string} name */
   setActiveScene (name) {
     this._data.activeSceneName = name
+    this._notify()
+  }
+
+  /**
+   * @param {string} name
+   * @param {string | null} [cloneFromName] scene name to clone intents from
+   * @returns {boolean} true if added, false if duplicate name
+   */
+  addScene (name, cloneFromName = null) {
+    if (this._data.scenes.some(s => s.name === name)) return false
+    let intents = /** @type {string[]} */ ([])
+    if (cloneFromName) {
+      const source = this._data.scenes.find(s => s.name === cloneFromName)
+      if (source) intents = [...source.intents]
+    }
+    this._data.scenes.push({ name, intents })
+    this._data.activeSceneName = name
+    this._notify()
+    return true
+  }
+
+  /** @param {string} name */
+  removeScene (name) {
+    const idx = this._data.scenes.findIndex(s => s.name === name)
+    if (idx === -1) return
+    this._data.scenes.splice(idx, 1)
+    if (this._data.activeSceneName === name) {
+      this._data.activeSceneName = this._data.scenes[0]?.name ?? null
+    }
+    this._notify()
+  }
+
+  /**
+   * @param {string} sceneName
+   * @param {string} guid
+   */
+  toggleSceneIntent (sceneName, guid) {
+    const scene = this._data.scenes.find(s => s.name === sceneName)
+    if (!scene) return
+    const idx = scene.intents.indexOf(guid)
+    if (idx === -1) {
+      scene.intents.push(guid)
+    } else {
+      scene.intents.splice(idx, 1)
+    }
     this._notify()
   }
 

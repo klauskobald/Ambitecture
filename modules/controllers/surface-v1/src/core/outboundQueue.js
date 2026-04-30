@@ -89,6 +89,15 @@ export function sendSceneActivate (sceneName) {
 }
 
 /**
+ * @param {Array<{ name: string, intents: string[] }>} scenes
+ */
+export function sendSceneUpdate (scenes) {
+  if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation) return
+  const hubScenes = scenes.map(s => ({ name: s.name, intents: s.intents.map(guid => ({ guid })) }))
+  activeWs.send(JSON.stringify({ message: { type: 'scene:update', location: activeLocation, payload: { scenes: hubScenes } } }))
+}
+
+/**
  * @param {unknown[]} fixtures
  * @param {WebSocket} ws
  * @param {number[]} location

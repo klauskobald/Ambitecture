@@ -139,19 +139,6 @@ body.nav-open .app-nav {
   overflow-y: auto;
 }
 
-@media (min-width: 600px) {
-  .scenes-pane .config-section-editor {
-    flex-direction: row;
-    gap: 1.5rem;
-  }
-
-  .scenes-pane .config-manager {
-    flex: 0 0 auto;
-    min-width: 200px;
-    max-width: 280px;
-  }
-}
-
 /* ── Status readouts ─────────────────────────────────────────── */
 
 .config-error {

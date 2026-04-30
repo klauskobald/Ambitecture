@@ -5,14 +5,30 @@ import { MessageHandler, WsMessage } from '../MessageRouter';
 import { ProjectManager } from '../ProjectManager';
 import { EventQueue } from '../EventQueue';
 import { normalizeIntentColor, intentToEvent, zeroAlphaEvent } from './intentHelpers';
+import { Scene } from '../ProjectManager';
 
 interface SceneActivatePayload {
   sceneName: string;
 }
 
+interface SceneUpdatePayload {
+  scenes: Scene[];
+}
+
 function isSceneActivatePayload(payload: unknown): payload is SceneActivatePayload {
   if (!payload || typeof payload !== 'object') return false;
   return typeof (payload as Record<string, unknown>)['sceneName'] === 'string';
+}
+
+function isSceneUpdatePayload(payload: unknown): payload is SceneUpdatePayload {
+  if (!payload || typeof payload !== 'object') return false;
+  const p = payload as Record<string, unknown>;
+  if (!Array.isArray(p['scenes'])) return false;
+  return (p['scenes'] as unknown[]).every(s => {
+    if (!s || typeof s !== 'object') return false;
+    const scene = s as Record<string, unknown>;
+    return typeof scene['name'] === 'string' && Array.isArray(scene['intents']);
+  });
 }
 
 export class SceneHandler implements MessageHandler {
@@ -85,7 +101,13 @@ export class SceneHandler implements MessageHandler {
         break;
       }
       case 'scene:update': {
-        Logger.info('[scene] scene:update received (not yet implemented)');
+        if (!isSceneUpdatePayload(message.payload)) {
+          Logger.warn('[scene] invalid scene:update payload');
+          return;
+        }
+        this.projectManager.updateScenes(message.payload.scenes);
+        this.onSceneChanged();
+        Logger.info(`[scene] controller ${info.guid} updated scenes: ${message.payload.scenes.length} scene(s)`);
         break;
       }
       default:

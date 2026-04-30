@@ -28,7 +28,7 @@ export class ConfigManager {
 
     this._titleEl = document.createElement('span')
     this._titleEl.className = 'config-manager-title'
-    this._titleEl.textContent = options.collectionName + 's'
+    this._titleEl.textContent = options.collectionName
 
     this._addBtn = document.createElement('button')
     this._addBtn.className = 'btn'

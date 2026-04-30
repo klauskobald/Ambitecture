@@ -76,7 +76,9 @@ function flushOutbound () {
  */
 function sendIntents (intents, ws, location) {
   if (ws.readyState !== WebSocket.OPEN) return
-  ws.send(JSON.stringify({ message: { type: 'intents', location, payload: intents } }))
+  ws.send(
+    JSON.stringify({ message: { type: 'intents', location, payload: intents } })
+  )
 }
 
 /**
@@ -84,17 +86,38 @@ function sendIntents (intents, ws, location) {
  * @param {string} sceneName
  */
 export function sendSceneActivate (sceneName) {
-  if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation) return
-  activeWs.send(JSON.stringify({ message: { type: 'scene:activate', location: activeLocation, payload: { sceneName } } }))
+  if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation)
+    return
+  activeWs.send(
+    JSON.stringify({
+      message: {
+        type: 'scene:activate',
+        location: activeLocation,
+        payload: { sceneName }
+      }
+    })
+  )
 }
 
 /**
  * @param {Array<{ name: string, intents: string[] }>} scenes
  */
 export function sendSceneUpdate (scenes) {
-  if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation) return
-  const hubScenes = scenes.map(s => ({ name: s.name, intents: s.intents.map(guid => ({ guid })) }))
-  activeWs.send(JSON.stringify({ message: { type: 'scene:update', location: activeLocation, payload: { scenes: hubScenes } } }))
+  if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation)
+    return
+  const hubScenes = scenes.map(s => ({
+    name: s.name,
+    intents: s.intents.map(guid => ({ guid }))
+  }))
+  activeWs.send(
+    JSON.stringify({
+      message: {
+        type: 'scene:update',
+        location: activeLocation,
+        payload: { scenes: hubScenes }
+      }
+    })
+  )
 }
 
 /**
@@ -104,5 +127,9 @@ export function sendSceneUpdate (scenes) {
  */
 function sendFixtures (fixtures, ws, location) {
   if (ws.readyState !== WebSocket.OPEN) return
-  ws.send(JSON.stringify({ message: { type: 'fixtures', location, payload: fixtures } }))
+  ws.send(
+    JSON.stringify({
+      message: { type: 'fixtures', location, payload: fixtures }
+    })
+  )
 }

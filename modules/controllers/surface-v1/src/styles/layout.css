@@ -120,6 +120,13 @@ body.nav-open .app-nav {
   box-sizing: border-box;
 }
 
+/* When sim-area is hidden (Setup pane), let pane-host expand to fill the space */
+.sim-area[hidden] + .pane-host,
+.sim-area[hidden] ~ .pane-host {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .pane {
   height: 100%;
   box-sizing: border-box;

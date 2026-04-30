@@ -1,16 +1,8 @@
-import { noopPolicy } from '../viewport/interactionPolicies.js'
-
 /**
- * Setup pane — scaffold for future configuration features.
- * The simulator is visible but non-interactive while this pane is active.
+ * Setup pane — generic configuration scaffold, no simulator.
  */
 export class SetupPane {
-  /**
-   * @param {import('../viewport/overlayCanvas.js').OverlayCanvas} overlay
-   */
-  constructor (overlay) {
-    this._overlay = overlay
-
+  constructor () {
     this._el = document.createElement('div')
     this._el.className = 'pane setup-pane'
     this._el.hidden = true
@@ -28,11 +20,14 @@ export class SetupPane {
   }
 
   activate () {
-    this._overlay.setPolicy(noopPolicy)
+    const simArea = document.getElementById('sim-area')
+    if (simArea) simArea.hidden = true
     this._el.hidden = false
   }
 
   deactivate () {
+    const simArea = document.getElementById('sim-area')
+    if (simArea) simArea.hidden = false
     this._el.hidden = true
   }
 }

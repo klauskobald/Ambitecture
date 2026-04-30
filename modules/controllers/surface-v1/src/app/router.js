@@ -74,7 +74,7 @@ async function createPane (paneName) {
     }
     case 'setup': {
       const { SetupPane } = await import('../panes/setupPane.js')
-      return new SetupPane(overlay)
+      return new SetupPane()
     }
     default:
       throw new Error(`Unknown pane: ${paneName}`)

@@ -19,7 +19,7 @@ let activePaneName = null
 export function initRouter (overlay) {
   paneCache.set('perform', { instance: null })
   paneCache.set('edit', { instance: null })
-  paneCache.set('setup', { instance: null })
+  paneCache.set('scenes', { instance: null })
 
   // Stash overlay so factory functions can use it
   routerOverlay = overlay
@@ -72,9 +72,9 @@ async function createPane (paneName) {
       const { EditPane } = await import('../panes/editPane.js')
       return new EditPane(overlay)
     }
-    case 'setup': {
-      const { SetupPane } = await import('../panes/setupPane.js')
-      return new SetupPane()
+    case 'scenes': {
+      const { ScenesPane } = await import('../panes/scenesPane.js')
+      return new ScenesPane()
     }
     default:
       throw new Error(`Unknown pane: ${paneName}`)

@@ -1,5 +1,5 @@
 import { loadConfig, applyLayoutCssVars } from '../core/config.js'
-import { processHubConfig, reconcileIntents, getIntents } from '../core/stores.js'
+import { projectGraph } from '../core/projectGraph.js'
 import { setSocket, queueIntentUpdate, setMinInterval } from '../core/outboundQueue.js'
 import { connect } from '../core/socket.js'
 import { SimulatorViewport } from '../viewport/simulatorViewport.js'
@@ -51,29 +51,34 @@ async function main () {
       switch (message.type) {
         case 'config': {
           const payload = message.payload
-          const { spatial } = processHubConfig(payload, cfg.SIMULATOR_RENDERER_GUID)
+          projectGraph.applyConfig(payload, cfg.SIMULATOR_RENDERER_GUID)
           const rateLimit = /** @type {Record<string,unknown>} */ (payload ?? {}).rateLimitEventsPerSecond
           if (typeof rateLimit === 'number' && rateLimit > 0) setMinInterval(1000 / rateLimit)
           const intents = Array.isArray(/** @type {Record<string,unknown>} */ (payload ?? {}).intents)
             ? /** @type {unknown[]} */ (/** @type {Record<string,unknown>} */ (payload).intents)
             : []
-          reconcileIntents(intents, queueIntentUpdate)
+          projectGraph.reconcileIntents(intents, queueIntentUpdate)
           setSpatialReadout(
-            spatial
+            projectGraph.getSpatial()
               ? 'hub config received — drag on the touch overlay'
               : 'config received but no zone for SIMULATOR_RENDERER_GUID'
           )
           break
         }
         case 'refresh': {
-          const all = [...getIntents().values()]
-          // re-send all known intents so hub can refresh renderer state
-          for (const intent of all) queueIntentUpdate(intent)
+          for (const intent of projectGraph.getIntents().values()) queueIntentUpdate(intent)
           break
         }
         case 'intents': {
           const incoming = Array.isArray(message.payload) ? /** @type {unknown[]} */ (message.payload) : []
-          reconcileIntents(incoming, null, { pruneMissing: false })
+          projectGraph.reconcileIntents(incoming, null, { pruneMissing: false })
+          break
+        }
+        case 'scene:state': {
+          const sp = /** @type {Record<string, unknown> | null} */ (message.payload)
+          if (sp && typeof sp.sceneName === 'string') {
+            projectGraph.setActiveScene(sp.sceneName)
+          }
           break
         }
       }
@@ -85,6 +90,12 @@ async function main () {
   })
 
   activateDefaultNav(paneName => navigateTo(paneName))
+
+  window.dev = {
+    projectState () {
+      console.log(JSON.stringify(projectGraph.toJSON(), null, 2))
+    }
+  }
 }
 
 main()

@@ -1,8 +1,6 @@
 import { editPolicy, noopPolicy } from '../viewport/interactionPolicies.js'
-import {
-  getIntents, intentGuid, getAllowances, setAllowance,
-  updateIntentColor
-} from '../core/stores.js'
+import { intentGuid } from '../core/stores.js'
+import { projectGraph } from '../core/projectGraph.js'
 import { queueIntentUpdate } from '../core/outboundQueue.js'
 import { SelectionManager } from '../viewport/selectionManager.js'
 import { ColorPicker } from '../ui/colorPicker.js'
@@ -126,7 +124,7 @@ export class EditPane {
 
   _buildPerformEnableManager () {
     return new SelectionManager({
-      getObjects: () => getIntents().entries(),
+      getObjects: () => projectGraph.getIntents().entries(),
       getWorldPos (obj) {
         const i = /** @type {Record<string, unknown>} */ (obj)
         const pos = /** @type {number[] | undefined} */ (i.position)
@@ -135,11 +133,11 @@ export class EditPane {
       },
       onTap (id, obj) {
         const guid = intentGuid(obj)
-        setAllowance(guid, 'performEnabled', !getAllowances()[guid]?.performEnabled)
+        projectGraph.setIntentConfig(guid, 'performEnabled', !projectGraph.getIntentConfig(guid).performEnabled)
       },
       drawBubble (ctx, px, py, id, obj) {
         const guid = intentGuid(obj)
-        const enabled = !!(getAllowances()[guid]?.performEnabled)
+        const enabled = !!(projectGraph.getIntentConfig(guid).performEnabled)
         const R = 24
         ctx.save()
         ctx.beginPath()
@@ -162,7 +160,7 @@ export class EditPane {
   _buildColorManager () {
     const colorPicker = this._colorPicker
     return new SelectionManager({
-      getObjects: () => getIntents().entries(),
+      getObjects: () => projectGraph.getIntents().entries(),
       getWorldPos (obj) {
         const i = /** @type {Record<string, unknown>} */ (obj)
         const pos = /** @type {number[] | undefined} */ (i.position)
@@ -175,7 +173,7 @@ export class EditPane {
         const params = /** @type {Record<string, unknown>} */ (i.params ?? {})
         const currentColor = params.color ?? { h: 0, s: 1, l: 0.25 }
         colorPicker.open(currentColor, rawColor => {
-          const updated = updateIntentColor(guid, rawColor)
+          const updated = projectGraph.updateIntentColor(guid, rawColor)
           if (updated) queueIntentUpdate(updated)
         })
       },

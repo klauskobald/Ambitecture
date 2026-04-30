@@ -7,6 +7,7 @@ import { RegisterHandler } from './handlers/RegisterHandler';
 import { EventsHandler } from './handlers/EventsHandler';
 import { IntentsHandler } from './handlers/IntentsHandler';
 import { FixturesHandler } from './handlers/FixturesHandler';
+import { SceneHandler } from './handlers/SceneHandler';
 import { EventQueue } from './EventQueue';
 import { ProjectManager } from './ProjectManager';
 import { Logger } from './Logger';
@@ -46,6 +47,9 @@ router.register('register', new RegisterHandler(registry, projectManager, rateLi
 router.register('events', new EventsHandler(registry));
 router.register('intents', new IntentsHandler(registry, projectManager, eventQueue));
 router.register('fixtures', new FixturesHandler(registry, projectManager, pushConfigsToModules));
+const sceneHandler = new SceneHandler(registry, projectManager, eventQueue, pushConfigsToModules);
+router.register('scene:activate', sceneHandler);
+router.register('scene:update', sceneHandler);
 
 projectManager.useProject(serverConfig.get<string>('defaultProject'), () => {
   pushConfigsToModules();

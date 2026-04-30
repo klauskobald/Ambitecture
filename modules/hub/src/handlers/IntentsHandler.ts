@@ -4,26 +4,7 @@ import { ConnectionRegistry } from '../ConnectionRegistry';
 import { MessageHandler, WsMessage } from '../MessageRouter';
 import { ProjectManager, ControllerIntent } from '../ProjectManager';
 import { EventQueue } from '../EventQueue';
-import { Color } from '../color';
-
-function normalizeIntentColor(intent: ControllerIntent): ControllerIntent {
-  if (!intent.params || intent.params['color'] === undefined) return intent;
-  return { ...intent, params: { ...intent.params, color: Color.createFromObject(intent.params['color']).toXYY(4) } };
-}
-
-function intentToEvent(intent: ControllerIntent, scheduledAt: number): object {
-  return {
-    guid: intent.guid,
-    layer: intent.layer,
-    name: intent.name,
-    class: intent.class,
-    scheduled: scheduledAt,
-    position: intent.position,
-    radius: intent.radius,
-    radiusFunction: intent.radiusFunction,
-    params: intent.params,
-  };
-}
+import { normalizeIntentColor, intentToEvent } from './intentHelpers';
 
 function isIntentArray(payload: unknown): payload is ControllerIntent[] {
   return Array.isArray(payload) && payload.every(

@@ -80,6 +80,15 @@ function sendIntents (intents, ws, location) {
 }
 
 /**
+ * Sends scene:activate directly on the WebSocket (bypasses the rate-limited queue).
+ * @param {string} sceneName
+ */
+export function sendSceneActivate (sceneName) {
+  if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation) return
+  activeWs.send(JSON.stringify({ message: { type: 'scene:activate', location: activeLocation, payload: { sceneName } } }))
+}
+
+/**
  * @param {unknown[]} fixtures
  * @param {WebSocket} ws
  * @param {number[]} location

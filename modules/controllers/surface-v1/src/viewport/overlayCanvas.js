@@ -1,11 +1,5 @@
-import {
-  getSpatial,
-  getZoneBoxes,
-  getIntents,
-  getFixtures,
-  intentName,
-  intentRadius
-} from '../core/stores.js'
+import { intentName, intentRadius } from '../core/stores.js'
+import { projectGraph } from '../core/projectGraph.js'
 import {
   worldToCanvas,
   clientToWorldViaSimCanvas,
@@ -16,7 +10,7 @@ import { setSpatialReadout } from '../app/statusDisplay.js'
 import { noopPolicy } from './interactionPolicies.js'
 
 /**
- * @typedef {import('../core/stores.js').HubSpatialState} HubSpatialState
+ * @typedef {import('../core/projectGraph.js').HubSpatialState} HubSpatialState
  * @typedef {import('./interactionPolicies.js').InteractionPolicy} InteractionPolicy
  * @typedef {import('./selectionManager.js').SelectionManager<unknown>} AnySelectionManager
  */
@@ -101,7 +95,7 @@ export class OverlayCanvas {
 
     // Selection mode: route taps to the manager, block all drag interaction
     if (this._selectionManager) {
-      const spatial = getSpatial()
+      const spatial = projectGraph.getSpatial()
       const simRect = this._viewport.getSimCanvasRect()
       if (spatial && simRect) {
         this._selectionManager.handleTap(x, y, spatial, simRect, this._canvas.getBoundingClientRect())
@@ -109,7 +103,7 @@ export class OverlayCanvas {
       return
     }
 
-    const spatial = getSpatial()
+    const spatial = projectGraph.getSpatial()
     if (spatial) {
       const fixtureHit = this._findFixtureAt(x, y, spatial)
       if (fixtureHit !== null) {
@@ -133,7 +127,7 @@ export class OverlayCanvas {
   _onPointerMove (ev) {
     const fixtureId = this._draggedFixtures.get(ev.pointerId)
     if (fixtureId !== undefined) {
-      const spatial = getSpatial()
+      const spatial = projectGraph.getSpatial()
       const simRect = this._viewport.getSimCanvasRect()
       if (!spatial || !simRect) return
       const m = clientToWorldViaSimCanvas(ev.clientX, ev.clientY, spatial, simRect)
@@ -143,7 +137,7 @@ export class OverlayCanvas {
     }
     const guid = this._draggedIntents.get(ev.pointerId)
     if (guid !== undefined) {
-      const spatial = getSpatial()
+      const spatial = projectGraph.getSpatial()
       const simRect = this._viewport.getSimCanvasRect()
       if (!spatial || !simRect) return
       const m = clientToWorldViaSimCanvas(ev.clientX, ev.clientY, spatial, simRect)
@@ -187,7 +181,7 @@ export class OverlayCanvas {
    */
   _pushSample (clientX, clientY, x, y) {
     this._samples.push({ x, y, t: performance.now() })
-    const spatial = getSpatial()
+    const spatial = projectGraph.getSpatial()
     if (!spatial) {
       setSpatialReadout('hub config (zone bbox) not yet received')
       return
@@ -215,7 +209,7 @@ export class OverlayCanvas {
     const alreadyGrabbed = new Set(this._draggedIntents.values())
     let nearest = null
     let nearestDist = DRAG_HIT_RADIUS_PX
-    for (const [guid, intent] of getIntents()) {
+    for (const [guid, intent] of projectGraph.getIntents()) {
       if (alreadyGrabbed.has(guid)) continue
       if (!this._policy.canDragIntent(intent)) continue
       const i = /** @type {Record<string, unknown>} */ (intent)
@@ -241,7 +235,7 @@ export class OverlayCanvas {
     const alreadyGrabbed = new Set(this._draggedFixtures.values())
     let nearest = null
     let nearestDist = DRAG_HIT_RADIUS_PX
-    for (const [id, fixture] of getFixtures()) {
+    for (const [id, fixture] of projectGraph.getFixtures()) {
       if (alreadyGrabbed.has(id)) continue
       if (!this._policy.canDragFixture(fixture)) continue
       const f = /** @type {Record<string, unknown>} */ (fixture)
@@ -281,14 +275,14 @@ export class OverlayCanvas {
     }
     ctx.globalAlpha = 1
 
-    const spatial = getSpatial()
+    const spatial = projectGraph.getSpatial()
     const simRect = this._viewport.getSimCanvasRect()
     if (!spatial || !simRect) return
 
     // dragged intent highlights
     if (this._draggedIntents.size > 0) {
       for (const guid of this._draggedIntents.values()) {
-        const intent = getIntents().get(guid)
+        const intent = projectGraph.getIntents().get(guid)
         if (!intent) continue
         const i = /** @type {Record<string, unknown>} */ (intent)
         const pos = /** @type {number[] | undefined} */ (i.position)
@@ -309,7 +303,7 @@ export class OverlayCanvas {
     // dragged fixture highlights
     if (this._draggedFixtures.size > 0) {
       for (const id of this._draggedFixtures.values()) {
-        const fixture = getFixtures().get(id)
+        const fixture = projectGraph.getFixtures().get(id)
         if (!fixture) continue
         const f = /** @type {Record<string, unknown>} */ (fixture)
         const pos = /** @type {number[] | undefined} */ (f.position)
@@ -324,7 +318,7 @@ export class OverlayCanvas {
     }
 
     // intent radius circles
-    for (const intent of getIntents().values()) {
+    for (const intent of projectGraph.getIntents().values()) {
       const i = /** @type {Record<string, unknown>} */ (intent)
       const pos = /** @type {number[] | undefined} */ (i.position)
       const radius = intentRadius(intent)
@@ -345,8 +339,8 @@ export class OverlayCanvas {
     }
 
     // out-of-zone intent markers
-    const zoneBoxes = getZoneBoxes()
-    for (const intent of getIntents().values()) {
+    const zoneBoxes = projectGraph.getZoneBoxes()
+    for (const intent of projectGraph.getIntents().values()) {
       const i = /** @type {Record<string, unknown>} */ (intent)
       const pos = /** @type {number[] | undefined} */ (i.position)
       if (!pos || pos.length < 3) continue

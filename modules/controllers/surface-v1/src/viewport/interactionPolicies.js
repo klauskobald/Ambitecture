@@ -1,9 +1,5 @@
-import {
-  updateIntentPosition,
-  updateFixturePosition,
-  intentGuid,
-  getAllowances
-} from '../core/stores.js'
+import { intentGuid } from '../core/stores.js'
+import { projectGraph } from '../core/projectGraph.js'
 import { queueIntentUpdate, queueFixtureUpdate } from '../core/outboundQueue.js'
 
 /**
@@ -18,13 +14,13 @@ import { queueIntentUpdate, queueFixtureUpdate } from '../core/outboundQueue.js'
 export const performPolicy = {
   canDragIntent (intent) {
     const guid = intentGuid(intent)
-    return !!(getAllowances()[guid]?.performEnabled)
+    return !!(projectGraph.getIntentConfig(guid).performEnabled)
   },
   canDragFixture (_fixture) {
     return false
   },
   onIntentMove (guid, wx, wz) {
-    const updated = updateIntentPosition(guid, wx, wz)
+    const updated = projectGraph.updateIntentPosition(guid, wx, wz)
     if (updated) queueIntentUpdate(updated)
   },
   onFixtureMove (_id, _wx, _wz) {}
@@ -39,11 +35,11 @@ export const editPolicy = {
     return true
   },
   onIntentMove (guid, wx, wz) {
-    const updated = updateIntentPosition(guid, wx, wz)
+    const updated = projectGraph.updateIntentPosition(guid, wx, wz)
     if (updated) queueIntentUpdate(updated)
   },
   onFixtureMove (id, wx, wz) {
-    const fixture = updateFixturePosition(id, wx, wz)
+    const fixture = projectGraph.updateFixturePosition(id, wx, wz)
     if (!fixture) return
     queueFixtureUpdate({
       zoneName: fixture.zoneName,

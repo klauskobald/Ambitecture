@@ -1,0 +1,54 @@
+this is a typescript project for running on a mac or pi
+
+
+assign to one or many intents
+- play like sound: note on/off turns on/off intent, optional velocity could modulate brightness
+- use note together with volume control: hold note set brightnes release note (or move in X/Y/Z) - more controllers could act on different params
+
+so we need a generic approacch
+source -> key (dot separated) of intent parameter. targets try to look for the given types like intent by guid. so the controller has to receive the project graph to find them.
+other possible types are scenes, sequences for now.
+The targets function are usual easy to extend functions like linear (default), square, etc.
+
+this graph will live inside the project under the controllers section:
+
+assignments:
+    - class: noteOnOff  
+      guid
+      channel: 0 = any
+      params:
+        note: 1-127
+        velocityRange: [0,127]
+      targets:
+        - type: intent
+          guid
+          key: brightness
+          function: linear
+        - type: intent
+          guid
+          key: brightness
+          function: linear
+
+    - class: noteAndControl
+      guid
+      channel: 0 = any
+      params:
+        note: 1-127
+        velocityRange: 0-127
+        controller: 1-127
+        valueRange: [0-127]
+      targets:
+        - type: intent
+          guid
+          key: brightness
+          function: linear
+
+
+multiple classes for the source
+class noteOnOff:
+playing intents like an instrument. note off is the same as not on with velocity 0
+
+class noteAndControl:
+note on selects a state graph for this note/channel and waits for a given controller number to arrive, which then sends the value to targets until note off is received
+
+

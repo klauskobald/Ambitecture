@@ -1,0 +1,314 @@
+import { intentGuid, fixtureId } from './stores.js'
+
+/**
+ * @typedef {object} HubSpatialState
+ * @property {number} x1
+ * @property {number} y1
+ * @property {number} z1
+ * @property {number} x2
+ * @property {number} y2
+ * @property {number} z2
+ */
+
+class ProjectGraph {
+  constructor () {
+    this._rendererGuid = ''
+    /** @type {Set<() => void>} */
+    this._listeners = new Set()
+
+    this._data = {
+      projectName: '',
+      zoneToRenderer: /** @type {Record<string, string[]>} */ ({}),
+      zones: /** @type {unknown[]} */ ([]),
+      intents: /** @type {Map<string, unknown>} */ (new Map()),
+      scenes: /** @type {Array<{ name: string, intents: string[] }>} */ ([]),
+      activeSceneName: /** @type {string | null} */ (null),
+      controller: {
+        intentConfig: /** @type {Map<string, Record<string, unknown>>} */ (new Map()),
+      },
+    }
+
+    /** @type {HubSpatialState | null} */
+    this._spatial = null
+    /** @type {number[][]} */
+    this._zoneBoxes = []
+    /** @type {Map<string, { zoneName: string, fixtureName: string, position: [number, number, number] }>} */
+    this._fixtures = new Map()
+  }
+
+  // ─── Subscriptions ────────────────────────────────────────────────────────────
+
+  /** @param {() => void} fn @returns {() => void} unsubscribe */
+  subscribe (fn) {
+    this._listeners.add(fn)
+    return () => this._listeners.delete(fn)
+  }
+
+  _notify () {
+    for (const fn of this._listeners) fn()
+  }
+
+  // ─── Derived state ────────────────────────────────────────────────────────────
+
+  /** @returns {HubSpatialState | null} */
+  getSpatial () { return this._spatial }
+
+  /** @returns {number[][]} */
+  getZoneBoxes () { return this._zoneBoxes }
+
+  /** @returns {Map<string, { zoneName: string, fixtureName: string, position: [number, number, number] }>} */
+  getFixtures () { return this._fixtures }
+
+  // ─── Project data ─────────────────────────────────────────────────────────────
+
+  /** @returns {Map<string, unknown>} */
+  getIntents () { return this._data.intents }
+
+  /** @returns {string[]} */
+  getScenes () { return this._data.scenes.map(s => s.name) }
+
+  /** @param {string} sceneName @returns {string[]} guid list */
+  getSceneIntents (sceneName) {
+    return this._data.scenes.find(s => s.name === sceneName)?.intents ?? []
+  }
+
+  /** @returns {string | null} */
+  getActiveSceneName () { return this._data.activeSceneName }
+
+  /** @param {string} guid @returns {Record<string, unknown>} */
+  getIntentConfig (guid) {
+    return this._data.controller.intentConfig.get(guid) ?? {}
+  }
+
+  // ─── Mutations ────────────────────────────────────────────────────────────────
+
+  /** @param {string} name */
+  setActiveScene (name) {
+    this._data.activeSceneName = name
+    this._notify()
+  }
+
+  /**
+   * @param {string} guid
+   * @param {string} key
+   * @param {unknown} value
+   */
+  setIntentConfig (guid, key, value) {
+    const current = this._data.controller.intentConfig.get(guid) ?? Object.create(null)
+    this._data.controller.intentConfig.set(guid, { ...current, [key]: value })
+    this._notify()
+  }
+
+  /**
+   * @param {string} guid
+   * @param {unknown} rawPickerValue
+   * @returns {unknown | null}
+   */
+  updateIntentColor (guid, rawPickerValue) {
+    const intent = this._data.intents.get(guid)
+    if (!intent) return null
+    const i = /** @type {Record<string, unknown>} */ (intent)
+    const updated = { ...i, params: { ...(/** @type {Record<string, unknown>} */ (i.params) ?? {}), color: rawPickerValue } }
+    this._data.intents.set(guid, updated)
+    this._notify()
+    return updated
+  }
+
+  /**
+   * @param {string} guid
+   * @param {number} wx
+   * @param {number} wz
+   * @returns {unknown | null}
+   */
+  updateIntentPosition (guid, wx, wz) {
+    const intent = this._data.intents.get(guid)
+    if (!intent) return null
+    const i = /** @type {Record<string, unknown>} */ (intent)
+    const pos = /** @type {number[] | undefined} */ (i.position)
+    const updated = { ...i, position: [wx, pos?.[1] ?? 0, wz] }
+    this._data.intents.set(guid, updated)
+    return updated
+  }
+
+  /**
+   * @param {string} id
+   * @param {number} wx
+   * @param {number} wz
+   * @returns {{ zoneName: string, fixtureName: string, position: [number, number, number] } | null}
+   */
+  updateFixturePosition (id, wx, wz) {
+    const fixture = this._fixtures.get(id)
+    if (!fixture) return null
+    const updated = { ...fixture, position: /** @type {[number, number, number]} */ ([wx, fixture.position[1] ?? 0, wz]) }
+    this._fixtures.set(id, updated)
+    return updated
+  }
+
+  /**
+   * @param {unknown[]} incomingIntents
+   * @param {((intent: unknown) => void) | null} queueFn
+   * @param {{ pruneMissing?: boolean }} [opts]
+   */
+  reconcileIntents (incomingIntents, queueFn, { pruneMissing = true } = {}) {
+    const incoming = new Map()
+    for (const intent of incomingIntents) {
+      const guid = intentGuid(intent)
+      if (!guid) continue
+      incoming.set(guid, intent)
+    }
+    for (const [guid, intent] of incoming) {
+      const existing = this._data.intents.get(guid)
+      if (!existing || JSON.stringify(existing) !== JSON.stringify(intent)) {
+        this._data.intents.set(guid, intent)
+        queueFn?.(intent)
+      }
+    }
+    if (pruneMissing) {
+      for (const guid of this._data.intents.keys()) {
+        if (!incoming.has(guid)) this._data.intents.delete(guid)
+      }
+    }
+    this._notify()
+  }
+
+  // ─── Config application ───────────────────────────────────────────────────────
+
+  /**
+   * Applies a hub config payload. Called on every `config` message.
+   * Intents are NOT applied here — caller passes them to reconcileIntents separately.
+   * @param {unknown} payload
+   * @param {string} rendererGuid
+   */
+  applyConfig (payload, rendererGuid) {
+    this._rendererGuid = rendererGuid
+
+    const p = /** @type {Record<string, unknown> | null} */ (
+      payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : null
+    )
+    if (!p) return
+
+    this._data.projectName = String(p.projectName ?? '')
+    this._data.zoneToRenderer = /** @type {Record<string, string[]>} */ (p.zoneToRenderer ?? {})
+    this._data.zones = Array.isArray(p.zones) ? /** @type {unknown[]} */ (p.zones) : []
+
+    const rawScenes = Array.isArray(p.scenes) ? /** @type {Array<Record<string, unknown>>} */ (p.scenes) : []
+    this._data.scenes = rawScenes
+      .map(scene => ({
+        name: String(scene.name ?? ''),
+        intents: Array.isArray(scene.intents)
+          ? scene.intents.map(i => String(/** @type {Record<string, unknown>} */ (i).guid ?? ''))
+          : [],
+      }))
+      .filter(s => s.name)
+
+    if (!this._data.activeSceneName && this._data.scenes.length > 0) {
+      this._data.activeSceneName = this._data.scenes[0].name
+    }
+
+    // Round-trip: restore intentConfig if hub sends it back (future persistence)
+    if (p.intentConfig && typeof p.intentConfig === 'object' && !Array.isArray(p.intentConfig)) {
+      const saved = /** @type {Record<string, Record<string, unknown>>} */ (p.intentConfig)
+      for (const [guid, config] of Object.entries(saved)) {
+        if (!this._data.controller.intentConfig.has(guid)) {
+          this._data.controller.intentConfig.set(guid, config)
+        }
+      }
+    }
+
+    this._spatial = this._computeSpatial()
+    this._zoneBoxes = this._computeZoneBoxes()
+    this._fixtures = this._computeFixtures()
+
+    this._notify()
+  }
+
+  // ─── Serialization ────────────────────────────────────────────────────────────
+
+  toJSON () {
+    return {
+      projectName: this._data.projectName,
+      zoneToRenderer: this._data.zoneToRenderer,
+      intents: [...this._data.intents.values()],
+      scenes: this._data.scenes,
+      activeSceneName: this._data.activeSceneName,
+      controller: {
+        intentConfig: Object.fromEntries(this._data.controller.intentConfig),
+      },
+    }
+  }
+
+  // ─── Private derivations ──────────────────────────────────────────────────────
+
+  /** @returns {HubSpatialState | null} */
+  _computeSpatial () {
+    const matched = this._matchedZoneBoxes()
+    if (matched.length === 0) return null
+    let x1 = Infinity, y1 = Infinity, z1 = Infinity
+    let x2 = -Infinity, y2 = -Infinity, z2 = -Infinity
+    for (const b of matched) {
+      x1 = Math.min(x1, b[0]); y1 = Math.min(y1, b[1]); z1 = Math.min(z1, b[2])
+      x2 = Math.max(x2, b[3]); y2 = Math.max(y2, b[4]); z2 = Math.max(z2, b[5])
+    }
+    return { x1, y1, z1, x2, y2, z2 }
+  }
+
+  /** @returns {number[][]} */
+  _computeZoneBoxes () {
+    return this._matchedZoneBoxes()
+  }
+
+  /** @returns {number[][]} */
+  _matchedZoneBoxes () {
+    const rendererGuid = this._rendererGuid
+    const zoneToRenderer = this._data.zoneToRenderer
+    /** @type {number[][]} */
+    const matched = []
+    for (const z of this._data.zones) {
+      if (z === null || typeof z !== 'object' || Array.isArray(z)) continue
+      const zone = /** @type {Record<string, unknown>} */ (z)
+      const assigned = zoneToRenderer[String(zone.name ?? '')]
+      if (!Array.isArray(assigned) || !assigned.includes(rendererGuid)) continue
+      const bb = zone.boundingBox
+      if (!Array.isArray(bb) || bb.length < 6) continue
+      matched.push(bb.map(n => Number(n)))
+    }
+    return matched
+  }
+
+  /** @returns {Map<string, { zoneName: string, fixtureName: string, position: [number, number, number] }>} */
+  _computeFixtures () {
+    const rendererGuid = this._rendererGuid
+    const zoneToRenderer = this._data.zoneToRenderer
+    /** @type {Map<string, { zoneName: string, fixtureName: string, position: [number, number, number] }>} */
+    const fixtures = new Map()
+    for (const z of this._data.zones) {
+      if (z === null || typeof z !== 'object' || Array.isArray(z)) continue
+      const zone = /** @type {Record<string, unknown>} */ (z)
+      const zoneName = String(zone.name ?? '')
+      const assigned = zoneToRenderer[zoneName]
+      if (!Array.isArray(assigned) || !assigned.includes(rendererGuid)) continue
+      const bb = zone.boundingBox
+      const zoneFixtures = zone.fixtures
+      if (!Array.isArray(bb) || bb.length < 6 || !Array.isArray(zoneFixtures)) continue
+      for (const raw of zoneFixtures) {
+        if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) continue
+        const fixture = /** @type {Record<string, unknown>} */ (raw)
+        const fName = String(fixture.name ?? '')
+        const local = fixture.location
+        if (!fName || !Array.isArray(local) || local.length < 3) continue
+        fixtures.set(fixtureId(zoneName, fName), {
+          zoneName,
+          fixtureName: fName,
+          position: /** @type {[number, number, number]} */ ([
+            Number(bb[0]) + Number(local[0]),
+            Number(bb[1]) + Number(local[1]),
+            Number(bb[2]) + Number(local[2]),
+          ]),
+        })
+      }
+    }
+    return fixtures
+  }
+}
+
+export const projectGraph = new ProjectGraph()

@@ -29,10 +29,16 @@ export interface ControllerIntent {
   params: Record<string, unknown>;
 }
 
+export interface Scene {
+  name: string;
+  intents: { guid: string }[];
+}
+
 interface ControllerDef {
   name: string;
   guid: string;
-  intents: ControllerIntent[];
+  intents: { guid: string }[];
+  [key: string]: unknown;  // pass-through for controller-specific config
 }
 
 /** Per-instance fields from project YAML; class-specific keys live in `params`. */
@@ -62,6 +68,8 @@ export interface Zone {
 interface Project {
   name: string;
   'zone-to-renderer': Record<string, string[]>;
+  intents?: ControllerIntent[];
+  scenes?: Scene[];
   zones: Zone[];
   controller?: ControllerDef[];
 }
@@ -73,6 +81,9 @@ export class ProjectManager {
   private fixtureProfiles: Map<string, FixtureProfile> = new Map();
   private watchers: fs.FSWatcher[] = [];
   private intentCache: Map<string, Map<string, ControllerIntent>> = new Map();
+  private intentDefinitions: Map<string, ControllerIntent> = new Map();
+  private activeSceneName: string | null = null;
+  private activeSceneIntents: ControllerIntent[] = [];
   private runtimeZones: Zone[] = [];
 
   constructor(projectsPath: string, fixturesPath: string) {
@@ -90,20 +101,34 @@ export class ProjectManager {
     const filePath = this.resolvePath(this.projectsPath, `${name}.yml`);
     this.project = new Config(filePath).getAll() as Project;
     this.intentCache.clear();
-    for (const controller of this.project.controller ?? []) {
-      for (const intent of controller.intents) {
-        if (!intent.guid) {
-          intent.guid = randomUUID();
-        }
+
+    this.intentDefinitions = new Map();
+    for (const intent of this.project.intents ?? []) {
+      if (!intent.guid) {
+        intent.guid = randomUUID();
       }
+      this.intentDefinitions.set(intent.guid, intent);
     }
+
+    // Auto-create "untitled" scene if intents exist but no scenes defined
+    if ((!this.project.scenes || this.project.scenes.length === 0) && (this.project.intents ?? []).length > 0) {
+      this.project.scenes = [{
+        name: 'untitled',
+        intents: (this.project.intents ?? []).map(i => ({ guid: i.guid! })),
+      }];
+      Logger.info('[project] auto-created "untitled" scene with all project intents');
+    }
+
+    this.activeSceneName = null;
+    this.activeSceneIntents = [];
+
     this.fixtureProfiles.clear();
     this.loadReferencedFixtures();
     this.runtimeZones = this.project.zones.map((zone) => ({
       ...zone,
       fixtures: zone.fixtures.map((fixture) => this.cloneFixtureInstance(fixture)),
     }));
-    Logger.info(`[project] loaded "${this.project.name}" with ${this.project.zones.length} zone(s)`);
+    Logger.info(`[project] loaded "${this.project.name}" with ${this.project.zones.length} zone(s), ${this.intentDefinitions.size} intent(s), ${(this.project.scenes ?? []).length} scene(s)`);
   }
 
   updateFixtures(updates: FixtureMoveUpdate[]): number {
@@ -186,10 +211,44 @@ export class ProjectManager {
   }
 
   getControllerIntents(controllerGuid: string): ControllerIntent[] {
-    const cached = this.intentCache.get(controllerGuid);
-    if (cached) return [...cached.values()];
     const match = (this.project?.controller ?? []).find(c => c.guid === controllerGuid);
-    return match?.intents ?? [];
+    const baseIntents = match
+      ? match.intents
+          .map(ref => this.intentDefinitions.get(ref.guid))
+          .filter((i): i is ControllerIntent => i !== undefined)
+      : [];
+    const merged = new Map<string, ControllerIntent>(baseIntents.map(i => [i.guid!, i]));
+    const cached = this.intentCache.get(controllerGuid);
+    if (cached) {
+      for (const [guid, intent] of cached) merged.set(guid, intent);
+    }
+    return [...merged.values()];
+  }
+
+  setActiveScene(sceneName: string): ControllerIntent[] {
+    const scene = (this.project?.scenes ?? []).find(s => s.name === sceneName);
+    if (!scene) {
+      Logger.warn(`[project] Scene "${sceneName}" not found`);
+      return [];
+    }
+    this.activeSceneName = sceneName;
+    this.activeSceneIntents = scene.intents
+      .map(ref => this.intentDefinitions.get(ref.guid))
+      .filter((i): i is ControllerIntent => i !== undefined);
+    Logger.info(`[project] Activated scene "${sceneName}" with ${this.activeSceneIntents.length} intent(s)`);
+    return this.activeSceneIntents;
+  }
+
+  getActiveSceneName(): string | null {
+    return this.activeSceneName;
+  }
+
+  getActiveSceneIntents(): ControllerIntent[] {
+    return this.activeSceneIntents;
+  }
+
+  getSceneNames(): string[] {
+    return (this.project?.scenes ?? []).map(s => s.name);
   }
 
   private watchAll(name: string, callback: () => void): void {
@@ -312,13 +371,36 @@ export class ProjectManager {
     const controllers = this.project.controller ?? [];
     const match = controllers.find(c => c.guid === guid);
     const cached = this.intentCache.get(guid);
-    const intents = cached ? [...cached.values()] : (match?.intents ?? []);
-    Logger.info(`[project] buildControllerConfig(${guid}): ${this.runtimeZones.length} zone(s), ${intents.length} intent(s)`);
+
+    const intentGuids = match?.intents?.map(i => i.guid) ?? [];
+    const baseIntents = intentGuids
+      .map(g => this.intentDefinitions.get(g))
+      .filter((i): i is ControllerIntent => i !== undefined);
+
+    const mergedIntents = new Map<string, ControllerIntent>(baseIntents.map(i => [i.guid!, i]));
+    if (cached) {
+      for (const [guid, intent] of cached) mergedIntents.set(guid, intent);
+    }
+    const intents = [...mergedIntents.values()];
+
+    // Pass through all controller-specific keys (interactionPolicies, etc.)
+    const passThrough: Record<string, unknown> = {};
+    if (match) {
+      for (const key of Object.keys(match)) {
+        if (key !== 'name' && key !== 'guid' && key !== 'intents') {
+          passThrough[key] = match[key];
+        }
+      }
+    }
+
+    Logger.info(`[project] buildControllerConfig(${guid}): ${this.runtimeZones.length} zone(s), ${intents.length} intent(s), ${(this.project.scenes ?? []).length} scene(s)`);
     return {
       projectName: this.project.name,
       zoneToRenderer: this.project['zone-to-renderer'] ?? {},
       zones: this.runtimeZones.map((z) => this.serializeZone(z)),
       intents,
+      scenes: this.project.scenes ?? [],
+      ...passThrough,
     };
   }
 }

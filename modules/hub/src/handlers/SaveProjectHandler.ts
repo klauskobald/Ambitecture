@@ -35,7 +35,7 @@ export class SaveProjectHandler implements MessageHandler {
       return;
     }
 
-    this.projectManager.setOverride(message.payload.key, message.payload.data);
+    this.projectManager.setProjectData(message.payload.key, message.payload.data);
     this.onChanged();
     const dataDesc = Array.isArray(message.payload.data)
       ? `array(${message.payload.data.length})`

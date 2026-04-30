@@ -85,7 +85,9 @@ export class ProjectManager {
   private activeSceneName: string | null = null;
   private activeSceneIntents: ControllerIntent[] = [];
   private runtimeZones: Zone[] = [];
-  private overrides: Map<string, unknown> = new Map();
+  private _projectConfig: Config | null = null;
+  private _saveTimer: ReturnType<typeof setTimeout> | null = null;
+  private _suppressWatch = false;
 
   constructor(projectsPath: string, fixturesPath: string) {
     this.projectsPath = projectsPath;
@@ -100,7 +102,8 @@ export class ProjectManager {
 
   private reloadProject(name: string): void {
     const filePath = this.resolvePath(this.projectsPath, `${name}.yml`);
-    this.project = new Config(filePath).getAll() as Project;
+    this._projectConfig = new Config(filePath);
+    this.project = this._projectConfig.getAll() as Project;
     this.intentCache.clear();
 
     this.intentDefinitions = new Map();
@@ -122,7 +125,6 @@ export class ProjectManager {
 
     this.activeSceneName = null;
     this.activeSceneIntents = [];
-    this.overrides.clear();
 
     this.fixtureProfiles.clear();
     this.loadReferencedFixtures();
@@ -130,6 +132,7 @@ export class ProjectManager {
       ...zone,
       fixtures: zone.fixtures.map((fixture) => this.cloneFixtureInstance(fixture)),
     }));
+
     Logger.info(`[project] loaded "${this.project.name}" with ${this.project.zones.length} zone(s), ${this.intentDefinitions.size} intent(s), ${(this.project.scenes ?? []).length} scene(s)`);
   }
 
@@ -227,40 +230,42 @@ export class ProjectManager {
     return [...merged.values()];
   }
 
-  setOverride(key: string, data: unknown): void {
-    this.overrides.set(key, data);
-    Logger.info(`[project] override set for key "${key}"`);
+  setProjectData(key: string, data: unknown): void {
+    if (!this.project) return;
+    const segments = key.split('.');
+    this._setAtPath(this.project, segments, data);
+    Logger.info(`[project] set key "${key}" in memory`);
+    this._scheduleSave();
   }
 
-  private applyOverrides(base: Record<string, unknown>): Record<string, unknown> {
-    let result = base;
-    const keys = [...this.overrides.keys()].sort();
-    for (const key of keys) {
-      const value = this.overrides.get(key);
-      result = this._setAtPath(result, key.split('.'), value) as Record<string, unknown>;
-    }
-    return result;
+  private _scheduleSave(): void {
+    if (this._saveTimer) clearTimeout(this._saveTimer);
+    this._saveTimer = setTimeout(() => {
+      if (!this._projectConfig || !this.project) return;
+      this._suppressWatch = true;
+      try {
+        this._projectConfig.save(this.project);
+        Logger.info('[project] saved to disk');
+      } catch (err) {
+        Logger.error('[project] save failed:', err);
+      } finally {
+        this._suppressWatch = false;
+      }
+    }, 2000);
   }
 
-  private _setAtPath(current: unknown, segments: string[], value: unknown): unknown {
-    if (segments.length === 0) return value;
+  private _setAtPath(current: unknown, segments: string[], value: unknown): void {
     const first = segments[0]!;
+    if (segments.length === 1) {
+      (current as Record<string, unknown>)[first] = value;
+      return;
+    }
     const rest = segments.slice(1);
-
-    if (Array.isArray(current)) {
-      const idx = parseInt(first, 10);
-      if (isNaN(idx) || idx < 0) return current;
-      const clone = [...current];
-      clone[idx] = this._setAtPath(clone[idx], rest, value);
-      return clone;
+    const obj = current as Record<string, unknown>;
+    if (!(first in obj) || typeof obj[first] !== 'object' || obj[first] === null) {
+      obj[first] = {};
     }
-
-    if (current !== null && typeof current === 'object') {
-      const obj = current as Record<string, unknown>;
-      return { ...obj, [first]: this._setAtPath(obj[first], rest, value) };
-    }
-
-    return { [first]: this._setAtPath(undefined, rest, value) };
+    this._setAtPath(obj[first], rest, value);
   }
 
   setActiveScene(sceneName: string): ControllerIntent[] {
@@ -297,6 +302,7 @@ export class ProjectManager {
     this.watchers = [];
 
     const onChange = (trigger: string) => {
+      if (this._suppressWatch) return;
       Logger.info(`[project] change detected in "${trigger}", reloading...`);
       this.reloadProject(name);
       this.watchAll(name, callback);
@@ -442,6 +448,6 @@ export class ProjectManager {
       scenes,
       ...passThrough,
     };
-    return this.applyOverrides(base);
+    return base;
   }
 }

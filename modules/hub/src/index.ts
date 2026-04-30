@@ -19,7 +19,7 @@ const host = serverConfig.getOrDefault<string>('LISTEN_HOST', '127.0.0.1');
 
 const projectManager = new ProjectManager(
   serverConfig.get<string>('projectsPath'),
-  serverConfig.get<string>('fixturesPath')
+  serverConfig.get<string>('fixturesPath'),
 );
 
 const registry = new ConnectionRegistry();

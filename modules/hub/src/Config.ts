@@ -197,4 +197,12 @@ export class Config {
     reload(): void {
         this.loadConfig();
     }
+
+    /**
+     * Save data back to the YAML file. Uses the same path resolution as load.
+     */
+    save(data: unknown): void {
+        const filePath = this.configpath();
+        fs.writeFileSync(filePath, yaml.dump(data, { lineWidth: -1, noRefs: true }));
+    }
 }

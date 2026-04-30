@@ -1,0 +1,36 @@
+/* CSS variables for the dark base theme */
+
+:root {
+  --color-bg: #0a0a0a;
+  --color-bg-raised: #141414;
+  --color-text: #ccc;
+  --color-text-muted: #666;
+  --color-text-meta: #8a8;
+  --color-text-error: #f66;
+  --color-border: #333;
+  --color-accent: #5af;
+  --color-accent-dim: rgba(85, 170, 255, 0.15);
+
+  /* layout dimensions — overridden per-config by applyLayoutCssVars() */
+  --page-padding: 8px;
+  --main-gap: 8px;
+  --sim-stack-min-height: 50vh;
+  --control-strip-min-height: 80px;
+  --iframe-z-index: 1;
+  --overlay-z-index: 2;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: system-ui, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}

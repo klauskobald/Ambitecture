@@ -1,0 +1,348 @@
+import {
+  getSpatial,
+  getZoneBoxes,
+  getIntents,
+  getFixtures,
+  intentName,
+  intentRadius
+} from '../core/stores.js'
+import {
+  worldToCanvas,
+  clientToWorldViaSimCanvas,
+  isPositionInsideAnyZone,
+  overlayClientToBboxMeters
+} from './spatialMath.js'
+import { setSpatialReadout } from '../app/statusDisplay.js'
+import { noopPolicy } from './interactionPolicies.js'
+
+/**
+ * @typedef {import('../core/stores.js').HubSpatialState} HubSpatialState
+ * @typedef {import('./interactionPolicies.js').InteractionPolicy} InteractionPolicy
+ */
+
+const DRAG_HIT_RADIUS_PX = 28
+
+export class OverlayCanvas {
+  /**
+   * @param {HTMLCanvasElement} canvas
+   * @param {HTMLElement} stack  the sim-stack container (used for resize observation)
+   * @param {import('./simulatorViewport.js').SimulatorViewport} viewport
+   * @param {import('../core/config.js').LayoutConfig} layoutConfig
+   */
+  constructor (canvas, stack, viewport, layoutConfig) {
+    this._canvas = canvas
+    this._stack = stack
+    this._viewport = viewport
+    this._L = layoutConfig
+    /** @type {InteractionPolicy} */
+    this._policy = noopPolicy
+
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error('Canvas 2D context unavailable.')
+    this._ctx = ctx
+
+    /** @type {{ x: number, y: number, t: number }[]} */
+    this._samples = []
+    /** @type {Set<number>} */
+    this._activePointers = new Set()
+    /** @type {Map<number, string>} pointerId → intent guid */
+    this._draggedIntents = new Map()
+    /** @type {Map<number, string>} pointerId → fixture id */
+    this._draggedFixtures = new Map()
+
+    this._bindPointerEvents()
+    this._ro = new ResizeObserver(() => this.resize())
+    this._ro.observe(stack)
+    this.resize()
+    requestAnimationFrame(now => this._frame(now))
+  }
+
+  /** @param {InteractionPolicy} policy */
+  setPolicy (policy) {
+    this._policy = policy
+  }
+
+  resize () {
+    const rect = this._stack.getBoundingClientRect()
+    const dpr = window.devicePixelRatio || 1
+    const w = Math.max(1, Math.floor(rect.width * dpr))
+    const h = Math.max(1, Math.floor(rect.height * dpr))
+    this._canvas.width = w
+    this._canvas.height = h
+    this._canvas.style.width = `${rect.width}px`
+    this._canvas.style.height = `${rect.height}px`
+    this._ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  }
+
+  _bindPointerEvents () {
+    this._canvas.addEventListener('pointerdown', ev => this._onPointerDown(ev))
+    this._canvas.addEventListener('pointermove', ev => this._onPointerMove(ev))
+    this._canvas.addEventListener('pointerup', ev => this._onPointerUp(ev))
+    this._canvas.addEventListener('pointercancel', ev => this._onPointerUp(ev))
+  }
+
+  /** @param {PointerEvent} ev */
+  _onPointerDown (ev) {
+    if (ev.button !== undefined && ev.button !== 0) return
+    const { x, y } = this._canvasPoint(ev)
+    const spatial = getSpatial()
+    if (spatial) {
+      const fixtureHit = this._findFixtureAt(x, y, spatial)
+      if (fixtureHit !== null) {
+        this._draggedFixtures.set(ev.pointerId, fixtureHit)
+        this._capture(ev)
+        return
+      }
+      const intentHit = this._findIntentAt(x, y, spatial)
+      if (intentHit !== null) {
+        this._draggedIntents.set(ev.pointerId, intentHit)
+        this._capture(ev)
+        return
+      }
+    }
+    this._activePointers.add(ev.pointerId)
+    this._capture(ev)
+    this._pushSample(ev.clientX, ev.clientY, x, y)
+  }
+
+  /** @param {PointerEvent} ev */
+  _onPointerMove (ev) {
+    const fixtureId = this._draggedFixtures.get(ev.pointerId)
+    if (fixtureId !== undefined) {
+      const spatial = getSpatial()
+      const simRect = this._viewport.getSimCanvasRect()
+      if (!spatial || !simRect) return
+      const m = clientToWorldViaSimCanvas(ev.clientX, ev.clientY, spatial, simRect)
+      if (!m) return
+      this._policy.onFixtureMove(fixtureId, m.wx, m.wz)
+      return
+    }
+    const guid = this._draggedIntents.get(ev.pointerId)
+    if (guid !== undefined) {
+      const spatial = getSpatial()
+      const simRect = this._viewport.getSimCanvasRect()
+      if (!spatial || !simRect) return
+      const m = clientToWorldViaSimCanvas(ev.clientX, ev.clientY, spatial, simRect)
+      if (!m) return
+      this._policy.onIntentMove(guid, m.wx, m.wz)
+      return
+    }
+    if (!this._activePointers.has(ev.pointerId)) return
+    const { x, y } = this._canvasPoint(ev)
+    this._pushSample(ev.clientX, ev.clientY, x, y)
+  }
+
+  /** @param {PointerEvent} ev */
+  _onPointerUp (ev) {
+    this._activePointers.delete(ev.pointerId)
+    this._draggedIntents.delete(ev.pointerId)
+    this._draggedFixtures.delete(ev.pointerId)
+    try { this._canvas.releasePointerCapture(ev.pointerId) } catch { /* ignore */ }
+  }
+
+  /** @param {PointerEvent} ev */
+  _capture (ev) {
+    this._activePointers.add(ev.pointerId)
+    try { this._canvas.setPointerCapture(ev.pointerId) } catch { /* ignore */ }
+  }
+
+  /**
+   * @param {PointerEvent} ev
+   * @returns {{ x: number, y: number }}
+   */
+  _canvasPoint (ev) {
+    const rect = this._canvas.getBoundingClientRect()
+    return { x: ev.clientX - rect.left, y: ev.clientY - rect.top }
+  }
+
+  /**
+   * @param {number} clientX
+   * @param {number} clientY
+   * @param {number} x
+   * @param {number} y
+   */
+  _pushSample (clientX, clientY, x, y) {
+    this._samples.push({ x, y, t: performance.now() })
+    const spatial = getSpatial()
+    if (!spatial) {
+      setSpatialReadout('hub config (zone bbox) not yet received')
+      return
+    }
+    const m = overlayClientToBboxMeters(clientX, clientY, this._canvas, spatial)
+    if (!m) {
+      setSpatialReadout('outside touch overlay')
+      return
+    }
+    setSpatialReadout(
+      `overlay u=${m.nx.toFixed(3)} v=${m.ny.toFixed(3)}  |  meters x=${m.wx.toFixed(3)} y=${m.wy.toFixed(3)} z=${m.wz.toFixed(3)}`
+    )
+  }
+
+  /**
+   * @param {number} cx canvas-local x
+   * @param {number} cy canvas-local y
+   * @param {HubSpatialState} spatial
+   * @returns {string | null}
+   */
+  _findIntentAt (cx, cy, spatial) {
+    const simRect = this._viewport.getSimCanvasRect()
+    if (!simRect) return null
+    const overlayRect = this._canvas.getBoundingClientRect()
+    const alreadyGrabbed = new Set(this._draggedIntents.values())
+    let nearest = null
+    let nearestDist = DRAG_HIT_RADIUS_PX
+    for (const [guid, intent] of getIntents()) {
+      if (alreadyGrabbed.has(guid)) continue
+      if (!this._policy.canDragIntent(intent)) continue
+      const i = /** @type {Record<string, unknown>} */ (intent)
+      const pos = /** @type {number[] | undefined} */ (i.position)
+      if (!pos) continue
+      const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, overlayRect)
+      const dist = Math.hypot(cx - px, cy - py)
+      if (dist < nearestDist) { nearest = guid; nearestDist = dist }
+    }
+    return nearest
+  }
+
+  /**
+   * @param {number} cx
+   * @param {number} cy
+   * @param {HubSpatialState} spatial
+   * @returns {string | null}
+   */
+  _findFixtureAt (cx, cy, spatial) {
+    const simRect = this._viewport.getSimCanvasRect()
+    if (!simRect) return null
+    const overlayRect = this._canvas.getBoundingClientRect()
+    const alreadyGrabbed = new Set(this._draggedFixtures.values())
+    let nearest = null
+    let nearestDist = DRAG_HIT_RADIUS_PX
+    for (const [id, fixture] of getFixtures()) {
+      if (alreadyGrabbed.has(id)) continue
+      if (!this._policy.canDragFixture(fixture)) continue
+      const f = /** @type {Record<string, unknown>} */ (fixture)
+      const pos = /** @type {number[] | undefined} */ (f.position)
+      if (!pos) continue
+      const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, overlayRect)
+      const dist = Math.hypot(cx - px, cy - py)
+      if (dist < nearestDist) { nearest = id; nearestDist = dist }
+    }
+    return nearest
+  }
+
+  /** @param {number} now */
+  _frame (now) {
+    requestAnimationFrame(t => this._frame(t))
+    const L = this._L
+    const fadeMs = L.overlayTrailFadeMs
+    while (this._samples.length > 0 && now - this._samples[0].t > fadeMs) this._samples.shift()
+
+    const rect = this._canvas.getBoundingClientRect()
+    const ctx = this._ctx
+    ctx.clearRect(0, 0, rect.width, rect.height)
+
+    // touch trail
+    const r = L.overlayFingerRadiusPx
+    ctx.lineWidth = L.overlayLineWidthPx
+    ctx.strokeStyle = L.overlayFingerStrokeRgba
+    ctx.fillStyle = L.overlayFingerFillRgba
+    for (const s of this._samples) {
+      const a = 1 - (now - s.t) / fadeMs
+      if (a <= 0) continue
+      ctx.globalAlpha = Math.min(1, Math.max(0, a))
+      ctx.beginPath()
+      ctx.arc(s.x, s.y, r, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.stroke()
+    }
+    ctx.globalAlpha = 1
+
+    const spatial = getSpatial()
+    const simRect = this._viewport.getSimCanvasRect()
+    if (!spatial || !simRect) return
+
+    // dragged intent highlights
+    if (this._draggedIntents.size > 0) {
+      for (const guid of this._draggedIntents.values()) {
+        const intent = getIntents().get(guid)
+        if (!intent) continue
+        const i = /** @type {Record<string, unknown>} */ (intent)
+        const pos = /** @type {number[] | undefined} */ (i.position)
+        if (!pos) continue
+        const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, rect)
+        ctx.save()
+        ctx.beginPath()
+        ctx.arc(px, py, L.overlayFingerRadiusPx * 1.4, 0, Math.PI * 2)
+        ctx.strokeStyle = 'rgba(255, 220, 80, 0.9)'
+        ctx.lineWidth = 2
+        ctx.stroke()
+        ctx.fillStyle = 'rgba(255, 220, 80, 0.25)'
+        ctx.fill()
+        ctx.restore()
+      }
+    }
+
+    // dragged fixture highlights
+    if (this._draggedFixtures.size > 0) {
+      for (const id of this._draggedFixtures.values()) {
+        const fixture = getFixtures().get(id)
+        if (!fixture) continue
+        const f = /** @type {Record<string, unknown>} */ (fixture)
+        const pos = /** @type {number[] | undefined} */ (f.position)
+        if (!pos) continue
+        const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, rect)
+        ctx.save()
+        ctx.strokeStyle = 'rgba(80, 220, 255, 0.95)'
+        ctx.lineWidth = 2
+        ctx.strokeRect(px - 10, py - 10, 20, 20)
+        ctx.restore()
+      }
+    }
+
+    // intent radius circles
+    for (const intent of getIntents().values()) {
+      const i = /** @type {Record<string, unknown>} */ (intent)
+      const pos = /** @type {number[] | undefined} */ (i.position)
+      const radius = intentRadius(intent)
+      if (!pos || pos.length < 3 || radius <= 0) continue
+      const center = worldToCanvas(pos[0], pos[2], spatial, simRect, rect)
+      const edge = worldToCanvas(pos[0] + radius, pos[2], spatial, simRect, rect)
+      const radiusPx = Math.abs(edge.px - center.px)
+      if (!Number.isFinite(radiusPx) || radiusPx <= 0) continue
+      ctx.save()
+      ctx.beginPath()
+      ctx.arc(center.px, center.py, radiusPx, 0, Math.PI * 2)
+      ctx.fillStyle = 'rgba(128, 128, 128, 0.02)'
+      ctx.fill()
+      ctx.strokeStyle = 'rgba(128, 128, 128, 0.1)'
+      ctx.lineWidth = 1
+      ctx.stroke()
+      ctx.restore()
+    }
+
+    // out-of-zone intent markers
+    const zoneBoxes = getZoneBoxes()
+    for (const intent of getIntents().values()) {
+      const i = /** @type {Record<string, unknown>} */ (intent)
+      const pos = /** @type {number[] | undefined} */ (i.position)
+      if (!pos || pos.length < 3) continue
+      if (isPositionInsideAnyZone(pos, zoneBoxes)) continue
+      const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, rect)
+      const size = 12
+      ctx.save()
+      ctx.fillStyle = 'rgba(120, 120, 120, 0.5)'
+      ctx.strokeStyle = 'rgba(170, 170, 170, 0.8)'
+      ctx.lineWidth = 1
+      ctx.fillRect(px - size / 2, py - size / 2, size, size)
+      ctx.strokeRect(px - size / 2, py - size / 2, size, size)
+      const name = intentName(intent)
+      if (name) {
+        ctx.fillStyle = 'rgba(170, 170, 170, 0.95)'
+        ctx.font = '11px monospace'
+        ctx.textAlign = 'center'
+        ctx.fillText(name, px, py + size / 2 + 12)
+      }
+      ctx.restore()
+    }
+  }
+}

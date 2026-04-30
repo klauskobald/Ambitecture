@@ -1,0 +1,113 @@
+/* ── Modal overlay ──────────────────────────────────────────── */
+
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 300;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.modal-overlay.is-open {
+  display: flex;
+}
+
+/* ── Modal card ────────────────────────────────────────────── */
+
+.modal {
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.7);
+  min-width: 300px;
+  max-width: 420px;
+  width: 100%;
+  padding: 1.25rem 1.25rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  animation: modal-in 0.15s ease-out;
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ── Text ──────────────────────────────────────────────────── */
+
+.modal-text {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--color-text);
+}
+
+/* ── Input fields ──────────────────────────────────────────── */
+
+.modal-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.modal-input {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.9rem;
+  font-family: inherit;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+
+.modal-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.modal-input:focus {
+  border-color: var(--color-accent);
+}
+
+/* ── Action buttons ────────────────────────────────────────── */
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.modal-actions .btn {
+  min-width: 5rem;
+  padding: 0.45rem 1rem;
+  font-size: 0.85rem;
+  border-radius: 8px;
+}
+
+/* Primary / affirmative action */
+.btn--primary {
+  background: var(--color-accent) !important;
+  border-color: var(--color-accent) !important;
+  color: #0a0a0a !important;
+  font-weight: 600;
+}
+
+.btn--primary:hover {
+  filter: brightness(1.15);
+}

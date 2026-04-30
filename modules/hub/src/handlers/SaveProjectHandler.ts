@@ -9,6 +9,7 @@ interface SaveProjectPayload {
   data: unknown;
 }
 
+const ALLOWED_TOP_KEYS = new Set(['scenes']);
 
 function isSaveProjectPayload(payload: unknown): payload is SaveProjectPayload {
   if (!payload || typeof payload !== 'object') return false;
@@ -20,15 +21,19 @@ export class SaveProjectHandler implements MessageHandler {
   constructor(
     private projectManager: ProjectManager,
     private onChanged: () => void,
-  ) { }
+  ) {}
 
-  handle(ws: WebSocket, message: WsMessage, _registry: ConnectionRegistry): void {
+  handle(_ws: WebSocket, message: WsMessage, _registry: ConnectionRegistry): void {
     if (!isSaveProjectPayload(message.payload)) {
       Logger.warn('[saveProject] invalid payload — expected { key, data }');
       return;
     }
 
     const topKey = message.payload.key.split('.')[0]!;
+    if (!ALLOWED_TOP_KEYS.has(topKey)) {
+      Logger.warn(`[saveProject] key "${message.payload.key}" rejected — "${topKey}" not in allowlist`);
+      return;
+    }
 
     this.projectManager.setOverride(message.payload.key, message.payload.data);
     this.onChanged();

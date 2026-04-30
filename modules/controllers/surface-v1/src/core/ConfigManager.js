@@ -1,3 +1,5 @@
+import { confirm as modalConfirm, prompt as modalPrompt } from './Modal.js'
+
 /**
  * Generic manager for named collections (scenes, sequences, actions).
  *
@@ -93,18 +95,23 @@ export class ConfigManager {
     return this._activeName
   }
 
-  _onAddClick () {
-    const name = prompt(`${this._options.collectionName} name:`, 'untitled')
-    if (name && name.trim()) {
-      this._options.onAdd(name.trim())
+  async _onAddClick () {
+    const values = await modalPrompt('', [
+      { label: 'Name', key: 'name', placeholder: 'untitled' },
+    ], { submit: 'Create' })
+    if (values && values.name.trim()) {
+      this._options.onAdd(values.name.trim())
       this.refresh()
     }
   }
 
   /** @param {string} name */
-  _onRemoveClick (name) {
-    const confirmed = confirm(`Remove ${this._options.collectionName.toLowerCase()} "${name}"?`)
-    if (confirmed) {
+  async _onRemoveClick (name) {
+    const ok = await modalConfirm(
+      `Remove ${this._options.collectionName.toLowerCase()} "${name}"?`,
+      { yes: 'Remove', no: 'Cancel' },
+    )
+    if (ok) {
       this._options.onRemove(name)
       if (this._activeName === name) {
         this._activeName = null

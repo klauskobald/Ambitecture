@@ -71,50 +71,102 @@
   min-height: 2.5rem;
 }
 
-/* ── Intent list (Edit pane) ────────────────────────────────── */
+/* ── Mode bar (Edit pane) ────────────────────────────────────── */
 
-.intent-list {
+.mode-bar {
   display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  padding: 0.5rem 0;
-  overflow-y: auto;
-  max-height: 100%;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem;
 }
 
-.intent-list-empty {
-  margin: 0.5rem 0;
-  color: var(--color-text-muted);
-  font-size: 0.85rem;
+/* ── Color picker modal ──────────────────────────────────────── */
+
+/*
+ * display: flex cannot be on the base class — author CSS overrides the hidden
+ * attribute's UA-stylesheet display: none. Use .is-open to toggle visibility.
+ */
+.color-picker-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
 }
 
-.intent-row {
+.color-picker-overlay.is-open {
+  display: flex;
+}
+
+.color-picker-modal {
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  min-width: 340px;
+}
+
+.color-picker-header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.3rem 0.5rem;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9rem;
+  justify-content: space-between;
+  padding: 0.4rem 0.5rem 0;
 }
 
-.intent-row:hover {
+.color-picker-tabs {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.color-picker-tab {
+  padding: 0.3rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+.color-picker-close {
+  padding: 0.25rem 0.6rem;
+  font-size: 1rem;
+  line-height: 1;
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.color-picker-close:hover {
+  color: var(--color-text);
   background: var(--color-bg-raised);
 }
 
-.intent-perform-toggle {
-  flex: 0 0 auto;
-  cursor: pointer;
-  accent-color: var(--color-accent);
-  width: 1rem;
-  height: 1rem;
+.color-picker-body {
+  padding: 0.75rem;
 }
 
-.intent-name {
-  flex: 1 1 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* ── HSL palette ─────────────────────────────────────────────── */
+
+.palette-hsl {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.palette-hsl-canvas {
+  display: block;
+  width: 320px;
+  height: 120px;
+  border-radius: 4px;
+  cursor: crosshair;
+}
+
+.palette-hsl-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  padding: 0 2px;
+  font-family: ui-monospace, monospace;
 }
 
 /* ── Placeholder content ────────────────────────────────────── */

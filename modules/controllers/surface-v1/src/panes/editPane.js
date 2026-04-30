@@ -1,6 +1,13 @@
 import { editPolicy, noopPolicy } from '../viewport/interactionPolicies.js'
-import { getIntents, intentGuid, getAllowances, setAllowance } from '../core/stores.js'
+import {
+  getIntents, intentGuid, getAllowances, setAllowance,
+  updateIntentColor
+} from '../core/stores.js'
+import { queueIntentUpdate } from '../core/outboundQueue.js'
 import { SelectionManager } from '../viewport/selectionManager.js'
+import { ColorPicker } from '../ui/colorPicker.js'
+import { hslPalette } from '../ui/palettes/hslPalette.js'
+import { toCSSRGB } from '../core/color.js'
 
 export class EditPane {
   /**
@@ -8,17 +15,30 @@ export class EditPane {
    */
   constructor (overlay) {
     this._overlay = overlay
-    this._enableModeActive = false
+    this._colorPicker = new ColorPicker([hslPalette])
+    /** @type {string | null} active mode id */
+    this._activeMode = null
+    /** @type {Map<string, SelectionManager | null>} lazy-built per mode */
+    this._managers = new Map()
+    this._unsubscribe = null
 
     this._el = document.createElement('div')
     this._el.className = 'pane edit-pane'
     this._el.hidden = true
 
-    this._toggleBtn = document.createElement('button')
-    this._toggleBtn.className = 'btn btn-mode-toggle'
-    this._toggleBtn.textContent = 'Perform Enable'
-    this._toggleBtn.addEventListener('click', () => this._toggleEnableMode())
-    this._el.appendChild(this._toggleBtn)
+    this._modeBar = document.createElement('div')
+    this._modeBar.className = 'mode-bar'
+    this._el.appendChild(this._modeBar)
+
+    for (const mode of this._modes()) {
+      const btn = document.createElement('button')
+      btn.className = 'btn btn-mode-toggle'
+      btn.textContent = mode.label
+      btn.dataset.modeId = mode.id
+      btn.addEventListener('click', () => this._toggleMode(mode.id))
+      this._modeBar.appendChild(btn)
+      this._managers.set(mode.id, null)
+    }
   }
 
   /** @param {HTMLElement} container */
@@ -33,77 +53,146 @@ export class EditPane {
   }
 
   deactivate () {
-    this._exitEnableMode()
+    this._exitCurrentMode()
+    this._colorPicker.close()
     this._el.hidden = true
   }
 
-  _toggleEnableMode () {
-    if (this._enableModeActive) {
-      this._exitEnableMode()
+  // ── Mode registry ─────────────────────────────────────────────────────────────
+
+  _modes () {
+    return [
+      {
+        id: 'performEnable',
+        label: 'Perform Enable',
+        buildManager: () => this._buildPerformEnableManager()
+      },
+      {
+        id: 'color',
+        label: 'Color',
+        buildManager: () => this._buildColorManager()
+      }
+    ]
+  }
+
+  /** @param {string} modeId */
+  _toggleMode (modeId) {
+    if (this._activeMode === modeId) {
+      this._exitCurrentMode()
     } else {
-      this._enterEnableMode()
+      this._exitCurrentMode()
+      this._enterMode(modeId)
     }
   }
 
-  _enterEnableMode () {
-    this._enableModeActive = true
+  /** @param {string} modeId */
+  _enterMode (modeId) {
+    const mode = this._modes().find(m => m.id === modeId)
+    if (!mode) return
+
+    let manager = this._managers.get(modeId) ?? null
+    if (!manager) {
+      manager = mode.buildManager()
+      this._managers.set(modeId, manager)
+    }
+
+    this._activeMode = modeId
     this._overlay.setPolicy(noopPolicy)
-    this._overlay.setSelectionManager(this._buildSelectionManager())
-    this._toggleBtn.classList.add('btn--active')
-    this._toggleBtn.textContent = 'Done'
+    this._overlay.setSelectionManager(manager)
+
+    const btn = this._modeBar.querySelector(`[data-mode-id="${modeId}"]`)
+    btn?.classList.add('btn--active')
+    // update button label for modes that change it
+    if (modeId === 'performEnable') btn && (btn.textContent = 'Done')
   }
 
-  _exitEnableMode () {
-    if (!this._enableModeActive) return
-    this._enableModeActive = false
+  _exitCurrentMode () {
+    if (!this._activeMode) return
+
+    const prev = this._activeMode
+    this._activeMode = null
     this._overlay.setPolicy(editPolicy)
     this._overlay.setSelectionManager(null)
-    this._toggleBtn.classList.remove('btn--active')
-    this._toggleBtn.textContent = 'Perform Enable'
+    this._colorPicker.close()
+
+    const btn = this._modeBar.querySelector(`[data-mode-id="${prev}"]`)
+    btn?.classList.remove('btn--active')
+    // restore original labels
+    const mode = this._modes().find(m => m.id === prev)
+    if (btn && mode) btn.textContent = mode.label
   }
 
-  _buildSelectionManager () {
+  // ── Manager builders ──────────────────────────────────────────────────────────
+
+  _buildPerformEnableManager () {
     return new SelectionManager({
       getObjects: () => getIntents().entries(),
-
       getWorldPos (obj) {
         const i = /** @type {Record<string, unknown>} */ (obj)
         const pos = /** @type {number[] | undefined} */ (i.position)
         if (!pos || pos.length < 3) return null
         return { wx: pos[0], wz: pos[2] }
       },
-
       onTap (id, obj) {
         const guid = intentGuid(obj)
-        const current = !!(getAllowances()[guid]?.performEnabled)
-        setAllowance(guid, 'performEnabled', !current)
+        setAllowance(guid, 'performEnabled', !getAllowances()[guid]?.performEnabled)
       },
-
       drawBubble (ctx, px, py, id, obj) {
         const guid = intentGuid(obj)
         const enabled = !!(getAllowances()[guid]?.performEnabled)
-        const BUBBLE_R = 24
-
+        const R = 24
         ctx.save()
-
-        // bubble fill
         ctx.beginPath()
-        ctx.arc(px, py, BUBBLE_R, 0, Math.PI * 2)
+        ctx.arc(px, py, R, 0, Math.PI * 2)
         ctx.fillStyle = enabled ? 'rgba(85, 170, 255, 0.88)' : 'rgba(30, 30, 30, 0.82)'
         ctx.fill()
-
-        // bubble stroke
         ctx.strokeStyle = enabled ? '#5af' : '#444'
         ctx.lineWidth = 2
         ctx.stroke()
-
-        // ON / OFF label
         ctx.fillStyle = enabled ? '#fff' : '#777'
         ctx.font = 'bold 11px system-ui, sans-serif'
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
         ctx.fillText(enabled ? 'ON' : 'OFF', px, py)
+        ctx.restore()
+      }
+    })
+  }
 
+  _buildColorManager () {
+    const colorPicker = this._colorPicker
+    return new SelectionManager({
+      getObjects: () => getIntents().entries(),
+      getWorldPos (obj) {
+        const i = /** @type {Record<string, unknown>} */ (obj)
+        const pos = /** @type {number[] | undefined} */ (i.position)
+        if (!pos || pos.length < 3) return null
+        return { wx: pos[0], wz: pos[2] }
+      },
+      onTap (_id, obj) {
+        const guid = intentGuid(obj)
+        const i = /** @type {Record<string, unknown>} */ (obj)
+        const params = /** @type {Record<string, unknown>} */ (i.params ?? {})
+        const currentColor = params.color ?? { h: 0, s: 1, l: 0.25 }
+        colorPicker.open(currentColor, rawColor => {
+          const updated = updateIntentColor(guid, rawColor)
+          if (updated) queueIntentUpdate(updated)
+        })
+      },
+      drawBubble (ctx, px, py, _id, obj) {
+        const i = /** @type {Record<string, unknown>} */ (obj)
+        const params = /** @type {Record<string, unknown>} */ (i.params ?? {})
+        const color = params.color
+        const cssColor = color ? toCSSRGB(color) : 'rgb(60, 60, 60)'
+        const R = 24
+        ctx.save()
+        ctx.beginPath()
+        ctx.arc(px, py, R, 0, Math.PI * 2)
+        ctx.fillStyle = cssColor
+        ctx.fill()
+        ctx.strokeStyle = 'rgba(255,255,255,0.4)'
+        ctx.lineWidth = 2
+        ctx.stroke()
         ctx.restore()
       }
     })

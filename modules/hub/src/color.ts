@@ -34,6 +34,10 @@ export class Color {
       return new Color(rgbComponentsToXYY(obj.r, obj.g, obj.b));
     }
 
+    if (isHSLObject(obj)) {
+      return new Color(hslToXYY(obj.h, obj.s, obj.l));
+    }
+
     throw new Error('Unrecognized color format');
   }
 
@@ -106,5 +110,29 @@ function rgbComponentsToXYY(r: number, g: number, b: number): XYY {
     linearizeSRGBChannel(r),
     linearizeSRGBChannel(g),
     linearizeSRGBChannel(b)
+  );
+}
+
+function isHSLObject(obj: Record<string, unknown>): obj is { h: number; s: number; l: number } {
+  return typeof obj['h'] === 'number' && typeof obj['s'] === 'number' && typeof obj['l'] === 'number';
+}
+
+function hslToXYY(h: number, s: number, l: number): XYY {
+  // Standard HSL → sRGB conversion
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  let r = 0, g = 0, b = 0;
+  if (h < 60)       { r = c; g = x; b = 0; }
+  else if (h < 120) { r = x; g = c; b = 0; }
+  else if (h < 180) { r = 0; g = c; b = x; }
+  else if (h < 240) { r = 0; g = x; b = c; }
+  else if (h < 300) { r = x; g = 0; b = c; }
+  else              { r = c; g = 0; b = x; }
+  // Scale to 0-255 then linearize via existing path
+  return rgbLinearToXYY(
+    linearizeSRGBChannel((r + m) * 255),
+    linearizeSRGBChannel((g + m) * 255),
+    linearizeSRGBChannel((b + m) * 255)
   );
 }

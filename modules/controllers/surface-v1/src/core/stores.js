@@ -100,6 +100,23 @@ export function setAllowance (guid, key, value) {
   notifyListeners()
 }
 
+// ─── Color updates ─────────────────────────────────────────────────────────────
+
+/**
+ * @param {string} guid
+ * @param {unknown} rawPickerValue  original picker format: { h,s,l } | { r,g,b } | { x,y,Y } | etc.
+ * @returns {unknown | null}
+ */
+export function updateIntentColor (guid, rawPickerValue) {
+  const intent = intentState.get(guid)
+  if (!intent) return null
+  const i = /** @type {Record<string,unknown>} */ (intent)
+  const updated = { ...i, params: { ...(/** @type {Record<string,unknown>} */ (i.params) ?? {}), color: rawPickerValue } }
+  intentState.set(guid, updated)
+  notifyListeners()
+  return updated
+}
+
 // ─── Position updates ──────────────────────────────────────────────────────────
 
 /**

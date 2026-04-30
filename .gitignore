@@ -8,3 +8,4 @@ var/
 .DS_Store
 _scratch/
 docs/
+claude-with-deepseek.sh

@@ -29,7 +29,7 @@ The hub is the **single source of truth** for system-wide configuration. It subs
 
 ### Hub-hosted setup GUI
 
-Status: **planned surface, mostly placeholder files today** (`public/index.html`, `public/main.js`, `public/styles.css` currently exist but are empty).
+The hub `public/` directory contains the static SPA frontend shell served by the hub HTTP server.
 
 All setup should be possible through the hub's own web GUI, served from `hub/public`.
 
@@ -43,6 +43,8 @@ The GUI should use a mobile-first layout with:
 - a generic navigation shell
 - pane-based sections (system, projects, fixtures, zones, modules, etc.)
 - fast pane switching without full page reloads
+
+The pane-based architecture pattern is already implemented in the `surface-v1` controller as a reference: lazy-loading pane modules, single mount with activate/deactivate lifecycle, no teardown on switch.
 
 ### Renderer setup panes (remote-provided UI)
 
@@ -93,7 +95,22 @@ Renderer data authority model:
 
 **Role:** Front ends and tools that send control intent/state to the hub.
 
-**`controllers/web-test/`** — Static controller shell: [`index.html`](modules/controllers/web-test/index.html) embeds simulator-2d in an iframe, opens a WebSocket to the hub as **`role: controller`**, receives **`config`** (full project zones from [`ProjectManager.buildControllerConfig`](modules/hub/src/ProjectManager.ts)), and maps overlay touches to **meters inside the selected zone’s `boundingBox`** (see [`src/main.js`](modules/controllers/web-test/src/main.js)). Tunable layout lives in [`config.json`](modules/controllers/web-test/config.json) next to `index.html`.
+**`controllers/surface-v1/`** — Primary operator controller. Architecture built around a **pane-based SPA** with lazy-loading panes and a touch overlay canvas:
+
+- **Pane router** (`src/app/router.js`): Three panes — **Perform**, **Edit**, **Setup** — each lazily imported, mounted once, and cycled via `activate()`/`deactivate()` lifecycle. No full page reloads or teardown on switch.
+- **Touch overlay** (`src/viewport/overlayCanvas.js`): Transparent canvas stacked on top of the simulator iframe. Handles pointer events for intent/fixture dragging, draws a finger-trail, intent radius circles, out-of-zone markers, and selection bubbles. Supports modality via **interaction policies** and an optional **SelectionManager**.
+- **Interaction policies** (`src/viewport/interactionPolicies.js`): `performPolicy` (allowance-gated drag), `editPolicy` (all intents and fixtures draggable), `noopPolicy` (no interaction). Policy switches per pane via `overlay.setPolicy()`.
+- **SelectionManager** (`src/viewport/selectionManager.js`): Generic bubble-overlay system — renders bubbles at world positions for any set of objects, detects taps within a hit radius, and calls an `onTap` callback. The manager holds no selection state — that belongs to the caller (e.g., allowances graph in `stores.js`). Can be enabled/disabled on the overlay canvas.
+- **State stores** (`src/core/stores.js`): Centralized reactive state — intent map (keyed by `guid`), fixture map (keyed by `zoneName::fixtureName`), allowances graph (per-object switches), hub spatial bounds, and zone bounding boxes. Exposes a `subscribeToStores(fn)` listener pattern and typed accessors (`intentGuid`, `intentLayer`, `intentName`, `intentRadius`).
+- **Color** (`src/core/color.js`): Display-oriented color conversion. Detects format (HSL, xyY, hex, RGB array, RGB components) and converts to CSS `rgb()` strings or HSL for palette initialization. Internal math matches hub `color.ts` and simulator-2d `color.js`.
+- **Outbound queue** (`src/core/outboundQueue.js`): Rate-limited WebSocket send queue for intent updates.
+- **WebSocket** (`src/core/socket.js`): Auto-reconnecting WebSocket with `onOpen`/`onMessage`/`onClose` callbacks. Reconnects immediately on close/error.
+- **Config** (`src/core/config.js`): Loads `config.json` at startup, validates required keys (including `CONTROLLER_GUID`, `SIMULATOR_RENDERER_GUID`, `GEO_LOCATION`, `LAYOUT`), and applies layout CSS custom properties.
+- **Spatial math** (`src/viewport/spatialMath.js`): World ↔ canvas coordinate transforms, zone containment checks, client-to-world conversion via the simulator canvas rect.
+- **CSS split** by concern: `theme.css`, `layout.css`, `controls.css` (matching the frontend styling policy). Layout values driven from `config.json` `LAYOUT` block via CSS custom properties.
+- **HTML** (`index.html`): Semantic structure — app root, header with nav toggle/spatial readout, nav bar with pane links, sim area (iframe + overlay canvas), and pane host container.
+
+**`controllers/web-test/`** — Legacy static controller shell (being replaced by surface-v1).
 
 ---
 
@@ -126,11 +143,13 @@ All HTML should be intentionally minimal and mostly unstyled at module level.
 - Inline styles and module-local visual styling should be avoided by default.
 - Visual design authority lives in the hub frontend styles under `hub/public`.
 
-Stylesheets should be split by concern, for example:
+Stylesheets must be split by concern, as implemented in `surface-v1/src/styles/`:
 
-- `layout` / positioning (flow, spacing, grid/flex helpers, pane sizing)
-- form/input controls (buttons, inputs, selects, sliders, focus states)
-- theme tokens (CSS variables for colors, typography, radii, shadows)
+- `theme.css` — CSS variables for colors, typography, radii, shadows (dark theme baseline)
+- `layout.css` — positioning, flow, spacing, grid/flex helpers, pane sizing, responsive breakpoints
+- `controls.css` — form/input controls: buttons, inputs, selects, sliders, focus states
+
+Layout values that are tunable per deployment (padding, gaps, z-indices, overlay sizes) are injected from `config.json` as CSS custom properties on `:root`.
 
 Initial baseline is a single dark theme. Theme values should be defined via variables so additional themes can be added later without changing component HTML.
 
@@ -161,6 +180,30 @@ Hub pre-filtering by bounding box/location is intended optimization, not current
 ### Room and scope filtering for controllers
 
 Controllers should eventually receive room/scope-filtered data based on announced metadata. This filtering is not implemented yet.
+
+### Color pipeline
+
+Color flows through the system in multiple formats, with CIE 1931 `xyY` as the internal truth on the hub:
+
+- **Hub** (`src/color.ts`): `Color.createFromObject()` accepts CIE xyY, hex strings, RGB components (0-255), and **HSL** (`{ h, s, l }`). All formats are converted to internal xyY on construction. HSL was added to support color picker output from controller UIs.
+- **Controller** (`surface-v1/src/core/color.js`): Display-oriented mirror — detects the same format set and converts to CSS `rgb()` strings for rendering, and to HSL for palette initialization.
+- **Simulator-2D**: Maintains its own `color.js` with the same conversion math for in-browser preview.
+
+The format detection logic is `{ h, s, l }` → HSL, `{ x, y, Y }` → CIE xyY, `{ rgb: "#..." }` → hex, `{ rgb: [r,g,b] }` → RGB array, `{ r, g, b }` → RGB components.
+
+### Interaction policies
+
+The `surface-v1` controller uses an **interaction policy** pattern to control what the touch overlay canvas allows per pane:
+
+- `performPolicy` — dragging is gated by the allowances graph (`allowances[guid].performEnabled`)
+- `editPolicy` — all intents and fixtures are draggable
+- `noopPolicy` — no interaction
+
+Policies are set on the overlay canvas via `overlay.setPolicy(policy)` when switching panes. The policy defines four methods: `canDragIntent(intent)`, `canDragFixture(fixture)`, `onIntentMove(guid, wx, wz)`, `onFixtureMove(id, wx, wz)`. This keeps pane-specific interaction rules in a single testable object rather than scattered through the overlay code.
+
+### SelectionManager
+
+A generic interactive bubble overlay (`surface-v1/src/viewport/selectionManager.js`) that renders bubbles at world-space positions for any set of objects. It has no selection state of its own — the caller (e.g., the allowances graph in `stores.js`) owns the state. The `OverlayCanvas` can enable/disable a SelectionManager; when active, it intercepts all pointer events and routes taps to the manager's `onTap` callback. Used by the Edit pane to toggle fixture/intent allowances via tap on world-positioned bubbles.
 
 ---
 
@@ -251,9 +294,11 @@ Controllers use `role: "controller"` and include `scope` (rooms/areas) instead o
         "class": "light",
         "scheduled": 250,
         "position": [1.2, 0.0, -3.5],
+        "layer": 100,
+        "name": "my intent",
+        "radius": 3.5,
         "params": {
           "color": { "x": 0.32, "y": 0.34, "Y": 0.8 },
-          "layer": 100,
           "blend": "ADD",
           "alpha": 1
         }
@@ -264,6 +309,8 @@ Controllers use `role: "controller"` and include `scope` (rooms/areas) instead o
 ```
 
 `scheduled` in controller `intents` is relative milliseconds from "now" and is resolved by the hub into absolute event timestamps.
+
+`layer`, `name`, and `radius` are top-level intent fields (not nested inside `params`). `layer` controls compositing priority, `name` is a human-readable label, and `radius` defines a spatial radius in world units for the intent.
 
 **`events`** — hub → renderer:
 
@@ -278,9 +325,11 @@ Controllers use `role: "controller"` and include `scope` (rooms/areas) instead o
         "class": "light",
         "scheduled": 1767225600000,
         "position": [1.2, 0.0, -3.5],
+        "layer": 100,
+        "name": "my intent",
+        "radius": 3.5,
         "params": {
           "color": { "x": 0.32, "y": 0.34, "Y": 0.8 },
-          "layer": 100,
           "blend": "ADD",
           "alpha": 1
         }
@@ -313,8 +362,10 @@ Controllers use `role: "controller"` and include `scope` (rooms/areas) instead o
 
 ### Layering and blend behavior
 
-- Renderer intent storage is keyed by intent `guid` (not by `params.layer`), so multiple intents can coexist on the same layer.
-- `params.layer` controls compositing priority.
+- Renderer intent storage is keyed by intent `guid` (not by `layer`), so multiple intents can coexist on the same layer.
+- `layer` is a top-level intent field that controls compositing priority.
+- `name` is a top-level human-readable label shown in controller UI.
+- `radius` is a top-level spatial radius in world units, rendered as a circle on the controller overlay canvas.
 - `light.color.xyY` is composited in ascending layer order using each intent's `blend` (`ADD`, `ALPHA`, `MULTIPLY`) and `alpha`.
 - Scalar and boolean capabilities (`light.strobe`, `master.brightness`, `master.blackout`) resolve by highest layer carrying a typed value.
 - Spatial attenuation uses fixture range and a named function curve (`linear`, `quadratic`, `cubic`, `sqrt`, `smoothstep`), defaulting to `quadratic`.
@@ -348,7 +399,7 @@ All long-lived module connections (renderers and controllers) must be treated as
 ### Reconnect behavior
 
 - DMX and simulator renderers reconnect immediately on close/error and re-register.
-- Controller reconnect behavior is module-specific; `controllers/web-test` currently does not implement automatic reconnect.
+- `controllers/surface-v1` automatically reconnects on close/error via its `Socket.connect()` (reconnects immediately with zero delay, re-registers on open).
 - After reconnect, modules should re-register identity/capabilities and wait for fresh config before resuming normal operation.
 
 ---

@@ -3,8 +3,8 @@ import { projectGraph } from '../../core/projectGraph.js'
 import { queueIntentUpdate } from '../../core/outboundQueue.js'
 
 export class PillControl extends PropertyControl {
-  constructor (descriptor, onCommit) {
-    super(descriptor, onCommit)
+  constructor (descriptor, onCommit, selectionSize) {
+    super(descriptor, onCommit, selectionSize)
     /** @type {HTMLButtonElement[]} */
     this._pills = []
   }
@@ -44,5 +44,6 @@ export class PillControl extends PropertyControl {
       const updated = projectGraph.updateIntentProperty(guid, dotKey, option)
       if (updated) queueIntentUpdate(updated)
     }
+    this._saveProject()
   }
 }

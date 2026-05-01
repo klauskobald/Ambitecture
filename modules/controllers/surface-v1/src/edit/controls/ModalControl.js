@@ -5,8 +5,8 @@ import * as Modal from '../../core/Modal.js'
 import { resolveMultiSelectState } from './controlHelpers.js'
 
 export class ModalControl extends PropertyControl {
-  constructor (descriptor, onCommit) {
-    super(descriptor, onCommit)
+  constructor (descriptor, onCommit, selectionSize) {
+    super(descriptor, onCommit, selectionSize)
     /** @type {HTMLButtonElement | null} */
     this._btn = null
   }
@@ -43,5 +43,6 @@ export class ModalControl extends PropertyControl {
       const updated = projectGraph.updateIntentProperty(guid, dotKey, newValue)
       if (updated) queueIntentUpdate(updated)
     }
+    this._saveProject()
   }
 }

@@ -68,12 +68,15 @@ export class EditPane {
       this._actionBar.refresh(selectionState.getSize())
     })
     this._actionBar.refresh(selectionState.getSize())
+
+    this._overlay.setDoubleTapIntentCallback(guid => this._handleDoubleTapIntent(guid))
   }
 
   deactivate () {
     this._exitCurrentMode()
     this._colorPicker.close()
     this._el.hidden = true
+    this._overlay.setDoubleTapIntentCallback(null)
 
     if (this._selectionUnsub) {
       this._selectionUnsub()
@@ -227,5 +230,12 @@ export class EditPane {
     const descriptors = resolveDescriptorsForClass('light')
     if (!descriptors) return
     this._drawer.open(descriptors, selectionState.getGuids())
+  }
+
+  /** @param {string} guid */
+  _handleDoubleTapIntent (guid) {
+    selectionState.clearAll()
+    selectionState.toggleGuid(guid)
+    this._onModifyClick()
   }
 }

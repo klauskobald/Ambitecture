@@ -66,14 +66,19 @@ export function resolveEnableState (guids, dotKey) {
 }
 
 /**
- * Clamp a value after applying a relative delta.
- * delta ∈ [-1, 1] maps to ±(max - min).
+ * Apply a delta to a value using the specified function, clamped to [min, max].
+ * ADD:      newVal = original + delta
+ * MULTIPLY: newVal = original * delta  (delta=1.0 → no change)
  * @param {number} original
  * @param {number} delta
+ * @param {'ADD' | 'MULTIPLY' | string} fn
  * @param {number} min
  * @param {number} max
  * @returns {number}
  */
-export function applyRelativeDelta (original, delta, min, max) {
-  return Math.max(min, Math.min(max, original + delta * (max - min)))
+export function applyDelta (original, delta, fn, min, max) {
+  const result = fn === 'MULTIPLY'
+    ? original * delta
+    : original + delta
+  return Math.max(min, Math.min(max, result))
 }

@@ -53,8 +53,10 @@
 /* ── Property panel ──────────────────────────────────────────────────────── */
 
 .prop-panel {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.4rem;
+  align-items: start;
 }
 
 /* ── Property row ────────────────────────────────────────────────────────── */
@@ -62,8 +64,10 @@
 .prop-row {
   display: flex;
   flex-direction: column;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid var(--color-border);
+  padding: 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 1px;
+  background: var(--color-bg-raised);
 }
 
 .prop-row__header {
@@ -134,15 +138,22 @@
   color: var(--color-accent);
 }
 
-/* ── Color swatch ────────────────────────────────────────────────────────── */
+/* ── Inline color palette ────────────────────────────────────────────────── */
 
-.prop-color-swatch {
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 4px;
-  border: 1px solid var(--color-border);
-  cursor: pointer;
-  background: rgb(60, 60, 60);
+.prop-color-inline {
+  width: 100%;
+  overflow: hidden;
+}
+
+.prop-color-inline .palette-hsl {
+  width: 100%;
+}
+
+.prop-color-inline .palette-hsl-canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+  cursor: crosshair;
 }
 
 /* ── Relative HSL sliders ────────────────────────────────────────────────── */

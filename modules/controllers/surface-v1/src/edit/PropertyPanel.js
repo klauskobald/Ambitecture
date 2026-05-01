@@ -60,15 +60,16 @@ export class PropertyPanel {
    */
   _controlForDescriptor (d) {
     const onCommit = () => {}
+    const size = this._selectionSize
     switch (d.type) {
       case 'color':
-        return new ColorControl(d, onCommit)
+        return new ColorControl(d, onCommit, size)
       case 'scalar':
-        return new SliderControl(d, onCommit)
+        return new SliderControl(d, onCommit, size)
       case 'string':
         return Array.isArray(d.options) && d.options.length > 0
-          ? new PillControl(d, onCommit)
-          : new ModalControl(d, onCommit)
+          ? new PillControl(d, onCommit, size)
+          : new ModalControl(d, onCommit, size)
       default:
         return null
     }

@@ -45,6 +45,12 @@ export class OverlayCanvas {
     this._draggedIntents = new Map()
     /** @type {Map<number, string>} pointerId → fixture id */
     this._draggedFixtures = new Map()
+    /** @type {((guid: string) => void) | null} */
+    this._doubleTapIntentCallback = null
+    /** @type {{ pointerId: number, downX: number, downY: number, intentGuid: string | null } | null} */
+    this._tapTracker = null
+    /** @type {{ x: number, y: number, t: number, intentGuid: string | null } | null} */
+    this._lastTap = null
 
     this._bindPointerEvents()
     this._ro = new ResizeObserver(() => this.resize())
@@ -66,6 +72,15 @@ export class OverlayCanvas {
    */
   setSelectionManager (manager) {
     this._selectionManager = manager
+  }
+
+  /**
+   * @param {((guid: string) => void) | null} fn
+   */
+  setDoubleTapIntentCallback (fn) {
+    this._doubleTapIntentCallback = fn
+    this._lastTap = null
+    this._tapTracker = null
   }
 
   resize () {
@@ -102,7 +117,27 @@ export class OverlayCanvas {
       return
     }
 
+    // Double-tap detection: fire callback if second tap lands close to first within 300ms
+    if (this._doubleTapIntentCallback && this._lastTap?.intentGuid) {
+      const elapsed = performance.now() - this._lastTap.t
+      const dist = Math.hypot(x - this._lastTap.x, y - this._lastTap.y)
+      if (elapsed < 300 && dist < 40) {
+        const guid = this._lastTap.intentGuid
+        this._lastTap = null
+        this._doubleTapIntentCallback(guid)
+        return
+      }
+      this._lastTap = null
+    }
+
     const spatial = projectGraph.getSpatial()
+
+    // Track this pointer for tap-vs-drag detection
+    if (spatial) {
+      const intentGuid = this._findIntentAt(x, y, spatial)
+      this._tapTracker = { pointerId: ev.pointerId, downX: x, downY: y, intentGuid }
+    }
+
     if (spatial) {
       const fixtureHit = this._findFixtureAt(x, y, spatial)
       if (fixtureHit !== null) {
@@ -151,6 +186,16 @@ export class OverlayCanvas {
 
   /** @param {PointerEvent} ev */
   _onPointerUp (ev) {
+    // Confirm tap if pointer didn't move far (enables double-tap on next down)
+    if (this._tapTracker?.pointerId === ev.pointerId) {
+      const { x, y } = this._canvasPoint(ev)
+      const dist = Math.hypot(x - this._tapTracker.downX, y - this._tapTracker.downY)
+      this._lastTap = dist < 10
+        ? { x: this._tapTracker.downX, y: this._tapTracker.downY, t: performance.now(), intentGuid: this._tapTracker.intentGuid }
+        : null
+      this._tapTracker = null
+    }
+
     const guid = this._draggedIntents.get(ev.pointerId)
     if (guid !== undefined) this._policy.onIntentMoveEnd(guid)
     this._activePointers.delete(ev.pointerId)

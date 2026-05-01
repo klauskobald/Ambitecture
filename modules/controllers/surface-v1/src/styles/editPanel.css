@@ -2,12 +2,27 @@
 
 /* ── Slide-up drawer ─────────────────────────────────────────────────────── */
 
+.prop-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 149;
+  background: rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease-out;
+}
+
+/* Stay pointer-events: none so hits reach the canvas/UI below; outside-close uses capture on document. */
+.prop-drawer-backdrop.is-open {
+  opacity: 1;
+}
+
 .prop-drawer {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
-  height: 65dvh;
+  max-height: min(85dvh, calc(100dvh - env(safe-area-inset-bottom, 0px)));
   z-index: 150;
   display: flex;
   flex-direction: column;
@@ -46,6 +61,7 @@
 
 .prop-drawer__body {
   flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   padding: 0.25rem 0.5rem;
 }

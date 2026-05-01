@@ -4,6 +4,8 @@ import { selectionState } from './selectionState.js'
 export class PropertiesDrawer {
   constructor () {
     /** @type {HTMLElement | null} */
+    this._backdrop = null
+    /** @type {HTMLElement | null} */
     this._el = null
     /** @type {HTMLElement | null} */
     this._body = null
@@ -17,9 +19,21 @@ export class PropertiesDrawer {
     this._lastDescriptors = []
     /** @type {(() => void) | null} */
     this._selectionUnsub = null
+    /** @type {number | null} */
+    this._outsideCloserRaf = null
+    this._onOutsidePointerDown = /** @param {PointerEvent} e */ (e) => {
+      if (!this.isOpen() || !this._el) return
+      const t = e.target
+      if (t instanceof Node && this._el.contains(t)) return
+      this.close()
+    }
   }
 
   mount () {
+    this._backdrop = document.createElement('div')
+    this._backdrop.className = 'prop-drawer-backdrop'
+    this._backdrop.setAttribute('aria-hidden', 'true')
+
     this._el = document.createElement('div')
     this._el.className = 'prop-drawer'
 
@@ -43,6 +57,7 @@ export class PropertiesDrawer {
 
     this._el.appendChild(header)
     this._el.appendChild(this._body)
+    document.body.appendChild(this._backdrop)
     document.body.appendChild(this._el)
   }
 
@@ -54,7 +69,18 @@ export class PropertiesDrawer {
     if (!this._el) return
     this._lastDescriptors = descriptors
     this._rebuildPanel(guids)
+    this._backdrop?.classList.add('is-open')
+    this._backdrop?.setAttribute('aria-hidden', 'false')
     this._el.classList.add('is-open')
+
+    if (this._outsideCloserRaf != null) {
+      cancelAnimationFrame(this._outsideCloserRaf)
+    }
+    this._outsideCloserRaf = requestAnimationFrame(() => {
+      this._outsideCloserRaf = null
+      if (!this.isOpen()) return
+      document.addEventListener('pointerdown', this._onOutsidePointerDown, true)
+    })
 
     if (!this._selectionUnsub) {
       this._selectionUnsub = selectionState.subscribe(() => this._onSelectionChange())
@@ -63,6 +89,13 @@ export class PropertiesDrawer {
 
   close () {
     if (!this._el) return
+    if (this._outsideCloserRaf != null) {
+      cancelAnimationFrame(this._outsideCloserRaf)
+      this._outsideCloserRaf = null
+    }
+    document.removeEventListener('pointerdown', this._onOutsidePointerDown, true)
+    this._backdrop?.classList.remove('is-open')
+    this._backdrop?.setAttribute('aria-hidden', 'true')
     this._el.classList.remove('is-open')
     if (this._panel) {
       this._panel.destroy()

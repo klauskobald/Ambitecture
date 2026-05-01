@@ -20,7 +20,6 @@ export class SceneHandler implements MessageHandler {
     private registry: ConnectionRegistry,
     private projectManager: ProjectManager,
     private eventQueue: EventQueue,
-    private onSceneChanged: () => void,
   ) {}
 
   handle(ws: WebSocket, message: WsMessage, _registry: ConnectionRegistry): void {
@@ -61,9 +60,6 @@ export class SceneHandler implements MessageHandler {
           }));
 
         this.eventQueue.schedule([...removalEntries, ...activeEntries], message.location);
-
-        // Push updated configs to all modules (controllers get new scene state)
-        this.onSceneChanged();
 
         // Broadcast scene state to all controllers
         const controllers = this.registry.getByRole('controller')

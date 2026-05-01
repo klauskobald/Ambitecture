@@ -69,7 +69,7 @@ router.register('register', new RegisterHandler(registry, projectManager, rateLi
 router.register('events', new EventsHandler(registry));
 router.register('intents', new IntentsHandler(registry, projectManager, eventQueue));
 router.register('fixtures', new FixturesHandler(registry, projectManager, pushConfigsToModules));
-const sceneHandler = new SceneHandler(registry, projectManager, eventQueue, pushConfigsToControllers);
+const sceneHandler = new SceneHandler(registry, projectManager, eventQueue);
 router.register('scene:activate', sceneHandler);
 router.register('saveProject', new SaveProjectHandler(projectManager, pushConfigsToControllers));
 

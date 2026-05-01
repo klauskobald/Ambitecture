@@ -62,6 +62,10 @@ class LayerIntentEngine {
         return true;
     }
 
+    clear() {
+        this._intentsByLayer.clear();
+    }
+
     getActiveIntents() {
         return this._intentsByLayer;
     }

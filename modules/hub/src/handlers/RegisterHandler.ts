@@ -3,6 +3,7 @@ import { Logger } from '../Logger';
 import { ConnectionRegistry } from '../ConnectionRegistry';
 import { MessageHandler, WsMessage } from '../MessageRouter';
 import { ProjectManager } from '../ProjectManager';
+import { normalizeIntentColor, intentToEvent } from './intentHelpers';
 
 interface RegisterPayload {
   role: 'renderer' | 'controller';
@@ -64,13 +65,12 @@ export class RegisterHandler implements MessageHandler {
       ws.send(JSON.stringify({ message: { type: 'config', payload: config } }));
       Logger.info(`[register] pushed config to renderer ${guid}`);
 
-      const controllers = this.registry.getByRole('controller');
-      const openControllers = controllers.filter(c => c.readyState === WebSocket.OPEN);
-      for (const controllerWs of openControllers) {
-        controllerWs.send(JSON.stringify({ message: { type: 'refresh', payload: {} } }));
-      }
-      if (openControllers.length > 0) {
-        Logger.info(`[register] sent refresh to ${openControllers.length} controller(s)`);
+      const activeIntents = this.projectManager.getActiveSceneIntents();
+      if (activeIntents.length > 0) {
+        const now = Date.now();
+        const events = activeIntents.map(normalizeIntentColor).map(i => intentToEvent(i, now));
+        ws.send(JSON.stringify({ message: { type: 'events', payload: events } }));
+        Logger.info(`[register] pushed ${events.length} active scene event(s) to renderer ${guid}`);
       }
     } else if (role === 'controller') {
       const config = {

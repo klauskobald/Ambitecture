@@ -152,6 +152,8 @@ export class OverlayCanvas {
 
   /** @param {PointerEvent} ev */
   _onPointerUp (ev) {
+    const guid = this._draggedIntents.get(ev.pointerId)
+    if (guid !== undefined) this._policy.onIntentMoveEnd(guid)
     this._activePointers.delete(ev.pointerId)
     this._draggedIntents.delete(ev.pointerId)
     this._draggedFixtures.delete(ev.pointerId)
@@ -319,6 +321,7 @@ export class OverlayCanvas {
 
     // intent radius circles
     for (const intent of projectGraph.getIntents().values()) {
+      if (!this._policy.isIntentVisible(intent)) continue
       const i = /** @type {Record<string, unknown>} */ (intent)
       const pos = /** @type {number[] | undefined} */ (i.position)
       const radius = intentRadius(intent)
@@ -341,6 +344,7 @@ export class OverlayCanvas {
     // out-of-zone intent markers
     const zoneBoxes = projectGraph.getZoneBoxes()
     for (const intent of projectGraph.getIntents().values()) {
+      if (!this._policy.isIntentVisible(intent)) continue
       const i = /** @type {Record<string, unknown>} */ (intent)
       const pos = /** @type {number[] | undefined} */ (i.position)
       if (!pos || pos.length < 3) continue

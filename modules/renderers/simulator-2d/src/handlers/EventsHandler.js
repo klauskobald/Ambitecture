@@ -12,7 +12,8 @@ class EventsHandler {
         for (const event of events) this.queue.enqueue(event);
     }
 
-    reapplyCurrentIntents() {
+    reapplyCurrentIntents(clearFirst = false) {
+        if (clearFirst) this._layerIntentEngine.clear();
         const zones = this.configHandler.getZones();
         if (!Array.isArray(zones) || zones.length === 0) {
             return;

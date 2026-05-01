@@ -2,7 +2,7 @@ import { WebSocket } from 'ws';
 import { Logger } from '../Logger';
 import { ConnectionRegistry } from '../ConnectionRegistry';
 import { MessageHandler, WsMessage } from '../MessageRouter';
-import { ProjectManager } from '../ProjectManager';
+import { ProjectManager, ControllerIntent } from '../ProjectManager';
 import { EventQueue } from '../EventQueue';
 import { normalizeIntentColor, intentToEvent, zeroAlphaEvent } from './intentHelpers';
 
@@ -36,19 +36,16 @@ export class SceneHandler implements MessageHandler {
           Logger.warn('[scene] invalid scene:activate payload');
           return;
         }
-        const oldIntents = this.projectManager.getActiveSceneIntents();
         const newIntents = this.projectManager.setActiveScene(message.payload.sceneName);
-        if (newIntents.length === 0 && oldIntents.length === 0) {
-          Logger.info('[scene] activate — no intents in old or new scene, skipping');
-          return;
-        }
 
         const now = Date.now();
         const newGuids = new Set(newIntents.map(i => i.guid));
 
-        // Zero-alpha events for intents removed from the scene
-        const removalEntries = oldIntents
-          .filter(i => i.guid && !newGuids.has(i.guid))
+        // Zero-alpha events for ALL project intents not in the new scene
+        const removalEntries = this.projectManager.getAllIntentDefinitionGuids()
+          .filter(guid => !newGuids.has(guid))
+          .map(guid => this.projectManager.getIntentDefinition(guid))
+          .filter((i): i is ControllerIntent => i !== undefined)
           .map(normalizeIntentColor)
           .map(intent => ({
             event: zeroAlphaEvent(intent, now),

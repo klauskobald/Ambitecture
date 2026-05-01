@@ -84,6 +84,9 @@ export class ScenesPane {
       btn.addEventListener('click', () => {
         projectGraph.toggleSceneIntent(activeScene, guid)
         sendSaveProject('scenes', toHubScenes(projectGraph.getScenesData()))
+        if (activeScene === projectGraph.getActiveSceneName()) {
+          sendSceneActivate(activeScene)
+        }
       })
       container.appendChild(btn)
     }

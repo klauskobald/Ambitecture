@@ -249,7 +249,10 @@ class ProjectGraph {
       }))
       .filter(s => s.name)
 
-    if (!this._data.activeSceneName && this._data.scenes.length > 0) {
+    const hubActive = typeof p.activeSceneName === 'string' && p.activeSceneName ? p.activeSceneName : null
+    if (hubActive && this._data.scenes.some(s => s.name === hubActive)) {
+      this._data.activeSceneName = hubActive
+    } else if (!this._data.activeSceneName && this._data.scenes.length > 0) {
       this._data.activeSceneName = this._data.scenes[0].name
     }
 

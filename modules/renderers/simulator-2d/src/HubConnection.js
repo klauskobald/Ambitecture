@@ -5,7 +5,7 @@ class HubConnection {
 
         const configHandler = new ConfigHandler(renderer, config);
         const eventsHandler = new EventsHandler(configHandler, renderer);
-        configHandler.setOnConfigApplied(() => eventsHandler.reapplyCurrentIntents());
+        configHandler.setOnConfigApplied(() => eventsHandler.reapplyCurrentIntents(true));
 
         this.handlers = {
             config: configHandler,

@@ -1,6 +1,6 @@
 import { loadConfig, applyLayoutCssVars } from '../core/config.js'
 import { projectGraph } from '../core/projectGraph.js'
-import { setSocket, queueIntentUpdate, setMinInterval } from '../core/outboundQueue.js'
+import { setSocket, queueIntentUpdate, setMinInterval, sendSceneActivate } from '../core/outboundQueue.js'
 import { connect } from '../core/socket.js'
 import { SimulatorViewport } from '../viewport/simulatorViewport.js'
 import { OverlayCanvas } from '../viewport/overlayCanvas.js'
@@ -57,7 +57,7 @@ async function main () {
           const intents = Array.isArray(/** @type {Record<string,unknown>} */ (payload ?? {}).intents)
             ? /** @type {unknown[]} */ (/** @type {Record<string,unknown>} */ (payload).intents)
             : []
-          projectGraph.reconcileIntents(intents, queueIntentUpdate)
+          projectGraph.reconcileIntents(intents, null)
           setSpatialReadout(
             projectGraph.getSpatial()
               ? 'hub config received — drag on the touch overlay'
@@ -66,7 +66,8 @@ async function main () {
           break
         }
         case 'refresh': {
-          for (const intent of projectGraph.getIntents().values()) queueIntentUpdate(intent)
+          const activeName = projectGraph.getActiveSceneName()
+          if (activeName) sendSceneActivate(activeName)
           break
         }
         case 'intents': {

@@ -70,6 +70,7 @@ interface Project {
   'zone-to-renderer': Record<string, string[]>;
   intents?: ControllerIntent[];
   scenes?: Scene[];
+  activeScene?: string;
   zones: Zone[];
   controller?: ControllerDef[];
 }
@@ -100,19 +101,33 @@ export class ProjectManager {
     this.watchAll(name, callback);
   }
 
+  private _rebuildIntentDefinitions(intents: ControllerIntent[]): void {
+    this.intentDefinitions = new Map();
+    for (const intent of intents) {
+      if (!intent.guid) {
+        intent.guid = randomUUID();
+      }
+      this.intentDefinitions.set(intent.guid, intent);
+    }
+  }
+
+  private _getMergedIntent(guid: string): ControllerIntent | undefined {
+    const base = this.intentDefinitions.get(guid);
+    if (!base) return undefined;
+    for (const controllerCache of this.intentCache.values()) {
+      const cached = controllerCache.get(guid);
+      if (cached) return { ...base, ...cached };
+    }
+    return base;
+  }
+
   private reloadProject(name: string): void {
     const filePath = this.resolvePath(this.projectsPath, `${name}.yml`);
     this._projectConfig = new Config(filePath);
     this.project = this._projectConfig.getAll() as Project;
     this.intentCache.clear();
 
-    this.intentDefinitions = new Map();
-    for (const intent of this.project.intents ?? []) {
-      if (!intent.guid) {
-        intent.guid = randomUUID();
-      }
-      this.intentDefinitions.set(intent.guid, intent);
-    }
+    this._rebuildIntentDefinitions(this.project.intents ?? []);
 
     // Auto-create "untitled" scene if intents exist but no scenes defined
     if ((!this.project.scenes || this.project.scenes.length === 0) && (this.project.intents ?? []).length > 0) {
@@ -123,8 +138,18 @@ export class ProjectManager {
       Logger.info('[project] auto-created "untitled" scene with all project intents');
     }
 
-    this.activeSceneName = null;
-    this.activeSceneIntents = [];
+    const scenes = this.project.scenes ?? [];
+    const storedScene = scenes.find(s => s.name === this.project!.activeScene);
+    const initialScene = storedScene ?? scenes[0];
+    if (initialScene) {
+      this.activeSceneName = initialScene.name;
+      this.activeSceneIntents = initialScene.intents
+        .map(ref => this._getMergedIntent(ref.guid))
+        .filter((i): i is ControllerIntent => i !== undefined);
+    } else {
+      this.activeSceneName = null;
+      this.activeSceneIntents = [];
+    }
 
     this.fixtureProfiles.clear();
     this.loadReferencedFixtures();
@@ -241,6 +266,9 @@ export class ProjectManager {
     if (!this.project) return;
     const segments = key.split('.');
     this._setAtPath(this.project, segments, data);
+    if (segments[0] === 'intents') {
+      this._rebuildIntentDefinitions(this.project.intents ?? []);
+    }
     Logger.info(`[project] set key "${key}" in memory`);
     this._scheduleSave();
   }
@@ -286,10 +314,22 @@ export class ProjectManager {
     }
     this.activeSceneName = sceneName;
     this.activeSceneIntents = scene.intents
-      .map(ref => this.intentDefinitions.get(ref.guid))
+      .map(ref => this._getMergedIntent(ref.guid))
       .filter((i): i is ControllerIntent => i !== undefined);
+    if (this.project) {
+      this.project.activeScene = sceneName;
+      this._scheduleSave();
+    }
     Logger.info(`[project] Activated scene "${sceneName}" with ${this.activeSceneIntents.length} intent(s)`);
     return this.activeSceneIntents;
+  }
+
+  getAllIntentDefinitionGuids(): string[] {
+    return [...this.intentDefinitions.keys()];
+  }
+
+  getIntentDefinition(guid: string): ControllerIntent | undefined {
+    return this.intentDefinitions.get(guid);
   }
 
   getActiveSceneName(): string | null {
@@ -455,6 +495,7 @@ export class ProjectManager {
       zones: this.runtimeZones.map((z) => this.serializeZone(z)),
       intents,
       scenes,
+      activeSceneName: this.activeSceneName,
       ...passThrough,
     };
     return base;

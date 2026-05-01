@@ -12,6 +12,7 @@ import { SaveProjectHandler } from './handlers/SaveProjectHandler';
 import { EventQueue } from './EventQueue';
 import { ProjectManager } from './ProjectManager';
 import { Logger } from './Logger';
+import { normalizeIntentColor, intentToEvent } from './handlers/intentHelpers';
 
 const serverConfig = new Config('server');
 const port = serverConfig.get<number>('LISTEN_PORT');
@@ -25,14 +26,34 @@ const projectManager = new ProjectManager(
 const registry = new ConnectionRegistry();
 const router = new MessageRouter(registry);
 
+const buildActiveSceneEventsMsg = (): string | null => {
+  const intents = projectManager.getActiveSceneIntents();
+  if (intents.length === 0) return null;
+  const now = Date.now();
+  const events = intents.map(normalizeIntentColor).map(i => intentToEvent(i, now));
+  return JSON.stringify({ message: { type: 'events', payload: events } });
+};
+
 const pushConfigsToModules = () => {
+  const sceneEventsMsg = buildActiveSceneEventsMsg();
   for (const ws of registry.getByRole('renderer')) {
     const info = registry.get(ws);
     if (info && ws.readyState === ws.OPEN) {
       const config = projectManager.buildRendererConfig(info.guid);
       ws.send(JSON.stringify({ message: { type: 'config', payload: config } }));
+      if (sceneEventsMsg) ws.send(sceneEventsMsg);
     }
   }
+  for (const ws of registry.getByRole('controller')) {
+    const info = registry.get(ws);
+    if (info && ws.readyState === ws.OPEN) {
+      const config = projectManager.buildControllerConfig(info.guid);
+      ws.send(JSON.stringify({ message: { type: 'config', payload: config } }));
+    }
+  }
+};
+
+const pushConfigsToControllers = () => {
   for (const ws of registry.getByRole('controller')) {
     const info = registry.get(ws);
     if (info && ws.readyState === ws.OPEN) {
@@ -48,9 +69,9 @@ router.register('register', new RegisterHandler(registry, projectManager, rateLi
 router.register('events', new EventsHandler(registry));
 router.register('intents', new IntentsHandler(registry, projectManager, eventQueue));
 router.register('fixtures', new FixturesHandler(registry, projectManager, pushConfigsToModules));
-const sceneHandler = new SceneHandler(registry, projectManager, eventQueue, pushConfigsToModules);
+const sceneHandler = new SceneHandler(registry, projectManager, eventQueue, pushConfigsToControllers);
 router.register('scene:activate', sceneHandler);
-router.register('saveProject', new SaveProjectHandler(projectManager, pushConfigsToModules));
+router.register('saveProject', new SaveProjectHandler(projectManager, pushConfigsToControllers));
 
 projectManager.useProject(serverConfig.get<string>('defaultProject'), () => {
   pushConfigsToModules();

@@ -18,20 +18,27 @@ function isSaveProjectPayload(payload: unknown): payload is SaveProjectPayload {
 export class SaveProjectHandler implements MessageHandler {
   constructor(
     private projectManager: ProjectManager,
-    private onChanged: () => void,
   ) {}
 
-  handle(_ws: WebSocket, message: WsMessage, _registry: ConnectionRegistry): void {
+  handle(ws: WebSocket, message: WsMessage, registry: ConnectionRegistry): void {
     if (!isSaveProjectPayload(message.payload)) {
       Logger.warn('[saveProject] invalid payload — expected { key, data }');
       return;
     }
 
-    this.projectManager.setProjectData(message.payload.key, message.payload.data);
-    this.onChanged();
-    const dataDesc = Array.isArray(message.payload.data)
-      ? `array(${message.payload.data.length})`
-      : typeof message.payload.data;
-    Logger.info(`[saveProject] saved key "${message.payload.key}" (${dataDesc})`);
+    const { key, data } = message.payload;
+    this.projectManager.setProjectData(key, data);
+
+    const patch = JSON.stringify({
+      message: { type: 'projectPatch', payload: { key, data } },
+    });
+
+    for (const controllerWs of registry.getByRole('controller')) {
+      if (controllerWs === ws || controllerWs.readyState !== WebSocket.OPEN) continue;
+      controllerWs.send(patch);
+    }
+
+    const dataDesc = Array.isArray(data) ? `array(${data.length})` : typeof data;
+    Logger.info(`[saveProject] patched key "${key}" (${dataDesc}) → broadcast to peers`);
   }
 }

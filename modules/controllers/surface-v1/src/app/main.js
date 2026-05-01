@@ -106,6 +106,13 @@ async function main () {
           projectGraph.reconcileIntents(incoming, null, { pruneMissing: false })
           break
         }
+        case 'projectPatch': {
+          const pp = /** @type {Record<string, unknown>} */ (message.payload ?? {})
+          if (typeof pp.key === 'string') {
+            projectGraph.applyPatch(pp.key, pp.data)
+          }
+          break
+        }
         case 'scene:state': {
           const sp = /** @type {Record<string, unknown> | null} */ (
             message.payload

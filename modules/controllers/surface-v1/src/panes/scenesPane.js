@@ -54,7 +54,9 @@ export class ScenesPane {
       this._editor.setActive(scenes[0])
     }
 
-    this._unsubscribe = projectGraph.subscribe(() => this._editor.refresh())
+    this._unsubscribe = projectGraph.subscribe(() => {
+      this._editor.syncActive(projectGraph.getActiveSceneName())
+    })
   }
 
   deactivate () {

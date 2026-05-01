@@ -219,6 +219,37 @@ class ProjectGraph {
     this._notify()
   }
 
+  // ─── Patch application ───────────────────────────────────────────────────────
+
+  /**
+   * Applies a single project key update broadcast by the hub.
+   * Only called on peer controllers (not the originating sender).
+   * @param {string} key
+   * @param {unknown} data
+   */
+  applyPatch (key, data) {
+    switch (key) {
+      case 'scenes': {
+        const rawScenes = Array.isArray(data) ? /** @type {Array<Record<string, unknown>>} */ (data) : []
+        this._data.scenes = rawScenes
+          .map(scene => ({
+            name: String(scene.name ?? ''),
+            intents: Array.isArray(scene.intents)
+              ? scene.intents.map(i => String(/** @type {Record<string, unknown>} */ (i).guid ?? ''))
+              : [],
+          }))
+          .filter(s => s.name)
+        if (this._data.activeSceneName && !this._data.scenes.some(s => s.name === this._data.activeSceneName)) {
+          this._data.activeSceneName = this._data.scenes[0]?.name ?? null
+        }
+        break
+      }
+      default:
+        break
+    }
+    this._notify()
+  }
+
   // ─── Config application ───────────────────────────────────────────────────────
 
   /**

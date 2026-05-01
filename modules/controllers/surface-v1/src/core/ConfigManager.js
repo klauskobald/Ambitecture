@@ -90,6 +90,16 @@ export class ConfigManager {
     this.refresh()
   }
 
+  /**
+   * Syncs the visual selection to `activeName` without firing `onActivate`.
+   * Use when the active item changed externally (e.g. remote scene:state).
+   * @param {string | null} activeName
+   */
+  syncActive (activeName) {
+    this._activeName = activeName
+    this.refresh()
+  }
+
   /** @returns {string | null} */
   getActive () {
     return this._activeName

@@ -53,7 +53,7 @@ body.nav-open .app-nav {
 }
 
 /* Desktop: nav always visible as a horizontal strip */
-@media (min-width: 600px) {
+@media (min-width: 400px) {
   .nav-toggle {
     display: none;
   }
@@ -121,8 +121,8 @@ body.nav-open .app-nav {
 }
 
 /* When sim-area is hidden (Setup pane), let pane-host expand to fill the space */
-.sim-area[hidden] + .pane-host,
-.sim-area[hidden] ~ .pane-host {
+.sim-area[hidden]+.pane-host,
+.sim-area[hidden]~.pane-host {
   flex: 1 1 auto;
   min-height: 0;
 }

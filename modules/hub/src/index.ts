@@ -53,16 +53,6 @@ const pushConfigsToModules = () => {
   }
 };
 
-const pushConfigsToControllers = () => {
-  for (const ws of registry.getByRole('controller')) {
-    const info = registry.get(ws);
-    if (info && ws.readyState === ws.OPEN) {
-      const config = projectManager.buildControllerConfig(info.guid);
-      ws.send(JSON.stringify({ message: { type: 'config', payload: config } }));
-    }
-  }
-};
-
 const rateLimitEventsPerSecond = serverConfig.get<number>('rateLimitEventsPerSecond');
 const eventQueue = new EventQueue(registry);
 router.register('register', new RegisterHandler(registry, projectManager, rateLimitEventsPerSecond));
@@ -71,7 +61,7 @@ router.register('intents', new IntentsHandler(registry, projectManager, eventQue
 router.register('fixtures', new FixturesHandler(registry, projectManager, pushConfigsToModules));
 const sceneHandler = new SceneHandler(registry, projectManager, eventQueue);
 router.register('scene:activate', sceneHandler);
-router.register('saveProject', new SaveProjectHandler(projectManager, pushConfigsToControllers));
+router.register('saveProject', new SaveProjectHandler(projectManager));
 
 projectManager.useProject(serverConfig.get<string>('defaultProject'), () => {
   pushConfigsToModules();

@@ -64,6 +64,12 @@ export class ConfigSectionEditor {
     this._manager.setActive(name)
   }
 
+  /** @param {string | null} name */
+  syncActive (name) {
+    this._manager.syncActive(name)
+    this._renderSection()
+  }
+
   /** @returns {string | null} */
   getActive () {
     return this._manager.getActive()

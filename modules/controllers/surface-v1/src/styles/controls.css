@@ -23,7 +23,7 @@
   background: var(--color-accent-dim);
 }
 
-@media (min-width: 600px) {
+@media (min-width: 400px) {
   .nav-link {
     border-left: none;
     border-bottom: 3px solid transparent;
@@ -268,7 +268,7 @@
   min-height: 0;
 }
 
-.config-section-editor__content > .config-manager {
+.config-section-editor__content>.config-manager {
   flex: 0 0 auto;
   min-width: 180px;
   max-width: 250px;

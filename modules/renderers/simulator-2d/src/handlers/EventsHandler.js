@@ -28,7 +28,7 @@ class EventsHandler {
                 };
                 const snapshot = {
                     intentsByLayer,
-                    sample: capabilityKey => this._layerIntentEngine.sample(context, capabilityKey),
+                    sample: (capabilityKey, withSpatialFactor) => this._layerIntentEngine.sample(context, capabilityKey, withSpatialFactor),
                 };
                 fixture.applyIntentSnapshot(context, snapshot);
             }

@@ -24,7 +24,7 @@ export interface FixtureSampleContext {
 }
 
 export interface CapabilityResolver<TValue> {
-    sample(context: FixtureSampleContext, intents: ReadonlyMap<string, IntentRecord>): TValue | undefined;
+    sample(context: FixtureSampleContext, intents: ReadonlyMap<string, IntentRecord>, withSpatialFactor?: boolean): TValue | undefined;
 }
 
 function isPositionInZone(
@@ -142,7 +142,7 @@ export class LayerIntentEngine {
             [...this.intentsByLayer.entries()]
                 .filter(([, intent]) => intent.zoneName === undefined || intent.zoneName === context.zoneName)
         );
-        return resolver.sample(context, scopedIntentsByLayer) as TValue | undefined;
+        return resolver.sample(context, scopedIntentsByLayer, withSpatialFactor) as TValue | undefined;
     }
 
     private sampleLightColor(context: FixtureSampleContext, intentsByLayer: ReadonlyMap<string, IntentRecord>, withSpatialFactor: boolean): Color {

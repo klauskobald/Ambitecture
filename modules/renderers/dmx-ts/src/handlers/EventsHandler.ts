@@ -86,7 +86,7 @@ export class EventsHandler {
                 };
                 const snapshot: FixtureIntentSnapshot = {
                     intentsByLayer,
-                    sample: <TValue>(capabilityKey: string) => this.layerIntentEngine.sample<TValue>(context, capabilityKey),
+                    sample: <TValue>(capabilityKey: string, withSpatialFactor?: boolean) => this.layerIntentEngine.sample<TValue>(context, capabilityKey, withSpatialFactor),
                 };
                 const handler = await this.getFixtureClass(fixture.fixtureProfile.class);
                 handler.applyIntentSnapshot(fixture, context, snapshot, this.dmxUniverse);

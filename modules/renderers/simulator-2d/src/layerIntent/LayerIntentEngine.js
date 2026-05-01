@@ -3,7 +3,7 @@ class LayerIntentEngine {
     this._intentsByLayer = new Map()
     this._resolvers = new Map()
 
-    this.registerResolver('light.color.xyY', (context, intentsByLayer) => {
+    this.registerResolver('light.color.xyY', (context, intentsByLayer, withSpatialFactor = true) => {
       const layers = [...intentsByLayer.entries()]
         .filter(([, intent]) => intent.intentType === 'light')
         .sort(([, a], [, b]) => a.layer - b.layer)
@@ -20,14 +20,14 @@ class LayerIntentEngine {
           continue
         }
 
-        const spatialFactor = this._computeSpatialFactor(
+        const spatialFactor = withSpatialFactor ? this._computeSpatialFactor(
           context.fixture,
           context.fixtureWorldPos,
           intent.position,
           context.fixture.range,
           intent.radius,
           intent.radiusFunction
-        )
+        ) : 1
         const layerColor = new Color(
           colorData.x,
           colorData.y,
@@ -92,7 +92,7 @@ class LayerIntentEngine {
     return this._intentsByLayer
   }
 
-  sample (context, capabilityKey) {
+  sample (context, capabilityKey, withSpatialFactor) {
     const resolver = this._resolvers.get(capabilityKey)
     if (!resolver) return undefined
     const scopedIntentsByLayer = new Map(
@@ -101,7 +101,7 @@ class LayerIntentEngine {
           intent.zoneName === undefined || intent.zoneName === context.zoneName
       )
     )
-    return resolver(context, scopedIntentsByLayer)
+    return resolver(context, scopedIntentsByLayer, withSpatialFactor)
   }
 
   _toIntentRecord (event) {

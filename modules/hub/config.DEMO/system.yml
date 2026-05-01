@@ -63,13 +63,14 @@ systemCapabilities:
           h: { fn: ADD, range: [-10, 10] }
           s: { fn: ADD, range: [-0.1, 0.1] }
           l: { fn: ADD, range: [-0.1, 0.1] }
-      - dotKey: params.brightness
-        name: Brightness
-        type: scalar
-        range: [0, 1]
-        defaultValue: 1
-        delta:
-          value: { fn: ADD, range: [-1, 1] }
+      # THIS IS NOT WORKING AS EXPECTED.
+      # - dotKey: params.brightness
+      #   name: Brightness
+      #   type: scalar
+      #   range: [0, 1]
+      #   defaultValue: 1
+      #   delta:
+      #     value: { fn: ADD, range: [-1, 1] }
       - dotKey: params.strobe
         name: Strobe
         type: scalar

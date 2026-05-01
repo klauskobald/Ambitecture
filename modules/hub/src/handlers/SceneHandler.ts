@@ -4,7 +4,7 @@ import { ConnectionRegistry } from '../ConnectionRegistry';
 import { MessageHandler, WsMessage } from '../MessageRouter';
 import { ProjectManager, ControllerIntent } from '../ProjectManager';
 import { EventQueue } from '../EventQueue';
-import { normalizeIntentColor, intentToEvent, zeroAlphaEvent } from './intentHelpers';
+import { normalizeIntentColor, intentToEvent, intentRemovalEvent } from './intentHelpers';
 
 interface SceneActivatePayload {
   sceneName: string;
@@ -47,7 +47,7 @@ export class SceneHandler implements MessageHandler {
           .filter((i): i is ControllerIntent => i !== undefined)
           .map(normalizeIntentColor)
           .map(intent => ({
-            event: zeroAlphaEvent(intent, now),
+            event: intentRemovalEvent(intent, now),
             scheduledAt: now,
           }));
 

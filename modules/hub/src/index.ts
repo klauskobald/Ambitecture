@@ -35,6 +35,51 @@ const buildActiveSceneEventsMsg = (): string | null => {
   return JSON.stringify({ message: { type: 'events', payload: events } });
 };
 
+const pushControllerProjectPatches = (): void => {
+  const zones = projectManager.getSerializedRuntimeZones();
+  const scenes = projectManager.getScenesWirePayload();
+  const zoneToRenderer = projectManager.getZoneToRendererPayload();
+  const activeSceneName = projectManager.getActiveSceneName();
+  const projectName = projectManager.getWireProjectName();
+
+  const zonesMsg = JSON.stringify({
+    message: { type: 'projectPatch', payload: { key: 'zones', data: zones } },
+  });
+  const scenesMsg = JSON.stringify({
+    message: { type: 'projectPatch', payload: { key: 'scenes', data: scenes } },
+  });
+  const ztrMsg = JSON.stringify({
+    message: { type: 'projectPatch', payload: { key: 'zoneToRenderer', data: zoneToRenderer } },
+  });
+  const activeMsg = JSON.stringify({
+    message: { type: 'projectPatch', payload: { key: 'activeSceneName', data: activeSceneName } },
+  });
+  const nameMsg = JSON.stringify({
+    message: { type: 'projectPatch', payload: { key: 'projectName', data: projectName } },
+  });
+
+  let controllerCount = 0;
+  for (const ws of registry.getByRole('controller')) {
+    if (ws.readyState !== ws.OPEN) continue;
+    const info = registry.get(ws);
+    if (!info) continue;
+    controllerCount += 1;
+    ws.send(zonesMsg);
+    ws.send(scenesMsg);
+    ws.send(ztrMsg);
+    ws.send(activeMsg);
+    ws.send(nameMsg);
+    const intents = projectManager.getControllerIntents(info.guid);
+    ws.send(JSON.stringify({
+      message: { type: 'projectPatch', payload: { key: 'intents', data: intents } },
+    }));
+  }
+  if (controllerCount > 0) {
+    Logger.info(`[hub] incremental projectPatch → ${controllerCount} controller(s) (zones, scenes, intents, …)`);
+  }
+};
+
+/** Renderers get full `config` + scene events; controllers get `projectPatch` only (full `config` on register). */
 const pushConfigsToModules = () => {
   const sceneEventsMsg = buildActiveSceneEventsMsg();
   for (const ws of registry.getByRole('renderer')) {
@@ -45,13 +90,7 @@ const pushConfigsToModules = () => {
       if (sceneEventsMsg) ws.send(sceneEventsMsg);
     }
   }
-  for (const ws of registry.getByRole('controller')) {
-    const info = registry.get(ws);
-    if (info && ws.readyState === ws.OPEN) {
-      const config = projectManager.buildControllerConfig(info.guid);
-      ws.send(JSON.stringify({ message: { type: 'config', payload: config } }));
-    }
-  }
+  pushControllerProjectPatches();
 };
 
 const rateLimitEventsPerSecond = serverConfig.get<number>('rateLimitEventsPerSecond');

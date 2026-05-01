@@ -11,6 +11,8 @@ export interface RendererEvent {
     radius?: number;
     radiusFunction?: string;
     params?: Record<string, unknown>;
+    /** Hub signals logical removal (scene change, etc.) — intent dropped from engine; not a params.alpha cue. */
+    removed?: boolean;
 }
 
 export interface FixtureIntentSnapshot {

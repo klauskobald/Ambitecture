@@ -20,6 +20,17 @@ export function intentToEvent(intent: ControllerIntent, scheduledAt: number): ob
   };
 }
 
+/** Marks an intent as logically absent from the renderer (e.g. scene switch). Not a light alpha tweak. */
+export function intentRemovalEvent(intent: ControllerIntent, scheduledAt: number): object {
+  return {
+    guid: intent.guid,
+    class: intent.class,
+    scheduled: scheduledAt,
+    removed: true,
+  };
+}
+
+/** @deprecated Prefer intentRemovalEvent when the intent must disappear from engine state. */
 export function zeroAlphaEvent(intent: ControllerIntent, scheduledAt: number): object {
   return {
     ...intentToEvent(intent, scheduledAt),

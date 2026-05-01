@@ -1,4 +1,3 @@
-import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { Config } from './Config';
@@ -80,7 +79,6 @@ export class ProjectManager {
   private fixturesPath: string;
   private project: Project | null = null;
   private fixtureProfiles: Map<string, FixtureProfile> = new Map();
-  private watchers: fs.FSWatcher[] = [];
   private intentCache: Map<string, Map<string, ControllerIntent>> = new Map();
   private intentDefinitions: Map<string, ControllerIntent> = new Map();
   private activeSceneName: string | null = null;
@@ -88,7 +86,6 @@ export class ProjectManager {
   private runtimeZones: Zone[] = [];
   private _projectConfig: Config | null = null;
   private _saveTimer: ReturnType<typeof setTimeout> | null = null;
-  private _suppressWatch = false;
 
   constructor(projectsPath: string, fixturesPath: string) {
     this.projectsPath = projectsPath;
@@ -98,7 +95,6 @@ export class ProjectManager {
   useProject(name: string, callback: () => void): void {
     this.reloadProject(name);
     callback();
-    this.watchAll(name, callback);
   }
 
   private _rebuildIntentDefinitions(intents: ControllerIntent[]): void {
@@ -125,9 +121,9 @@ export class ProjectManager {
     const filePath = this.resolvePath(this.projectsPath, `${name}.yml`);
     this._projectConfig = new Config(filePath);
     this.project = this._projectConfig.getAll() as Project;
-    this.intentCache.clear();
 
     this._rebuildIntentDefinitions(this.project.intents ?? []);
+    this._pruneIntentCacheAfterReload();
 
     // Auto-create "untitled" scene if intents exist but no scenes defined
     if ((!this.project.scenes || this.project.scenes.length === 0) && (this.project.intents ?? []).length > 0) {
@@ -277,17 +273,12 @@ export class ProjectManager {
     if (this._saveTimer) clearTimeout(this._saveTimer);
     this._saveTimer = setTimeout(() => {
       if (!this._projectConfig || !this.project) return;
-      this._suppressWatch = true;
       try {
         this._projectConfig.save(this.project);
         Logger.info('[project] saved to disk');
       } catch (err) {
         Logger.error('[project] save failed:', err);
       }
-      // Keep suppress flag set briefly — FSEvents callbacks fire async
-      // after writeFileSync returns, so the watcher may see the change
-      // after we've already cleared the flag.
-      setTimeout(() => { this._suppressWatch = false; }, 500);
     }, 2000);
   }
 
@@ -344,44 +335,6 @@ export class ProjectManager {
     return (this.project?.scenes ?? []).map(s => s.name);
   }
 
-  private watchAll(name: string, callback: () => void): void {
-    for (const watcher of this.watchers) {
-      watcher.close();
-    }
-    this.watchers = [];
-
-    const onChange = (trigger: string) => {
-      if (this._suppressWatch) return;
-      Logger.info(`[project] change detected in "${trigger}", reloading...`);
-      this.reloadProject(name);
-      this.watchAll(name, callback);
-      callback();
-    };
-
-    const projectFile = this.resolvePath(this.projectsPath, `${name}.yml`);
-    this.watchers.push(fs.watch(projectFile, (eventType) => {
-      if (eventType === 'change' || eventType === 'rename') {
-        onChange(`${name}.yml`);
-      }
-    }));
-
-    const fixtureNames = new Set<string>();
-    for (const zone of this.project!.zones) {
-      for (const fi of zone.fixtures) {
-        fixtureNames.add(fi.fixture);
-      }
-    }
-    Logger.info(`[project] watching ${fixtureNames.size} fixture file(s): ${[...fixtureNames].join(', ')}`);
-    for (const fixtureName of fixtureNames) {
-      const fixtureFile = this.resolvePath(this.fixturesPath, `${fixtureName}.yml`);
-      this.watchers.push(fs.watch(fixtureFile, (eventType) => {
-        if (eventType === 'change' || eventType === 'rename') {
-          onChange(`${fixtureName}.yml`);
-        }
-      }));
-    }
-  }
-
   private resolvePath(base: string, file: string): string {
     const resolvedBase = path.isAbsolute(base)
       ? base
@@ -422,6 +375,38 @@ export class ProjectManager {
     if (fi.target !== undefined) entry['target'] = fi.target;
     if (fi.rotation !== undefined) entry['rotation'] = fi.rotation;
     return entry;
+  }
+
+  /**
+   * After reloading YAML, drop cached intent overrides that no longer exist in definitions.
+   * Keeps live WebSocket intent edits instead of wiping them via intentCache.clear().
+   */
+  private _pruneIntentCacheAfterReload(): void {
+    const valid = new Set(this.intentDefinitions.keys());
+    for (const cache of this.intentCache.values()) {
+      for (const guid of [...cache.keys()]) {
+        if (!valid.has(guid)) {
+          cache.delete(guid);
+        }
+      }
+    }
+  }
+
+  /** Serialized runtime zones for incremental controller sync (same shape as full config). */
+  getSerializedRuntimeZones(): unknown[] {
+    return this.runtimeZones.map((z) => this.serializeZone(z));
+  }
+
+  getZoneToRendererPayload(): Record<string, string[]> {
+    return this.project?.['zone-to-renderer'] ?? {};
+  }
+
+  getScenesWirePayload(): Scene[] {
+    return this.project?.scenes ?? [];
+  }
+
+  getWireProjectName(): string {
+    return this.project?.name ?? '';
   }
 
   private serializeZone(zone: Zone): Record<string, unknown> {

@@ -294,13 +294,48 @@ class ProjectGraph {
   // ─── Patch application ───────────────────────────────────────────────────────
 
   /**
-   * Applies a single project key update broadcast by the hub.
-   * Only called on peer controllers (not the originating sender).
+   * Applies a single project key update (`projectPatch` from hub or peers).
    * @param {string} key
    * @param {unknown} data
    */
   applyPatch (key, data) {
     switch (key) {
+      case 'intents': {
+        const list = Array.isArray(data) ? data : []
+        this.reconcileIntents(list, null, { pruneMissing: true })
+        return
+      }
+      case 'zones': {
+        this._data.zones = Array.isArray(data) ? data : []
+        this._spatial = this._computeSpatial()
+        this._zoneBoxes = this._computeZoneBoxes()
+        this._fixtures = this._computeFixtures()
+        break
+      }
+      case 'zoneToRenderer': {
+        this._data.zoneToRenderer = (data && typeof data === 'object' && !Array.isArray(data))
+          ? /** @type {Record<string, string[]>} */ (data)
+          : {}
+        this._spatial = this._computeSpatial()
+        this._zoneBoxes = this._computeZoneBoxes()
+        break
+      }
+      case 'projectName': {
+        if (typeof data === 'string') this._data.projectName = data
+        break
+      }
+      case 'activeSceneName': {
+        if (data === null) {
+          this._data.activeSceneName = null
+        } else if (typeof data === 'string' && data.length > 0) {
+          if (this._data.scenes.some(s => s.name === data)) {
+            this._data.activeSceneName = data
+          }
+        } else {
+          this._data.activeSceneName = null
+        }
+        break
+      }
       case 'scenes': {
         const rawScenes = Array.isArray(data) ? /** @type {Array<Record<string, unknown>>} */ (data) : []
         this._data.scenes = rawScenes

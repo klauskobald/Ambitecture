@@ -6,6 +6,10 @@ import { SelectionManager } from '../viewport/selectionManager.js'
 import { ColorPicker } from '../ui/colorPicker.js'
 import { hslPalette } from '../ui/palettes/hslPalette.js'
 import { toCSSRGB } from '../core/color.js'
+import { selectionState } from '../edit/selectionState.js'
+import { ActionBar } from '../edit/ActionBar.js'
+import { PropertiesDrawer } from '../edit/PropertiesDrawer.js'
+import { resolveDescriptorsForClass } from '../core/systemCapabilities.js'
 
 export class EditPane {
   /**
@@ -18,7 +22,8 @@ export class EditPane {
     this._activeMode = null
     /** @type {Map<string, SelectionManager | null>} lazy-built per mode */
     this._managers = new Map()
-    this._unsubscribe = null
+    /** @type {(() => void) | null} */
+    this._selectionUnsub = null
 
     this._el = document.createElement('div')
     this._el.className = 'pane edit-pane'
@@ -37,23 +42,43 @@ export class EditPane {
       this._modeBar.appendChild(btn)
       this._managers.set(mode.id, null)
     }
+
+    this._actionBar = new ActionBar({
+      onModify: () => this._onModifyClick(),
+      onCopy: () => {},
+      onDelete: () => {}
+    })
+    this._el.appendChild(this._actionBar.buildElement())
+
+    this._drawer = new PropertiesDrawer()
   }
 
   /** @param {HTMLElement} container */
   mount (container) {
     container.appendChild(this._el)
+    this._drawer.mount()
   }
 
   activate () {
     this._overlay.setPolicy(editPolicy)
     this._overlay.resize()
     this._el.hidden = false
+
+    this._selectionUnsub = selectionState.subscribe(() => {
+      this._actionBar.refresh(selectionState.getSize())
+    })
+    this._actionBar.refresh(selectionState.getSize())
   }
 
   deactivate () {
     this._exitCurrentMode()
     this._colorPicker.close()
     this._el.hidden = true
+
+    if (this._selectionUnsub) {
+      this._selectionUnsub()
+      this._selectionUnsub = null
+    }
   }
 
   // ── Mode registry ─────────────────────────────────────────────────────────────
@@ -66,9 +91,9 @@ export class EditPane {
         buildManager: () => this._buildPerformEnableManager()
       },
       {
-        id: 'color',
-        label: 'Color',
-        buildManager: () => this._buildColorManager()
+        id: 'select',
+        label: 'Select',
+        buildManager: () => this._buildSelectManager()
       }
     ]
   }
@@ -100,7 +125,6 @@ export class EditPane {
 
     const btn = this._modeBar.querySelector(`[data-mode-id="${modeId}"]`)
     btn?.classList.add('btn--active')
-    // update button label for modes that change it
     if (modeId === 'performEnable') btn && (btn.textContent = 'Done')
   }
 
@@ -112,10 +136,11 @@ export class EditPane {
     this._overlay.setPolicy(editPolicy)
     this._overlay.setSelectionManager(null)
     this._colorPicker.close()
+    selectionState.clearAll()
+    this._drawer.close()
 
     const btn = this._modeBar.querySelector(`[data-mode-id="${prev}"]`)
     btn?.classList.remove('btn--active')
-    // restore original labels
     const mode = this._modes().find(m => m.id === prev)
     if (btn && mode) btn.textContent = mode.label
   }
@@ -164,8 +189,7 @@ export class EditPane {
     })
   }
 
-  _buildColorManager () {
-    const colorPicker = this._colorPicker
+  _buildSelectManager () {
     return new SelectionManager({
       getObjects: () => this._sceneIntentEntries(),
       getWorldPos (obj) {
@@ -176,30 +200,32 @@ export class EditPane {
       },
       onTap (_id, obj) {
         const guid = intentGuid(obj)
-        const i = /** @type {Record<string, unknown>} */ (obj)
-        const params = /** @type {Record<string, unknown>} */ (i.params ?? {})
-        const currentColor = params.color ?? { h: 0, s: 1, l: 0.25 }
-        colorPicker.open(currentColor, rawColor => {
-          const updated = projectGraph.updateIntentColor(guid, rawColor)
-          if (updated) queueIntentUpdate(updated)
-        })
+        selectionState.toggleGuid(guid)
       },
       drawBubble (ctx, px, py, _id, obj) {
         const i = /** @type {Record<string, unknown>} */ (obj)
         const params = /** @type {Record<string, unknown>} */ (i.params ?? {})
         const color = params.color
         const cssColor = color ? toCSSRGB(color) : 'rgb(60, 60, 60)'
+        const guid = intentGuid(obj)
+        const selected = selectionState.hasGuid(guid)
         const R = 24
         ctx.save()
         ctx.beginPath()
         ctx.arc(px, py, R, 0, Math.PI * 2)
         ctx.fillStyle = cssColor
         ctx.fill()
-        ctx.strokeStyle = 'rgba(255,255,255,0.4)'
-        ctx.lineWidth = 2
+        ctx.strokeStyle = selected ? '#5af' : 'rgba(100,100,100,0.5)'
+        ctx.lineWidth = selected ? 3 : 1.5
         ctx.stroke()
         ctx.restore()
       }
     })
+  }
+
+  _onModifyClick () {
+    const descriptors = resolveDescriptorsForClass('light')
+    if (!descriptors) return
+    this._drawer.open(descriptors, selectionState.getGuids())
   }
 }

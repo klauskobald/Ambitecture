@@ -153,13 +153,85 @@ class ProjectGraph {
    * @returns {unknown | null}
    */
   updateIntentColor (guid, rawPickerValue) {
+    return this.updateIntentProperty(guid, 'params.color', rawPickerValue)
+  }
+
+  /**
+   * Sets a nested property on an intent using dot-notation path.
+   * @param {string} guid
+   * @param {string} dotKey
+   * @param {unknown} value
+   * @returns {unknown | null}
+   */
+  updateIntentProperty (guid, dotKey, value) {
     const intent = this._data.intents.get(guid)
     if (!intent) return null
-    const i = /** @type {Record<string, unknown>} */ (intent)
-    const updated = { ...i, params: { ...(/** @type {Record<string, unknown>} */ (i.params) ?? {}), color: rawPickerValue } }
+    const updated = this._cloneAndSetAtDotPath(/** @type {Record<string, unknown>} */ (intent), dotKey, value)
     this._data.intents.set(guid, updated)
     this._notify()
     return updated
+  }
+
+  /**
+   * Removes a nested property from an intent using dot-notation path.
+   * Parent objects are preserved even if they become empty.
+   * @param {string} guid
+   * @param {string} dotKey
+   * @returns {unknown | null}
+   */
+  removeIntentProperty (guid, dotKey) {
+    const intent = this._data.intents.get(guid)
+    if (!intent) return null
+    const updated = this._cloneAndDeleteAtDotPath(/** @type {Record<string, unknown>} */ (intent), dotKey)
+    this._data.intents.set(guid, updated)
+    this._notify()
+    return updated
+  }
+
+  /**
+   * @param {Record<string, unknown>} obj
+   * @param {string} dotKey
+   * @param {unknown} value
+   * @returns {Record<string, unknown>}
+   */
+  _cloneAndSetAtDotPath (obj, dotKey, value) {
+    const keys = dotKey.split('.')
+    const cloned = { ...obj }
+    let cursor = cloned
+    for (let i = 0; i < keys.length - 1; i++) {
+      const k = /** @type {string} */ (keys[i])
+      const child = cursor[k]
+      const clonedChild = (child && typeof child === 'object' && !Array.isArray(child))
+        ? { .../** @type {Record<string, unknown>} */ (child) }
+        : {}
+      cursor[k] = clonedChild
+      cursor = clonedChild
+    }
+    const leafKey = /** @type {string} */ (keys[keys.length - 1])
+    cursor[leafKey] = value
+    return cloned
+  }
+
+  /**
+   * @param {Record<string, unknown>} obj
+   * @param {string} dotKey
+   * @returns {Record<string, unknown>}
+   */
+  _cloneAndDeleteAtDotPath (obj, dotKey) {
+    const keys = dotKey.split('.')
+    const cloned = { ...obj }
+    let cursor = cloned
+    for (let i = 0; i < keys.length - 1; i++) {
+      const k = /** @type {string} */ (keys[i])
+      const child = cursor[k]
+      if (!child || typeof child !== 'object' || Array.isArray(child)) return cloned
+      const clonedChild = { .../** @type {Record<string, unknown>} */ (child) }
+      cursor[k] = clonedChild
+      cursor = clonedChild
+    }
+    const leafKey = /** @type {string} */ (keys[keys.length - 1])
+    delete cursor[leafKey]
+    return cloned
   }
 
   /**

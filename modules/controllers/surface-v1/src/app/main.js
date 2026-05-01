@@ -1,4 +1,5 @@
 import { loadConfig, applyLayoutCssVars } from '../core/config.js'
+import { applySystemCapabilities } from '../core/systemCapabilities.js'
 import { projectGraph } from '../core/projectGraph.js'
 import {
   setSocket,
@@ -120,6 +121,10 @@ async function main () {
           if (sp && typeof sp.sceneName === 'string') {
             projectGraph.setActiveScene(sp.sceneName)
           }
+          break
+        }
+        case 'systemCapabilities': {
+          applySystemCapabilities(message.payload)
           break
         }
       }

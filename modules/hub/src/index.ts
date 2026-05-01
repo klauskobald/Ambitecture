@@ -15,6 +15,7 @@ import { Logger } from './Logger';
 import { normalizeIntentColor, intentToEvent } from './handlers/intentHelpers';
 
 const serverConfig = new Config('server');
+const systemConfig = new Config('system', true);
 const port = serverConfig.get<number>('LISTEN_PORT');
 const host = serverConfig.getOrDefault<string>('LISTEN_HOST', '127.0.0.1');
 
@@ -55,7 +56,7 @@ const pushConfigsToModules = () => {
 
 const rateLimitEventsPerSecond = serverConfig.get<number>('rateLimitEventsPerSecond');
 const eventQueue = new EventQueue(registry);
-router.register('register', new RegisterHandler(registry, projectManager, rateLimitEventsPerSecond));
+router.register('register', new RegisterHandler(registry, projectManager, rateLimitEventsPerSecond, systemConfig));
 router.register('events', new EventsHandler(registry));
 router.register('intents', new IntentsHandler(registry, projectManager, eventQueue));
 router.register('fixtures', new FixturesHandler(registry, projectManager, pushConfigsToModules));

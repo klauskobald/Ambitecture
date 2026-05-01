@@ -1,5 +1,6 @@
 import { WebSocket } from 'ws';
 import { Logger } from '../Logger';
+import { Config } from '../Config';
 import { ConnectionRegistry } from '../ConnectionRegistry';
 import { MessageHandler, WsMessage } from '../MessageRouter';
 import { ProjectManager } from '../ProjectManager';
@@ -25,11 +26,13 @@ export class RegisterHandler implements MessageHandler {
   private registry: ConnectionRegistry;
   private projectManager: ProjectManager;
   private rateLimitEventsPerSecond: number;
+  private systemConfig: Config;
 
-  constructor(registry: ConnectionRegistry, projectManager: ProjectManager, rateLimitEventsPerSecond: number) {
+  constructor(registry: ConnectionRegistry, projectManager: ProjectManager, rateLimitEventsPerSecond: number, systemConfig: Config) {
     this.registry = registry;
     this.projectManager = projectManager;
     this.rateLimitEventsPerSecond = rateLimitEventsPerSecond;
+    this.systemConfig = systemConfig;
   }
 
   handle(ws: WebSocket, message: WsMessage, _registry: ConnectionRegistry): void {
@@ -79,6 +82,12 @@ export class RegisterHandler implements MessageHandler {
       };
       ws.send(JSON.stringify({ message: { type: 'config', payload: config } }));
       Logger.info(`[register] pushed config to controller ${guid}`);
+
+      const capabilities = this.systemConfig.getOrDefault<unknown>('systemCapabilities', null);
+      if (capabilities !== null) {
+        ws.send(JSON.stringify({ message: { type: 'systemCapabilities', payload: capabilities } }));
+        Logger.info(`[register] pushed systemCapabilities to controller ${guid}`);
+      }
     }
   }
 }

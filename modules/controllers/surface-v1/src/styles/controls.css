@@ -70,6 +70,15 @@
   color: var(--color-accent);
 }
 
+.btn--danger {
+  border-color: #c44;
+  color: #c44;
+}
+
+.btn--danger:hover {
+  background: rgba(204, 68, 68, 0.15);
+}
+
 .btn-mode-toggle {
   margin: 0.5rem;
   min-width: 8rem;

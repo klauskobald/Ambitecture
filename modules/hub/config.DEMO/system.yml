@@ -1,0 +1,63 @@
+systemCapabilities:
+  functionCurves:
+    - linear
+    - quadratic
+    - cubic
+    - sqrt
+    - smoothstep
+  intentProperties:
+    light:
+      - dotKey: params.color
+        name: Color
+        type: color
+        defaultValue:
+          h: 0
+          s: 1
+          l: 0.25
+      - dotKey: params.brightness
+        name: Brightness
+        type: scalar
+        range: [0, 1]
+        defaultValue: 1
+      - dotKey: params.strobe
+        name: Strobe
+        type: scalar
+        range: [0, 1]
+        defaultValue: 0
+      - dotKey: params.alpha
+        name: Alpha
+        type: scalar
+        range: [0, 1]
+        defaultValue: 1
+      - dotKey: params.blend
+        name: Blend
+        type: string
+        options: [ADD, ALPHA, MULTIPLY]
+        defaultValue: ADD
+        noMultiple: true
+      - dotKey: params.aux.amber
+        name: Amber
+        type: scalar
+        range: [0, 1]
+        defaultValue: 0
+      - dotKey: layer
+        name: Layer
+        type: scalar
+        range: [0, 200]
+        defaultValue: 100
+        noMultiple: true
+      - dotKey: radius
+        name: Radius
+        type: scalar
+        range: [0, 50]
+        defaultValue: 5
+      - dotKey: radiusFunction
+        name: Radius Fn
+        type: string
+        optionsRef: functionCurves
+        defaultValue: quadratic
+        noMultiple: true
+      - dotKey: name
+        name: Name
+        type: string
+        noMultiple: true

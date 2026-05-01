@@ -1,4 +1,4 @@
-import { ConfigSectionEditor } from '../core/ConfigSectionEditor.js'
+import { confirm as modalConfirm, prompt as modalPrompt } from '../core/Modal.js'
 import { intentName } from '../core/stores.js'
 import { projectGraph } from '../core/projectGraph.js'
 import { sendSceneActivate, sendSaveProject } from '../core/outboundQueue.js'
@@ -9,27 +9,56 @@ export class ScenesPane {
     this._el.className = 'pane scenes-pane'
     this._el.hidden = true
 
-    this._editor = new ConfigSectionEditor({
-      title: 'Scenes',
-      getItems: () => projectGraph.getScenes(),
-      onActivate: (name) => {
-        projectGraph.setActiveScene(name)
-        sendSceneActivate(name)
-      },
-      onAdd: (name) => {
-        const active = projectGraph.getActiveSceneName()
-        projectGraph.addScene(name, active)
-        sendSaveProject('scenes', toHubScenes(projectGraph.getScenesData()))
-      },
-      onRemove: (name) => {
-        projectGraph.removeScene(name)
-        sendSaveProject('scenes', toHubScenes(projectGraph.getScenesData()))
-      },
-      renderSection: (container, activeScene) => {
-        this._renderIntentToggles(container, activeScene)
-      },
-    })
-    this._editor.mount(this._el)
+    this._layout = document.createElement('div')
+    this._layout.className = 'scenes-layout'
+
+    this._listEl = document.createElement('ul')
+    this._listEl.className = 'scene-list'
+
+    this._detailEl = document.createElement('div')
+    this._detailEl.className = 'scene-detail'
+
+    this._intentsSection = document.createElement('section')
+    this._intentsSection.className = 'scene-section'
+    this._intentsTitle = document.createElement('h2')
+    this._intentsTitle.className = 'scene-section-title'
+    this._intentsTitle.textContent = 'Intents'
+    this._intentsBody = document.createElement('div')
+    this._intentsBody.className = 'scene-intents'
+    this._intentsSection.appendChild(this._intentsTitle)
+    this._intentsSection.appendChild(this._intentsBody)
+
+    this._actionsSection = document.createElement('section')
+    this._actionsSection.className = 'scene-section scene-section--actions'
+    this._actionsBody = document.createElement('div')
+    this._actionsBody.className = 'scene-actions'
+
+    this._renameBtn = document.createElement('button')
+    this._renameBtn.className = 'btn'
+    this._renameBtn.textContent = 'Rename'
+    this._renameBtn.addEventListener('click', () => this._onRenameClick())
+
+    this._copyBtn = document.createElement('button')
+    this._copyBtn.className = 'btn'
+    this._copyBtn.textContent = 'Copy'
+    this._copyBtn.addEventListener('click', () => this._onCopyClick())
+
+    this._deleteBtn = document.createElement('button')
+    this._deleteBtn.className = 'btn'
+    this._deleteBtn.textContent = 'Delete'
+    this._deleteBtn.addEventListener('click', () => this._onDeleteClick())
+
+    this._actionsBody.appendChild(this._renameBtn)
+    this._actionsBody.appendChild(this._copyBtn)
+    this._actionsBody.appendChild(this._deleteBtn)
+    this._actionsSection.appendChild(this._actionsBody)
+
+    this._detailEl.appendChild(this._intentsSection)
+    this._detailEl.appendChild(this._actionsSection)
+
+    this._layout.appendChild(this._listEl)
+    this._layout.appendChild(this._detailEl)
+    this._el.appendChild(this._layout)
 
     /** @type {(() => void) | null} */
     this._unsubscribe = null
@@ -45,17 +74,12 @@ export class ScenesPane {
     if (simArea) simArea.hidden = true
     this._el.hidden = false
 
-    const active = projectGraph.getActiveSceneName()
-    const scenes = projectGraph.getScenes()
-    this._editor.refresh()
-    if (active && scenes.includes(active)) {
-      this._editor.setActive(active)
-    } else if (scenes.length > 0) {
-      this._editor.setActive(scenes[0])
-    }
+    this._ensureActiveScene()
+    this._render()
 
     this._unsubscribe = projectGraph.subscribe(() => {
-      this._editor.syncActive(projectGraph.getActiveSceneName())
+      this._ensureActiveScene()
+      this._render()
     })
   }
 
@@ -65,6 +89,49 @@ export class ScenesPane {
     this._el.hidden = true
     this._unsubscribe?.()
     this._unsubscribe = null
+  }
+
+  _render () {
+    const activeScene = projectGraph.getActiveSceneName()
+    this._renderSceneList(activeScene)
+    this._renderIntentToggles(this._intentsBody, activeScene)
+    this._renderActions(activeScene)
+  }
+
+  _ensureActiveScene () {
+    const scenes = projectGraph.getScenes()
+    const active = projectGraph.getActiveSceneName()
+    if (active && scenes.includes(active)) return
+    const fallback = scenes[0] ?? null
+    if (fallback) {
+      projectGraph.setActiveScene(fallback)
+      sendSceneActivate(fallback)
+    }
+  }
+
+  /** @param {string | null} activeScene */
+  _renderSceneList (activeScene) {
+    this._listEl.innerHTML = ''
+    for (const name of projectGraph.getScenes()) {
+      const li = document.createElement('li')
+      li.className = 'scene-list-item'
+      if (name === activeScene) li.classList.add('scene-list-item--active')
+      li.textContent = name
+      li.addEventListener('click', () => {
+        projectGraph.setActiveScene(name)
+        sendSceneActivate(name)
+      })
+      this._listEl.appendChild(li)
+    }
+  }
+
+  /** @param {string | null} activeScene */
+  _renderActions (activeScene) {
+    const sceneCount = projectGraph.getScenes().length
+    const hasActive = Boolean(activeScene)
+    this._renameBtn.disabled = !hasActive
+    this._copyBtn.disabled = !hasActive
+    this._deleteBtn.disabled = !hasActive || sceneCount <= 1
   }
 
   // ── Intent toggles ────────────────────────────────────────────────────────────
@@ -92,6 +159,63 @@ export class ScenesPane {
       })
       container.appendChild(btn)
     }
+  }
+
+  async _onRenameClick () {
+    const active = projectGraph.getActiveSceneName()
+    if (!active) return
+    const values = await modalPrompt('', [
+      { label: 'Name', key: 'name', value: active, placeholder: 'scene name' },
+    ], { submit: 'Rename' })
+    const nextName = values?.name?.trim()
+    if (!nextName || nextName === active) return
+    const scenes = projectGraph.getScenesData()
+    if (scenes.some(s => s.name === nextName)) return
+    const target = scenes.find(s => s.name === active)
+    if (!target) return
+    target.name = nextName
+    projectGraph.setActiveScene(nextName)
+    sendSaveProject('scenes', toHubScenes(scenes))
+    sendSceneActivate(nextName)
+  }
+
+  async _onCopyClick () {
+    const active = projectGraph.getActiveSceneName()
+    if (!active) return
+    const values = await modalPrompt('', [
+      { label: 'Name', key: 'name', value: `${active} copy`, placeholder: 'scene name' },
+    ], { submit: 'Copy' })
+    const nextName = values?.name?.trim()
+    if (!nextName) return
+    const scenes = projectGraph.getScenesData()
+    if (scenes.some(s => s.name === nextName)) return
+    const source = scenes.find(s => s.name === active)
+    if (!source) return
+    scenes.push({ name: nextName, intents: [...source.intents] })
+    projectGraph.setActiveScene(nextName)
+    sendSaveProject('scenes', toHubScenes(scenes))
+    sendSceneActivate(nextName)
+  }
+
+  async _onDeleteClick () {
+    const active = projectGraph.getActiveSceneName()
+    if (!active) return
+    const scenes = projectGraph.getScenesData()
+    if (scenes.length <= 1) return
+    const ok = await modalConfirm(
+      `Remove scene "${active}"?`,
+      { yes: 'Remove', no: 'Cancel' },
+    )
+    if (!ok) return
+    const idx = scenes.findIndex(s => s.name === active)
+    if (idx === -1) return
+    scenes.splice(idx, 1)
+    const nextActive = scenes[Math.max(0, idx - 1)]?.name ?? scenes[0]?.name ?? null
+    if (nextActive) {
+      projectGraph.setActiveScene(nextActive)
+      sendSceneActivate(nextActive)
+    }
+    sendSaveProject('scenes', toHubScenes(scenes))
   }
 }
 

@@ -5,7 +5,7 @@
     "SIMULATOR_RENDERER_GUID": "simulator-1234567890",
     "SIMULATOR_IFRAME_URL": "/simulator-2d/",
     "LAYOUT": {
-        "pagePaddingPx": 12,
+        "pagePaddingPx": 3,
         "mainGapPx": 8,
         "simStackMinHeightVh": 50,
         "controlStripMinHeightPx": 120,

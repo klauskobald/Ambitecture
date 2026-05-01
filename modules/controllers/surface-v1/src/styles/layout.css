@@ -151,7 +151,7 @@ body.nav-open .app-nav .nav-link {
 /* ── Scenes pane layout ─────────────────────────────────────── */
 
 .scenes-pane {
-  padding: 0 var(--page-padding);
+  padding: var(--page-padding);
   overflow-y: auto;
 }
 

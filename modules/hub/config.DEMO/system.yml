@@ -6,6 +6,7 @@ systemCapabilities:
     - sqrt
     - smoothstep
   intentProperties:
+    # these are the properties that are available for all intents and show up in the controllers.
     light:
       - dotKey: name
         name: Name

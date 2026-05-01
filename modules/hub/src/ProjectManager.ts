@@ -143,6 +143,13 @@ export class ProjectManager {
         changed += 1;
       }
     }
+    if (changed > 0) {
+      this.project!.zones = this.runtimeZones.map((zone) => ({
+        ...zone,
+        fixtures: zone.fixtures.map((fixture) => this.cloneFixtureInstance(fixture)),
+      }));
+      this._scheduleSave();
+    }
     return changed;
   }
 
@@ -248,9 +255,11 @@ export class ProjectManager {
         Logger.info('[project] saved to disk');
       } catch (err) {
         Logger.error('[project] save failed:', err);
-      } finally {
-        this._suppressWatch = false;
       }
+      // Keep suppress flag set briefly — FSEvents callbacks fire async
+      // after writeFileSync returns, so the watcher may see the change
+      // after we've already cleared the flag.
+      setTimeout(() => { this._suppressWatch = false; }, 500);
     }, 2000);
   }
 

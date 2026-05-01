@@ -1,11 +1,14 @@
 import { toHSL } from '../../core/color.js'
 
 const CANVAS_W = 320
-const CANVAS_H = 120
+const CANVAS_H = 220
+const MID_Y = Math.floor(CANVAS_H / 2) // split line: bottom = S=1 L 0→0.5, top = S 1→0 L 0.5→1
 
 /**
  * HSL palette plugin descriptor.
- * X axis: Hue 0–360°, Y axis: Lightness 0.5 (top, full color) → 0 (bottom, black), S=1 fixed.
+ * X axis: Hue 0–360°.
+ * Y axis bottom half: S=1 fixed, L 0 (black) → 0.5 (full saturation at midline).
+ * Y axis top half:    S 1→0, L 0.5→1 (saturated → white at top).
  */
 export const hslPalette = {
   id: 'hsl',
@@ -40,11 +43,21 @@ export const hslPalette = {
     // ── Draw gradient via ImageData for accuracy ──────────────────
     const img = ctx.createImageData(CANVAS_W, CANVAS_H)
     for (let py = 0; py < CANVAS_H; py++) {
-      // l: 0.5 at top → 0 at bottom
-      const l = 0.5 * (1 - py / (CANVAS_H - 1))
+      let s, l
+      if (py < MID_Y) {
+        // Top half: S 1→0, L 0.5→1
+        const f = py / (MID_Y - 1 || 1) // 0 at top, 1 at midline
+        s = f
+        l = 1 - 0.5 * f
+      } else {
+        // Bottom half: S=1 fixed, L 0.5→0
+        const f = (py - MID_Y) / (CANVAS_H - 1 - MID_Y || 1) // 0 at midline, 1 at bottom
+        s = 1
+        l = 0.5 * (1 - f)
+      }
       for (let px = 0; px < CANVAS_W; px++) {
         const h = (px / (CANVAS_W - 1)) * 360
-        const { r, g, b } = hslToRGB01(h, 1, l)
+        const { r, g, b } = hslToRGB01(h, s, l)
         const i = (py * CANVAS_W + px) * 4
         img.data[i]     = Math.round(r * 255)
         img.data[i + 1] = Math.round(g * 255)
@@ -56,14 +69,21 @@ export const hslPalette = {
 
     // ── Crosshair state ───────────────────────────────────────────
     let currentH = 0
+    let currentS = 1
     let currentL = 0.5
     let isDragging = false
 
     function drawCrosshair () {
       ctx.putImageData(img, 0, 0)
       const px = (currentH / 360) * (CANVAS_W - 1)
-      // l: 0.5 → top (py=0), 0 → bottom (py=CANVAS_H-1)
-      const py = (1 - currentL / 0.5) * (CANVAS_H - 1)
+      let py
+      if (currentL <= 0.5) {
+        // Bottom half: S=1, L 0→0.5
+        py = MID_Y + (1 - currentL / 0.5) * (CANVAS_H - 1 - MID_Y)
+      } else {
+        // Top half: S 0→1, L 1→0.5
+        py = currentS * (MID_Y - 1)
+      }
       ctx.save()
       ctx.strokeStyle = '#fff'
       ctx.lineWidth = 1.5
@@ -86,10 +106,21 @@ export const hslPalette = {
       const rect = canvas.getBoundingClientRect()
       const nx = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
       const ny = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height))
+      const py = ny * (CANVAS_H - 1)
       currentH = nx * 360
-      currentL = 0.5 * (1 - ny)
+      if (py < MID_Y) {
+        // Top half: S 1→0, L 0.5→1
+        const f = py / (MID_Y - 1 || 1) // 0 at top, 1 at midline
+        currentS = f
+        currentL = 1 - 0.5 * f
+      } else {
+        // Bottom half: S=1, L 0.5→0
+        const f = (py - MID_Y) / (CANVAS_H - 1 - MID_Y || 1) // 0 at midline, 1 at bottom
+        currentS = 1
+        currentL = 0.5 * (1 - f)
+      }
       drawCrosshair()
-      onChange({ h: currentH, s: 1, l: currentL })
+      onChange({ h: currentH, s: currentS, l: currentL })
     }
 
     canvas.addEventListener('pointerdown', ev => {
@@ -108,10 +139,10 @@ export const hslPalette = {
 
     return {
       setColor (colorObj) {
-        const { h, s: _s, l } = toHSL(colorObj)
-        // l from toHSL may exceed 0.5 (e.g. near-white XYY); clamp to palette range
+        const { h, s, l } = toHSL(colorObj)
         currentH = h
-        currentL = Math.min(0.5, Math.max(0, l))
+        currentS = Math.max(0, Math.min(1, s))
+        currentL = Math.max(0, Math.min(1, l))
         drawCrosshair()
       },
       destroy () {

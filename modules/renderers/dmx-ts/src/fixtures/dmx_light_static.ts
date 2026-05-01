@@ -12,6 +12,8 @@ class DmxLightStatic extends DmxFixtureBase {
         snapshot: FixtureIntentSnapshot,
         dmxUniverse: DmxUniverse
     ): void {
+        const xbrightness = snapshot.sample<number>('light.brightness') || 1;
+
         const color = snapshot.sample<Color>('light.color.xyY') ?? Color.black();
         const { r, g, b } = color.toRGB();
         this.writeFunction(fixture, 'red', r, dmxUniverse);
@@ -34,7 +36,7 @@ class DmxLightStatic extends DmxFixtureBase {
 
         const masterBrightness = snapshot.sample<number>('master.brightness') ?? 1;
         const masterBlackout = snapshot.sample<boolean>('master.blackout') ?? false;
-        const brightness = masterBrightness * (masterBlackout ? 0 : 1);
+        const brightness = xbrightness * masterBrightness * (masterBlackout ? 0 : 1);
         this.writeFunction(fixture, 'brightness', Math.max(0, Math.min(1, brightness)), dmxUniverse);
     }
 }

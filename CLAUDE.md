@@ -301,6 +301,7 @@ All server-side processes must be supervised:
 - Config in YAML (not hardcoded). Listen port/host always come from `server.yml`.
 - `Logger` (`src/Logger.ts`) is the shared logging utility for hub-side code.
 - **Modules are self-contained.** No `../../` cross-module imports. Duplication is acceptable for now — shared utilities will be extracted into a proper shared package later.
+- **Renderers must stay in sync.** Whenever you update a renderer (e.g. `dmx-ts`), apply the same logic change to all other renderers (e.g. `simulator-2d`). Renderers share the same event model, LayerIntentEngine, and fixture classes — divergence causes hard-to-debug behavioral differences at runtime.
 
 ---
 

@@ -9,13 +9,14 @@ class DmxLightStatic extends LightBase {
   applyIntentSnapshot(_context, snapshot) {
     const color = snapshot.sample('light.color.xyY') || Color.black()
     const masterBrightness = snapshot.sample('master.brightness') ?? 1
+    const xbrightness = snapshot.sample('light.brightness') ?? 1
     const masterBlackout = snapshot.sample('master.blackout') ?? false
     const spatialStrobe = snapshot.sample('light.strobe') ?? 0
     const aux = snapshot.sample('light.aux') ?? {}
     this._strobe = aux['strobe'] !== undefined ? aux['strobe'] : spatialStrobe
 
     const { r, g, b } = color.toRGB()
-    const f = masterBrightness * (masterBlackout ? 0 : 1)
+    const f = Math.max(0, Math.min(1, xbrightness * masterBrightness)) * (masterBlackout ? 0 : 1)
     this.currentColor = { r: r * f, g: g * f, b: b * f }
   }
 

@@ -15,7 +15,7 @@ export interface RendererEvent {
 
 export interface FixtureIntentSnapshot {
     intentsByLayer: ReadonlyMap<string, IntentRecord>;
-    sample<TValue>(capabilityKey: string): TValue | undefined;
+    sample<TValue>(capabilityKey: string, withSpatialFactor?: boolean): TValue | undefined;
 }
 
 export interface IFixtureClass {

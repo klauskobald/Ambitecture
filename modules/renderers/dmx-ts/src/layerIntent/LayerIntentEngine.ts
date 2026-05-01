@@ -93,10 +93,13 @@ export class LayerIntentEngine {
 
     constructor() {
         this.registerResolver<Color>('light.color.xyY', {
-            sample: (context, intents) => this.sampleLightColor(context, intents),
+            sample: (context, intents, withSpatialFactor = true) => this.sampleLightColor(context, intents, withSpatialFactor),
         });
         this.registerResolver<number>('light.strobe', {
-            sample: (context, intents) => this.sampleSpatialStrobe(context, intents),
+            sample: (context, intents) => this.sampleSpatialAdditive(context, intents, 'light', 'strobe'),
+        });
+        this.registerResolver<number>('light.brightness', {
+            sample: (context, intents) => this.sampleSpatialAdditive(context, intents, 'light', 'brightness'),
         });
         this.registerResolver<Record<string, number>>('light.aux', {
             sample: (_context, intents) => this.sampleTopLayerAux(intents, 'light'),
@@ -132,7 +135,7 @@ export class LayerIntentEngine {
         return this.intentsByLayer;
     }
 
-    sample<TValue>(context: FixtureSampleContext, capabilityKey: string): TValue | undefined {
+    sample<TValue>(context: FixtureSampleContext, capabilityKey: string, withSpatialFactor?: boolean): TValue | undefined {
         const resolver = this.resolvers.get(capabilityKey);
         if (!resolver) return undefined;
         const scopedIntentsByLayer = new Map(
@@ -142,7 +145,7 @@ export class LayerIntentEngine {
         return resolver.sample(context, scopedIntentsByLayer) as TValue | undefined;
     }
 
-    private sampleLightColor(context: FixtureSampleContext, intentsByLayer: ReadonlyMap<string, IntentRecord>): Color {
+    private sampleLightColor(context: FixtureSampleContext, intentsByLayer: ReadonlyMap<string, IntentRecord>, withSpatialFactor: boolean): Color {
         const layers = [...intentsByLayer.entries()]
             .filter(([, intent]) => intent.intentType === 'light')
             .sort(([, a], [, b]) => a.layer - b.layer);
@@ -159,43 +162,66 @@ export class LayerIntentEngine {
                 continue;
             }
 
-            const spatialFactor = this.computeSpatialFactor(
+            const spatialFactor = withSpatialFactor ? this.computeSpatialFactor(
                 context.fixture,
                 context.fixtureWorldPos,
                 intent.position,
                 context.fixture.range,
                 intent.radius,
                 intent.radiusFunction
-            );
+            ) : 1;
             const layerColor = new Color(colorData.x, colorData.y, Math.max(0, Math.min(1, colorData.Y * spatialFactor)));
             mixed = mixed.blend(layerColor, intent.blend ?? 'ADD', intent.alpha ?? 1);
         }
         return mixed;
     }
 
-    private sampleSpatialStrobe(
+    // Accumulates from 0. Zero-state = 0. Use for additive effects (strobe).
+    private sampleSpatialAdditive(
         context: FixtureSampleContext,
-        intentsByLayer: ReadonlyMap<string, IntentRecord>
+        intentsByLayer: ReadonlyMap<string, IntentRecord>,
+        intentType: string,
+        paramKey: string
     ): number {
-        const layers = [...intentsByLayer.entries()]
-            .filter(([, intent]) => intent.intentType === 'light')
-            .sort(([, a], [, b]) => a.layer - b.layer);
-
+        const layers = this.lightLayersSorted(intentsByLayer, intentType);
         let result = 0;
-        for (const [, intent] of layers) {
-            const value = intent.payload['strobe'];
+        for (const intent of layers) {
+            const value = intent.payload[paramKey];
             if (typeof value !== 'number' || !Number.isFinite(value) || value === 0) continue;
-            const spatialFactor = this.computeSpatialFactor(
-                context.fixture,
-                context.fixtureWorldPos,
-                intent.position,
-                context.fixture.range,
-                intent.radius,
-                intent.radiusFunction
-            );
-            result = Math.min(1, result + value * spatialFactor * (intent.alpha ?? 1));
+            const f = this.computeSpatialFactor(context.fixture, context.fixtureWorldPos,
+                intent.position, context.fixture.range, intent.radius, intent.radiusFunction);
+            result = Math.min(1, result + value * f * (intent.alpha ?? 1));
         }
         return result;
+    }
+
+    // Reduces from 1. Zero-state = 1. Use for modulative effects (brightness).
+    // Outside an intent's radius spatialFactor → 0, so reduction → 0 and result stays 1.
+    private sampleSpatialSubtractive(
+        context: FixtureSampleContext,
+        intentsByLayer: ReadonlyMap<string, IntentRecord>,
+        intentType: string,
+        paramKey: string
+    ): number {
+        const layers = this.lightLayersSorted(intentsByLayer, intentType);
+        let reduction = 0;
+        for (const intent of layers) {
+            const value = intent.payload[paramKey];
+            if (typeof value !== 'number' || !Number.isFinite(value)) continue;
+            const f = this.computeSpatialFactor(context.fixture, context.fixtureWorldPos,
+                intent.position, context.fixture.range, intent.radius, intent.radiusFunction);
+            reduction = Math.min(1, reduction + (1 - value) * f * (intent.alpha ?? 1));
+        }
+        return Math.max(0, 1 - reduction);
+    }
+
+    private lightLayersSorted(
+        intentsByLayer: ReadonlyMap<string, IntentRecord>,
+        intentType: string
+    ): IntentRecord[] {
+        return [...intentsByLayer.values()]
+            .filter(intent => intent.intentType === intentType)
+            .sort((a, b) => a.layer - b.layer);
     }
 
     private sampleTopLayerNumber(

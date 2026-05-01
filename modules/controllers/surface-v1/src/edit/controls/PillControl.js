@@ -45,5 +45,6 @@ export class PillControl extends PropertyControl {
       if (updated) queueIntentUpdate(updated)
     }
     this._saveProject()
+    this.refresh(this._currentGuids)
   }
 }

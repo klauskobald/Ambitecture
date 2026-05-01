@@ -1,15 +1,17 @@
-export function showConfigError (message) {
-  const el = document.getElementById('config-error')
-  if (el) {
-    el.textContent = message
-    el.hidden = false
-  }
-  console.error('surface-v1:', message)
+import { notification } from './notification.js'
+import * as statusLogger from './statusLogger.js'
+
+export function info (message, key) {
+  statusLogger.info(message, key)
+  notification.info(message, key)
 }
 
-export function setSpatialReadout (text) {
-  const el = document.getElementById('spatial-readout')
-  if (!el) return
-  el.textContent = text
-  el.hidden = text === ''
+export function warn (message, key) {
+  statusLogger.warn(message, key)
+  notification.warn(message, key)
+}
+
+export function error (message, key) {
+  statusLogger.error(message, key)
+  notification.error(message, key)
 }

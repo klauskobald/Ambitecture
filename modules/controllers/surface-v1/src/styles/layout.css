@@ -139,17 +139,42 @@ body.nav-open .app-nav {
   overflow-y: auto;
 }
 
-/* ── Status readouts ─────────────────────────────────────────── */
+/* ── Status notifications ────────────────────────────────────── */
 
-.config-error {
-  color: var(--color-text-error);
-  font-size: 0.85rem;
-  margin: 0;
+.status-notification-stack {
+  position: fixed;
+  right: max(0.6rem, env(safe-area-inset-right));
+  bottom: max(0.6rem, env(safe-area-inset-bottom));
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.45rem;
+  width: min(26rem, calc(100vw - 1.2rem));
+  pointer-events: none;
 }
 
-.spatial-readout {
-  margin: 0;
-  font-size: 0.75rem;
-  color: var(--color-text-meta);
+.status-notification {
+  border: 1px solid var(--color-border);
+  border-left-width: 4px;
+  border-radius: 10px;
+  background: var(--color-bg-raised);
+  color: var(--color-text);
+  font-size: 0.82rem;
+  line-height: 1.3;
+  padding: 0.55rem 0.65rem;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
   font-family: ui-monospace, monospace;
+}
+
+.status-notification--info {
+  border-left-color: var(--color-accent);
+}
+
+.status-notification--warn {
+  border-left-color: #f7bd42;
+}
+
+.status-notification--error {
+  border-left-color: var(--color-text-error);
 }

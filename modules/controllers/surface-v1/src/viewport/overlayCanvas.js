@@ -6,7 +6,6 @@ import {
   isPositionInsideAnyZone,
   overlayClientToBboxMeters
 } from './spatialMath.js'
-import { setSpatialReadout } from '../app/statusDisplay.js'
 import { noopPolicy } from './interactionPolicies.js'
 
 /**
@@ -184,18 +183,9 @@ export class OverlayCanvas {
   _pushSample (clientX, clientY, x, y) {
     this._samples.push({ x, y, t: performance.now() })
     const spatial = projectGraph.getSpatial()
-    if (!spatial) {
-      setSpatialReadout('hub config (zone bbox) not yet received')
-      return
-    }
+    if (!spatial) return
     const m = overlayClientToBboxMeters(clientX, clientY, this._canvas, spatial)
-    if (!m) {
-      setSpatialReadout('outside touch overlay')
-      return
-    }
-    setSpatialReadout(
-      `overlay u=${m.nx.toFixed(3)} v=${m.ny.toFixed(3)}  |  meters x=${m.wx.toFixed(3)} y=${m.wy.toFixed(3)} z=${m.wz.toFixed(3)}`
-    )
+    if (!m) return
   }
 
   /**

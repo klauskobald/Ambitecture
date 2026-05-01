@@ -1,4 +1,4 @@
-import { showConfigError } from '../app/statusDisplay.js'
+import * as statusDisplay from '../app/statusDisplay.js'
 
 /**
  * @typedef {object} LayoutConfig
@@ -74,11 +74,11 @@ export async function loadConfig () {
   try {
     res = await fetch('./config.json', { cache: 'no-store' })
   } catch (e) {
-    showConfigError(`Could not load config.json (${/** @type {Error} */ (e).message}).`)
+    statusDisplay.error(`Could not load config.json (${/** @type {Error} */ (e).message}).`, 'config')
     return null
   }
   if (!res.ok) {
-    showConfigError(`config.json HTTP ${res.status}`)
+    statusDisplay.error(`config.json HTTP ${res.status}`, 'config')
     return null
   }
   /** @type {unknown} */
@@ -86,11 +86,11 @@ export async function loadConfig () {
   try {
     cfg = await res.json()
   } catch {
-    showConfigError('config.json is not valid JSON.')
+    statusDisplay.error('config.json is not valid JSON.', 'config')
     return null
   }
   if (!validateControllerConfig(cfg)) {
-    showConfigError('config.json failed validation: see README for required keys (including CONTROLLER_GUID, SIMULATOR_RENDERER_GUID, GEO_LOCATION).')
+    statusDisplay.error('config.json failed validation: see README for required keys (including CONTROLLER_GUID, SIMULATOR_RENDERER_GUID, GEO_LOCATION).', 'config')
     return null
   }
   return cfg

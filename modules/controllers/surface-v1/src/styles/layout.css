@@ -22,6 +22,7 @@
 
 .app-title {
   margin: 0;
+  padding-left: 0.5rem;
   font-size: 1rem;
   font-weight: 600;
   flex: 1 1 auto;
@@ -29,16 +30,24 @@
 
 /* ── Navigation ─────────────────────────────────────────────── */
 
-/* Mobile: nav hidden by default, toggle shows it */
+/* Mobile: nav bar is visible, links are collapsed by default */
 .app-nav {
-  display: none;
-  flex-direction: column;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  padding: var(--page-padding);
   background: var(--color-bg-raised);
   border-bottom: 1px solid var(--color-border);
 }
 
-body.nav-open .app-nav {
-  display: flex;
+.app-nav .nav-link {
+  display: none;
+  width: 100%;
+}
+
+body.nav-open .app-nav .nav-link {
+  display: block;
 }
 
 .nav-toggle {
@@ -59,8 +68,15 @@ body.nav-open .app-nav {
   }
 
   .app-nav {
-    display: flex;
+    flex-wrap: nowrap;
     flex-direction: row;
+    gap: 0;
+    padding: 0;
+  }
+
+  .app-nav .nav-link {
+    display: block;
+    width: auto;
   }
 }
 

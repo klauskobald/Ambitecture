@@ -122,9 +122,16 @@ export class EditPane {
 
   // ── Manager builders ──────────────────────────────────────────────────────────
 
+  /** @returns {Iterable<[string, unknown]>} only intents in the active scene */
+  _sceneIntentEntries () {
+    const active = projectGraph.getActiveSceneName()
+    const guids = active ? new Set(projectGraph.getSceneIntents(active)) : null
+    return [...projectGraph.getIntents().entries()].filter(([g]) => !guids || guids.has(g))
+  }
+
   _buildPerformEnableManager () {
     return new SelectionManager({
-      getObjects: () => projectGraph.getIntents().entries(),
+      getObjects: () => this._sceneIntentEntries(),
       getWorldPos (obj) {
         const i = /** @type {Record<string, unknown>} */ (obj)
         const pos = /** @type {number[] | undefined} */ (i.position)
@@ -160,7 +167,7 @@ export class EditPane {
   _buildColorManager () {
     const colorPicker = this._colorPicker
     return new SelectionManager({
-      getObjects: () => projectGraph.getIntents().entries(),
+      getObjects: () => this._sceneIntentEntries(),
       getWorldPos (obj) {
         const i = /** @type {Record<string, unknown>} */ (obj)
         const pos = /** @type {number[] | undefined} */ (i.position)

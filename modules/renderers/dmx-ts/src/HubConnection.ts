@@ -19,8 +19,13 @@ interface MessageHandler {
     handle(ws: WebSocket, message: WsMessage): void;
 }
 
+/** Max wait for TCP + WebSocket handshake; avoids hanging on unreachable hub. */
+const CONNECT_TIMEOUT_MS = 5000;
+
 export class HubConnection {
     private ws: WebSocket | null = null;
+    private connectGeneration = 0;
+    private connectTimeout: ReturnType<typeof setTimeout> | null = null;
     private handlers: Map<string, MessageHandler>;
     private dmxUniverse: DmxUniverse;
 
@@ -36,14 +41,38 @@ export class HubConnection {
         ]);
     }
 
+    private clearConnectTimeout(): void {
+        if (this.connectTimeout !== null) {
+            clearTimeout(this.connectTimeout);
+            this.connectTimeout = null;
+        }
+    }
+
     connect(): void {
+        this.clearConnectTimeout();
+        const gen = ++this.connectGeneration;
         const url = Config.hubWsUrl;
         Logger.info(`[ws] connecting to ${url}`);
 
         const ws = new WebSocket(url);
         this.ws = ws;
 
+        this.connectTimeout = setTimeout(() => {
+            this.connectTimeout = null;
+            if (gen !== this.connectGeneration) {
+                return;
+            }
+            if (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN) {
+                Logger.warn(`[ws] connect timeout after ${CONNECT_TIMEOUT_MS}ms, retrying`);
+                ws.terminate();
+            }
+        }, CONNECT_TIMEOUT_MS);
+
         ws.on('open', () => {
+            if (gen !== this.connectGeneration) {
+                return;
+            }
+            this.clearConnectTimeout();
             Logger.info('[ws] connected');
             this.sendRegister(ws);
         });
@@ -53,11 +82,20 @@ export class HubConnection {
         });
 
         ws.on('close', () => {
+            if (gen === this.connectGeneration) {
+                this.clearConnectTimeout();
+            }
+            if (gen !== this.connectGeneration) {
+                return;
+            }
             Logger.warn('[ws] connection closed, reconnecting');
             setImmediate(() => this.connect());
         });
 
         ws.on('error', (err: Error) => {
+            if (gen === this.connectGeneration) {
+                this.clearConnectTimeout();
+            }
             Logger.warn('[ws] error, reconnecting', err.message);
             ws.terminate();
         });

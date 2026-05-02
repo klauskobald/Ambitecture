@@ -246,8 +246,9 @@ export class OverlayCanvas {
     const alreadyGrabbed = new Set(this._draggedIntents.values())
     let nearest = null
     let nearestDist = DRAG_HIT_RADIUS_PX
-    for (const [guid, intent] of projectGraph.getIntents()) {
+    for (const [guid, sharedIntent] of projectGraph.getIntents()) {
       if (alreadyGrabbed.has(guid)) continue
+      const intent = projectGraph.getEffectiveIntent(guid) ?? sharedIntent
       if (!this._policy.canDragIntent(intent)) continue
       const i = /** @type {Record<string, unknown>} */ (intent)
       const pos = /** @type {number[] | undefined} */ (i.position)
@@ -319,7 +320,7 @@ export class OverlayCanvas {
     // dragged intent highlights
     if (this._draggedIntents.size > 0) {
       for (const guid of this._draggedIntents.values()) {
-        const intent = projectGraph.getIntents().get(guid)
+        const intent = projectGraph.getEffectiveIntent(guid) ?? projectGraph.getIntents().get(guid)
         if (!intent) continue
         const i = /** @type {Record<string, unknown>} */ (intent)
         const pos = /** @type {number[] | undefined} */ (i.position)
@@ -355,7 +356,8 @@ export class OverlayCanvas {
     }
 
     // intent radius circles
-    for (const intent of projectGraph.getIntents().values()) {
+    for (const [guid, sharedIntent] of projectGraph.getIntents()) {
+      const intent = projectGraph.getEffectiveIntent(guid) ?? sharedIntent
       if (!this._policy.isIntentVisible(intent)) continue
       const i = /** @type {Record<string, unknown>} */ (intent)
       const pos = /** @type {number[] | undefined} */ (i.position)
@@ -378,7 +380,8 @@ export class OverlayCanvas {
 
     // out-of-zone intent markers
     const zoneBoxes = projectGraph.getZoneBoxes()
-    for (const intent of projectGraph.getIntents().values()) {
+    for (const [guid, sharedIntent] of projectGraph.getIntents()) {
+      const intent = projectGraph.getEffectiveIntent(guid) ?? sharedIntent
       if (!this._policy.isIntentVisible(intent)) continue
       const i = /** @type {Record<string, unknown>} */ (intent)
       const pos = /** @type {number[] | undefined} */ (i.position)

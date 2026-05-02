@@ -2,6 +2,7 @@ import { SliderControl } from './controls/SliderControl.js'
 import { ColorControl } from './controls/ColorControl.js'
 import { PillControl } from './controls/PillControl.js'
 import { ModalControl } from './controls/ModalControl.js'
+import { InfoTextControl } from './controls/InfoTextControl.js'
 
 export class PropertyPanel {
   /**
@@ -70,6 +71,8 @@ export class PropertyPanel {
         return Array.isArray(d.options) && d.options.length > 0
           ? new PillControl(d, onCommit, size)
           : new ModalControl(d, onCommit, size)
+      case 'infoText':
+        return new InfoTextControl(d, onCommit, size)
       default:
         return null
     }

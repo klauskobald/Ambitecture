@@ -136,7 +136,7 @@ export class RuntimeCommandHandler implements MessageHandler {
     if (!this.projectManager.isIntentInActiveScene(update.guid)) {
       return null;
     }
-    const existing = this.projectManager.getIntentDefinition(update.guid);
+    const existing = this.projectManager.getActiveSceneIntent(update.guid);
     if (!existing) {
       return null;
     }

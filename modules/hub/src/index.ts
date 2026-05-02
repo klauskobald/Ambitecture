@@ -35,7 +35,13 @@ const buildActiveSceneEventsMsg = (): string | null => {
   return JSON.stringify({ message: { type: 'events', payload: events } });
 };
 
-const pushControllerProjectPatches = (): void => {
+/**
+ * Controllers receive incremental `projectPatch` messages. When the trigger is fixture-only
+ * (zones/runtime layout changed), omit the `intents` patch: `getControllerIntents` merges YAML
+ * definitions with per-controller cache, so a full intents snapshot would stomp client-local
+ * intent positions that have not been flushed to the hub yet.
+ */
+const pushControllerProjectPatches = (includeIntentsPatch: boolean): void => {
   const zones = projectManager.getSerializedRuntimeZones();
   const scenes = projectManager.getScenesWirePayload();
   const zoneToRenderer = projectManager.getZoneToRendererPayload();
@@ -69,18 +75,21 @@ const pushControllerProjectPatches = (): void => {
     ws.send(ztrMsg);
     ws.send(activeMsg);
     ws.send(nameMsg);
-    const intents = projectManager.getControllerIntents(info.guid);
-    ws.send(JSON.stringify({
-      message: { type: 'projectPatch', payload: { key: 'intents', data: intents } },
-    }));
+    if (includeIntentsPatch) {
+      const intents = projectManager.getControllerIntents(info.guid);
+      ws.send(JSON.stringify({
+        message: { type: 'projectPatch', payload: { key: 'intents', data: intents } },
+      }));
+    }
   }
   if (controllerCount > 0) {
-    Logger.info(`[hub] incremental projectPatch → ${controllerCount} controller(s) (zones, scenes, intents, …)`);
+    const scope = includeIntentsPatch ? 'zones, scenes, intents, …' : 'zones, scenes, … (no intents)';
+    Logger.info(`[hub] incremental projectPatch → ${controllerCount} controller(s) (${scope})`);
   }
 };
 
 /** Renderers get full `config` + scene events; controllers get `projectPatch` only (full `config` on register). */
-const pushConfigsToModules = () => {
+const pushConfigsToModules = (includeControllerIntentPatch = true) => {
   const sceneEventsMsg = buildActiveSceneEventsMsg();
   for (const ws of registry.getByRole('renderer')) {
     const info = registry.get(ws);
@@ -90,7 +99,7 @@ const pushConfigsToModules = () => {
       if (sceneEventsMsg) ws.send(sceneEventsMsg);
     }
   }
-  pushControllerProjectPatches();
+  pushControllerProjectPatches(includeControllerIntentPatch);
 };
 
 const rateLimitEventsPerSecond = serverConfig.get<number>('rateLimitEventsPerSecond');
@@ -98,7 +107,10 @@ const eventQueue = new EventQueue(registry);
 router.register('register', new RegisterHandler(registry, projectManager, rateLimitEventsPerSecond, systemConfig));
 router.register('events', new EventsHandler(registry));
 router.register('intents', new IntentsHandler(registry, projectManager, eventQueue));
-router.register('fixtures', new FixturesHandler(registry, projectManager, pushConfigsToModules));
+router.register(
+  'fixtures',
+  new FixturesHandler(registry, projectManager, () => pushConfigsToModules(false)),
+);
 const sceneHandler = new SceneHandler(registry, projectManager, eventQueue);
 router.register('scene:activate', sceneHandler);
 router.register('saveProject', new SaveProjectHandler(projectManager));

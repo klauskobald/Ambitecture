@@ -79,10 +79,8 @@ export class ProjectManager {
   private fixturesPath: string;
   private project: Project | null = null;
   private fixtureProfiles: Map<string, FixtureProfile> = new Map();
-  private intentCache: Map<string, Map<string, ControllerIntent>> = new Map();
   private intentDefinitions: Map<string, ControllerIntent> = new Map();
   private activeSceneName: string | null = null;
-  private activeSceneIntents: ControllerIntent[] = [];
   private runtimeZones: Zone[] = [];
   private _projectConfig: Config | null = null;
   private _saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -107,23 +105,12 @@ export class ProjectManager {
     }
   }
 
-  private _getMergedIntent(guid: string): ControllerIntent | undefined {
-    const base = this.intentDefinitions.get(guid);
-    if (!base) return undefined;
-    for (const controllerCache of this.intentCache.values()) {
-      const cached = controllerCache.get(guid);
-      if (cached) return { ...base, ...cached };
-    }
-    return base;
-  }
-
   private reloadProject(name: string): void {
     const filePath = this.resolvePath(this.projectsPath, `${name}.yml`);
     this._projectConfig = new Config(filePath);
     this.project = this._projectConfig.getAll() as Project;
 
     this._rebuildIntentDefinitions(this.project.intents ?? []);
-    this._pruneIntentCacheAfterReload();
 
     // Auto-create "untitled" scene if intents exist but no scenes defined
     if ((!this.project.scenes || this.project.scenes.length === 0) && (this.project.intents ?? []).length > 0) {
@@ -137,15 +124,7 @@ export class ProjectManager {
     const scenes = this.project.scenes ?? [];
     const storedScene = scenes.find(s => s.name === this.project!.activeScene);
     const initialScene = storedScene ?? scenes[0];
-    if (initialScene) {
-      this.activeSceneName = initialScene.name;
-      this.activeSceneIntents = initialScene.intents
-        .map(ref => this._getMergedIntent(ref.guid))
-        .filter((i): i is ControllerIntent => i !== undefined);
-    } else {
-      this.activeSceneName = null;
-      this.activeSceneIntents = [];
-    }
+    this.activeSceneName = initialScene?.name ?? null;
 
     this.fixtureProfiles.clear();
     this.loadReferencedFixtures();
@@ -233,29 +212,21 @@ export class ProjectManager {
       && position[2] >= bbox[2] && position[2] <= bbox[5];
   }
 
-  updateIntents(controllerGuid: string, updatedIntents: ControllerIntent[]): void {
-    const withGuids = updatedIntents.filter(i => i.guid);
-    if (withGuids.length === 0) return;
-    const cache = this.intentCache.get(controllerGuid) ?? new Map<string, ControllerIntent>();
-    for (const intent of withGuids) {
-      cache.set(intent.guid!, intent);
+  updateIntents(_controllerGuid: string, updatedIntents: ControllerIntent[]): void {
+    for (const intent of updatedIntents) {
+      if (!intent.guid) continue;
+      const existing = this.intentDefinitions.get(intent.guid);
+      if (!existing) continue;
+      this.intentDefinitions.set(intent.guid, { ...existing, ...intent });
     }
-    this.intentCache.set(controllerGuid, cache);
   }
 
   getControllerIntents(controllerGuid: string): ControllerIntent[] {
     const match = (this.project?.controller ?? []).find(c => c.guid === controllerGuid);
-    const baseIntents = match
-      ? match.intents
-          .map(ref => this.intentDefinitions.get(ref.guid))
-          .filter((i): i is ControllerIntent => i !== undefined)
-      : [];
-    const merged = new Map<string, ControllerIntent>(baseIntents.map(i => [i.guid!, i]));
-    const cached = this.intentCache.get(controllerGuid);
-    if (cached) {
-      for (const [guid, intent] of cached) merged.set(guid, intent);
-    }
-    return [...merged.values()];
+    if (!match) return [];
+    return match.intents
+      .map(ref => this.intentDefinitions.get(ref.guid))
+      .filter((i): i is ControllerIntent => i !== undefined);
   }
 
   setProjectData(key: string, data: unknown): void {
@@ -304,15 +275,13 @@ export class ProjectManager {
       return [];
     }
     this.activeSceneName = sceneName;
-    this.activeSceneIntents = scene.intents
-      .map(ref => this._getMergedIntent(ref.guid))
-      .filter((i): i is ControllerIntent => i !== undefined);
     if (this.project) {
       this.project.activeScene = sceneName;
       this._scheduleSave();
     }
-    Logger.info(`[project] Activated scene "${sceneName}" with ${this.activeSceneIntents.length} intent(s)`);
-    return this.activeSceneIntents;
+    const intents = this.getActiveSceneIntents();
+    Logger.info(`[project] Activated scene "${sceneName}" with ${intents.length} intent(s)`);
+    return intents;
   }
 
   getAllIntentDefinitionGuids(): string[] {
@@ -328,7 +297,12 @@ export class ProjectManager {
   }
 
   getActiveSceneIntents(): ControllerIntent[] {
-    return this.activeSceneIntents;
+    if (!this.activeSceneName || !this.project?.scenes) return [];
+    const scene = this.project.scenes.find(s => s.name === this.activeSceneName);
+    if (!scene) return [];
+    return scene.intents
+      .map(ref => this.intentDefinitions.get(ref.guid))
+      .filter((i): i is ControllerIntent => i !== undefined);
   }
 
   getSceneNames(): string[] {
@@ -375,21 +349,6 @@ export class ProjectManager {
     if (fi.target !== undefined) entry['target'] = fi.target;
     if (fi.rotation !== undefined) entry['rotation'] = fi.rotation;
     return entry;
-  }
-
-  /**
-   * After reloading YAML, drop cached intent overrides that no longer exist in definitions.
-   * Keeps live WebSocket intent edits instead of wiping them via intentCache.clear().
-   */
-  private _pruneIntentCacheAfterReload(): void {
-    const valid = new Set(this.intentDefinitions.keys());
-    for (const cache of this.intentCache.values()) {
-      for (const guid of [...cache.keys()]) {
-        if (!valid.has(guid)) {
-          cache.delete(guid);
-        }
-      }
-    }
   }
 
   /** Serialized runtime zones for incremental controller sync (same shape as full config). */
@@ -449,18 +408,8 @@ export class ProjectManager {
     }
     const controllers = this.project.controller ?? [];
     const match = controllers.find(c => c.guid === guid);
-    const cached = this.intentCache.get(guid);
 
-    const intentGuids = match?.intents?.map(i => i.guid) ?? [];
-    const baseIntents = intentGuids
-      .map(g => this.intentDefinitions.get(g))
-      .filter((i): i is ControllerIntent => i !== undefined);
-
-    const mergedIntents = new Map<string, ControllerIntent>(baseIntents.map(i => [i.guid!, i]));
-    if (cached) {
-      for (const [guid, intent] of cached) mergedIntents.set(guid, intent);
-    }
-    const intents = [...mergedIntents.values()];
+    const intents = this.getControllerIntents(guid);
 
     // Pass through all controller-specific keys (interactionPolicies, etc.)
     const passThrough: Record<string, unknown> = {};
@@ -474,7 +423,7 @@ export class ProjectManager {
 
     const scenes = this.project.scenes ?? [];
     Logger.info(`[project] buildControllerConfig(${guid}): ${this.runtimeZones.length} zone(s), ${intents.length} intent(s), ${scenes.length} scene(s)`);
-    const base = {
+    return {
       projectName: this.project.name,
       zoneToRenderer: this.project['zone-to-renderer'] ?? {},
       zones: this.runtimeZones.map((z) => this.serializeZone(z)),
@@ -483,6 +432,5 @@ export class ProjectManager {
       activeSceneName: this.activeSceneName,
       ...passThrough,
     };
-    return base;
   }
 }

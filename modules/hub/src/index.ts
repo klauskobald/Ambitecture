@@ -105,14 +105,19 @@ const pushConfigsToModules = (includeControllerIntentPatch = true) => {
 
 const publishGraphMutation = (source: import('ws').WebSocket, result: GraphMutationResult, location?: [number, number]): void => {
   if (result.controllerDeltas.length > 0) {
-    const msg = JSON.stringify({
-      message: {
-        type: 'graph:delta',
-        payload: result.controllerDeltas,
-      },
-    });
     for (const ws of registry.getByRole('controller')) {
       if (ws === source || ws.readyState !== ws.OPEN) continue;
+      const info = registry.get(ws);
+      const deltas = result.controllerDeltas.filter(delta =>
+        delta.entityType !== 'controller' || info?.guid === delta.guid
+      );
+      if (deltas.length === 0) continue;
+      const msg = JSON.stringify({
+        message: {
+          type: 'graph:delta',
+          payload: deltas,
+        },
+      });
       ws.send(msg);
     }
   }

@@ -33,11 +33,13 @@ export interface GraphCommand {
 export interface GraphInitPayload {
   projectName: string;
   revision: number;
+  controllerGuid: string;
   activeSceneName: string | null;
   zoneToRenderer: Record<string, string[]>;
   zones: unknown[];
   intents: unknown[];
   scenes: unknown[];
+  interactionPolicies?: Record<string, unknown>;
   entities: Record<string, Record<string, Record<string, unknown>>>;
 }
 

@@ -20,6 +20,18 @@ function isInActiveScene (intent) {
   return projectGraph.getSceneIntents(activeScene).includes(guid)
 }
 
+let editFixturesUnlocked = false
+
+/** @param {boolean} unlocked */
+export function setEditFixturesUnlocked (unlocked) {
+  editFixturesUnlocked = unlocked
+}
+
+/** @returns {boolean} */
+export function getEditFixturesUnlocked () {
+  return editFixturesUnlocked
+}
+
 /** @type {InteractionPolicy} */
 export const performPolicy = {
   isIntentVisible (intent) {
@@ -49,7 +61,7 @@ export const editPolicy = {
     return isInActiveScene(intent)
   },
   canDragFixture (_fixture) {
-    return true
+    return editFixturesUnlocked
   },
   onIntentMove (guid, wx, wz) {
     const updated = projectGraph.updateIntentPosition(guid, wx, wz)

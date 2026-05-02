@@ -38,6 +38,7 @@ interface ControllerDef {
   name: string;
   guid: string;
   intents: { guid: string }[];
+  interactionPolicies?: Record<string, unknown>;
   [key: string]: unknown;  // pass-through for controller-specific config
 }
 
@@ -290,6 +291,52 @@ export class ProjectManager {
     return match.intents
       .map(ref => this.intentDefinitions.get(ref.guid))
       .filter((i): i is ControllerIntent => i !== undefined);
+  }
+
+  getControllerInteractionPolicies(controllerGuid: string): Record<string, unknown> {
+    const match = (this.project?.controller ?? []).find(c => c.guid === controllerGuid);
+    return match?.interactionPolicies ?? {};
+  }
+
+  updateControllerInteractionPolicies(controllerGuid: string, patch: Record<string, unknown>, remove: string[] = []): boolean {
+    const match = (this.project?.controller ?? []).find(c => c.guid === controllerGuid);
+    if (!match) return false;
+    const current = { ...(match.interactionPolicies ?? {}) };
+    for (const [key, value] of Object.entries(patch)) {
+      this.setAtDotPath(current, key, value);
+    }
+    for (const key of remove) {
+      this.removeAtDotPath(current, key);
+    }
+    match.interactionPolicies = current;
+    this._scheduleSave();
+    return true;
+  }
+
+  private setAtDotPath(target: Record<string, unknown>, dotKey: string, value: unknown): void {
+    const segments = dotKey.split('.');
+    let cursor = target;
+    for (let i = 0; i < segments.length - 1; i++) {
+      const segment = segments[i]!;
+      const existing = cursor[segment];
+      if (!existing || typeof existing !== 'object' || Array.isArray(existing)) {
+        cursor[segment] = {};
+      }
+      cursor = cursor[segment] as Record<string, unknown>;
+    }
+    cursor[segments[segments.length - 1]!] = value;
+  }
+
+  private removeAtDotPath(target: Record<string, unknown>, dotKey: string): void {
+    const segments = dotKey.split('.');
+    let cursor = target;
+    for (let i = 0; i < segments.length - 1; i++) {
+      const segment = segments[i]!;
+      const existing = cursor[segment];
+      if (!existing || typeof existing !== 'object' || Array.isArray(existing)) return;
+      cursor = existing as Record<string, unknown>;
+    }
+    delete cursor[segments[segments.length - 1]!];
   }
 
   getAllIntentDefinitions(): ControllerIntent[] {

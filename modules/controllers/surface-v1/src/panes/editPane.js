@@ -1,7 +1,7 @@
-import { editPolicy, noopPolicy } from '../viewport/interactionPolicies.js'
+import { editPolicy, noopPolicy, getEditFixturesUnlocked, setEditFixturesUnlocked } from '../viewport/interactionPolicies.js'
 import { intentGuid } from '../core/stores.js'
 import { projectGraph } from '../core/projectGraph.js'
-import { queueIntentUpdate } from '../core/outboundQueue.js'
+import { queueIntentUpdate, sendGraphCommand } from '../core/outboundQueue.js'
 import { SelectionManager } from '../viewport/selectionManager.js'
 import { ColorPicker } from '../ui/colorPicker.js'
 import { hslPalette } from '../ui/palettes/hslPalette.js'
@@ -33,6 +33,13 @@ export class EditPane {
     this._modeBar.className = 'mode-bar'
     this._el.appendChild(this._modeBar)
 
+    this._fixtureLockBtn = document.createElement('button')
+    this._fixtureLockBtn.className = 'btn btn-mode-toggle'
+    this._fixtureLockBtn.type = 'button'
+    this._fixtureLockBtn.addEventListener('click', () => this._toggleFixtureLock())
+    this._modeBar.appendChild(this._fixtureLockBtn)
+    this._refreshFixtureLockButton()
+
     for (const mode of this._modes()) {
       const btn = document.createElement('button')
       btn.className = 'btn btn-mode-toggle'
@@ -60,6 +67,8 @@ export class EditPane {
   }
 
   activate () {
+    setEditFixturesUnlocked(false)
+    this._refreshFixtureLockButton()
     this._overlay.setPolicy(editPolicy)
     this._overlay.resize()
     this._el.hidden = false
@@ -85,6 +94,19 @@ export class EditPane {
   }
 
   // ── Mode registry ─────────────────────────────────────────────────────────────
+
+  _toggleFixtureLock () {
+    setEditFixturesUnlocked(!getEditFixturesUnlocked())
+    this._refreshFixtureLockButton()
+  }
+
+  _refreshFixtureLockButton () {
+    const unlocked = getEditFixturesUnlocked()
+    this._fixtureLockBtn.textContent = unlocked ? '🔓 Fixtures' : '🔒 Fixtures'
+    this._fixtureLockBtn.classList.toggle('btn--active', unlocked)
+    this._fixtureLockBtn.title = unlocked ? 'Fixture dragging enabled' : 'Fixture dragging locked'
+    this._fixtureLockBtn.setAttribute('aria-pressed', String(unlocked))
+  }
 
   _modes () {
     return [
@@ -168,7 +190,17 @@ export class EditPane {
       },
       onTap (id, obj) {
         const guid = intentGuid(obj)
-        projectGraph.setIntentConfig(guid, 'performEnabled', !projectGraph.getIntentConfig(guid).performEnabled)
+        const enabled = !projectGraph.getIntentConfig(guid).performEnabled
+        projectGraph.setIntentConfig(guid, 'performEnabled', enabled)
+        const controllerGuid = projectGraph.getControllerGuid()
+        if (!controllerGuid) return
+        sendGraphCommand({
+          op: 'patch',
+          entityType: 'controller',
+          guid: controllerGuid,
+          patch: { [`performEnabled.${guid}`]: enabled },
+          persistence: 'runtimeAndDurable'
+        })
       },
       drawBubble (ctx, px, py, id, obj) {
         const guid = intentGuid(obj)

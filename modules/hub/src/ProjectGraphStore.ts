@@ -77,11 +77,13 @@ export class ProjectGraphStore {
     return {
       projectName: this.projectManager.getWireProjectName(),
       revision: this.revision,
+      controllerGuid: guid,
       activeSceneName,
       zoneToRenderer,
       zones,
       intents,
       scenes,
+      interactionPolicies: this.projectManager.getControllerInteractionPolicies(guid),
       entities: this.projectManager.getGraphEntities(),
     };
   }
@@ -113,6 +115,8 @@ export class ProjectGraphStore {
           return this.activateScene(command.patch['activeSceneName']);
         }
         return this.applyOpaqueCommand(command);
+      case 'controller':
+        return this.applyControllerCommand(command);
       default:
         return this.applyOpaqueCommand(command);
     }
@@ -259,6 +263,29 @@ export class ProjectGraphStore {
       rendererEvents: [],
       rendererConfigChangedFor: [],
       durableChanged: true,
+    };
+  }
+
+  private applyControllerCommand(command: GraphCommand): GraphMutationResult {
+    if (command.op === 'remove') {
+      return this.applyOpaqueCommand(command);
+    }
+    const persistence = command.persistence ?? 'runtimeAndDurable';
+    const durableChanged = persistence === 'durable' || persistence === 'runtimeAndDurable';
+    if (durableChanged && (command.patch || command.remove)) {
+      this.projectManager.updateControllerInteractionPolicies(
+        command.guid,
+        command.patch ?? {},
+        command.remove ?? [],
+      );
+    }
+    const delta = this.makeDelta({ ...command, persistence });
+    return {
+      revision: this.revision,
+      controllerDeltas: [delta],
+      rendererEvents: [],
+      rendererConfigChangedFor: [],
+      durableChanged,
     };
   }
 

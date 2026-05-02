@@ -18,6 +18,7 @@ class ProjectGraph {
 
     this._data = {
       projectName: '',
+      controllerGuid: '',
       zoneToRenderer: /** @type {Record<string, string[]>} */ ({}),
       zones: /** @type {unknown[]} */ ([]),
       intents: /** @type {Map<string, unknown>} */ (new Map()),
@@ -82,6 +83,9 @@ class ProjectGraph {
   getIntentConfig (guid) {
     return this._data.controller.intentConfig.get(guid) ?? {}
   }
+
+  /** @returns {string} */
+  getControllerGuid () { return this._data.controllerGuid }
 
   // ─── Mutations ────────────────────────────────────────────────────────────────
 
@@ -398,6 +402,9 @@ class ProjectGraph {
         case 'project':
           this._applyProjectDelta(delta)
           break
+        case 'controller':
+          this._applyControllerDelta(guid, op, delta)
+          break
         default:
           break
       }
@@ -422,6 +429,7 @@ class ProjectGraph {
     if (!p) return
 
     this._data.projectName = String(p.projectName ?? '')
+    this._data.controllerGuid = String(p.controllerGuid ?? this._data.controllerGuid)
     this._data.zoneToRenderer = /** @type {Record<string, string[]>} */ (p.zoneToRenderer ?? {})
     this._data.zones = Array.isArray(p.zones) ? /** @type {unknown[]} */ (p.zones) : []
 
@@ -453,6 +461,10 @@ class ProjectGraph {
       }
     }
 
+    if (p.interactionPolicies && typeof p.interactionPolicies === 'object' && !Array.isArray(p.interactionPolicies)) {
+      this._applyInteractionPolicies(/** @type {Record<string, unknown>} */ (p.interactionPolicies))
+    }
+
     this._spatial = this._computeSpatial()
     this._zoneBoxes = this._computeZoneBoxes()
     this._fixtures = this._computeFixtures()
@@ -465,6 +477,7 @@ class ProjectGraph {
   toJSON () {
     return {
       projectName: this._data.projectName,
+      controllerGuid: this._data.controllerGuid,
       zoneToRenderer: this._data.zoneToRenderer,
       intents: [...this._data.intents.values()],
       scenes: this._data.scenes,
@@ -601,6 +614,39 @@ class ProjectGraph {
       : {}
     if (typeof patch.activeSceneName === 'string') {
       this._data.activeSceneName = patch.activeSceneName
+    }
+  }
+
+  /**
+   * @param {string} guid
+   * @param {string} op
+   * @param {Record<string, unknown>} delta
+   */
+  _applyControllerDelta (guid, op, delta) {
+    if (guid !== this._data.controllerGuid || op === 'remove') return
+    const patch = delta.patch && typeof delta.patch === 'object' && !Array.isArray(delta.patch)
+      ? /** @type {Record<string, unknown>} */ (delta.patch)
+      : {}
+    const value = delta.value && typeof delta.value === 'object' && !Array.isArray(delta.value)
+      ? /** @type {Record<string, unknown>} */ (delta.value)
+      : null
+    if (value?.interactionPolicies && typeof value.interactionPolicies === 'object' && !Array.isArray(value.interactionPolicies)) {
+      this._applyInteractionPolicies(/** @type {Record<string, unknown>} */ (value.interactionPolicies))
+    }
+    for (const [key, patchValue] of Object.entries(patch)) {
+      if (!key.startsWith('performEnabled.')) continue
+      const intentGuid = key.slice('performEnabled.'.length)
+      if (!intentGuid) continue
+      this.setIntentConfig(intentGuid, 'performEnabled', Boolean(patchValue))
+    }
+  }
+
+  /** @param {Record<string, unknown>} policies */
+  _applyInteractionPolicies (policies) {
+    const performEnabled = policies.performEnabled
+    if (!performEnabled || typeof performEnabled !== 'object' || Array.isArray(performEnabled)) return
+    for (const [guid, enabled] of Object.entries(/** @type {Record<string, unknown>} */ (performEnabled))) {
+      this.setIntentConfig(guid, 'performEnabled', Boolean(enabled))
     }
   }
 

@@ -8,7 +8,7 @@ The `modules/` tree holds **runnable components** grouped by role: one central *
 
 **Role:** Central process: configuration authority and real-time channel for controllers and renderers.
 
-The hub is the **single source of truth** for system-wide configuration. It subscribes to configuration file changes (implemented in `src/Config.ts`) and is responsible for pushing effective config updates to all connected modules.
+The hub is the **single source of truth** for system-wide configuration and graph state. `Config.ts` supports file-watch subscribers, but project graph reload/sync is currently driven by hub startup, graph commands, and explicit runtime mutation paths.
 
 **Stack:** Node.js, TypeScript, `ts-node` (see `package.json`). Declared entry point is `src/index.ts`.
 
@@ -18,11 +18,14 @@ The hub is the **single source of truth** for system-wide configuration. It subs
 - **`src/Logger.ts`** — Shared logging.
 - **`src/Server.ts`** — HTTP server + WebSocket server (`perMessageDeflate` enabled, heartbeat ping/pong supervision).
 - **`src/MessageRouter.ts`** — Message dispatch by `message.type`.
-- **`src/handlers/RegisterHandler.ts`** — Accepts `register`, stores module identity/metadata, pushes `config` to renderers and controllers, and emits `refresh` to controllers when renderer topology changes.
+- **`src/handlers/RegisterHandler.ts`** — Accepts `register`, stores module identity/metadata, pushes `config` to renderers, and pushes `graph:init` to controllers.
+- **`src/GraphProtocol.ts`** — Defines the open graph command/delta/init protocol used by controllers and the hub.
+- **`src/ProjectGraphStore.ts`** — Hub-side graph state mutation boundary. Owns graph revisions, durable/runtime mutation policy, controller deltas, renderer event/config invalidation results, and opaque future entity persistence.
+- **`src/handlers/GraphCommandHandler.ts`** — Accepts controller `graph:command`, validates role/payload, applies it through `ProjectGraphStore`, and publishes mutation results.
 - **`src/handlers/EventsHandler.ts`** — Legacy/direct `events` forwarder kept for compatibility paths.
-- **`src/handlers/IntentsHandler.ts`** — Accepts controller `intents`, updates controller intent state, normalizes color, schedules renderer-facing `events`, and syncs intent state to peer controllers.
+- **`src/handlers/IntentsHandler.ts`** — Legacy controller `intents` path kept for compatibility. New controller code should send `graph:command` instead.
 - **`src/EventQueue.ts`** — Buckets/schedules generated renderer `events` by execution timestamp and dispatches to connected renderers.
-- **`src/ProjectManager.ts`** — Loads project + referenced fixtures, watches files, builds renderer/controller config payloads, and keeps per-controller runtime intent cache.
+- **`src/ProjectManager.ts`** — Loads project + referenced fixtures, assigns missing GUIDs to mutable graph entities, serializes renderer/controller snapshots, saves durable YAML, and exposes project helper methods used by `ProjectGraphStore`.
 - **Profile example:** `config.DEMO/server.yml` defines `LISTEN_PORT` and `LISTEN_HOST` (demo uses `3000` and `0.0.0.0`). Use `.env` / `.env.DEMO` to point `CONFIG_PATH` at a profile such as `config.DEMO`.
 
 **Current runtime note:** The hub currently runs on Node's `http` server directly (not Express). WebSocket is attached to that server without a path restriction (not limited to `/ws` yet).
@@ -86,8 +89,9 @@ Renderer data authority model:
 
 - The hub is always the source of truth for renderer-relevant data.
 - A renderer may cache hub data in memory for operation/performance, but cache is non-authoritative.
-- Renderer config is pushed from the hub (not locally self-authored at runtime).
+- Renderer config is pushed from the hub (not locally self-authored at runtime). Renderers still receive compact assigned zone/fixture snapshots, not graph deltas.
 - Event queues/state are kept in renderer memory for now (no persistent event store yet).
+- Renderers receive incremental intent execution as `events` lists. They do not receive `graph:init`, `graph:command`, or `graph:delta`.
 
 ---
 
@@ -101,9 +105,10 @@ Renderer data authority model:
 - **Touch overlay** (`src/viewport/overlayCanvas.js`): Transparent canvas stacked on top of the simulator iframe. Handles pointer events for intent/fixture dragging, draws a finger-trail, intent radius circles, out-of-zone markers, and selection bubbles. Supports modality via **interaction policies** and an optional **SelectionManager**.
 - **Interaction policies** (`src/viewport/interactionPolicies.js`): `performPolicy` (allowance-gated drag), `editPolicy` (all intents and fixtures draggable), `noopPolicy` (no interaction). Policy switches per pane via `overlay.setPolicy()`.
 - **SelectionManager** (`src/viewport/selectionManager.js`): Generic bubble-overlay system — renders bubbles at world positions for any set of objects, detects taps within a hit radius, and calls an `onTap` callback. The manager holds no selection state — that belongs to the caller (e.g., allowances graph in `stores.js`). Can be enabled/disabled on the overlay canvas.
-- **State stores** (`src/core/stores.js`): Centralized reactive state — intent map (keyed by `guid`), fixture map (keyed by `zoneName::fixtureName`), allowances graph (per-object switches), hub spatial bounds, and zone bounding boxes. Exposes a `subscribeToStores(fn)` listener pattern and typed accessors (`intentGuid`, `intentLayer`, `intentName`, `intentRadius`).
+- **Project graph** (`src/core/projectGraph.js`): Controller-side graph replica. Initializes from hub `graph:init`, stores entities by stable `guid`, applies `graph:delta`, derives scene/fixture/spatial views, and notifies UI subscribers.
+- **State helpers** (`src/core/stores.js`): Pure helper functions for graph objects such as `intentGuid`, `intentLayer`, `intentName`, `intentRadius`, and `fixtureId`.
 - **Color** (`src/core/color.js`): Display-oriented color conversion. Detects format (HSL, xyY, hex, RGB array, RGB components) and converts to CSS `rgb()` strings or HSL for palette initialization. Internal math matches hub `color.ts` and simulator-2d `color.js`.
-- **Outbound queue** (`src/core/outboundQueue.js`): Rate-limited WebSocket send queue for intent updates.
+- **Outbound queue** (`src/core/outboundQueue.js`): Rate-limited WebSocket send queue for minimal `graph:command` updates. Intent changes are sent as GUID-addressed patches/removals; fixture moves are sent by fixture GUID; scene saves are converted to graph upserts/removes.
 - **WebSocket** (`src/core/socket.js`): Auto-reconnecting WebSocket with `onOpen`/`onMessage`/`onClose` callbacks. Reconnects immediately on close/error.
 - **Config** (`src/core/config.js`): Loads `config.json` at startup, validates required keys (including `CONTROLLER_GUID`, `SIMULATOR_RENDERER_GUID`, `GEO_LOCATION`, `LAYOUT`), and applies layout CSS custom properties.
 - **Spatial math** (`src/viewport/spatialMath.js`): World ↔ canvas coordinate transforms, zone containment checks, client-to-world conversion via the simulator canvas rect.
@@ -167,19 +172,69 @@ This metadata can be stored in module-local config (`.env`, JSON) and then treat
 When a module connects, it should announce its location/capability data to the hub.
 
 - **Renderer -> Hub:** announces geo + optional `boundingBox` metadata + `guid`; spatial truth for the scene comes from hub **`config`** (project zones, each with `boundingBox`).
-- **Controller -> Hub:** announces geo + `guid` + `scope` (rooms/areas); receives hub **`config`** with full project zone data including `boundingBox` and fixtures (view density such as `PIXEL_PER_METER` stays renderer-local).
+- **Controller -> Hub:** announces geo + `guid` + `scope` (rooms/areas); receives hub **`graph:init`** with full controller graph data including zones, scenes, controller-visible intents, renderer routing, and active scene state.
 
 The hub keeps this as authoritative runtime metadata and can update it if the module reconnects or republishes.
 
 ### Intent-to-event routing for renderers
 
-Controllers submit `intents` to the hub. The hub updates controller intent state and converts those intents into scheduled renderer-facing `events` via the queue. Renderers then apply received events through a capability-based layer engine. In the current implementation, renderers keep intent state keyed by stable intent `guid` and fixtures sample capabilities from snapshots (`light.color.xyY`, `light.strobe`, `master.brightness`, `master.blackout`) instead of handling each event directly.
+Controllers submit graph commands to the hub. For interpreted `intent` changes, the hub updates graph state and converts active-scene intent changes into scheduled renderer-facing `events` via the queue. Renderers then apply received events through a capability-based layer engine. In the current implementation, renderers keep intent state keyed by stable intent `guid` and fixtures sample capabilities from snapshots (`light.color.xyY`, `light.strobe`, `master.brightness`, `master.blackout`) instead of handling each event directly.
 
 Hub pre-filtering by bounding box/location is intended optimization, not current default behavior. Current queue dispatch of generated `events` is broadcast to all connected renderers.
 
 ### Room and scope filtering for controllers
 
-Controllers should eventually receive room/scope-filtered data based on announced metadata. This filtering is not implemented yet.
+Controllers should eventually receive room/scope-filtered graph init/delta data based on announced metadata. This filtering is not implemented yet.
+
+### Graph state protocol
+
+Current controller/hub state sync uses a GUID-addressed graph protocol:
+
+- `graph:init` — hub -> controller, sent on controller register/reconnect/resync. This is the full controller snapshot and includes project name, revision, active scene, zones, scenes, controller-visible intents, renderer routing, and a generic entity map.
+- `graph:command` — controller -> hub, the only new-path controller mutation message. It carries an operation, open `entityType` string, stable `guid`, optional `patch`, optional `remove`, optional full `value`, and a persistence policy.
+- `graph:delta` — hub -> controllers, sent after accepted mutations. It carries one or more deltas with hub-assigned `revision`.
+- `config` — hub -> renderer, still used for assigned zones/fixtures.
+- `events` — hub -> renderer, still used for incremental intent execution.
+
+Example `graph:command`:
+
+```json
+{
+  "message": {
+    "type": "graph:command",
+    "location": [8.5417, 47.3769],
+    "payload": {
+      "op": "patch",
+      "entityType": "intent",
+      "guid": "color-1",
+      "patch": {
+        "position": [4.1, 0, 3.2],
+        "params.color": { "h": 220, "s": 1, "l": 0.4 }
+      },
+      "persistence": "runtime"
+    }
+  }
+}
+```
+
+Persistence policy:
+
+- `runtime` — applies to hub runtime state and emits renderer/controller updates, but does not save YAML.
+- `durable` — applies to durable project state and saves YAML.
+- `runtimeAndDurable` — applies live and saves YAML. Edit-mode drop/commit paths normally use this.
+
+Entity type policy:
+
+- `entityType` is intentionally open-ended (`string`), not a closed union.
+- Core interpreted types include `intent`, `fixture`, `scene`, `zone`, `controller`, and `project`. The hub understands these and may derive renderer events/config or active-scene behavior from them.
+- Unknown or future types are allowed. If no hub handler exists for a type, the hub may store/sync it as opaque graph state but must not generate renderer events or renderer config from it.
+- System-relevant future types such as `sequence`, `trigger`, and `action` must become explicit hub-interpreted handlers when execution exists. A `sequence` is not just an opaque blob once the hub runs it.
+- Module-specific custom types should be namespaced, for example `controller.midi-v1.mapping` or `controller.surface-v1.widget`.
+- Every synced or durable graph entity must have a stable `guid`. Migration/loading code must assign and save GUIDs for legacy YAML objects that only have names.
+
+Important scene rule:
+
+- Renderer events for intent updates are only emitted when the intent belongs to the active scene. Saving all durable intents after an edit must not cause disabled/out-of-scene intents to appear on renderers.
 
 ### Color pipeline
 
@@ -281,7 +336,19 @@ Every WebSocket message uses a unified envelope:
 
 Controllers use `role: "controller"` and include `scope` (rooms/areas) instead of `boundingBox`.
 
-**`intents`** — controller → hub:
+**`graph:init`** — hub -> controller:
+
+Full controller snapshot sent on register/reconnect/resync only. Controllers should not expect full project snapshots after every edit.
+
+**`graph:command`** — controller -> hub:
+
+Minimal mutation message. Use this for new controller features instead of `intents`, `fixtures`, `saveProject`, or broad top-level project patches.
+
+**`graph:delta`** — hub -> controller:
+
+Minimal accepted mutation result. Controllers apply this by `entityType` and `guid`.
+
+**`intents`** — legacy controller -> hub:
 
 ```json
 {
@@ -308,7 +375,7 @@ Controllers use `role: "controller"` and include `scope` (rooms/areas) instead o
 }
 ```
 
-`scheduled` in controller `intents` is relative milliseconds from "now" and is resolved by the hub into absolute event timestamps.
+`scheduled` in legacy controller `intents` is relative milliseconds from "now" and is resolved by the hub into absolute event timestamps. New graph commands may patch any mutable intent field, not only `position`.
 
 `layer`, `name`, and `radius` are top-level intent fields (not nested inside `params`). `layer` controls compositing priority, `name` is a human-readable label, and `radius` defines a spatial radius in world units for the intent.
 
@@ -339,7 +406,7 @@ Controllers use `role: "controller"` and include `scope` (rooms/areas) instead o
 }
 ```
 
-**`config`** — hub → renderer and hub → controller:
+**`config`** — hub -> renderer:
 
 ```json
 {
@@ -373,9 +440,9 @@ Controllers use `role: "controller"` and include `scope` (rooms/areas) instead o
 
 ### Event dispatch model
 
-- Hub accepts controller `intents`, updates per-controller intent state in `ProjectManager`, normalizes `params.color` into CIE 1931 `xyY`, and emits scheduled renderer `events` through `EventQueue`.
+- Hub accepts controller `graph:command` messages, applies interpreted mutations through `ProjectGraphStore`, normalizes `params.color` into CIE 1931 `xyY`, and emits scheduled renderer `events` through `EventQueue` when the effective active scene requires it.
 - Current queue dispatch broadcasts generated `events` to connected renderers.
-- Hub also re-broadcasts merged current `intents` to other connected controllers for state sync.
+- Hub broadcasts `graph:delta` to other connected controllers for state sync.
 - Hub forwards controller intent `guid` into renderer `events`; renderers ignore events without `guid`.
 - `class` (inside an event object) is stored as layer intent type and consumed by renderer capability resolvers.
 - Renderer dynamically imports fixture class modules and runs `applyIntentSnapshot(...)` for configured fixtures.
@@ -383,7 +450,27 @@ Controllers use `role: "controller"` and include `scope` (rooms/areas) instead o
 
 ### Refresh message
 
-`refresh` is hub → controller and signals browser controllers to re-send current intent state (used when renderer registration or topology changes).
+`refresh` is a legacy hub -> controller signal. New graph-aware controllers should rely on `graph:init` after reconnect and `graph:delta` during normal operation.
+
+---
+
+## Obligatory Guidance For Coding Agents
+
+Future coding agents must read and obey [CLAUDE.md](CLAUDE.md) first. It is the hard-rule file for this repository: module layout, dev commands, WebSocket contract, color model, renderer synchronization rules, coding style, test conventions, and the rule that renderers must not diverge.
+
+Use this `SYSTEM-ARCHITECTURE.md` file as the hard architecture reference. If code and this document disagree, inspect the current code and update this document in the same change.
+
+Mandatory graph-state rules:
+
+- Do not invent new top-level WebSocket mutation messages for controller state. Use `graph:command` unless a truly separate subsystem is being designed.
+- Do not send full controller project snapshots after normal edits. Use `graph:delta`; reserve `graph:init` for register/reconnect/resync.
+- Do not make `entityType` a closed TypeScript union. It must remain an open string so future modules can define new types.
+- Do not treat unknown entity types as renderer-affecting. Unknown types may be stored/synced as opaque graph state, but only registered hub-interpreted handlers may produce renderer `events` or renderer `config`.
+- Do not update only one renderer when changing shared renderer event/config behavior. Apply equivalent changes to `dmx-ts` and `simulator-2d`.
+- Do not persist perform-mode live changes unless the command says `durable` or `runtimeAndDurable`.
+- Do not emit renderer events for disabled/out-of-active-scene intents when committing all durable intents from edit mode.
+- Do not rely on fixture names alone for synced mutable fixture identity. Use stable fixture GUIDs.
+- Do not remove existing comments while editing files.
 
 ---
 

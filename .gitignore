@@ -9,3 +9,4 @@ var/
 _scratch/
 docs/
 claude-with-deepseek.sh
+**/config.json

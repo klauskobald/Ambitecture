@@ -10,6 +10,7 @@ import { FixturesHandler } from './handlers/FixturesHandler';
 import { SceneHandler } from './handlers/SceneHandler';
 import { SaveProjectHandler } from './handlers/SaveProjectHandler';
 import { GraphCommandHandler } from './handlers/GraphCommandHandler';
+import { RuntimeCommandHandler } from './handlers/RuntimeCommandHandler';
 import { EventQueue } from './EventQueue';
 import { ProjectManager } from './ProjectManager';
 import { ProjectGraphStore } from './ProjectGraphStore';
@@ -148,6 +149,7 @@ const rateLimitEventsPerSecond = serverConfig.get<number>('rateLimitEventsPerSec
 const eventQueue = new EventQueue(registry);
 router.register('register', new RegisterHandler(registry, graphStore, rateLimitEventsPerSecond, systemConfig));
 router.register('graph:command', new GraphCommandHandler(registry, graphStore, publishGraphMutation));
+router.register('runtime:command', new RuntimeCommandHandler(registry, projectManager, eventQueue, rateLimitEventsPerSecond));
 router.register('events', new EventsHandler(registry));
 router.register('intents', new IntentsHandler(registry, projectManager, eventQueue));
 router.register(

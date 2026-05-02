@@ -14,6 +14,31 @@ import { initNav, activateDefaultNav } from './nav.js'
 import { initRouter, navigateTo } from './router.js'
 import * as statusDisplay from './statusDisplay.js'
 
+/** @type {Map<string, unknown>} */
+const pendingRuntimeUpdates = new Map()
+let runtimeFlushScheduled = false
+
+/** @param {unknown} payload */
+function queueRuntimeUpdate (payload) {
+  const updates = Array.isArray(payload) ? payload : [payload]
+  for (const raw of updates) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue
+    const update = /** @type {Record<string, unknown>} */ (raw)
+    const entityType = String(update.entityType ?? '')
+    const guid = String(update.guid ?? '')
+    if (!entityType || !guid) continue
+    pendingRuntimeUpdates.set(`${entityType}:${guid}`, update)
+  }
+  if (runtimeFlushScheduled) return
+  runtimeFlushScheduled = true
+  requestAnimationFrame(() => {
+    runtimeFlushScheduled = false
+    const updatesToApply = [...pendingRuntimeUpdates.values()]
+    pendingRuntimeUpdates.clear()
+    if (updatesToApply.length > 0) projectGraph.applyRuntimeUpdate(updatesToApply)
+  })
+}
+
 async function main () {
   const cfg = await loadConfig()
   if (!cfg) return
@@ -113,6 +138,10 @@ async function main () {
         }
         case 'graph:delta': {
           projectGraph.applyGraphDelta(message.payload)
+          break
+        }
+        case 'runtime:update': {
+          queueRuntimeUpdate(message.payload)
           break
         }
         case 'refresh': {

@@ -15,6 +15,8 @@ class ProjectGraph {
     this._rendererGuid = ''
     /** @type {Set<() => void>} */
     this._listeners = new Set()
+    /** @type {Set<() => void>} */
+    this._runtimeListeners = new Set()
 
     this._data = {
       projectName: '',
@@ -46,8 +48,18 @@ class ProjectGraph {
     return () => this._listeners.delete(fn)
   }
 
+  /** @param {() => void} fn @returns {() => void} unsubscribe */
+  subscribeRuntime (fn) {
+    this._runtimeListeners.add(fn)
+    return () => this._runtimeListeners.delete(fn)
+  }
+
   _notify () {
     for (const fn of this._listeners) fn()
+  }
+
+  _notifyRuntime () {
+    for (const fn of this._runtimeListeners) fn()
   }
 
   // ─── Derived state ────────────────────────────────────────────────────────────
@@ -424,6 +436,33 @@ class ProjectGraph {
       }
     }
     this._notify()
+  }
+
+  /**
+   * Applies transient runtime updates from the hub. These updates intentionally
+   * do not represent authoritative project graph state.
+   * @param {unknown} payload
+   */
+  applyRuntimeUpdate (payload) {
+    const updates = Array.isArray(payload) ? payload : [payload]
+    for (const raw of updates) {
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue
+      const update = /** @type {Record<string, unknown>} */ (raw)
+      const entityType = String(update.entityType ?? '')
+      const guid = String(update.guid ?? '')
+      if (!entityType || !guid) continue
+      switch (entityType) {
+        case 'intent':
+          this._applyIntentDelta(guid, 'patch', update)
+          break
+        case 'fixture':
+          this._applyFixtureDelta(guid, 'patch', update)
+          break
+        default:
+          break
+      }
+    }
+    this._notifyRuntime()
   }
 
   // ─── Config application ───────────────────────────────────────────────────────

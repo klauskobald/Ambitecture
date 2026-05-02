@@ -178,7 +178,7 @@ The hub keeps this as authoritative runtime metadata and can update it if the mo
 
 ### Intent-to-event routing for renderers
 
-Controllers submit graph commands to the hub. For interpreted `intent` changes, the hub updates graph state and converts active-scene intent changes into scheduled renderer-facing `events` via the queue. Renderers then apply received events through a capability-based layer engine. In the current implementation, renderers keep intent state keyed by stable intent `guid` and fixtures sample capabilities from snapshots (`light.color.xyY`, `light.strobe`, `master.brightness`, `master.blackout`) instead of handling each event directly.
+Controllers submit authoritative graph/control changes to the hub with `graph:command`, and transient live updates with `runtime:command`. For interpreted `intent` runtime updates, the hub does not mutate the project graph; it derives scheduled renderer-facing `events` when the intent belongs to the active scene. Renderers then apply received events through a capability-based layer engine. In the current implementation, renderers keep intent state keyed by stable intent `guid` and fixtures sample capabilities from snapshots (`light.color.xyY`, `light.strobe`, `master.brightness`, `master.blackout`) instead of handling each event directly.
 
 Hub pre-filtering by bounding box/location is intended optimization, not current default behavior. Current queue dispatch of generated `events` is broadcast to all connected renderers.
 
@@ -188,13 +188,17 @@ Controllers should eventually receive room/scope-filtered graph init/delta data 
 
 ### Graph state protocol
 
-Current controller/hub state sync uses a GUID-addressed graph protocol:
+Current controller/hub state sync uses a GUID-addressed graph/control protocol:
 
 - `graph:init` — hub -> controller, sent on controller register/reconnect/resync. This is the full controller snapshot and includes project name, revision, active scene, zones, scenes, controller-visible intents, renderer routing, and a generic entity map.
-- `graph:command` — controller -> hub, the only new-path controller mutation message. It carries an operation, open `entityType` string, stable `guid`, optional `patch`, optional `remove`, optional full `value`, and a persistence policy.
+- `graph:command` — controller -> hub for authoritative graph/control mutations. It carries an operation, open `entityType` string, stable `guid`, optional `patch`, optional `remove`, optional full `value`, and a persistence policy.
 - `graph:delta` — hub -> controllers, sent after accepted mutations. It carries one or more deltas with hub-assigned `revision`.
+- `runtime:command` — controller -> hub for transient live updates. It carries an open `entityType`, stable `guid`, and optional `patch` / `remove` / `value` data. It must not save YAML, must not emit `graph:delta`, and must not call the authoritative project graph mutation path.
+- `runtime:update` — hub -> controllers for relayed live updates. Controllers apply these as transient state, separately from `graph:delta`.
 - `config` — hub -> renderer, still used for assigned zones/fixtures.
 - `events` — hub -> renderer, still used for incremental intent execution.
+
+Use `graph:command` for scene activation, controller state, durable edits, saves, and final committed graph changes. Use `runtime:command` for live data streams such as intent dragging, controller-generated loops, MIDI/sensor values, temporary overrides, and future realtime entity updates. Runtime traffic is latest-wins/coalesced by entity and must not block or rerender graph/control UI such as scene buttons.
 
 Example `graph:command`:
 
@@ -205,13 +209,31 @@ Example `graph:command`:
     "location": [8.5417, 47.3769],
     "payload": {
       "op": "patch",
+      "entityType": "project",
+      "guid": "active",
+      "patch": {
+        "activeSceneName": "Scene 1"
+      },
+      "persistence": "runtimeAndDurable"
+    }
+  }
+}
+```
+
+Example `runtime:command`:
+
+```json
+{
+  "message": {
+    "type": "runtime:command",
+    "location": [8.5417, 47.3769],
+    "payload": {
       "entityType": "intent",
       "guid": "color-1",
       "patch": {
         "position": [4.1, 0, 3.2],
         "params.color": { "h": 220, "s": 1, "l": 0.4 }
-      },
-      "persistence": "runtime"
+      }
     }
   }
 }
@@ -219,7 +241,7 @@ Example `graph:command`:
 
 Persistence policy:
 
-- `runtime` — applies to hub runtime state and emits renderer/controller updates, but does not save YAML.
+- `runtime` — applies to authoritative graph state in memory and emits renderer/controller updates, but does not save YAML. Do not use this for high-frequency live streams; use `runtime:command` instead.
 - `durable` — applies to durable project state and saves YAML.
 - `runtimeAndDurable` — applies live and saves YAML. Edit-mode drop/commit paths normally use this.
 

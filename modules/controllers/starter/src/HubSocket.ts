@@ -1,6 +1,6 @@
 import WebSocket from 'ws';
 import { ControllerConfig } from './Config';
-import { GraphCommand, WsEnvelope, WsMessage } from './GraphProtocol';
+import { GraphCommand, RuntimeCommand, WsEnvelope, WsMessage } from './GraphProtocol';
 import { Logger } from './Logger';
 
 export interface HubSocketHandlers {
@@ -51,6 +51,15 @@ export class HubSocket {
 
   sendGraphCommand(command: GraphCommand): boolean {
     return this.sendMessage('graph:command', command);
+  }
+
+  /**
+   * Runtime commands are transient live data. They intentionally bypass the
+   * hub's authoritative graph mutation path so high-rate control streams do not
+   * compete with scene changes, saves, or other graph/control commands.
+   */
+  sendRuntimeCommand(command: RuntimeCommand): boolean {
+    return this.sendMessage('runtime:command', command);
   }
 
   sendMessage(type: string, payload: unknown): boolean {

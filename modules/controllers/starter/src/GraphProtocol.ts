@@ -24,6 +24,18 @@ export interface GraphCommand {
   persistence?: GraphPersistence;
 }
 
+export interface RuntimeCommand {
+  entityType: GraphEntityType;
+  guid: string;
+  patch?: Record<string, unknown>;
+  remove?: string[];
+  value?: Record<string, unknown>;
+  source?: string;
+  class?: string;
+  target?: string;
+  scheduled?: number;
+}
+
 export interface GraphDelta extends GraphCommand {
   persistence: GraphPersistence;
   revision: number;

@@ -1,7 +1,7 @@
 import { intentGuid, fixtureId } from './stores.js'
 
 /** @type {Map<string, unknown>} */
-const outboundMap = new Map()
+const outboundRuntimeMap = new Map()
 /** @type {Map<string, unknown>} */
 const outboundFixtureMap = new Map()
 let lastSentAt = 0
@@ -31,15 +31,13 @@ export function queueIntentUpdate (intent) {
   const record = /** @type {Record<string, unknown>} */ (intent)
   const guid = String(record.guid ?? intentGuid(intent))
   if (!guid) return
-  const existing = /** @type {Record<string, unknown> | undefined} */ (outboundMap.get(guid))
-  outboundMap.set(guid, mergeGraphCommand(existing, {
-    op: 'patch',
+  const existing = /** @type {Record<string, unknown> | undefined} */ (outboundRuntimeMap.get(guid))
+  outboundRuntimeMap.set(guid, mergeGraphCommand(existing, {
     entityType: 'intent',
     guid,
     patch: /** @type {Record<string, unknown> | undefined} */ (record.patch),
     remove: /** @type {string[] | undefined} */ (record.remove),
-    value: record.patch || record.remove ? undefined : record,
-    persistence: 'runtime'
+    value: record.patch || record.remove ? undefined : record
   }))
   scheduleFlush()
 }
@@ -76,13 +74,14 @@ function scheduleFlush () {
 
 function flushOutbound () {
   if (!activeWs || !activeLocation) return
-  const intents = [...outboundMap.values()]
+  const runtime = [...outboundRuntimeMap.values()]
   const fixtures = [...outboundFixtureMap.values()]
-  if (intents.length === 0 && fixtures.length === 0) return
-  outboundMap.clear()
+  if (runtime.length === 0 && fixtures.length === 0) return
+  outboundRuntimeMap.clear()
   outboundFixtureMap.clear()
   lastSentAt = Date.now()
-  sendGraphCommands([...intents, ...fixtures], activeWs, activeLocation)
+  sendRuntimeCommands(runtime, activeWs, activeLocation)
+  sendGraphCommands(fixtures, activeWs, activeLocation)
 }
 
 /**
@@ -95,6 +94,20 @@ function sendGraphCommands (commands, ws, location) {
   for (const command of commands) {
     ws.send(
       JSON.stringify({ message: { type: 'graph:command', location, payload: command } })
+    )
+  }
+}
+
+/**
+ * @param {unknown[]} commands
+ * @param {WebSocket} ws
+ * @param {number[]} location
+ */
+function sendRuntimeCommands (commands, ws, location) {
+  if (ws.readyState !== WebSocket.OPEN) return
+  for (const command of commands) {
+    ws.send(
+      JSON.stringify({ message: { type: 'runtime:command', location, payload: command } })
     )
   }
 }

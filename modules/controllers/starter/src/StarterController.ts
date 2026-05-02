@@ -1,5 +1,5 @@
 import { ControllerConfig } from './Config';
-import { GraphCommand, Position3, WsMessage } from './GraphProtocol';
+import { Position3, RuntimeCommand, WsMessage } from './GraphProtocol';
 import { HubSocket } from './HubSocket';
 import { Logger } from './Logger';
 import { boundedLoopPosition, MovementBounds, ProjectGraph } from './ProjectGraph';
@@ -88,6 +88,8 @@ export class StarterController {
         this.graph.applyGraphDelta(message.payload);
         this.onGraphDelta();
         break;
+      case 'runtime:update':
+        break;
       case 'refresh':
         this.logger.info('received refresh request');
         break;
@@ -161,15 +163,18 @@ export class StarterController {
     this.sendIntentPosition(guid, position);
   }
 
+  /**
+   * Publish sample movement on the generic runtime lane. This keeps the demo loop
+   * out of the project graph: no YAML writes, no graph deltas, and no contention
+   * with control-plane actions such as scene activation.
+   */
   private sendIntentPosition(guid: string, position: Position3): void {
-    const command: GraphCommand = {
-      op: 'patch',
+    const command: RuntimeCommand = {
       entityType: 'intent',
       guid,
       patch: { position },
-      persistence: 'runtime',
     };
-    const sent = this.socket.sendGraphCommand(command);
+    const sent = this.socket.sendRuntimeCommand(command);
     if (!sent) {
       return;
     }

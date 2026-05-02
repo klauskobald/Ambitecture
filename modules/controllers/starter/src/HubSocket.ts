@@ -3,6 +3,8 @@ import { ControllerConfig } from './Config';
 import { GraphCommand, RuntimeCommand, WsEnvelope, WsMessage } from './GraphProtocol';
 import { Logger } from './Logger';
 
+const CONNECT_TIMEOUT_MS = 5_000;
+
 export interface HubSocketHandlers {
   onConnected: () => void;
   onRegistered: () => void;
@@ -85,8 +87,15 @@ export class HubSocket {
     this.logger.info(`connecting to ${wsUrl}`);
     const ws = new WebSocket(wsUrl);
     this.ws = ws;
+    const connectTimer = setTimeout(() => {
+      if (ws.readyState === WebSocket.CONNECTING) {
+        this.logger.warn(`connection timed out after ${CONNECT_TIMEOUT_MS}ms`);
+        ws.terminate();
+      }
+    }, CONNECT_TIMEOUT_MS);
 
     ws.on('open', () => {
+      clearTimeout(connectTimer);
       this.handlers.onConnected();
       this.register();
     });
@@ -103,6 +112,7 @@ export class HubSocket {
     });
 
     ws.on('close', () => {
+      clearTimeout(connectTimer);
       this.handlers.onDisconnected();
       if (!this.stopped) {
         setTimeout(() => this.attemptConnect(), 0);
@@ -110,6 +120,7 @@ export class HubSocket {
     });
 
     ws.on('error', error => {
+      clearTimeout(connectTimer);
       this.handlers.onError(error);
     });
   }

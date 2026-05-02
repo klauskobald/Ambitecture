@@ -83,6 +83,7 @@ export class ProjectGraphStore {
       zones,
       intents,
       scenes,
+      controllerState: this.projectManager.getControllerState(guid),
       interactionPolicies: this.projectManager.getControllerInteractionPolicies(guid),
       entities: this.projectManager.getGraphEntities(),
     };
@@ -273,7 +274,7 @@ export class ProjectGraphStore {
     const persistence = command.persistence ?? 'runtimeAndDurable';
     const durableChanged = persistence === 'durable' || persistence === 'runtimeAndDurable';
     if (durableChanged && (command.patch || command.remove)) {
-      this.projectManager.updateControllerInteractionPolicies(
+      this.projectManager.updateControllerState(
         command.guid,
         command.patch ?? {},
         command.remove ?? [],

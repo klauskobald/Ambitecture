@@ -191,14 +191,13 @@ export class EditPane {
       onTap (id, obj) {
         const guid = intentGuid(obj)
         const enabled = !projectGraph.getIntentConfig(guid).performEnabled
-        projectGraph.setIntentConfig(guid, 'performEnabled', enabled)
-        const controllerGuid = projectGraph.getControllerGuid()
-        if (!controllerGuid) return
+        const command = projectGraph.patchControllerState(`interactionPolicies.performEnabled.${guid}`, enabled)
+        if (!command) return
         sendGraphCommand({
           op: 'patch',
           entityType: 'controller',
-          guid: controllerGuid,
-          patch: { [`performEnabled.${guid}`]: enabled },
+          guid: command.guid,
+          patch: command.patch,
           persistence: 'runtimeAndDurable'
         })
       },

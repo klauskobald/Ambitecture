@@ -298,17 +298,26 @@ export class ProjectManager {
     return match?.interactionPolicies ?? {};
   }
 
-  updateControllerInteractionPolicies(controllerGuid: string, patch: Record<string, unknown>, remove: string[] = []): boolean {
+  getControllerState(controllerGuid: string): Record<string, unknown> {
+    const match = (this.project?.controller ?? []).find(c => c.guid === controllerGuid);
+    if (!match) return {};
+    const state: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(match)) {
+      if (key === 'name' || key === 'guid' || key === 'intents') continue;
+      state[key] = value;
+    }
+    return state;
+  }
+
+  updateControllerState(controllerGuid: string, patch: Record<string, unknown>, remove: string[] = []): boolean {
     const match = (this.project?.controller ?? []).find(c => c.guid === controllerGuid);
     if (!match) return false;
-    const current = { ...(match.interactionPolicies ?? {}) };
     for (const [key, value] of Object.entries(patch)) {
-      this.setAtDotPath(current, key, value);
+      this.setAtDotPath(match as unknown as Record<string, unknown>, key, value);
     }
     for (const key of remove) {
-      this.removeAtDotPath(current, key);
+      this.removeAtDotPath(match as unknown as Record<string, unknown>, key);
     }
-    match.interactionPolicies = current;
     this._scheduleSave();
     return true;
   }

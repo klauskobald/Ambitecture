@@ -25,6 +25,7 @@ class ProjectGraph {
       scenes: /** @type {Array<{ name: string, intents: string[] }>} */ ([]),
       activeSceneName: /** @type {string | null} */ (null),
       controller: {
+        state: /** @type {Record<string, unknown>} */ ({}),
         intentConfig: /** @type {Map<string, Record<string, unknown>>} */ (new Map()),
       },
     }
@@ -149,6 +150,19 @@ class ProjectGraph {
     const current = this._data.controller.intentConfig.get(guid) ?? Object.create(null)
     this._data.controller.intentConfig.set(guid, { ...current, [key]: value })
     this._notify()
+  }
+
+  /**
+   * @param {string} dotKey
+   * @param {unknown} value
+   * @returns {{ guid: string, patch: Record<string, unknown> } | null}
+   */
+  patchControllerState (dotKey, value) {
+    if (!this._data.controllerGuid) return null
+    this._data.controller.state = this._cloneAndSetAtDotPath(this._data.controller.state, dotKey, value)
+    this._applyControllerStateDerivedValue(dotKey, value)
+    this._notify()
+    return { guid: this._data.controllerGuid, patch: { [dotKey]: value } }
   }
 
   /**
@@ -464,6 +478,10 @@ class ProjectGraph {
     if (p.interactionPolicies && typeof p.interactionPolicies === 'object' && !Array.isArray(p.interactionPolicies)) {
       this._applyInteractionPolicies(/** @type {Record<string, unknown>} */ (p.interactionPolicies))
     }
+    if (p.controllerState && typeof p.controllerState === 'object' && !Array.isArray(p.controllerState)) {
+      this._data.controller.state = /** @type {Record<string, unknown>} */ (p.controllerState)
+      this._applyControllerStateDerivedValues(this._data.controller.state)
+    }
 
     this._spatial = this._computeSpatial()
     this._zoneBoxes = this._computeZoneBoxes()
@@ -483,6 +501,7 @@ class ProjectGraph {
       scenes: this._data.scenes,
       activeSceneName: this._data.activeSceneName,
       controller: {
+        state: this._data.controller.state,
         intentConfig: Object.fromEntries(this._data.controller.intentConfig),
       },
     }
@@ -630,15 +649,35 @@ class ProjectGraph {
     const value = delta.value && typeof delta.value === 'object' && !Array.isArray(delta.value)
       ? /** @type {Record<string, unknown>} */ (delta.value)
       : null
-    if (value?.interactionPolicies && typeof value.interactionPolicies === 'object' && !Array.isArray(value.interactionPolicies)) {
-      this._applyInteractionPolicies(/** @type {Record<string, unknown>} */ (value.interactionPolicies))
+    if (value) {
+      this._data.controller.state = { ...this._data.controller.state, ...value }
+      this._applyControllerStateDerivedValues(this._data.controller.state)
     }
     for (const [key, patchValue] of Object.entries(patch)) {
-      if (!key.startsWith('performEnabled.')) continue
-      const intentGuid = key.slice('performEnabled.'.length)
-      if (!intentGuid) continue
-      this.setIntentConfig(intentGuid, 'performEnabled', Boolean(patchValue))
+      this._data.controller.state = this._cloneAndSetAtDotPath(this._data.controller.state, key, patchValue)
+      this._applyControllerStateDerivedValue(key, patchValue)
     }
+  }
+
+  /** @param {Record<string, unknown>} state */
+  _applyControllerStateDerivedValues (state) {
+    const interactionPolicies = state.interactionPolicies
+    if (interactionPolicies && typeof interactionPolicies === 'object' && !Array.isArray(interactionPolicies)) {
+      this._applyInteractionPolicies(/** @type {Record<string, unknown>} */ (interactionPolicies))
+    }
+  }
+
+  /**
+   * @param {string} dotKey
+   * @param {unknown} value
+   */
+  _applyControllerStateDerivedValue (dotKey, value) {
+    const prefix = 'interactionPolicies.performEnabled.'
+    if (!dotKey.startsWith(prefix)) return
+    const intentGuid = dotKey.slice(prefix.length)
+    if (!intentGuid) return
+    const current = this._data.controller.intentConfig.get(intentGuid) ?? Object.create(null)
+    this._data.controller.intentConfig.set(intentGuid, { ...current, performEnabled: Boolean(value) })
   }
 
   /** @param {Record<string, unknown>} policies */

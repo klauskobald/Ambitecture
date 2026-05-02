@@ -1,0 +1,24 @@
+{
+  "name": "ambitecture-starter-controller",
+  "version": "1.0.0",
+  "description": "Starter TypeScript CLI controller for Ambitecture",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "ts-node src/index.ts",
+    "dev": "node --watch --watch-path=src --require ts-node/register src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [],
+  "author": "Klaus P Kobald Gmbh",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "ws": "^8.20.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "@types/ws": "^8.18.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.3"
+  }
+}

@@ -52,6 +52,7 @@ systemCapabilities:
       - dotKey: params.color
         name: Color
         type: color
+        allowOverlay: true
         defaultValue:
           x: 0
           y: 0

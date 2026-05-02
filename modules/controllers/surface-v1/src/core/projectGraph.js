@@ -1,4 +1,5 @@
 import { intentGuid, fixtureId } from './stores.js'
+import { cloneAndDeleteAtDotPath, cloneAndSetAtDotPath } from './dotPath.js'
 
 /**
  * @typedef {object} HubSpatialState
@@ -171,7 +172,7 @@ class ProjectGraph {
    */
   patchControllerState (dotKey, value) {
     if (!this._data.controllerGuid) return null
-    this._data.controller.state = this._cloneAndSetAtDotPath(this._data.controller.state, dotKey, value)
+    this._data.controller.state = cloneAndSetAtDotPath(this._data.controller.state, dotKey, value)
     this._applyControllerStateDerivedValue(dotKey, value)
     this._notify()
     return { guid: this._data.controllerGuid, patch: { [dotKey]: value } }
@@ -196,7 +197,7 @@ class ProjectGraph {
   updateIntentProperty (guid, dotKey, value) {
     const intent = this._data.intents.get(guid)
     if (!intent) return null
-    const updated = this._cloneAndSetAtDotPath(/** @type {Record<string, unknown>} */ (intent), dotKey, value)
+    const updated = cloneAndSetAtDotPath(/** @type {Record<string, unknown>} */ (intent), dotKey, value)
     this._data.intents.set(guid, updated)
     this._notify()
     return { guid, patch: { [dotKey]: value } }
@@ -212,7 +213,7 @@ class ProjectGraph {
   removeIntentProperty (guid, dotKey) {
     const intent = this._data.intents.get(guid)
     if (!intent) return null
-    const updated = this._cloneAndDeleteAtDotPath(/** @type {Record<string, unknown>} */ (intent), dotKey)
+    const updated = cloneAndDeleteAtDotPath(/** @type {Record<string, unknown>} */ (intent), dotKey)
     this._data.intents.set(guid, updated)
     this._notify()
     return { guid, remove: [dotKey] }
@@ -225,21 +226,7 @@ class ProjectGraph {
    * @returns {Record<string, unknown>}
    */
   _cloneAndSetAtDotPath (obj, dotKey, value) {
-    const keys = dotKey.split('.')
-    const cloned = { ...obj }
-    let cursor = cloned
-    for (let i = 0; i < keys.length - 1; i++) {
-      const k = /** @type {string} */ (keys[i])
-      const child = cursor[k]
-      const clonedChild = (child && typeof child === 'object' && !Array.isArray(child))
-        ? { .../** @type {Record<string, unknown>} */ (child) }
-        : {}
-      cursor[k] = clonedChild
-      cursor = clonedChild
-    }
-    const leafKey = /** @type {string} */ (keys[keys.length - 1])
-    cursor[leafKey] = value
-    return cloned
+    return cloneAndSetAtDotPath(obj, dotKey, value)
   }
 
   /**
@@ -248,20 +235,7 @@ class ProjectGraph {
    * @returns {Record<string, unknown>}
    */
   _cloneAndDeleteAtDotPath (obj, dotKey) {
-    const keys = dotKey.split('.')
-    const cloned = { ...obj }
-    let cursor = cloned
-    for (let i = 0; i < keys.length - 1; i++) {
-      const k = /** @type {string} */ (keys[i])
-      const child = cursor[k]
-      if (!child || typeof child !== 'object' || Array.isArray(child)) return cloned
-      const clonedChild = { .../** @type {Record<string, unknown>} */ (child) }
-      cursor[k] = clonedChild
-      cursor = clonedChild
-    }
-    const leafKey = /** @type {string} */ (keys[keys.length - 1])
-    delete cursor[leafKey]
-    return cloned
+    return cloneAndDeleteAtDotPath(obj, dotKey)
   }
 
   /**
@@ -565,11 +539,11 @@ class ProjectGraph {
       ? /** @type {Record<string, unknown>} */ (delta.patch)
       : {}
     for (const [key, patchValue] of Object.entries(patch)) {
-      next = this._cloneAndSetAtDotPath(next, key, patchValue)
+      next = cloneAndSetAtDotPath(next, key, patchValue)
     }
     const remove = Array.isArray(delta.remove) ? delta.remove.map(String) : []
     for (const key of remove) {
-      next = this._cloneAndDeleteAtDotPath(next, key)
+      next = cloneAndDeleteAtDotPath(next, key)
     }
     this._data.intents.set(guid, next)
   }
@@ -693,7 +667,7 @@ class ProjectGraph {
       this._applyControllerStateDerivedValues(this._data.controller.state)
     }
     for (const [key, patchValue] of Object.entries(patch)) {
-      this._data.controller.state = this._cloneAndSetAtDotPath(this._data.controller.state, key, patchValue)
+      this._data.controller.state = cloneAndSetAtDotPath(this._data.controller.state, key, patchValue)
       this._applyControllerStateDerivedValue(key, patchValue)
     }
   }

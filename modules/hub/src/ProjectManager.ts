@@ -2,6 +2,7 @@ import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { Config } from './Config';
 import { Logger } from './Logger';
+import { removeAtDotPath, setAtDotPath } from './dotPath';
 
 export interface FixtureChannelDef {
   function: string;
@@ -313,39 +314,13 @@ export class ProjectManager {
     const match = (this.project?.controller ?? []).find(c => c.guid === controllerGuid);
     if (!match) return false;
     for (const [key, value] of Object.entries(patch)) {
-      this.setAtDotPath(match as unknown as Record<string, unknown>, key, value);
+      setAtDotPath(match as unknown as Record<string, unknown>, key, value);
     }
     for (const key of remove) {
-      this.removeAtDotPath(match as unknown as Record<string, unknown>, key);
+      removeAtDotPath(match as unknown as Record<string, unknown>, key);
     }
     this._scheduleSave();
     return true;
-  }
-
-  private setAtDotPath(target: Record<string, unknown>, dotKey: string, value: unknown): void {
-    const segments = dotKey.split('.');
-    let cursor = target;
-    for (let i = 0; i < segments.length - 1; i++) {
-      const segment = segments[i]!;
-      const existing = cursor[segment];
-      if (!existing || typeof existing !== 'object' || Array.isArray(existing)) {
-        cursor[segment] = {};
-      }
-      cursor = cursor[segment] as Record<string, unknown>;
-    }
-    cursor[segments[segments.length - 1]!] = value;
-  }
-
-  private removeAtDotPath(target: Record<string, unknown>, dotKey: string): void {
-    const segments = dotKey.split('.');
-    let cursor = target;
-    for (let i = 0; i < segments.length - 1; i++) {
-      const segment = segments[i]!;
-      const existing = cursor[segment];
-      if (!existing || typeof existing !== 'object' || Array.isArray(existing)) return;
-      cursor = existing as Record<string, unknown>;
-    }
-    delete cursor[segments[segments.length - 1]!];
   }
 
   getAllIntentDefinitions(): ControllerIntent[] {
@@ -451,7 +426,7 @@ export class ProjectManager {
   setProjectData(key: string, data: unknown): void {
     if (!this.project) return;
     const segments = key.split('.');
-    this._setAtPath(this.project, segments, data);
+    setAtDotPath(this.project as unknown as Record<string, unknown>, key, data);
     if (segments[0] === 'intents') {
       this._rebuildIntentDefinitions(this.project.intents ?? []);
     }
@@ -470,20 +445,6 @@ export class ProjectManager {
         Logger.error('[project] save failed:', err);
       }
     }, 2000);
-  }
-
-  private _setAtPath(current: unknown, segments: string[], value: unknown): void {
-    const first = segments[0]!;
-    if (segments.length === 1) {
-      (current as Record<string, unknown>)[first] = value;
-      return;
-    }
-    const rest = segments.slice(1);
-    const obj = current as Record<string, unknown>;
-    if (!(first in obj) || typeof obj[first] !== 'object' || obj[first] === null) {
-      obj[first] = {};
-    }
-    this._setAtPath(obj[first], rest, value);
   }
 
   setActiveScene(sceneName: string): ControllerIntent[] {

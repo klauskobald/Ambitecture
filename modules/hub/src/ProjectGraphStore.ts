@@ -9,47 +9,7 @@ import {
 } from './GraphProtocol';
 import { normalizeIntentColor, intentRemovalEvent, intentToEvent } from './handlers/intentHelpers';
 import { Logger } from './Logger';
-
-function cloneRecord(value: Record<string, unknown>): Record<string, unknown> {
-  return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
-}
-
-function setAtDotPath(target: Record<string, unknown>, dotKey: string, value: unknown): void {
-  const segments = dotKey.split('.');
-  let cursor = target;
-  for (let i = 0; i < segments.length - 1; i++) {
-    const segment = segments[i]!;
-    const existing = cursor[segment];
-    if (!existing || typeof existing !== 'object' || Array.isArray(existing)) {
-      cursor[segment] = {};
-    }
-    cursor = cursor[segment] as Record<string, unknown>;
-  }
-  cursor[segments[segments.length - 1]!] = value;
-}
-
-function removeAtDotPath(target: Record<string, unknown>, dotKey: string): void {
-  const segments = dotKey.split('.');
-  let cursor = target;
-  for (let i = 0; i < segments.length - 1; i++) {
-    const segment = segments[i]!;
-    const existing = cursor[segment];
-    if (!existing || typeof existing !== 'object' || Array.isArray(existing)) return;
-    cursor = existing as Record<string, unknown>;
-  }
-  delete cursor[segments[segments.length - 1]!];
-}
-
-function applyPatch(target: Record<string, unknown>, patch: Record<string, unknown>, remove: string[] = []): Record<string, unknown> {
-  const next = cloneRecord(target);
-  for (const [key, value] of Object.entries(patch)) {
-    setAtDotPath(next, key, value);
-  }
-  for (const key of remove) {
-    removeAtDotPath(next, key);
-  }
-  return next;
-}
+import { applyDotPathPatch, cloneRecord } from './dotPath';
 
 export class ProjectGraphStore {
   private revision = 0;
@@ -172,7 +132,7 @@ export class ProjectGraphStore {
     }
 
     const base = cloneRecord((command.value ?? existing ?? { guid: command.guid }) as Record<string, unknown>);
-    const next = command.patch || command.remove ? applyPatch(base, command.patch ?? {}, command.remove) : base;
+    const next = command.patch || command.remove ? applyDotPathPatch(base, command.patch ?? {}, command.remove) : base;
     next['guid'] = command.guid;
     const intent = next as unknown as ControllerIntent;
     this.projectManager.updateIntents('', [intent]);
@@ -246,7 +206,7 @@ export class ProjectGraphStore {
       : scenes.map(scene => {
         if (scene.guid !== command.guid) return scene;
         const base = cloneRecord(scene as unknown as Record<string, unknown>);
-        const next = command.patch || command.remove ? applyPatch(base, command.patch ?? {}, command.remove) : cloneRecord(command.value ?? base);
+        const next = command.patch || command.remove ? applyDotPathPatch(base, command.patch ?? {}, command.remove) : cloneRecord(command.value ?? base);
         next['guid'] = command.guid;
         return next as unknown as typeof scene;
       });
@@ -298,7 +258,7 @@ export class ProjectGraphStore {
         this.projectManager.removeOpaqueGraphEntity(command.entityType, command.guid);
       } else {
         const base = cloneRecord(command.value ?? { guid: command.guid, entityType: command.entityType });
-        const next = command.patch || command.remove ? applyPatch(base, command.patch ?? {}, command.remove) : base;
+        const next = command.patch || command.remove ? applyDotPathPatch(base, command.patch ?? {}, command.remove) : base;
         this.projectManager.upsertOpaqueGraphEntity(command.entityType, command.guid, next);
       }
     }

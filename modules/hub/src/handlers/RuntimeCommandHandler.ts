@@ -6,36 +6,7 @@ import { ProjectManager, ControllerIntent } from '../ProjectManager';
 import { EventQueue } from '../EventQueue';
 import { RuntimeCommand, RuntimeUpdate, isRuntimeCommand } from '../RuntimeProtocol';
 import { intentToEvent, normalizeIntentColor } from './intentHelpers';
-
-function cloneRecord(value: Record<string, unknown>): Record<string, unknown> {
-  return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
-}
-
-function setAtDotPath(target: Record<string, unknown>, dotKey: string, value: unknown): void {
-  const segments = dotKey.split('.');
-  let cursor = target;
-  for (let i = 0; i < segments.length - 1; i++) {
-    const segment = segments[i]!;
-    const existing = cursor[segment];
-    if (!existing || typeof existing !== 'object' || Array.isArray(existing)) {
-      cursor[segment] = {};
-    }
-    cursor = cursor[segment] as Record<string, unknown>;
-  }
-  cursor[segments[segments.length - 1]!] = value;
-}
-
-function removeAtDotPath(target: Record<string, unknown>, dotKey: string): void {
-  const segments = dotKey.split('.');
-  let cursor = target;
-  for (let i = 0; i < segments.length - 1; i++) {
-    const segment = segments[i]!;
-    const existing = cursor[segment];
-    if (!existing || typeof existing !== 'object' || Array.isArray(existing)) return;
-    cursor = existing as Record<string, unknown>;
-  }
-  delete cursor[segments[segments.length - 1]!];
-}
+import { cloneRecord, removeAtDotPath, setAtDotPath } from '../dotPath';
 
 function applyRuntimePatch(base: Record<string, unknown>, update: RuntimeUpdate): Record<string, unknown> {
   const next = cloneRecord(update.value ?? base);

@@ -3,7 +3,8 @@ import { hslPalette } from '../../ui/palettes/hslPalette.js'
 import { projectGraph } from '../../core/projectGraph.js'
 import { queueIntentUpdate } from '../../core/outboundQueue.js'
 import { toHSL } from '../../core/color.js'
-import { readAtDotPath, applyDelta } from './controlHelpers.js'
+import { readAtDotPath } from '../../core/dotPath.js'
+import { applyDelta } from './controlHelpers.js'
 
 const HSL_CHANNEL_DEFAULTS = {
   h: { fn: 'ADD', range: /** @type {[number, number]} */ ([-10, 10]),   label: 'ΔH', step: '1',    wrap: true },

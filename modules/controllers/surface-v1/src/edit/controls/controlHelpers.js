@@ -1,4 +1,5 @@
 import { projectGraph } from '../../core/projectGraph.js'
+import { readAtDotPath } from '../../core/dotPath.js'
 
 /**
  * Read a value from an intent object using dot-notation path.
@@ -6,12 +7,7 @@ import { projectGraph } from '../../core/projectGraph.js'
  * @param {string} dotKey
  * @returns {unknown}
  */
-export function readAtDotPath (intentObj, dotKey) {
-  return dotKey.split('.').reduce((/** @type {unknown} */ obj, key) => {
-    if (obj === null || obj === undefined || typeof obj !== 'object') return undefined
-    return /** @type {Record<string, unknown>} */ (obj)[key]
-  }, /** @type {unknown} */ (intentObj))
-}
+export { readAtDotPath }
 
 /**
  * @param {unknown} a

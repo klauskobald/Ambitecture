@@ -20,6 +20,7 @@ The hub is the **single source of truth** for system-wide configuration and grap
 - **`src/MessageRouter.ts`** — Message dispatch by `message.type`.
 - **`src/handlers/RegisterHandler.ts`** — Accepts `register`, stores module identity/metadata, pushes `config` to renderers, and pushes `graph:init` to controllers.
 - **`src/GraphProtocol.ts`** — Defines the open graph command/delta/init protocol used by controllers and the hub.
+- **`src/dotPath.ts`** — Hub-local dot-key helper for graph patches such as `params.color`. Use this for reading, setting, removing, cloning, and applying dot-path patches instead of reimplementing `split('.')` traversal.
 - **`src/ProjectGraphStore.ts`** — Hub-side graph state mutation boundary. Owns graph revisions, durable/runtime mutation policy, controller deltas, renderer event/config invalidation results, and opaque future entity persistence.
 - **`src/handlers/GraphCommandHandler.ts`** — Accepts controller `graph:command`, validates role/payload, applies it through `ProjectGraphStore`, and publishes mutation results.
 - **`src/handlers/EventsHandler.ts`** — Legacy/direct `events` forwarder kept for compatibility paths.
@@ -106,6 +107,7 @@ Renderer data authority model:
 - **Interaction policies** (`src/viewport/interactionPolicies.js`): `performPolicy` (allowance-gated drag), `editPolicy` (all intents and fixtures draggable), `noopPolicy` (no interaction). Policy switches per pane via `overlay.setPolicy()`.
 - **SelectionManager** (`src/viewport/selectionManager.js`): Generic bubble-overlay system — renders bubbles at world positions for any set of objects, detects taps within a hit radius, and calls an `onTap` callback. The manager holds no selection state — that belongs to the caller (e.g., allowances graph in `stores.js`). Can be enabled/disabled on the overlay canvas.
 - **Project graph** (`src/core/projectGraph.js`): Controller-side graph replica. Initializes from hub `graph:init`, stores entities by stable `guid`, applies `graph:delta`, derives scene/fixture/spatial views, and notifies UI subscribers.
+- **Dot-key helper** (`src/core/dotPath.js`): Controller-local helper for reading and immutably editing nested graph properties addressed by dot keys such as `params.color`.
 - **State helpers** (`src/core/stores.js`): Pure helper functions for graph objects such as `intentGuid`, `intentLayer`, `intentName`, `intentRadius`, and `fixtureId`.
 - **Color** (`src/core/color.js`): Display-oriented color conversion. Detects format (HSL, xyY, hex, RGB array, RGB components) and converts to CSS `rgb()` strings or HSL for palette initialization. Internal math matches hub `color.ts` and simulator-2d `color.js`.
 - **Outbound queue** (`src/core/outboundQueue.js`): Rate-limited WebSocket send queue for minimal `graph:command` updates. Intent changes are sent as GUID-addressed patches/removals; fixture moves are sent by fixture GUID; scene saves are converted to graph upserts/removes.
@@ -493,6 +495,14 @@ Mandatory graph-state rules:
 - Do not emit renderer events for disabled/out-of-active-scene intents when committing all durable intents from edit mode.
 - Do not rely on fixture names alone for synced mutable fixture identity. Use stable fixture GUIDs.
 - Do not remove existing comments while editing files.
+
+Mandatory dot-key rules:
+
+- Dot keys are the graph patch language for nested properties, for example `position`, `layer`, `params.color`, and `params.aux.amber`.
+- Use the module-local dot-path helper for all dot-key reads/writes/removals: `modules/hub/src/dotPath.ts` in the hub and `modules/controllers/surface-v1/src/core/dotPath.js` in the controller surface.
+- Do not hand-roll `dotKey.split('.')` traversal in feature code. Keeping this logic centralized prevents subtle drift in graph commands, runtime commands, controller UI state, and future scene overlays.
+- Dot-path helpers intentionally traverse plain objects only. Arrays are not addressable by dot key; mutate list members by stable `guid` first, then apply dot keys inside the matched object.
+- Removing a dot-key value removes only the leaf and preserves parent objects, matching current graph patch/remove behavior.
 
 ---
 

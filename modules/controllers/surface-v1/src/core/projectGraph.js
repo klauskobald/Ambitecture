@@ -32,6 +32,8 @@ class ProjectGraph {
       zones: /** @type {unknown[]} */ ([]),
       intents: /** @type {Map<string, unknown>} */ (new Map()),
       scenes: /** @type {Array<{ guid?: string, name: string, intents: SceneIntentRef[] }>} */ ([]),
+      actions: /** @type {Map<string, Record<string, unknown>>} */ (new Map()),
+      inputs: /** @type {Map<string, Record<string, unknown>>} */ (new Map()),
       activeSceneName: /** @type {string | null} */ (null),
       controller: {
         state: /** @type {Record<string, unknown>} */ ({}),
@@ -100,6 +102,40 @@ class ProjectGraph {
 
   /** @returns {Array<{ guid?: string, name: string, intents: SceneIntentRef[] }>} */
   getScenesData () { return this._data.scenes }
+
+  /** @returns {Map<string, Record<string, unknown>>} */
+  getActions () { return this._data.actions }
+
+  /** @returns {Map<string, Record<string, unknown>>} */
+  getInputs () { return this._data.inputs }
+
+  /** @param {string} sceneGuid @returns {Record<string, unknown> | null} */
+  getSceneButtonInput (sceneGuid) {
+    for (const input of this._data.inputs.values()) {
+      const target = input.target
+      if (target && typeof target === 'object' && !Array.isArray(target)) {
+        const t = /** @type {Record<string, unknown>} */ (target)
+        if (t.type === 'scene' && t.guid === sceneGuid) return input
+      }
+      const actionGuid = typeof input.action === 'string' ? input.action : ''
+      const action = actionGuid ? this._data.actions.get(actionGuid) : null
+      if (action && actionTargetsScene(action, sceneGuid)) return input
+    }
+    return null
+  }
+
+  /** @param {string} sceneGuid @returns {Record<string, unknown> | null} */
+  getSceneAction (sceneGuid) {
+    for (const action of this._data.actions.values()) {
+      if (actionTargetsScene(action, sceneGuid)) return action
+    }
+    return null
+  }
+
+  /** @param {string} sceneName @returns {string | null} */
+  getSceneGuid (sceneName) {
+    return this._data.scenes.find(s => s.name === sceneName)?.guid ?? null
+  }
 
   /** @returns {string | null} */
   getActiveSceneName () { return this._data.activeSceneName }
@@ -445,6 +481,14 @@ class ProjectGraph {
         }
         break
       }
+      case 'actions': {
+        this._data.actions = normalizeEntityMap(data)
+        break
+      }
+      case 'inputs': {
+        this._data.inputs = normalizeEntityMap(data)
+        break
+      }
       default:
         break
     }
@@ -487,6 +531,12 @@ class ProjectGraph {
           break
         case 'scene':
           this._applySceneDelta(guid, op, delta)
+          break
+        case 'action':
+          this._applyEntityDelta(this._data.actions, guid, op, delta)
+          break
+        case 'input':
+          this._applyEntityDelta(this._data.inputs, guid, op, delta)
           break
         case 'project':
           this._applyProjectDelta(delta)
@@ -553,6 +603,8 @@ class ProjectGraph {
     this._data.scenes = rawScenes
       .map(normalizeScene)
       .filter(s => s.name)
+    this._data.actions = normalizeEntityMap(p.actions)
+    this._data.inputs = normalizeEntityMap(p.inputs)
 
     const hubActive = typeof p.activeSceneName === 'string' && p.activeSceneName ? p.activeSceneName : null
     if (hubActive && this._data.scenes.some(s => s.name === hubActive)) {
@@ -595,6 +647,8 @@ class ProjectGraph {
       zoneToRenderer: this._data.zoneToRenderer,
       intents: [...this._data.intents.values()],
       scenes: this._data.scenes,
+      actions: [...this._data.actions.values()],
+      inputs: [...this._data.inputs.values()],
       activeSceneName: this._data.activeSceneName,
       controller: {
         state: this._data.controller.state,
@@ -719,6 +773,35 @@ class ProjectGraph {
     } else if (scene.name) {
       this._data.scenes.push(scene)
     }
+  }
+
+  /**
+   * @param {Map<string, Record<string, unknown>>} target
+   * @param {string} guid
+   * @param {string} op
+   * @param {Record<string, unknown>} delta
+   */
+  _applyEntityDelta (target, guid, op, delta) {
+    if (op === 'remove') {
+      target.delete(guid)
+      return
+    }
+    const current = target.get(guid) ?? { guid }
+    const value = delta.value && typeof delta.value === 'object' && !Array.isArray(delta.value)
+      ? /** @type {Record<string, unknown>} */ (delta.value)
+      : current
+    let next = { ...value, guid }
+    const patch = delta.patch && typeof delta.patch === 'object' && !Array.isArray(delta.patch)
+      ? /** @type {Record<string, unknown>} */ (delta.patch)
+      : {}
+    for (const [key, patchValue] of Object.entries(patch)) {
+      next = cloneAndSetAtDotPath(next, key, patchValue)
+    }
+    const remove = Array.isArray(delta.remove) ? delta.remove.map(String) : []
+    for (const key of remove) {
+      next = cloneAndDeleteAtDotPath(next, key)
+    }
+    target.set(guid, next)
   }
 
   /** @param {Record<string, unknown>} delta */
@@ -946,6 +1029,38 @@ function normalizeScene (scene) {
       ? scene.intents.map(normalizeSceneIntentRef).filter(ref => ref.guid)
       : [],
   }
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {Map<string, Record<string, unknown>>}
+ */
+function normalizeEntityMap (raw) {
+  const map = /** @type {Map<string, Record<string, unknown>>} */ (new Map())
+  const list = Array.isArray(raw) ? raw : []
+  for (const item of list) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+    const record = /** @type {Record<string, unknown>} */ (item)
+    const guid = String(record.guid ?? '')
+    if (!guid) continue
+    map.set(guid, { ...record, guid })
+  }
+  return map
+}
+
+/**
+ * @param {Record<string, unknown>} action
+ * @param {string} sceneGuid
+ * @returns {boolean}
+ */
+function actionTargetsScene (action, sceneGuid) {
+  const execute = action.execute
+  if (!Array.isArray(execute)) return false
+  return execute.some(item => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return false
+    const record = /** @type {Record<string, unknown>} */ (item)
+    return record.type === 'scene' && record.guid === sceneGuid
+  })
 }
 
 export const projectGraph = new ProjectGraph()

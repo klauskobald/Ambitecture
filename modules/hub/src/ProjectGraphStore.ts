@@ -10,11 +10,15 @@ import {
 import { normalizeIntentColor, intentRemovalEvent, intentToEvent } from './handlers/intentHelpers';
 import { Logger } from './Logger';
 import { applyDotPathPatch, cloneRecord } from './dotPath';
+import { ActionInputManager } from './ActionInputManager';
 
 export class ProjectGraphStore {
   private revision = 0;
 
-  constructor(private projectManager: ProjectManager) {}
+  constructor(
+    private projectManager: ProjectManager,
+    private actionInputManager?: ActionInputManager,
+  ) {}
 
   useProject(name: string, callback: () => void): void {
     this.projectManager.useProject(name, () => {
@@ -28,6 +32,8 @@ export class ProjectGraphStore {
     const intents = Array.isArray(config['intents']) ? config['intents'] : [];
     const zones = Array.isArray(config['zones']) ? config['zones'] : [];
     const scenes = Array.isArray(config['scenes']) ? config['scenes'] : [];
+    const actions = Array.isArray(config['actions']) ? config['actions'] : [];
+    const inputs = Array.isArray(config['inputs']) ? config['inputs'] : [];
     const zoneToRenderer = config['zoneToRenderer'] && typeof config['zoneToRenderer'] === 'object'
       ? config['zoneToRenderer'] as Record<string, string[]>
       : {};
@@ -43,6 +49,8 @@ export class ProjectGraphStore {
       zones,
       intents,
       scenes,
+      actions,
+      inputs,
       controllerState: this.projectManager.getControllerState(guid),
       interactionPolicies: this.projectManager.getControllerInteractionPolicies(guid),
       entities: this.projectManager.getGraphEntities(),
@@ -71,6 +79,10 @@ export class ProjectGraphStore {
         return this.applyFixtureCommand(command);
       case 'scene':
         return this.applySceneCommand(command);
+      case 'action':
+        return this.applyActionCommand(command);
+      case 'input':
+        return this.applyInputCommand(command);
       case 'project':
         if (command.patch && typeof command.patch['activeSceneName'] === 'string') {
           return this.activateScene(command.patch['activeSceneName']);
@@ -202,6 +214,9 @@ export class ProjectGraphStore {
 
   private applySceneCommand(command: GraphCommand): GraphMutationResult {
     const scenes = this.projectManager.getScenesWirePayload();
+    const cleanupCommands = command.op === 'remove'
+      ? this.actionInputManager?.buildSceneCleanupCommands(command.guid) ?? []
+      : [];
     const nextScenes = command.op === 'remove'
       ? scenes.filter(scene => scene.guid !== command.guid)
       : scenes.map(scene => {
@@ -218,6 +233,63 @@ export class ProjectGraphStore {
       nextScenes.push(value as unknown as typeof scenes[number]);
     }
     this.projectManager.setProjectData('scenes', nextScenes);
+    const delta = this.makeDelta({ ...command, persistence: command.persistence ?? 'runtimeAndDurable' });
+    const cleanupResults = cleanupCommands.map(cleanupCommand => this.applyGraphCommand(cleanupCommand));
+    return {
+      revision: this.revision,
+      controllerDeltas: [delta, ...cleanupResults.flatMap(result => result.controllerDeltas)],
+      rendererEvents: cleanupResults.flatMap(result => result.rendererEvents),
+      rendererConfigChangedFor: cleanupResults.flatMap(result => result.rendererConfigChangedFor),
+      durableChanged: true,
+    };
+  }
+
+  private applyActionCommand(command: GraphCommand): GraphMutationResult {
+    const actions = this.projectManager.getActionsWirePayload();
+    const nextActions = command.op === 'remove'
+      ? actions.filter(action => action.guid !== command.guid)
+      : actions.map(action => {
+        if (action.guid !== command.guid) return action;
+        const base = cloneRecord(action as unknown as Record<string, unknown>);
+        const next = command.patch || command.remove ? applyDotPathPatch(base, command.patch ?? {}, command.remove) : cloneRecord(command.value ?? base);
+        next['guid'] = command.guid;
+        return next as unknown as typeof action;
+      });
+    const existing = actions.some(action => action.guid === command.guid);
+    if (!existing && command.op !== 'remove') {
+      const value = cloneRecord(command.value ?? { guid: command.guid });
+      value['guid'] = command.guid;
+      nextActions.push(value as unknown as typeof actions[number]);
+    }
+    this.projectManager.setProjectData('actions', nextActions);
+    const delta = this.makeDelta({ ...command, persistence: command.persistence ?? 'runtimeAndDurable' });
+    return {
+      revision: this.revision,
+      controllerDeltas: [delta],
+      rendererEvents: [],
+      rendererConfigChangedFor: [],
+      durableChanged: true,
+    };
+  }
+
+  private applyInputCommand(command: GraphCommand): GraphMutationResult {
+    const inputs = this.projectManager.getInputsWirePayload();
+    const nextInputs = command.op === 'remove'
+      ? inputs.filter(input => input.guid !== command.guid)
+      : inputs.map(input => {
+        if (input.guid !== command.guid) return input;
+        const base = cloneRecord(input as unknown as Record<string, unknown>);
+        const next = command.patch || command.remove ? applyDotPathPatch(base, command.patch ?? {}, command.remove) : cloneRecord(command.value ?? base);
+        next['guid'] = command.guid;
+        return next as unknown as typeof input;
+      });
+    const existing = inputs.some(input => input.guid === command.guid);
+    if (!existing && command.op !== 'remove') {
+      const value = cloneRecord(command.value ?? { guid: command.guid });
+      value['guid'] = command.guid;
+      nextInputs.push(value as unknown as typeof inputs[number]);
+    }
+    this.projectManager.setProjectData('inputs', nextInputs);
     const delta = this.makeDelta({ ...command, persistence: command.persistence ?? 'runtimeAndDurable' });
     return {
       revision: this.revision,

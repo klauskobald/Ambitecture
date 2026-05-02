@@ -39,6 +39,8 @@ export interface GraphInitPayload {
   zones: unknown[];
   intents: unknown[];
   scenes: unknown[];
+  actions: unknown[];
+  inputs: unknown[];
   controllerState?: Record<string, unknown>;
   interactionPolicies?: Record<string, unknown>;
   entities: Record<string, Record<string, Record<string, unknown>>>;

@@ -22,8 +22,17 @@ export class GraphCommandHandler implements MessageHandler {
       Logger.warn('[graph] invalid graph:command payload');
       return;
     }
-    const result = this.graphStore.applyGraphCommand(message.payload);
+    const command = message.payload;
+    const result = this.graphStore.applyGraphCommand(command);
+    const sourceDeltas = result.controllerDeltas.filter(delta =>
+      delta.entityType !== command.entityType
+      || delta.guid !== command.guid
+      || delta.op !== command.op
+    );
+    if (sourceDeltas.length > 0 && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ message: { type: 'graph:delta', payload: sourceDeltas } }));
+    }
     this.publishMutation(ws, result, message.location);
-    Logger.info(`[graph] ${message.payload.op} ${message.payload.entityType}:${message.payload.guid} from ${info.guid}`);
+    Logger.info(`[graph] ${command.op} ${command.entityType}:${command.guid} from ${info.guid}`);
   }
 }

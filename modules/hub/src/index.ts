@@ -11,9 +11,11 @@ import { SceneHandler } from './handlers/SceneHandler';
 import { SaveProjectHandler } from './handlers/SaveProjectHandler';
 import { GraphCommandHandler } from './handlers/GraphCommandHandler';
 import { RuntimeCommandHandler } from './handlers/RuntimeCommandHandler';
+import { ActionHandler } from './handlers/ActionHandler';
 import { EventQueue } from './EventQueue';
 import { ProjectManager } from './ProjectManager';
 import { ProjectGraphStore } from './ProjectGraphStore';
+import { ActionInputManager } from './ActionInputManager';
 import { Logger } from './Logger';
 import { GraphMutationResult } from './GraphProtocol';
 
@@ -26,7 +28,8 @@ const projectManager = new ProjectManager(
   serverConfig.get<string>('projectsPath'),
   serverConfig.get<string>('fixturesPath'),
 );
-const graphStore = new ProjectGraphStore(projectManager);
+const actionInputManager = new ActionInputManager(projectManager);
+const graphStore = new ProjectGraphStore(projectManager, actionInputManager);
 
 const registry = new ConnectionRegistry();
 const router = new MessageRouter(registry);
@@ -46,6 +49,8 @@ const buildActiveSceneEventsMsg = (): string | null => {
 const pushControllerProjectPatches = (includeIntentsPatch: boolean): void => {
   const zones = projectManager.getSerializedRuntimeZones();
   const scenes = projectManager.getScenesWirePayload();
+  const actions = projectManager.getActionsWirePayload();
+  const inputs = projectManager.getInputsWirePayload();
   const zoneToRenderer = projectManager.getZoneToRendererPayload();
   const activeSceneName = projectManager.getActiveSceneName();
   const projectName = projectManager.getWireProjectName();
@@ -55,6 +60,12 @@ const pushControllerProjectPatches = (includeIntentsPatch: boolean): void => {
   });
   const scenesMsg = JSON.stringify({
     message: { type: 'projectPatch', payload: { key: 'scenes', data: scenes } },
+  });
+  const actionsMsg = JSON.stringify({
+    message: { type: 'projectPatch', payload: { key: 'actions', data: actions } },
+  });
+  const inputsMsg = JSON.stringify({
+    message: { type: 'projectPatch', payload: { key: 'inputs', data: inputs } },
   });
   const ztrMsg = JSON.stringify({
     message: { type: 'projectPatch', payload: { key: 'zoneToRenderer', data: zoneToRenderer } },
@@ -74,6 +85,8 @@ const pushControllerProjectPatches = (includeIntentsPatch: boolean): void => {
     controllerCount += 1;
     ws.send(zonesMsg);
     ws.send(scenesMsg);
+    ws.send(actionsMsg);
+    ws.send(inputsMsg);
     ws.send(ztrMsg);
     ws.send(activeMsg);
     ws.send(nameMsg);
@@ -150,6 +163,9 @@ const eventQueue = new EventQueue(registry);
 router.register('register', new RegisterHandler(registry, graphStore, rateLimitEventsPerSecond, systemConfig));
 router.register('graph:command', new GraphCommandHandler(registry, graphStore, publishGraphMutation));
 router.register('runtime:command', new RuntimeCommandHandler(registry, projectManager, eventQueue, rateLimitEventsPerSecond));
+const actionHandler = new ActionHandler(registry, graphStore, actionInputManager, publishGraphMutation);
+router.register('action:input', actionHandler);
+router.register('action:trigger', actionHandler);
 router.register('events', new EventsHandler(registry));
 router.register('intents', new IntentsHandler(registry, projectManager, eventQueue));
 router.register(

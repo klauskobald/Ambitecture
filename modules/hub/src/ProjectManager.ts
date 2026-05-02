@@ -40,6 +40,29 @@ export interface SceneIntentRef {
   overlay?: Record<string, unknown>;
 }
 
+export interface ActionExecuteItem {
+  type: string;
+  guid: string;
+}
+
+export interface ActionDefinition {
+  guid?: string;
+  name: string;
+  execute: ActionExecuteItem[];
+}
+
+export interface InputDefinition {
+  guid?: string;
+  name: string;
+  type: string;
+  action?: string;
+  target?: {
+    type: string;
+    guid: string;
+  };
+  display?: Record<string, unknown>;
+}
+
 interface ControllerDef {
   name: string;
   guid: string;
@@ -79,6 +102,8 @@ interface Project {
   'zone-to-renderer': Record<string, string[]>;
   intents?: ControllerIntent[];
   scenes?: Scene[];
+  actions?: ActionDefinition[];
+  inputs?: InputDefinition[];
   activeScene?: string;
   zones: Zone[];
   controller?: ControllerDef[];
@@ -165,6 +190,12 @@ export class ProjectManager {
     for (const scene of this.project.scenes ?? []) {
       ensureGuid(scene as unknown as Record<string, unknown>, 'scene');
     }
+    for (const action of this.project.actions ?? []) {
+      ensureGuid(action as unknown as Record<string, unknown>, 'action');
+    }
+    for (const input of this.project.inputs ?? []) {
+      ensureGuid(input as unknown as Record<string, unknown>, 'input');
+    }
     for (const zone of this.project.zones) {
       ensureGuid(zone as unknown as Record<string, unknown>, 'zone');
       for (const fixture of zone.fixtures) {
@@ -174,7 +205,7 @@ export class ProjectManager {
     for (const controller of this.project.controller ?? []) {
       ensureGuid(controller as unknown as Record<string, unknown>, 'controller');
     }
-    const knownTopLevel = new Set(['name', 'zone-to-renderer', 'intents', 'scenes', 'activeScene', 'zones', 'controller']);
+    const knownTopLevel = new Set(['name', 'zone-to-renderer', 'intents', 'scenes', 'actions', 'inputs', 'activeScene', 'zones', 'controller']);
     for (const [key, value] of Object.entries(this.project as unknown as Record<string, unknown>)) {
       if (knownTopLevel.has(key) || !Array.isArray(value)) continue;
       const prefix = key.endsWith('s') ? key.slice(0, -1) : key;
@@ -345,6 +376,12 @@ export class ProjectManager {
     for (const scene of this.project?.scenes ?? []) {
       add('scene', scene.guid, { ...scene });
     }
+    for (const action of this.project?.actions ?? []) {
+      add('action', action.guid, { ...action });
+    }
+    for (const input of this.project?.inputs ?? []) {
+      add('input', input.guid, { ...input });
+    }
     for (const controller of this.project?.controller ?? []) {
       add('controller', controller.guid, { ...controller });
     }
@@ -358,7 +395,7 @@ export class ProjectManager {
         });
       }
     }
-    const knownTopLevel = new Set(['name', 'zone-to-renderer', 'intents', 'scenes', 'activeScene', 'zones', 'controller']);
+    const knownTopLevel = new Set(['name', 'zone-to-renderer', 'intents', 'scenes', 'actions', 'inputs', 'activeScene', 'zones', 'controller']);
     for (const [key, value] of Object.entries(this.project as unknown as Record<string, unknown>)) {
       if (knownTopLevel.has(key) || !Array.isArray(value)) continue;
       const entityType = key.endsWith('s') ? key.slice(0, -1) : key;
@@ -575,6 +612,26 @@ export class ProjectManager {
     return this.project?.scenes ?? [];
   }
 
+  getActionsWirePayload(): ActionDefinition[] {
+    return this.project?.actions ?? [];
+  }
+
+  getInputsWirePayload(): InputDefinition[] {
+    return this.project?.inputs ?? [];
+  }
+
+  getSceneByGuid(guid: string): Scene | undefined {
+    return (this.project?.scenes ?? []).find(scene => scene.guid === guid);
+  }
+
+  getActionByGuid(guid: string): ActionDefinition | undefined {
+    return (this.project?.actions ?? []).find(action => action.guid === guid);
+  }
+
+  getInputByGuid(guid: string): InputDefinition | undefined {
+    return (this.project?.inputs ?? []).find(input => input.guid === guid);
+  }
+
   getWireProjectName(): string {
     return this.project?.name ?? '';
   }
@@ -634,6 +691,8 @@ export class ProjectManager {
     }
 
     const scenes = this.project.scenes ?? [];
+    const actions = this.project.actions ?? [];
+    const inputs = this.project.inputs ?? [];
     Logger.info(`[project] buildControllerConfig(${guid}): ${this.runtimeZones.length} zone(s), ${intents.length} intent(s), ${scenes.length} scene(s)`);
     return {
       projectName: this.project.name,
@@ -641,6 +700,8 @@ export class ProjectManager {
       zones: this.runtimeZones.map((z) => this.serializeZone(z)),
       intents,
       scenes,
+      actions,
+      inputs,
       activeSceneName: this.activeSceneName,
       ...passThrough,
     };

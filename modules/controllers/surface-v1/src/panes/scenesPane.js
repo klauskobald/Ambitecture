@@ -1,7 +1,7 @@
 import { confirm as modalConfirm, prompt as modalPrompt } from '../core/Modal.js'
 import { intentName } from '../core/stores.js'
 import { projectGraph } from '../core/projectGraph.js'
-import { sendGraphCommand, sendSceneActivate, sendSaveProject } from '../core/outboundQueue.js'
+import { sendActionInputCommand, sendGraphCommand, sendSceneActivate, sendSaveProject } from '../core/outboundQueue.js'
 
 export class ScenesPane {
   constructor () {
@@ -27,6 +27,16 @@ export class ScenesPane {
     this._intentsBody.className = 'scene-intents'
     this._intentsSection.appendChild(this._intentsTitle)
     this._intentsSection.appendChild(this._intentsBody)
+
+    this._performSection = document.createElement('section')
+    this._performSection.className = 'scene-section scene-section--perform'
+    this._performTitle = document.createElement('h2')
+    this._performTitle.className = 'scene-section-title'
+    this._performTitle.textContent = 'Perform'
+    this._performBody = document.createElement('div')
+    this._performBody.className = 'scene-perform'
+    this._performSection.appendChild(this._performTitle)
+    this._performSection.appendChild(this._performBody)
 
     this._actionsSection = document.createElement('section')
     this._actionsSection.className = 'scene-section scene-section--actions'
@@ -54,6 +64,7 @@ export class ScenesPane {
     this._actionsSection.appendChild(this._actionsBody)
 
     this._detailEl.appendChild(this._intentsSection)
+    this._detailEl.appendChild(this._performSection)
     this._detailEl.appendChild(this._actionsSection)
 
     this._layout.appendChild(this._listEl)
@@ -95,6 +106,7 @@ export class ScenesPane {
     const activeScene = projectGraph.getActiveSceneName()
     this._renderSceneList(activeScene)
     this._renderIntentToggles(this._intentsBody, activeScene)
+    this._renderPerformControls(activeScene)
     this._renderActions(activeScene)
   }
 
@@ -132,6 +144,43 @@ export class ScenesPane {
     this._renameBtn.disabled = !hasActive
     this._copyBtn.disabled = !hasActive
     this._deleteBtn.disabled = !hasActive || sceneCount <= 1
+  }
+
+  /** @param {string | null} activeScene */
+  _renderPerformControls (activeScene) {
+    this._performBody.innerHTML = ''
+    if (!activeScene) return
+
+    const sceneGuid = projectGraph.getSceneGuid(activeScene)
+    if (!sceneGuid) return
+
+    const input = projectGraph.getSceneButtonInput(sceneGuid)
+    const action = projectGraph.getSceneAction(sceneGuid)
+    const isActive = Boolean(input?.action && action)
+    const label = String(input?.name ?? activeScene)
+
+    const row = document.createElement('div')
+    row.className = 'scene-perform-row' + (isActive ? ' scene-perform-row--active' : '')
+
+    const button = document.createElement('button')
+    button.className = 'btn scene-perform-button'
+    button.textContent = 'Button'
+    button.addEventListener('click', () => {
+      sendActionInputCommand({
+        command: isActive ? 'disableSceneButton' : 'ensureSceneButton',
+        sceneGuid
+      })
+    })
+
+    const labelButton = document.createElement('button')
+    labelButton.className = 'btn scene-perform-label'
+    labelButton.textContent = label
+    labelButton.disabled = !isActive || !input?.guid
+    labelButton.addEventListener('click', () => this._onPerformLabelClick(input))
+
+    row.appendChild(button)
+    row.appendChild(labelButton)
+    this._performBody.appendChild(row)
   }
 
   // ── Intent toggles ────────────────────────────────────────────────────────────
@@ -177,6 +226,22 @@ export class ScenesPane {
     projectGraph.setActiveScene(nextName)
     sendSaveProject('scenes', toHubScenes(scenes))
     sendSceneActivate(nextName)
+  }
+
+  /** @param {Record<string, unknown> | null} input */
+  async _onPerformLabelClick (input) {
+    const inputGuid = typeof input?.guid === 'string' ? input.guid : ''
+    if (!inputGuid) return
+    const values = await modalPrompt('', [
+      { label: 'Name', key: 'name', value: String(input?.name ?? ''), placeholder: 'input name' },
+    ], { submit: 'Rename' })
+    const nextName = values?.name?.trim()
+    if (!nextName || nextName === input?.name) return
+    sendActionInputCommand({
+      command: 'renameInput',
+      inputGuid,
+      name: nextName
+    })
   }
 
   async _onCopyClick () {

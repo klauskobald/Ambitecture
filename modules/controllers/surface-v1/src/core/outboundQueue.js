@@ -156,6 +156,32 @@ export function sendGraphCommand (command) {
   sendGraphCommands([command], activeWs, activeLocation)
 }
 
+/** @param {Record<string, unknown>} command */
+export function sendActionInputCommand (command) {
+  if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation)
+    return
+  activeWs.send(JSON.stringify({
+    message: {
+      type: 'action:input',
+      location: activeLocation,
+      payload: command
+    }
+  }))
+}
+
+/** @param {string} actionGuid */
+export function sendActionTrigger (actionGuid) {
+  if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation)
+    return
+  activeWs.send(JSON.stringify({
+    message: {
+      type: 'action:trigger',
+      location: activeLocation,
+      payload: { actionGuid }
+    }
+  }))
+}
+
 /**
  * @param {string} key
  * @param {unknown} data

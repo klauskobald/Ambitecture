@@ -49,7 +49,7 @@ export class PerformPane {
       const button = document.createElement('button')
       button.className = 'btn perform-input perform-input--button'
       button.textContent = String(input.name ?? 'Button')
-      button.addEventListener('click', () => {
+      button.addEventListener('pointerdown', () => {
         if (typeof input.action === 'string') sendActionTrigger(input.action)
       })
       controls.appendChild(button)

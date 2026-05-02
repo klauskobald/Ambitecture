@@ -163,7 +163,7 @@ export class ScenesPane {
     row.className = 'scene-perform-row' + (isActive ? ' scene-perform-row--active' : '')
 
     const button = document.createElement('button')
-    button.className = 'btn scene-perform-button'
+    button.className = 'intent-toggle scene-perform-button' + (isActive ? ' intent-toggle--enabled' : '')
     button.textContent = 'Button'
     button.addEventListener('click', () => {
       sendActionInputCommand({

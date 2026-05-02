@@ -1,7 +1,7 @@
 import { confirm as modalConfirm, prompt as modalPrompt } from '../core/Modal.js'
 import { intentName } from '../core/stores.js'
 import { projectGraph } from '../core/projectGraph.js'
-import { sendSceneActivate, sendSaveProject } from '../core/outboundQueue.js'
+import { sendGraphCommand, sendSceneActivate, sendSaveProject } from '../core/outboundQueue.js'
 
 export class ScenesPane {
   constructor () {
@@ -191,7 +191,7 @@ export class ScenesPane {
     if (scenes.some(s => s.name === nextName)) return
     const source = scenes.find(s => s.name === active)
     if (!source) return
-    scenes.push({ name: nextName, intents: [...source.intents] })
+    scenes.push({ guid: newGuid('scene'), name: nextName, intents: [...source.intents] })
     projectGraph.setActiveScene(nextName)
     sendSaveProject('scenes', toHubScenes(scenes))
     sendSceneActivate(nextName)
@@ -209,20 +209,37 @@ export class ScenesPane {
     if (!ok) return
     const idx = scenes.findIndex(s => s.name === active)
     if (idx === -1) return
+    const removedGuid = scenes[idx]?.guid
     scenes.splice(idx, 1)
     const nextActive = scenes[Math.max(0, idx - 1)]?.name ?? scenes[0]?.name ?? null
     if (nextActive) {
       projectGraph.setActiveScene(nextActive)
       sendSceneActivate(nextActive)
     }
-    sendSaveProject('scenes', toHubScenes(scenes))
+    if (removedGuid) {
+      sendGraphCommand({
+        op: 'remove',
+        entityType: 'scene',
+        guid: removedGuid,
+        persistence: 'runtimeAndDurable'
+      })
+    } else {
+      sendSaveProject('scenes', toHubScenes(scenes))
+    }
   }
 }
 
 /**
- * @param {Array<{ name: string, intents: string[] }>} scenes
- * @returns {Array<{ name: string, intents: Array<{ guid: string }> }>}
+ * @param {Array<{ guid?: string, name: string, intents: string[] }>} scenes
+ * @returns {Array<{ guid: string, name: string, intents: Array<{ guid: string }> }>}
  */
 function toHubScenes (scenes) {
-  return scenes.map(s => ({ name: s.name, intents: s.intents.map(guid => ({ guid })) }))
+  return scenes.map(s => ({ guid: s.guid || newGuid('scene'), name: s.name, intents: s.intents.map(guid => ({ guid })) }))
+}
+
+/** @param {string} prefix */
+function newGuid (prefix) {
+  const cryptoApi = globalThis.crypto
+  if (cryptoApi?.randomUUID) return `${prefix}-${cryptoApi.randomUUID()}`
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }

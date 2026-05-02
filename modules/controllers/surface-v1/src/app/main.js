@@ -95,6 +95,26 @@ async function main () {
           )
           break
         }
+        case 'graph:init': {
+          const payload = message.payload
+          projectGraph.applyGraphInit(payload, cfg.SIMULATOR_RENDERER_GUID)
+          const rateLimit = /** @type {Record<string,unknown>} */ (
+            payload ?? {}
+          ).rateLimitEventsPerSecond
+          if (typeof rateLimit === 'number' && rateLimit > 0)
+            setMinInterval(1000 / rateLimit)
+          statusDisplay.info(
+            projectGraph.getSpatial()
+              ? 'graph initialized'
+              : 'graph initialized but no zone for SIMULATOR_RENDERER_GUID',
+            'config'
+          )
+          break
+        }
+        case 'graph:delta': {
+          projectGraph.applyGraphDelta(message.payload)
+          break
+        }
         case 'refresh': {
           const activeName = projectGraph.getActiveSceneName()
           if (activeName) sendSceneActivate(activeName)

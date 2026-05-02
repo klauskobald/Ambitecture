@@ -32,7 +32,7 @@ class ProjectGraph {
     this._spatial = null
     /** @type {number[][]} */
     this._zoneBoxes = []
-    /** @type {Map<string, { zoneName: string, fixtureName: string, position: [number, number, number] }>} */
+    /** @type {Map<string, { guid: string, zoneName: string, fixtureName: string, position: [number, number, number] }>} */
     this._fixtures = new Map()
   }
 
@@ -56,7 +56,7 @@ class ProjectGraph {
   /** @returns {number[][]} */
   getZoneBoxes () { return this._zoneBoxes }
 
-  /** @returns {Map<string, { zoneName: string, fixtureName: string, position: [number, number, number] }>} */
+  /** @returns {Map<string, { guid: string, zoneName: string, fixtureName: string, position: [number, number, number] }>} */
   getFixtures () { return this._fixtures }
 
   // ─── Project data ─────────────────────────────────────────────────────────────
@@ -103,7 +103,7 @@ class ProjectGraph {
       const source = this._data.scenes.find(s => s.name === cloneFromName)
       if (source) intents = [...source.intents]
     }
-    this._data.scenes.push({ name, intents })
+    this._data.scenes.push({ guid: this._newGuid('scene'), name, intents })
     this._data.activeSceneName = name
     this._notify()
     return true
@@ -169,7 +169,7 @@ class ProjectGraph {
     const updated = this._cloneAndSetAtDotPath(/** @type {Record<string, unknown>} */ (intent), dotKey, value)
     this._data.intents.set(guid, updated)
     this._notify()
-    return updated
+    return { guid, patch: { [dotKey]: value } }
   }
 
   /**
@@ -185,7 +185,7 @@ class ProjectGraph {
     const updated = this._cloneAndDeleteAtDotPath(/** @type {Record<string, unknown>} */ (intent), dotKey)
     this._data.intents.set(guid, updated)
     this._notify()
-    return updated
+    return { guid, remove: [dotKey] }
   }
 
   /**
@@ -247,14 +247,14 @@ class ProjectGraph {
     const pos = /** @type {number[] | undefined} */ (i.position)
     const updated = { ...i, position: [wx, pos?.[1] ?? 0, wz] }
     this._data.intents.set(guid, updated)
-    return updated
+    return { guid, patch: { position: updated.position } }
   }
 
   /**
    * @param {string} id
    * @param {number} wx
    * @param {number} wz
-   * @returns {{ zoneName: string, fixtureName: string, position: [number, number, number] } | null}
+   * @returns {{ guid: string, zoneName: string, fixtureName: string, position: [number, number, number] } | null}
    */
   updateFixturePosition (id, wx, wz) {
     const fixture = this._fixtures.get(id)
@@ -340,6 +340,7 @@ class ProjectGraph {
         const rawScenes = Array.isArray(data) ? /** @type {Array<Record<string, unknown>>} */ (data) : []
         this._data.scenes = rawScenes
           .map(scene => ({
+            guid: String(scene.guid ?? ''),
             name: String(scene.name ?? ''),
             intents: Array.isArray(scene.intents)
               ? scene.intents.map(i => String(/** @type {Record<string, unknown>} */ (i).guid ?? ''))
@@ -353,6 +354,53 @@ class ProjectGraph {
       }
       default:
         break
+    }
+    this._notify()
+  }
+
+  /**
+   * Applies the full graph snapshot sent only on registration/reconnect/resync.
+   * @param {unknown} payload
+   * @param {string} rendererGuid
+   */
+  applyGraphInit (payload, rendererGuid) {
+    this.applyConfig(payload, rendererGuid)
+    const p = /** @type {Record<string, unknown> | null} */ (
+      payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : null
+    )
+    const intents = Array.isArray(p?.intents) ? /** @type {unknown[]} */ (p.intents) : []
+    this.reconcileIntents(intents, null)
+  }
+
+  /**
+   * Applies one or more GUID-addressed graph deltas from the hub.
+   * @param {unknown} payload
+   */
+  applyGraphDelta (payload) {
+    const deltas = Array.isArray(payload) ? payload : [payload]
+    for (const raw of deltas) {
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue
+      const delta = /** @type {Record<string, unknown>} */ (raw)
+      const entityType = String(delta.entityType ?? '')
+      const guid = String(delta.guid ?? '')
+      const op = String(delta.op ?? '')
+      if (!entityType || !guid) continue
+      switch (entityType) {
+        case 'intent':
+          this._applyIntentDelta(guid, op, delta)
+          break
+        case 'fixture':
+          this._applyFixtureDelta(guid, op, delta)
+          break
+        case 'scene':
+          this._applySceneDelta(guid, op, delta)
+          break
+        case 'project':
+          this._applyProjectDelta(delta)
+          break
+        default:
+          break
+      }
     }
     this._notify()
   }
@@ -380,6 +428,7 @@ class ProjectGraph {
     const rawScenes = Array.isArray(p.scenes) ? /** @type {Array<Record<string, unknown>>} */ (p.scenes) : []
     this._data.scenes = rawScenes
       .map(scene => ({
+        guid: String(scene.guid ?? ''),
         name: String(scene.name ?? ''),
         intents: Array.isArray(scene.intents)
           ? scene.intents.map(i => String(/** @type {Record<string, unknown>} */ (i).guid ?? ''))
@@ -426,6 +475,135 @@ class ProjectGraph {
     }
   }
 
+  /**
+   * @param {string} guid
+   * @param {string} op
+   * @param {Record<string, unknown>} delta
+   */
+  _applyIntentDelta (guid, op, delta) {
+    if (op === 'remove') {
+      this._data.intents.delete(guid)
+      return
+    }
+    const current = /** @type {Record<string, unknown>} */ (this._data.intents.get(guid) ?? { guid })
+    const value = delta.value && typeof delta.value === 'object' && !Array.isArray(delta.value)
+      ? /** @type {Record<string, unknown>} */ (delta.value)
+      : current
+    let next = { ...value, guid }
+    const patch = delta.patch && typeof delta.patch === 'object' && !Array.isArray(delta.patch)
+      ? /** @type {Record<string, unknown>} */ (delta.patch)
+      : {}
+    for (const [key, patchValue] of Object.entries(patch)) {
+      next = this._cloneAndSetAtDotPath(next, key, patchValue)
+    }
+    const remove = Array.isArray(delta.remove) ? delta.remove.map(String) : []
+    for (const key of remove) {
+      next = this._cloneAndDeleteAtDotPath(next, key)
+    }
+    this._data.intents.set(guid, next)
+  }
+
+  /**
+   * @param {string} guid
+   * @param {string} op
+   * @param {Record<string, unknown>} delta
+   */
+  _applyFixtureDelta (guid, op, delta) {
+    if (op === 'remove') return
+    const value = delta.value && typeof delta.value === 'object' && !Array.isArray(delta.value)
+      ? /** @type {Record<string, unknown>} */ (delta.value)
+      : null
+    if (value) {
+      const zoneName = String(value.zoneName ?? '')
+      const targetZone = this._data.zones.find(zone => {
+        if (!zone || typeof zone !== 'object' || Array.isArray(zone)) return false
+        const z = /** @type {Record<string, unknown>} */ (zone)
+        return String(z.name ?? '') === zoneName || String(z.guid ?? '') === String(value.zoneGuid ?? '')
+      })
+      if (targetZone && typeof targetZone === 'object' && !Array.isArray(targetZone)) {
+        for (const zone of this._data.zones) {
+          if (!zone || typeof zone !== 'object' || Array.isArray(zone)) continue
+          const fixtures = /** @type {Record<string, unknown>} */ (zone).fixtures
+          if (!Array.isArray(fixtures)) continue
+          const idx = fixtures.findIndex(fixture =>
+            fixture && typeof fixture === 'object' && !Array.isArray(fixture) && String(/** @type {Record<string, unknown>} */ (fixture).guid ?? '') === guid
+          )
+          if (idx >= 0) fixtures.splice(idx, 1)
+        }
+        const targetFixtures = /** @type {Record<string, unknown>} */ (targetZone).fixtures
+        if (Array.isArray(targetFixtures)) {
+          const fixtureCopy = { ...value }
+          delete fixtureCopy.zoneGuid
+          delete fixtureCopy.zoneName
+          targetFixtures.push(fixtureCopy)
+        }
+        this._fixtures = this._computeFixtures()
+        return
+      }
+    }
+    const patch = delta.patch && typeof delta.patch === 'object' && !Array.isArray(delta.patch)
+      ? /** @type {Record<string, unknown>} */ (delta.patch)
+      : {}
+    const position = patch.position
+    if (!Array.isArray(position) || position.length < 3) return
+    for (const zone of this._data.zones) {
+      if (!zone || typeof zone !== 'object' || Array.isArray(zone)) continue
+      const z = /** @type {Record<string, unknown>} */ (zone)
+      const bb = z.boundingBox
+      const fixtures = z.fixtures
+      if (!Array.isArray(bb) || bb.length < 6 || !Array.isArray(fixtures)) continue
+      for (const fixture of fixtures) {
+        if (!fixture || typeof fixture !== 'object' || Array.isArray(fixture)) continue
+        const f = /** @type {Record<string, unknown>} */ (fixture)
+        if (String(f.guid ?? '') !== guid) continue
+        f.location = [
+          Number(position[0]) - Number(bb[0]),
+          Number(position[1]) - Number(bb[1]),
+          Number(position[2]) - Number(bb[2]),
+        ]
+      }
+    }
+    this._fixtures = this._computeFixtures()
+  }
+
+  /**
+   * @param {string} guid
+   * @param {string} op
+   * @param {Record<string, unknown>} delta
+   */
+  _applySceneDelta (guid, op, delta) {
+    const idx = this._data.scenes.findIndex(s => s.guid === guid)
+    if (op === 'remove') {
+      if (idx >= 0) this._data.scenes.splice(idx, 1)
+      return
+    }
+    const value = delta.value && typeof delta.value === 'object' && !Array.isArray(delta.value)
+      ? /** @type {Record<string, unknown>} */ (delta.value)
+      : {}
+    const scene = {
+      guid,
+      name: String(value.name ?? this._data.scenes[idx]?.name ?? ''),
+      intents: Array.isArray(value.intents)
+        ? value.intents.map(i => String(/** @type {Record<string, unknown>} */ (i).guid ?? i))
+        : this._data.scenes[idx]?.intents ?? [],
+    }
+    if (idx >= 0) {
+      this._data.scenes[idx] = scene
+    } else if (scene.name) {
+      this._data.scenes.push(scene)
+    }
+  }
+
+  /** @param {Record<string, unknown>} delta */
+  _applyProjectDelta (delta) {
+    const patch = delta.patch && typeof delta.patch === 'object' && !Array.isArray(delta.patch)
+      ? /** @type {Record<string, unknown>} */ (delta.patch)
+      : {}
+    if (typeof patch.activeSceneName === 'string') {
+      this._data.activeSceneName = patch.activeSceneName
+    }
+  }
+
   // ─── Private derivations ──────────────────────────────────────────────────────
 
   /** @returns {HubSpatialState | null} */
@@ -464,11 +642,11 @@ class ProjectGraph {
     return matched
   }
 
-  /** @returns {Map<string, { zoneName: string, fixtureName: string, position: [number, number, number] }>} */
+  /** @returns {Map<string, { guid: string, zoneName: string, fixtureName: string, position: [number, number, number] }>} */
   _computeFixtures () {
     const rendererGuid = this._rendererGuid
     const zoneToRenderer = this._data.zoneToRenderer
-    /** @type {Map<string, { zoneName: string, fixtureName: string, position: [number, number, number] }>} */
+    /** @type {Map<string, { guid: string, zoneName: string, fixtureName: string, position: [number, number, number] }>} */
     const fixtures = new Map()
     for (const z of this._data.zones) {
       if (z === null || typeof z !== 'object' || Array.isArray(z)) continue
@@ -483,9 +661,11 @@ class ProjectGraph {
         if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) continue
         const fixture = /** @type {Record<string, unknown>} */ (raw)
         const fName = String(fixture.name ?? '')
+        const guid = String(fixture.guid ?? fixtureId(zoneName, fName))
         const local = fixture.location
         if (!fName || !Array.isArray(local) || local.length < 3) continue
         fixtures.set(fixtureId(zoneName, fName), {
+          guid,
           zoneName,
           fixtureName: fName,
           position: /** @type {[number, number, number]} */ ([
@@ -497,6 +677,13 @@ class ProjectGraph {
       }
     }
     return fixtures
+  }
+
+  /** @param {string} prefix */
+  _newGuid (prefix) {
+    const cryptoApi = globalThis.crypto
+    if (cryptoApi?.randomUUID) return `${prefix}-${cryptoApi.randomUUID()}`
+    return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
   }
 }
 

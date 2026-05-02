@@ -3,8 +3,7 @@ import { Logger } from '../Logger';
 import { Config } from '../Config';
 import { ConnectionRegistry } from '../ConnectionRegistry';
 import { MessageHandler, WsMessage } from '../MessageRouter';
-import { ProjectManager } from '../ProjectManager';
-import { normalizeIntentColor, intentToEvent } from './intentHelpers';
+import { ProjectGraphStore } from '../ProjectGraphStore';
 
 interface RegisterPayload {
   role: 'renderer' | 'controller';
@@ -24,13 +23,13 @@ function isRegisterPayload(payload: unknown): payload is RegisterPayload {
 
 export class RegisterHandler implements MessageHandler {
   private registry: ConnectionRegistry;
-  private projectManager: ProjectManager;
+  private graphStore: ProjectGraphStore;
   private rateLimitEventsPerSecond: number;
   private systemConfig: Config;
 
-  constructor(registry: ConnectionRegistry, projectManager: ProjectManager, rateLimitEventsPerSecond: number, systemConfig: Config) {
+  constructor(registry: ConnectionRegistry, graphStore: ProjectGraphStore, rateLimitEventsPerSecond: number, systemConfig: Config) {
     this.registry = registry;
-    this.projectManager = projectManager;
+    this.graphStore = graphStore;
     this.rateLimitEventsPerSecond = rateLimitEventsPerSecond;
     this.systemConfig = systemConfig;
   }
@@ -64,24 +63,22 @@ export class RegisterHandler implements MessageHandler {
     }
 
     if (role === 'renderer') {
-      const config = this.projectManager.buildRendererConfig(guid);
+      const config = this.graphStore.buildRendererConfig(guid);
       ws.send(JSON.stringify({ message: { type: 'config', payload: config } }));
       Logger.info(`[register] pushed config to renderer ${guid}`);
 
-      const activeIntents = this.projectManager.getActiveSceneIntents();
-      if (activeIntents.length > 0) {
-        const now = Date.now();
-        const events = activeIntents.map(normalizeIntentColor).map(i => intentToEvent(i, now));
+      const events = this.graphStore.getActiveSceneEvents();
+      if (events.length > 0) {
         ws.send(JSON.stringify({ message: { type: 'events', payload: events } }));
         Logger.info(`[register] pushed ${events.length} active scene event(s) to renderer ${guid}`);
       }
     } else if (role === 'controller') {
-      const config = {
-        ...this.projectManager.buildControllerConfig(guid),
+      const graphInit = {
+        ...this.graphStore.buildControllerInit(guid),
         rateLimitEventsPerSecond: this.rateLimitEventsPerSecond,
       };
-      ws.send(JSON.stringify({ message: { type: 'config', payload: config } }));
-      Logger.info(`[register] pushed config to controller ${guid}`);
+      ws.send(JSON.stringify({ message: { type: 'graph:init', payload: graphInit } }));
+      Logger.info(`[register] pushed graph:init to controller ${guid}`);
 
       const capabilities = this.systemConfig.getOrDefault<unknown>('systemCapabilities', null);
       if (capabilities !== null) {

@@ -9,10 +9,12 @@ import { IntentsHandler } from './handlers/IntentsHandler';
 import { FixturesHandler } from './handlers/FixturesHandler';
 import { SceneHandler } from './handlers/SceneHandler';
 import { SaveProjectHandler } from './handlers/SaveProjectHandler';
+import { GraphCommandHandler } from './handlers/GraphCommandHandler';
 import { EventQueue } from './EventQueue';
 import { ProjectManager } from './ProjectManager';
+import { ProjectGraphStore } from './ProjectGraphStore';
 import { Logger } from './Logger';
-import { normalizeIntentColor, intentToEvent } from './handlers/intentHelpers';
+import { GraphMutationResult } from './GraphProtocol';
 
 const serverConfig = new Config('server');
 const systemConfig = new Config('system', true);
@@ -23,15 +25,14 @@ const projectManager = new ProjectManager(
   serverConfig.get<string>('projectsPath'),
   serverConfig.get<string>('fixturesPath'),
 );
+const graphStore = new ProjectGraphStore(projectManager);
 
 const registry = new ConnectionRegistry();
 const router = new MessageRouter(registry);
 
 const buildActiveSceneEventsMsg = (): string | null => {
-  const intents = projectManager.getActiveSceneIntents();
-  if (intents.length === 0) return null;
-  const now = Date.now();
-  const events = intents.map(normalizeIntentColor).map(i => intentToEvent(i, now));
+  const events = graphStore.getActiveSceneEvents();
+  if (events.length === 0) return null;
   return JSON.stringify({ message: { type: 'events', payload: events } });
 };
 
@@ -94,7 +95,7 @@ const pushConfigsToModules = (includeControllerIntentPatch = true) => {
   for (const ws of registry.getByRole('renderer')) {
     const info = registry.get(ws);
     if (info && ws.readyState === ws.OPEN) {
-      const config = projectManager.buildRendererConfig(info.guid);
+      const config = graphStore.buildRendererConfig(info.guid);
       ws.send(JSON.stringify({ message: { type: 'config', payload: config } }));
       if (sceneEventsMsg) ws.send(sceneEventsMsg);
     }
@@ -102,9 +103,46 @@ const pushConfigsToModules = (includeControllerIntentPatch = true) => {
   pushControllerProjectPatches(includeControllerIntentPatch);
 };
 
+const publishGraphMutation = (source: import('ws').WebSocket, result: GraphMutationResult, location?: [number, number]): void => {
+  if (result.controllerDeltas.length > 0) {
+    const msg = JSON.stringify({
+      message: {
+        type: 'graph:delta',
+        payload: result.controllerDeltas,
+      },
+    });
+    for (const ws of registry.getByRole('controller')) {
+      if (ws === source || ws.readyState !== ws.OPEN) continue;
+      ws.send(msg);
+    }
+  }
+  if (result.rendererEvents.length > 0) {
+    const now = Date.now();
+    eventQueue.schedule(
+      result.rendererEvents.map(event => {
+        const scheduled = (event as Record<string, unknown>)['scheduled'];
+        return {
+          event,
+          scheduledAt: typeof scheduled === 'number' ? scheduled : now,
+        };
+      }),
+      location,
+    );
+  }
+  if (result.rendererConfigChangedFor.length > 0) {
+    const changed = new Set(result.rendererConfigChangedFor);
+    for (const ws of registry.getByRole('renderer')) {
+      const info = registry.get(ws);
+      if (!info || ws.readyState !== ws.OPEN || !changed.has(info.guid)) continue;
+      ws.send(JSON.stringify({ message: { type: 'config', payload: graphStore.buildRendererConfig(info.guid) } }));
+    }
+  }
+};
+
 const rateLimitEventsPerSecond = serverConfig.get<number>('rateLimitEventsPerSecond');
 const eventQueue = new EventQueue(registry);
-router.register('register', new RegisterHandler(registry, projectManager, rateLimitEventsPerSecond, systemConfig));
+router.register('register', new RegisterHandler(registry, graphStore, rateLimitEventsPerSecond, systemConfig));
+router.register('graph:command', new GraphCommandHandler(registry, graphStore, publishGraphMutation));
 router.register('events', new EventsHandler(registry));
 router.register('intents', new IntentsHandler(registry, projectManager, eventQueue));
 router.register(
@@ -115,7 +153,7 @@ const sceneHandler = new SceneHandler(registry, projectManager, eventQueue);
 router.register('scene:activate', sceneHandler);
 router.register('saveProject', new SaveProjectHandler(projectManager));
 
-projectManager.useProject(serverConfig.get<string>('defaultProject'), () => {
+graphStore.useProject(serverConfig.get<string>('defaultProject'), () => {
   pushConfigsToModules();
 });
 

@@ -62,6 +62,7 @@ export const editPolicy = {
     const fixture = projectGraph.updateFixturePosition(id, wx, wz)
     if (!fixture) return
     queueFixtureUpdate({
+      guid: fixture.guid,
       zoneName: fixture.zoneName,
       fixtureName: fixture.fixtureName,
       position: fixture.position

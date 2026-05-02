@@ -28,18 +28,35 @@ export function setMinInterval (ms) {
 
 /** @param {unknown} intent */
 export function queueIntentUpdate (intent) {
-  const guid = intentGuid(intent)
+  const record = /** @type {Record<string, unknown>} */ (intent)
+  const guid = String(record.guid ?? intentGuid(intent))
   if (!guid) return
-  outboundMap.set(guid, intent)
+  const existing = /** @type {Record<string, unknown> | undefined} */ (outboundMap.get(guid))
+  outboundMap.set(guid, mergeGraphCommand(existing, {
+    op: 'patch',
+    entityType: 'intent',
+    guid,
+    patch: /** @type {Record<string, unknown> | undefined} */ (record.patch),
+    remove: /** @type {string[] | undefined} */ (record.remove),
+    value: record.patch || record.remove ? undefined : record,
+    persistence: 'runtime'
+  }))
   scheduleFlush()
 }
 
 /** @param {unknown} fixtureUpdate */
 export function queueFixtureUpdate (fixtureUpdate) {
   const f = /** @type {Record<string, unknown>} */ (fixtureUpdate)
-  const id = fixtureId(String(f.zoneName ?? ''), String(f.fixtureName ?? ''))
-  if (!id) return
-  outboundFixtureMap.set(id, fixtureUpdate)
+  const guid = String(f.guid ?? '')
+  const id = guid || fixtureId(String(f.zoneName ?? ''), String(f.fixtureName ?? ''))
+  if (!id || !guid) return
+  outboundFixtureMap.set(id, {
+    op: 'patch',
+    entityType: 'fixture',
+    guid,
+    patch: { position: f.position },
+    persistence: 'runtimeAndDurable'
+  })
   scheduleFlush()
 }
 
@@ -65,8 +82,7 @@ function flushOutbound () {
   outboundMap.clear()
   outboundFixtureMap.clear()
   lastSentAt = Date.now()
-  if (intents.length > 0) sendIntents(intents, activeWs, activeLocation)
-  if (fixtures.length > 0) sendFixtures(fixtures, activeWs, activeLocation)
+  sendGraphCommands([...intents, ...fixtures], activeWs, activeLocation)
 }
 
 /**
@@ -74,11 +90,13 @@ function flushOutbound () {
  * @param {WebSocket} ws
  * @param {number[]} location
  */
-function sendIntents (intents, ws, location) {
+function sendGraphCommands (commands, ws, location) {
   if (ws.readyState !== WebSocket.OPEN) return
-  ws.send(
-    JSON.stringify({ message: { type: 'intents', location, payload: intents } })
-  )
+  for (const command of commands) {
+    ws.send(
+      JSON.stringify({ message: { type: 'graph:command', location, payload: command } })
+    )
+  }
 }
 
 /**
@@ -91,9 +109,15 @@ export function sendSceneActivate (sceneName) {
   activeWs.send(
     JSON.stringify({
       message: {
-        type: 'scene:activate',
+        type: 'graph:command',
         location: activeLocation,
-        payload: { sceneName }
+        payload: {
+          op: 'patch',
+          entityType: 'project',
+          guid: 'active',
+          patch: { activeSceneName: sceneName },
+          persistence: 'runtimeAndDurable'
+        }
       }
     })
   )
@@ -106,27 +130,68 @@ export function sendSceneActivate (sceneName) {
 export function sendSaveProject (key, data) {
   if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation)
     return
-  activeWs.send(
-    JSON.stringify({
-      message: {
-        type: 'saveProject',
-        location: activeLocation,
-        payload: { key, data }
-      }
-    })
-  )
+  const commands = saveProjectCommands(key, data)
+  sendGraphCommands(commands, activeWs, activeLocation)
 }
 
 /**
- * @param {unknown[]} fixtures
- * @param {WebSocket} ws
- * @param {number[]} location
+ * @param {Record<string, unknown>} command
  */
-function sendFixtures (fixtures, ws, location) {
-  if (ws.readyState !== WebSocket.OPEN) return
-  ws.send(
-    JSON.stringify({
-      message: { type: 'fixtures', location, payload: fixtures }
-    })
-  )
+export function sendGraphCommand (command) {
+  if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation)
+    return
+  sendGraphCommands([command], activeWs, activeLocation)
+}
+
+/**
+ * @param {string} key
+ * @param {unknown} data
+ * @returns {unknown[]}
+ */
+function saveProjectCommands (key, data) {
+  if (key === 'intents' && Array.isArray(data)) {
+    return data
+      .map(value => /** @type {Record<string, unknown>} */ (value))
+      .filter(value => typeof value.guid === 'string')
+      .map(value => ({
+        op: 'upsert',
+        entityType: 'intent',
+        guid: String(value.guid),
+        value,
+        persistence: 'runtimeAndDurable'
+      }))
+  }
+  if (key === 'scenes' && Array.isArray(data)) {
+    return data
+      .map(value => /** @type {Record<string, unknown>} */ (value))
+      .filter(value => typeof value.guid === 'string')
+      .map(value => ({
+        op: 'upsert',
+        entityType: 'scene',
+        guid: String(value.guid),
+        value,
+        persistence: 'runtimeAndDurable'
+      }))
+  }
+  return []
+}
+
+/**
+ * @param {Record<string, unknown> | undefined} existing
+ * @param {Record<string, unknown>} next
+ * @returns {Record<string, unknown>}
+ */
+function mergeGraphCommand (existing, next) {
+  if (!existing) return next
+  return {
+    ...next,
+    patch: {
+      .../** @type {Record<string, unknown>} */ (existing.patch ?? {}),
+      .../** @type {Record<string, unknown>} */ (next.patch ?? {})
+    },
+    remove: [
+      .../** @type {string[]} */ (existing.remove ?? []),
+      .../** @type {string[]} */ (next.remove ?? [])
+    ]
+  }
 }

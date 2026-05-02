@@ -15,6 +15,11 @@ export class PerformPane {
     this._el = document.createElement('div')
     this._el.className = 'pane perform-pane'
     this._el.hidden = true
+    this._controls = document.createElement('div')
+    this._controls.className = 'perform-controls'
+    this._el.appendChild(this._controls)
+    /** @type {Map<string, HTMLButtonElement>} */
+    this._buttonByGuid = new Map()
     /** @type {(() => void) | null} */
     this._unsubscribe = null
   }
@@ -39,22 +44,41 @@ export class PerformPane {
   }
 
   _render () {
-    this._el.innerHTML = ''
     const activeInputs = this._activeDisplayInputs()
-    if (activeInputs.length === 0) return
+    const activeGuids = new Set()
 
-    const controls = document.createElement('div')
-    controls.className = 'perform-controls'
     for (const input of activeInputs) {
-      const button = document.createElement('button')
-      button.className = 'btn perform-input perform-input--button'
+      const guid = String(input.guid ?? '')
+      if (!guid) continue
+      activeGuids.add(guid)
+      const button = this._buttonForInput(guid)
       button.textContent = String(input.name ?? 'Button')
-      button.addEventListener('pointerdown', () => {
-        if (typeof input.action === 'string') sendActionTrigger(input.action)
-      })
-      controls.appendChild(button)
+      button.dataset.actionGuid = typeof input.action === 'string' ? input.action : ''
+      this._controls.appendChild(button)
     }
-    this._el.appendChild(controls)
+
+    for (const [guid, button] of this._buttonByGuid) {
+      if (activeGuids.has(guid)) continue
+      button.remove()
+      this._buttonByGuid.delete(guid)
+    }
+  }
+
+  /**
+   * @param {string} guid
+   * @returns {HTMLButtonElement}
+   */
+  _buttonForInput (guid) {
+    const existing = this._buttonByGuid.get(guid)
+    if (existing) return existing
+    const button = document.createElement('button')
+    button.className = 'btn perform-input perform-input--button'
+    button.addEventListener('pointerdown', () => {
+      const actionGuid = button.dataset.actionGuid ?? ''
+      if (actionGuid) sendActionTrigger(actionGuid)
+    })
+    this._buttonByGuid.set(guid, button)
+    return button
   }
 
   /** @returns {Record<string, unknown>[]} */

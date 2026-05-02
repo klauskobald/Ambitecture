@@ -37,7 +37,7 @@ export interface Scene {
 interface ControllerDef {
   name: string;
   guid: string;
-  intents: { guid: string }[];
+  intents?: { guid: string }[];
   interactionPolicies?: Record<string, unknown>;
   [key: string]: unknown;  // pass-through for controller-specific config
 }
@@ -288,7 +288,7 @@ export class ProjectManager {
   getControllerIntents(controllerGuid: string): ControllerIntent[] {
     const match = (this.project?.controller ?? []).find(c => c.guid === controllerGuid);
     if (!match) return [];
-    return match.intents
+    return (match.intents ?? [])
       .map(ref => this.intentDefinitions.get(ref.guid))
       .filter((i): i is ControllerIntent => i !== undefined);
   }

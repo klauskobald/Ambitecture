@@ -1,5 +1,6 @@
 import { projectGraph } from '../../core/projectGraph.js'
-import { queueIntentUpdate, sendSaveProject } from '../../core/outboundQueue.js'
+import { queueIntentUpdate, sendSaveProject, sendSceneActivate } from '../../core/outboundQueue.js'
+import { warn as modalWarn } from '../../core/Modal.js'
 import { resolveMultiSelectState, resolveEnableState } from './controlHelpers.js'
 
 export class PropertyControl {
@@ -13,12 +14,16 @@ export class PropertyControl {
     this._onCommit = onCommit
     this._selectionSize = selectionSize
     this._isMandatory = !!descriptor.isMandatory
+    this._allowOverlay = !!descriptor.allowOverlay
     /** @type {HTMLElement | null} */
     this._controlArea = null
     /** @type {HTMLButtonElement | null} */
     this._toggleBtn = null
+    /** @type {HTMLButtonElement | null} */
+    this._overlayBtn = null
     /** @type {Set<string>} */
     this._currentGuids = new Set()
+    this._sceneDirty = false
   }
 
   buildRow () {
@@ -43,6 +48,15 @@ export class PropertyControl {
       header.appendChild(this._toggleBtn)
     }
 
+    if (this._allowOverlay) {
+      this._overlayBtn = document.createElement('button')
+      this._overlayBtn.className = 'prop-row__toggle intent-toggle'
+      this._overlayBtn.textContent = 'Shared'
+      this._overlayBtn.setAttribute('aria-checked', 'false')
+      this._overlayBtn.addEventListener('click', () => this._onOverlayClick())
+      header.appendChild(this._overlayBtn)
+    }
+
     row.appendChild(header)
 
     this._controlArea = document.createElement('div')
@@ -61,6 +75,7 @@ export class PropertyControl {
 
     if (this._isMandatory) {
       if (this._controlArea) this._controlArea.hidden = false
+      this._applyOverlayState(this._resolveOverlayState(guids, dotKey))
       const multiState = resolveMultiSelectState(guids, dotKey)
       this._applyState({ ...multiState, enableState: 'on', selectionSize: guids.size })
       return
@@ -70,6 +85,7 @@ export class PropertyControl {
     const multiState = resolveMultiSelectState(guids, dotKey)
 
     this._applyEnableState(enableState)
+    this._applyOverlayState(this._resolveOverlayState(guids, dotKey))
     if (enableState !== 'off') {
       this._applyState({ ...multiState, enableState, selectionSize: guids.size })
     }
@@ -92,7 +108,53 @@ export class PropertyControl {
   }
 
   _saveProject () {
-    sendSaveProject('intents', [...projectGraph.getIntents().values()])
+    const dotKey = /** @type {string} */ (this._descriptor.dotKey)
+    const activeScene = projectGraph.getActiveSceneName()
+    const hasOverlayTargets = activeScene && [...this._currentGuids].some(guid =>
+      projectGraph.isSceneIntentOverlayed(activeScene, guid, dotKey)
+    )
+    const hasSharedTargets = [...this._currentGuids].some(guid =>
+      !activeScene || !projectGraph.isSceneIntentOverlayed(activeScene, guid, dotKey)
+    )
+    if (hasSharedTargets) {
+      sendSaveProject('intents', [...projectGraph.getIntents().values()])
+    }
+    if ((this._sceneDirty || hasOverlayTargets) && activeScene) {
+      sendSaveProject('scenes', projectGraph.getScenesData())
+      sendSceneActivate(activeScene)
+    }
+    this._sceneDirty = false
+  }
+
+  /**
+   * @param {string} guid
+   * @param {string} dotKey
+   * @param {unknown} value
+   */
+  _updateProperty (guid, dotKey, value) {
+    const activeScene = projectGraph.getActiveSceneName()
+    if (this._allowOverlay && activeScene && projectGraph.isSceneIntentOverlayed(activeScene, guid, dotKey)) {
+      projectGraph.setSceneIntentOverlay(activeScene, guid, dotKey, value)
+      this._sceneDirty = true
+      return
+    }
+    const updated = projectGraph.updateIntentProperty(guid, dotKey, value)
+    if (updated) queueIntentUpdate(updated)
+  }
+
+  /**
+   * @param {string} guid
+   * @param {string} dotKey
+   */
+  _removeProperty (guid, dotKey) {
+    const activeScene = projectGraph.getActiveSceneName()
+    if (this._allowOverlay && activeScene && projectGraph.isSceneIntentOverlayed(activeScene, guid, dotKey)) {
+      projectGraph.removeSceneIntentOverlay(activeScene, guid, dotKey)
+      this._sceneDirty = true
+      return
+    }
+    const updated = projectGraph.removeIntentProperty(guid, dotKey)
+    if (updated) queueIntentUpdate(updated)
   }
 
   // ── Private ───────────────────────────────────────────────────────────────
@@ -124,6 +186,52 @@ export class PropertyControl {
     }
   }
 
+  /** @param {'overlay' | 'shared' | 'mixed'} overlayState */
+  _applyOverlayState (overlayState) {
+    if (!this._overlayBtn) return
+    switch (overlayState) {
+      case 'overlay':
+        this._overlayBtn.textContent = 'Overlay'
+        this._overlayBtn.setAttribute('aria-checked', 'true')
+        this._overlayBtn.setAttribute('aria-disabled', 'false')
+        this._overlayBtn.classList.add('intent-toggle--enabled')
+        this._overlayBtn.classList.remove('prop-row__toggle--mixed')
+        break
+      case 'shared':
+        this._overlayBtn.textContent = 'Shared'
+        this._overlayBtn.setAttribute('aria-checked', 'false')
+        this._overlayBtn.setAttribute('aria-disabled', 'false')
+        this._overlayBtn.classList.remove('intent-toggle--enabled', 'prop-row__toggle--mixed')
+        break
+      case 'mixed':
+        this._overlayBtn.textContent = 'Mixed'
+        this._overlayBtn.setAttribute('aria-checked', 'mixed')
+        this._overlayBtn.setAttribute('aria-disabled', 'true')
+        this._overlayBtn.classList.add('prop-row__toggle--mixed')
+        this._overlayBtn.classList.remove('intent-toggle--enabled')
+        break
+    }
+  }
+
+  /**
+   * @param {Set<string>} guids
+   * @param {string} dotKey
+   * @returns {'overlay' | 'shared' | 'mixed'}
+   */
+  _resolveOverlayState (guids, dotKey) {
+    const activeScene = projectGraph.getActiveSceneName()
+    let overlayCount = 0
+    let total = 0
+    for (const guid of guids) {
+      if (!projectGraph.getIntents().has(guid)) continue
+      total++
+      if (activeScene && projectGraph.isSceneIntentOverlayed(activeScene, guid, dotKey)) overlayCount++
+    }
+    if (total === 0 || overlayCount === 0) return 'shared'
+    if (overlayCount === total) return 'overlay'
+    return 'mixed'
+  }
+
   _onToggleClick () {
     const dotKey = /** @type {string} */ (this._descriptor.dotKey)
     const enableState = resolveEnableState(this._currentGuids, dotKey)
@@ -131,17 +239,44 @@ export class PropertyControl {
 
     if (enableState === 'on') {
       for (const guid of this._currentGuids) {
-        const updated = projectGraph.removeIntentProperty(guid, dotKey)
-        if (updated) queueIntentUpdate(updated)
+        this._removeProperty(guid, dotKey)
       }
     } else {
       for (const guid of this._currentGuids) {
-        const updated = projectGraph.updateIntentProperty(guid, dotKey, defaultValue)
-        if (updated) queueIntentUpdate(updated)
+        this._updateProperty(guid, dotKey, defaultValue)
       }
     }
 
     this._saveProject()
+    this.refresh(this._currentGuids)
+  }
+
+  _onOverlayClick () {
+    const dotKey = /** @type {string} */ (this._descriptor.dotKey)
+    const activeScene = projectGraph.getActiveSceneName()
+    if (!activeScene) return
+
+    const overlayState = this._resolveOverlayState(this._currentGuids, dotKey)
+    if (overlayState === 'mixed') {
+      modalWarn('Selected intents have mixed overlay state. Select only Overlay or only Shared intents before toggling this property.')
+      return
+    }
+
+    if (overlayState === 'shared') {
+      for (const guid of this._currentGuids) {
+        const value = projectGraph.getEffectiveIntentProperty(guid, dotKey)
+        if (value !== undefined) {
+          projectGraph.setSceneIntentOverlay(activeScene, guid, dotKey, value)
+        }
+      }
+    } else {
+      for (const guid of this._currentGuids) {
+        projectGraph.removeSceneIntentOverlay(activeScene, guid, dotKey)
+      }
+    }
+
+    sendSaveProject('scenes', projectGraph.getScenesData())
+    sendSceneActivate(activeScene)
     this.refresh(this._currentGuids)
   }
 }

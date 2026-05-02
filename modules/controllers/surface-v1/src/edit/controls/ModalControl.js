@@ -1,6 +1,4 @@
 import { PropertyControl } from './PropertyControl.js'
-import { projectGraph } from '../../core/projectGraph.js'
-import { queueIntentUpdate } from '../../core/outboundQueue.js'
 import * as Modal from '../../core/Modal.js'
 import { resolveMultiSelectState } from './controlHelpers.js'
 
@@ -40,8 +38,7 @@ export class ModalControl extends PropertyControl {
 
     const newValue = result['value'] ?? ''
     for (const guid of this._currentGuids) {
-      const updated = projectGraph.updateIntentProperty(guid, dotKey, newValue)
-      if (updated) queueIntentUpdate(updated)
+      this._updateProperty(guid, dotKey, newValue)
     }
     this._saveProject()
   }

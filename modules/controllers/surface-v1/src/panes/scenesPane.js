@@ -191,7 +191,7 @@ export class ScenesPane {
     if (scenes.some(s => s.name === nextName)) return
     const source = scenes.find(s => s.name === active)
     if (!source) return
-    scenes.push({ guid: newGuid('scene'), name: nextName, intents: [...source.intents] })
+    scenes.push({ guid: newGuid('scene'), name: nextName, intents: source.intents.map(cloneSceneIntentRef) })
     projectGraph.setActiveScene(nextName)
     sendSaveProject('scenes', toHubScenes(scenes))
     sendSceneActivate(nextName)
@@ -230,11 +230,23 @@ export class ScenesPane {
 }
 
 /**
- * @param {Array<{ guid?: string, name: string, intents: string[] }>} scenes
- * @returns {Array<{ guid: string, name: string, intents: Array<{ guid: string }> }>}
+ * @param {Array<{ guid?: string, name: string, intents: Array<{ guid: string, overlay?: Record<string, unknown> }> }>} scenes
+ * @returns {Array<{ guid: string, name: string, intents: Array<{ guid: string, overlay?: Record<string, unknown> }> }>}
  */
 function toHubScenes (scenes) {
-  return scenes.map(s => ({ guid: s.guid || newGuid('scene'), name: s.name, intents: s.intents.map(guid => ({ guid })) }))
+  return scenes.map(s => ({
+    guid: s.guid || newGuid('scene'),
+    name: s.name,
+    intents: s.intents.map(cloneSceneIntentRef),
+  }))
+}
+
+/**
+ * @param {{ guid: string, overlay?: Record<string, unknown> }} ref
+ * @returns {{ guid: string, overlay?: Record<string, unknown> }}
+ */
+function cloneSceneIntentRef (ref) {
+  return ref.overlay ? { guid: ref.guid, overlay: JSON.parse(JSON.stringify(ref.overlay)) } : { guid: ref.guid }
 }
 
 /** @param {string} prefix */

@@ -176,7 +176,9 @@ export class EditPane {
   _sceneIntentEntries () {
     const active = projectGraph.getActiveSceneName()
     const guids = active ? new Set(projectGraph.getSceneIntents(active)) : null
-    return [...projectGraph.getIntents().entries()].filter(([g]) => !guids || guids.has(g))
+    return [...projectGraph.getIntents().entries()]
+      .filter(([g]) => !guids || guids.has(g))
+      .map(([g, intent]) => [g, projectGraph.getEffectiveIntent(g) ?? intent])
   }
 
   _buildPerformEnableManager () {

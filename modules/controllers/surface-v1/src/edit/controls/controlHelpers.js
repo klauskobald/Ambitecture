@@ -25,12 +25,9 @@ function deepEqual (a, b) {
  * @returns {{ mode: 'same' | 'mixed' | 'absent', value: unknown }}
  */
 export function resolveMultiSelectState (guids, dotKey) {
-  const intents = projectGraph.getIntents()
   const values = []
   for (const guid of guids) {
-    const intent = /** @type {Record<string, unknown> | undefined} */ (intents.get(guid))
-    if (!intent) continue
-    const val = readAtDotPath(intent, dotKey)
+    const val = projectGraph.getEffectiveIntentProperty(guid, dotKey)
     if (val !== undefined) values.push(val)
   }
   if (values.length === 0) return { mode: 'absent', value: undefined }
@@ -47,14 +44,12 @@ export function resolveMultiSelectState (guids, dotKey) {
  * @returns {'on' | 'off' | 'mixed'}
  */
 export function resolveEnableState (guids, dotKey) {
-  const intents = projectGraph.getIntents()
   let presentCount = 0
   let total = 0
   for (const guid of guids) {
-    const intent = /** @type {Record<string, unknown> | undefined} */ (intents.get(guid))
-    if (!intent) continue
+    if (!projectGraph.getIntents().has(guid)) continue
     total++
-    if (readAtDotPath(intent, dotKey) !== undefined) presentCount++
+    if (projectGraph.getEffectiveIntentProperty(guid, dotKey) !== undefined) presentCount++
   }
   if (total === 0 || presentCount === 0) return 'off'
   if (presentCount === total) return 'on'

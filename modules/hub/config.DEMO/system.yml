@@ -21,6 +21,7 @@ systemCapabilities:
         noMultiple: true
       - dotKey: params.alpha
         name: Alpha
+        allowOverlay: true
         type: scalar
         range: [0, 1]
         defaultValue: 1
@@ -30,12 +31,14 @@ systemCapabilities:
       - dotKey: params.blend
         name: Blend
         type: string
+        allowOverlay: true
         options: [ADD, ALPHA, MULTIPLY]
         defaultValue: ADD
         noMultiple: true
         isMandatory: true
       - dotKey: radius
         name: Radius
+        allowOverlay: true
         type: scalar
         range: [0, 20]
         defaultValue: 5
@@ -44,6 +47,7 @@ systemCapabilities:
           value: { fn: MULTIPLY, range: [0.1, 10] }
       - dotKey: radiusFunction
         name: Radius Fn
+        allowOverlay: true
         type: string
         optionsRef: functionCurves
         defaultValue: quadratic
@@ -75,6 +79,7 @@ systemCapabilities:
       #     value: { fn: ADD, range: [-1, 1] }
       - dotKey: params.strobe
         name: Strobe
+        allowOverlay: true
         type: scalar
         range: [0, 1]
         defaultValue: 0
@@ -82,9 +87,16 @@ systemCapabilities:
           value: { fn: ADD, range: [-1, 1] }
       - dotKey: params.aux.amber
         name: Amber
+        allowOverlay: true
         type: scalar
         range: [0, 1]
         defaultValue: 0
         delta:
           value: { fn: ADD, range: [-1, 1] }
+      - dotKey: position
+        name: Position
+        allowOverlay: true
+        type: infoText
+        noMultiple: true
+        isMandatory: true
 

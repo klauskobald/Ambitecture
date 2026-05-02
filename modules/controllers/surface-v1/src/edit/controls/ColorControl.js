@@ -1,9 +1,7 @@
 import { PropertyControl } from './PropertyControl.js'
 import { hslPalette } from '../../ui/palettes/hslPalette.js'
 import { projectGraph } from '../../core/projectGraph.js'
-import { queueIntentUpdate } from '../../core/outboundQueue.js'
 import { toHSL } from '../../core/color.js'
-import { readAtDotPath } from '../../core/dotPath.js'
 import { applyDelta } from './controlHelpers.js'
 
 const HSL_CHANNEL_DEFAULTS = {
@@ -34,8 +32,7 @@ export class ColorControl extends PropertyControl {
     this._paletteInstance = hslPalette.mount(this._inlineArea, rawColor => {
       const dotKey = /** @type {string} */ (this._descriptor.dotKey)
       for (const guid of this._currentGuids) {
-        const updated = projectGraph.updateIntentProperty(guid, dotKey, rawColor)
-        if (updated) queueIntentUpdate(updated)
+        this._updateProperty(guid, dotKey, rawColor)
       }
     })
     // Save project when user lifts finger/mouse from palette
@@ -111,13 +108,10 @@ export class ColorControl extends PropertyControl {
     const fn = slider.dataset.fn ?? 'ADD'
     const wrap = slider.dataset.wrap === 'true'
     const delta = parseFloat(slider.value)
-    const intents = projectGraph.getIntents()
     const absRange = this._getAbsoluteRange()
 
     for (const guid of this._currentGuids) {
-      const intent = /** @type {Record<string, unknown> | undefined} */ (intents.get(guid))
-      if (!intent) continue
-      const currentColor = readAtDotPath(intent, dotKey)
+      const currentColor = projectGraph.getEffectiveIntentProperty(guid, dotKey)
       const hsl = toHSL(currentColor)
 
       let newH = hsl.h, newS = hsl.s, newL = hsl.l
@@ -145,8 +139,7 @@ export class ColorControl extends PropertyControl {
         }
       }
 
-      const updated = projectGraph.updateIntentProperty(guid, dotKey, { h: newH, s: newS, l: newL })
-      if (updated) queueIntentUpdate(updated)
+      this._updateProperty(guid, dotKey, { h: newH, s: newS, l: newL })
     }
   }
 

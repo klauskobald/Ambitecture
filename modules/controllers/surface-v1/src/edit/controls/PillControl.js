@@ -1,6 +1,4 @@
 import { PropertyControl } from './PropertyControl.js'
-import { projectGraph } from '../../core/projectGraph.js'
-import { queueIntentUpdate } from '../../core/outboundQueue.js'
 
 export class PillControl extends PropertyControl {
   constructor (descriptor, onCommit, selectionSize) {
@@ -41,8 +39,7 @@ export class PillControl extends PropertyControl {
   _handlePillClick (option) {
     const dotKey = /** @type {string} */ (this._descriptor.dotKey)
     for (const guid of this._currentGuids) {
-      const updated = projectGraph.updateIntentProperty(guid, dotKey, option)
-      if (updated) queueIntentUpdate(updated)
+      this._updateProperty(guid, dotKey, option)
     }
     this._saveProject()
     this.refresh(this._currentGuids)

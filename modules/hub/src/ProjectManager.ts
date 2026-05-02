@@ -2,7 +2,7 @@ import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { Config } from './Config';
 import { Logger } from './Logger';
-import { removeAtDotPath, setAtDotPath } from './dotPath';
+import { applyDotPathPatch, cloneRecord, removeAtDotPath, setAtDotPath } from './dotPath';
 
 export interface FixtureChannelDef {
   function: string;
@@ -32,7 +32,12 @@ export interface ControllerIntent {
 export interface Scene {
   guid?: string;
   name: string;
-  intents: { guid: string }[];
+  intents: SceneIntentRef[];
+}
+
+export interface SceneIntentRef {
+  guid: string;
+  overlay?: Record<string, unknown>;
 }
 
 interface ControllerDef {
@@ -481,8 +486,26 @@ export class ProjectManager {
     const scene = this.project.scenes.find(s => s.name === this.activeSceneName);
     if (!scene) return [];
     return scene.intents
-      .map(ref => this.intentDefinitions.get(ref.guid))
+      .map(ref => this.getEffectiveSceneIntent(ref))
       .filter((i): i is ControllerIntent => i !== undefined);
+  }
+
+  getActiveSceneIntent(guid: string): ControllerIntent | undefined {
+    if (!this.activeSceneName || !this.project?.scenes) return this.intentDefinitions.get(guid);
+    const scene = this.project.scenes.find(s => s.name === this.activeSceneName);
+    const ref = scene?.intents.find(item => item.guid === guid);
+    if (!ref) return undefined;
+    return this.getEffectiveSceneIntent(ref);
+  }
+
+  private getEffectiveSceneIntent(ref: SceneIntentRef): ControllerIntent | undefined {
+    const intent = this.intentDefinitions.get(ref.guid);
+    if (!intent) return undefined;
+    const base = cloneRecord(intent as unknown as Record<string, unknown>);
+    const overlay = ref.overlay && typeof ref.overlay === 'object' && !Array.isArray(ref.overlay)
+      ? ref.overlay
+      : {};
+    return applyDotPathPatch(base, overlay) as unknown as ControllerIntent;
   }
 
   isIntentInActiveScene(guid: string): boolean {

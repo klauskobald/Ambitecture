@@ -59,3 +59,21 @@ export function cloneAndDeleteAtDotPath (obj, dotKey) {
   delete cursor[leafKey]
   return cloned
 }
+
+/**
+ * Clone an object and apply dot-key patch/remove operations.
+ * @param {Record<string, unknown>} obj
+ * @param {Record<string, unknown>} patch
+ * @param {string[]} [remove]
+ * @returns {Record<string, unknown>}
+ */
+export function applyDotPathPatch (obj, patch, remove = []) {
+  let next = JSON.parse(JSON.stringify(obj))
+  for (const [key, value] of Object.entries(patch)) {
+    next = cloneAndSetAtDotPath(next, key, value)
+  }
+  for (const key of remove) {
+    next = cloneAndDeleteAtDotPath(next, key)
+  }
+  return next
+}

@@ -150,8 +150,9 @@ export class ProjectGraphStore {
 
     const now = Date.now();
     const delta = this.makeDelta({ ...command, persistence });
-    const rendererEvents = this.projectManager.isIntentInActiveScene(command.guid)
-      ? [intentToEvent(normalizeIntentColor(intent), now + (intent.scheduled ?? 0))]
+    const effectiveIntent = this.projectManager.getActiveSceneIntent(command.guid);
+    const rendererEvents = effectiveIntent
+      ? [intentToEvent(normalizeIntentColor(effectiveIntent), now + (effectiveIntent.scheduled ?? 0))]
       : [];
     return {
       revision: this.revision,

@@ -6,6 +6,7 @@
  * is open dismisses the current one first.
  *
  *   Modal.alert('Something happened')
+ *   Modal.warn('Check this before continuing')
  *   Modal.confirm('Delete this?', { yes: 'Delete', no: 'Cancel' }).then(ok => { ... })
  *   Modal.prompt('New scene', [
  *     { label: 'Name', key: 'name', placeholder: 'untitled' }
@@ -209,6 +210,15 @@ export function alert (text, callback) {
     _overlay.appendChild(_buildAlert(text))
     _overlay.classList.add('is-open')
   })
+}
+
+/**
+ * @param {string} text
+ * @param {() => void} [callback]
+ * @returns {Promise<void>}
+ */
+export function warn (text, callback) {
+  return alert(text, callback)
 }
 
 /**

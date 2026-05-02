@@ -1,7 +1,5 @@
 import { PropertyControl } from './PropertyControl.js'
 import { projectGraph } from '../../core/projectGraph.js'
-import { queueIntentUpdate } from '../../core/outboundQueue.js'
-import { readAtDotPath } from '../../core/dotPath.js'
 import { applyDelta } from './controlHelpers.js'
 
 export class SliderControl extends PropertyControl {
@@ -64,22 +62,17 @@ export class SliderControl extends PropertyControl {
     const min = range?.[0] ?? 0
     const max = range?.[1] ?? 1
     const sliderVal = parseFloat(this._slider.value)
-    const intents = projectGraph.getIntents()
 
     if (this._isDelta) {
       const { fn } = this._getDeltaConfig()
       for (const guid of this._currentGuids) {
-        const intent = /** @type {Record<string, unknown> | undefined} */ (intents.get(guid))
-        if (!intent) continue
-        const original = /** @type {number} */ (readAtDotPath(intent, dotKey) ?? min)
+        const original = /** @type {number} */ (projectGraph.getEffectiveIntentProperty(guid, dotKey) ?? min)
         const newVal = applyDelta(original, sliderVal, fn, min, max)
-        const updated = projectGraph.updateIntentProperty(guid, dotKey, newVal)
-        if (updated) queueIntentUpdate(updated)
+        this._updateProperty(guid, dotKey, newVal)
       }
     } else {
       for (const guid of this._currentGuids) {
-        const updated = projectGraph.updateIntentProperty(guid, dotKey, sliderVal)
-        if (updated) queueIntentUpdate(updated)
+        this._updateProperty(guid, dotKey, sliderVal)
       }
     }
   }

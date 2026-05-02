@@ -1,6 +1,6 @@
 import { intentGuid } from '../core/stores.js'
 import { projectGraph } from '../core/projectGraph.js'
-import { queueIntentUpdate, queueFixtureUpdate, sendSaveProject } from '../core/outboundQueue.js'
+import { queueIntentUpdate, queueFixtureUpdate, sendSaveProject, sendSceneActivate } from '../core/outboundQueue.js'
 
 /**
  * @typedef {object} InteractionPolicy
@@ -32,6 +32,24 @@ export function getEditFixturesUnlocked () {
   return editFixturesUnlocked
 }
 
+/** @param {string} guid @param {number} wx @param {number} wz @returns {boolean} */
+function updatePositionOverlayIfActive (guid, wx, wz) {
+  const activeScene = projectGraph.getActiveSceneName()
+  if (!activeScene || !projectGraph.isSceneIntentOverlayed(activeScene, guid, 'position')) return false
+  const current = /** @type {number[] | undefined} */ (projectGraph.getEffectiveIntentProperty(guid, 'position'))
+  projectGraph.setSceneIntentOverlay(activeScene, guid, 'position', [wx, current?.[1] ?? 0, wz])
+  return true
+}
+
+/** @param {string} guid @returns {boolean} */
+function savePositionOverlayIfActive (guid) {
+  const activeScene = projectGraph.getActiveSceneName()
+  if (!activeScene || !projectGraph.isSceneIntentOverlayed(activeScene, guid, 'position')) return false
+  sendSaveProject('scenes', projectGraph.getScenesData())
+  sendSceneActivate(activeScene)
+  return true
+}
+
 /** @type {InteractionPolicy} */
 export const performPolicy = {
   isIntentVisible (intent) {
@@ -45,10 +63,13 @@ export const performPolicy = {
     return false
   },
   onIntentMove (guid, wx, wz) {
+    if (updatePositionOverlayIfActive(guid, wx, wz)) return
     const updated = projectGraph.updateIntentPosition(guid, wx, wz)
     if (updated) queueIntentUpdate(updated)
   },
-  onIntentMoveEnd (_guid) {},
+  onIntentMoveEnd (guid) {
+    savePositionOverlayIfActive(guid)
+  },
   onFixtureMove (_id, _wx, _wz) {}
 }
 
@@ -64,10 +85,12 @@ export const editPolicy = {
     return editFixturesUnlocked
   },
   onIntentMove (guid, wx, wz) {
+    if (updatePositionOverlayIfActive(guid, wx, wz)) return
     const updated = projectGraph.updateIntentPosition(guid, wx, wz)
     if (updated) queueIntentUpdate(updated)
   },
-  onIntentMoveEnd (_guid) {
+  onIntentMoveEnd (guid) {
+    if (savePositionOverlayIfActive(guid)) return
     sendSaveProject('intents', [...projectGraph.getIntents().values()])
   },
   onFixtureMove (id, wx, wz) {

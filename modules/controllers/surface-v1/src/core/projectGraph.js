@@ -1,5 +1,5 @@
 import { intentGuid, fixtureId } from './stores.js'
-import { cloneAndDeleteAtDotPath, cloneAndSetAtDotPath } from './dotPath.js'
+import { applyDotPathPatch, cloneAndDeleteAtDotPath, cloneAndSetAtDotPath, readAtDotPath } from './dotPath.js'
 
 /**
  * @typedef {object} HubSpatialState
@@ -9,6 +9,12 @@ import { cloneAndDeleteAtDotPath, cloneAndSetAtDotPath } from './dotPath.js'
  * @property {number} x2
  * @property {number} y2
  * @property {number} z2
+ */
+
+/**
+ * @typedef {object} SceneIntentRef
+ * @property {string} guid
+ * @property {Record<string, unknown>} [overlay]
  */
 
 class ProjectGraph {
@@ -25,7 +31,7 @@ class ProjectGraph {
       zoneToRenderer: /** @type {Record<string, string[]>} */ ({}),
       zones: /** @type {unknown[]} */ ([]),
       intents: /** @type {Map<string, unknown>} */ (new Map()),
-      scenes: /** @type {Array<{ name: string, intents: string[] }>} */ ([]),
+      scenes: /** @type {Array<{ guid?: string, name: string, intents: SceneIntentRef[] }>} */ ([]),
       activeSceneName: /** @type {string | null} */ (null),
       controller: {
         state: /** @type {Record<string, unknown>} */ ({}),
@@ -84,10 +90,15 @@ class ProjectGraph {
 
   /** @param {string} sceneName @returns {string[]} guid list */
   getSceneIntents (sceneName) {
+    return this.getSceneIntentRefs(sceneName).map(ref => ref.guid)
+  }
+
+  /** @param {string} sceneName @returns {SceneIntentRef[]} */
+  getSceneIntentRefs (sceneName) {
     return this._data.scenes.find(s => s.name === sceneName)?.intents ?? []
   }
 
-  /** @returns {Array<{ name: string, intents: string[] }>} */
+  /** @returns {Array<{ guid?: string, name: string, intents: SceneIntentRef[] }>} */
   getScenesData () { return this._data.scenes }
 
   /** @returns {string | null} */
@@ -100,6 +111,55 @@ class ProjectGraph {
 
   /** @returns {string} */
   getControllerGuid () { return this._data.controllerGuid }
+
+  /**
+   * @param {string} guid
+   * @returns {Record<string, unknown> | null}
+   */
+  getEffectiveIntent (guid) {
+    const intent = /** @type {Record<string, unknown> | undefined} */ (this._data.intents.get(guid))
+    if (!intent) return null
+    const active = this._data.activeSceneName
+    const ref = active ? this._findSceneIntentRef(active, guid) : null
+    const overlay = ref?.overlay ?? {}
+    return applyDotPathPatch(intent, overlay)
+  }
+
+  /**
+   * @param {string} guid
+   * @param {string} dotKey
+   * @returns {unknown}
+   */
+  getEffectiveIntentProperty (guid, dotKey) {
+    const intent = this.getEffectiveIntent(guid)
+    if (!intent) return undefined
+    return readAtDotPath(intent, dotKey)
+  }
+
+  /**
+   * @param {string | null} sceneName
+   * @param {string} guid
+   * @param {string} dotKey
+   * @returns {unknown}
+   */
+  getSceneIntentOverlayValue (sceneName, guid, dotKey) {
+    if (!sceneName) return undefined
+    const ref = this._findSceneIntentRef(sceneName, guid)
+    if (!ref?.overlay || !Object.prototype.hasOwnProperty.call(ref.overlay, dotKey)) return undefined
+    return ref.overlay[dotKey]
+  }
+
+  /**
+   * @param {string | null} sceneName
+   * @param {string} guid
+   * @param {string} dotKey
+   * @returns {boolean}
+   */
+  isSceneIntentOverlayed (sceneName, guid, dotKey) {
+    if (!sceneName) return false
+    const ref = this._findSceneIntentRef(sceneName, guid)
+    return !!ref?.overlay && Object.prototype.hasOwnProperty.call(ref.overlay, dotKey)
+  }
 
   // ─── Mutations ────────────────────────────────────────────────────────────────
 
@@ -116,10 +176,10 @@ class ProjectGraph {
    */
   addScene (name, cloneFromName = null) {
     if (this._data.scenes.some(s => s.name === name)) return false
-    let intents = /** @type {string[]} */ ([])
+    let intents = /** @type {SceneIntentRef[]} */ ([])
     if (cloneFromName) {
       const source = this._data.scenes.find(s => s.name === cloneFromName)
-      if (source) intents = [...source.intents]
+      if (source) intents = source.intents.map(ref => cloneSceneIntentRef(ref))
     }
     this._data.scenes.push({ guid: this._newGuid('scene'), name, intents })
     this._data.activeSceneName = name
@@ -145,13 +205,48 @@ class ProjectGraph {
   toggleSceneIntent (sceneName, guid) {
     const scene = this._data.scenes.find(s => s.name === sceneName)
     if (!scene) return
-    const idx = scene.intents.indexOf(guid)
+    const idx = scene.intents.findIndex(ref => ref.guid === guid)
     if (idx === -1) {
-      scene.intents.push(guid)
+      scene.intents.push({ guid })
     } else {
       scene.intents.splice(idx, 1)
     }
     this._notify()
+  }
+
+  /**
+   * @param {string} sceneName
+   * @param {string} guid
+   * @param {string} dotKey
+   * @param {unknown} value
+   * @returns {boolean}
+   */
+  setSceneIntentOverlay (sceneName, guid, dotKey, value) {
+    const ref = this._ensureSceneIntentRef(sceneName, guid)
+    if (!ref) return false
+    ref.overlay = { ...(ref.overlay ?? {}), [dotKey]: cloneSceneValue(value) }
+    this._notify()
+    return true
+  }
+
+  /**
+   * @param {string} sceneName
+   * @param {string} guid
+   * @param {string} dotKey
+   * @returns {boolean}
+   */
+  removeSceneIntentOverlay (sceneName, guid, dotKey) {
+    const ref = this._findSceneIntentRef(sceneName, guid)
+    if (!ref?.overlay || !Object.prototype.hasOwnProperty.call(ref.overlay, dotKey)) return false
+    const nextOverlay = { ...ref.overlay }
+    delete nextOverlay[dotKey]
+    if (Object.keys(nextOverlay).length > 0) {
+      ref.overlay = nextOverlay
+    } else {
+      delete ref.overlay
+    }
+    this._notify()
+    return true
   }
 
   /**
@@ -343,13 +438,7 @@ class ProjectGraph {
       case 'scenes': {
         const rawScenes = Array.isArray(data) ? /** @type {Array<Record<string, unknown>>} */ (data) : []
         this._data.scenes = rawScenes
-          .map(scene => ({
-            guid: String(scene.guid ?? ''),
-            name: String(scene.name ?? ''),
-            intents: Array.isArray(scene.intents)
-              ? scene.intents.map(i => String(/** @type {Record<string, unknown>} */ (i).guid ?? ''))
-              : [],
-          }))
+          .map(normalizeScene)
           .filter(s => s.name)
         if (this._data.activeSceneName && !this._data.scenes.some(s => s.name === this._data.activeSceneName)) {
           this._data.activeSceneName = this._data.scenes[0]?.name ?? null
@@ -462,13 +551,7 @@ class ProjectGraph {
 
     const rawScenes = Array.isArray(p.scenes) ? /** @type {Array<Record<string, unknown>>} */ (p.scenes) : []
     this._data.scenes = rawScenes
-      .map(scene => ({
-        guid: String(scene.guid ?? ''),
-        name: String(scene.name ?? ''),
-        intents: Array.isArray(scene.intents)
-          ? scene.intents.map(i => String(/** @type {Record<string, unknown>} */ (i).guid ?? ''))
-          : [],
-      }))
+      .map(normalizeScene)
       .filter(s => s.name)
 
     const hubActive = typeof p.activeSceneName === 'string' && p.activeSceneName ? p.activeSceneName : null
@@ -625,13 +708,12 @@ class ProjectGraph {
     const value = delta.value && typeof delta.value === 'object' && !Array.isArray(delta.value)
       ? /** @type {Record<string, unknown>} */ (delta.value)
       : {}
-    const scene = {
+    const scene = normalizeScene({
+      ...value,
       guid,
       name: String(value.name ?? this._data.scenes[idx]?.name ?? ''),
-      intents: Array.isArray(value.intents)
-        ? value.intents.map(i => String(/** @type {Record<string, unknown>} */ (i).guid ?? i))
-        : this._data.scenes[idx]?.intents ?? [],
-    }
+      intents: Array.isArray(value.intents) ? value.intents : this._data.scenes[idx]?.intents ?? [],
+    })
     if (idx >= 0) {
       this._data.scenes[idx] = scene
     } else if (scene.name) {
@@ -777,11 +859,92 @@ class ProjectGraph {
     return fixtures
   }
 
+  /**
+   * @param {string} sceneName
+   * @param {string} guid
+   * @returns {SceneIntentRef | null}
+   */
+  _findSceneIntentRef (sceneName, guid) {
+    const scene = this._data.scenes.find(s => s.name === sceneName)
+    return scene?.intents.find(ref => ref.guid === guid) ?? null
+  }
+
+  /**
+   * @param {string} sceneName
+   * @param {string} guid
+   * @returns {SceneIntentRef | null}
+   */
+  _ensureSceneIntentRef (sceneName, guid) {
+    const scene = this._data.scenes.find(s => s.name === sceneName)
+    if (!scene) return null
+    let ref = scene.intents.find(item => item.guid === guid)
+    if (!ref) {
+      ref = { guid }
+      scene.intents.push(ref)
+    }
+    return ref
+  }
+
   /** @param {string} prefix */
   _newGuid (prefix) {
     const cryptoApi = globalThis.crypto
     if (cryptoApi?.randomUUID) return `${prefix}-${cryptoApi.randomUUID()}`
     return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  }
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {SceneIntentRef}
+ */
+function normalizeSceneIntentRef (raw) {
+  if (typeof raw === 'string') return { guid: raw }
+  const record = raw && typeof raw === 'object' && !Array.isArray(raw)
+    ? /** @type {Record<string, unknown>} */ (raw)
+    : {}
+  const guid = String(record.guid ?? '')
+  const overlay = record.overlay && typeof record.overlay === 'object' && !Array.isArray(record.overlay)
+    ? cloneOverlay(/** @type {Record<string, unknown>} */ (record.overlay))
+    : undefined
+  return overlay ? { guid, overlay } : { guid }
+}
+
+/**
+ * @param {SceneIntentRef} ref
+ * @returns {SceneIntentRef}
+ */
+function cloneSceneIntentRef (ref) {
+  return ref.overlay ? { guid: ref.guid, overlay: cloneOverlay(ref.overlay) } : { guid: ref.guid }
+}
+
+/**
+ * @param {Record<string, unknown>} overlay
+ * @returns {Record<string, unknown>}
+ */
+function cloneOverlay (overlay) {
+  return Object.fromEntries(Object.entries(overlay).map(([key, value]) => [key, cloneSceneValue(value)]))
+}
+
+/**
+ * @param {unknown} value
+ * @returns {unknown}
+ */
+function cloneSceneValue (value) {
+  if (value === undefined) return undefined
+  return JSON.parse(JSON.stringify(value))
+}
+
+/**
+ * @param {Record<string, unknown>} scene
+ * @returns {{ guid: string, name: string, intents: SceneIntentRef[] }}
+ */
+function normalizeScene (scene) {
+  return {
+    guid: String(scene.guid ?? ''),
+    name: String(scene.name ?? ''),
+    intents: Array.isArray(scene.intents)
+      ? scene.intents.map(normalizeSceneIntentRef).filter(ref => ref.guid)
+      : [],
   }
 }
 

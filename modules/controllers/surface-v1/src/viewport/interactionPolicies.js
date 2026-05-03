@@ -36,8 +36,8 @@ export function getEditFixturesUnlocked () {
 function updatePositionOverlayIfActive (guid, wx, wz) {
   const activeScene = projectGraph.getActiveSceneName()
   if (!activeScene || !projectGraph.isSceneIntentOverlayed(activeScene, guid, 'position')) return false
-  const current = /** @type {number[] | undefined} */ (projectGraph.getEffectiveIntentProperty(guid, 'position'))
-  projectGraph.setSceneIntentOverlay(activeScene, guid, 'position', [wx, current?.[1] ?? 0, wz])
+  const updated = projectGraph.updateRuntimeIntentPosition(guid, wx, wz)
+  if (updated) queueIntentUpdate(updated)
   return true
 }
 
@@ -45,6 +45,9 @@ function updatePositionOverlayIfActive (guid, wx, wz) {
 function savePositionOverlayIfActive (guid) {
   const activeScene = projectGraph.getActiveSceneName()
   if (!activeScene || !projectGraph.isSceneIntentOverlayed(activeScene, guid, 'position')) return false
+  const position = projectGraph.getEffectiveIntentProperty(guid, 'position')
+  if (position !== undefined) projectGraph.setSceneIntentOverlay(activeScene, guid, 'position', position)
+  projectGraph.clearRuntimeIntent(guid)
   sendSaveProject('scenes', projectGraph.getScenesData())
   sendSceneActivate(activeScene)
   return true
@@ -67,9 +70,7 @@ export const performPolicy = {
     const updated = projectGraph.updateIntentPosition(guid, wx, wz)
     if (updated) queueIntentUpdate(updated)
   },
-  onIntentMoveEnd (guid) {
-    savePositionOverlayIfActive(guid)
-  },
+  onIntentMoveEnd (_guid) {},
   onFixtureMove (_id, _wx, _wz) {}
 }
 

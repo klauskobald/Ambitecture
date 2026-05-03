@@ -31,6 +31,7 @@ class ProjectGraph {
       zoneToRenderer: /** @type {Record<string, string[]>} */ ({}),
       zones: /** @type {unknown[]} */ ([]),
       intents: /** @type {Map<string, unknown>} */ (new Map()),
+      runtimeIntents: /** @type {Map<string, Record<string, unknown>>} */ (new Map()),
       scenes: /** @type {Array<{ guid?: string, name: string, intents: SceneIntentRef[] }>} */ ([]),
       actions: /** @type {Map<string, Record<string, unknown>>} */ (new Map()),
       inputs: /** @type {Map<string, Record<string, unknown>>} */ (new Map()),
@@ -153,6 +154,16 @@ class ProjectGraph {
    * @returns {Record<string, unknown> | null}
    */
   getEffectiveIntent (guid) {
+    const runtimeIntent = this._data.runtimeIntents.get(guid)
+    if (runtimeIntent) return runtimeIntent
+    return this._getSceneEffectiveIntent(guid)
+  }
+
+  /**
+   * @param {string} guid
+   * @returns {Record<string, unknown> | null}
+   */
+  _getSceneEffectiveIntent (guid) {
     const intent = /** @type {Record<string, unknown> | undefined} */ (this._data.intents.get(guid))
     if (!intent) return null
     const active = this._data.activeSceneName
@@ -386,6 +397,26 @@ class ProjectGraph {
   }
 
   /**
+   * @param {string} guid
+   * @param {number} wx
+   * @param {number} wz
+   * @returns {{ guid: string, patch: { position: [number, number, number] } } | null}
+   */
+  updateRuntimeIntentPosition (guid, wx, wz) {
+    const intent = this.getEffectiveIntent(guid)
+    if (!intent) return null
+    const pos = /** @type {number[] | undefined} */ (intent.position)
+    const position = /** @type {[number, number, number]} */ ([wx, pos?.[1] ?? 0, wz])
+    this._data.runtimeIntents.set(guid, cloneAndSetAtDotPath(intent, 'position', position))
+    return { guid, patch: { position } }
+  }
+
+  /** @param {string} guid */
+  clearRuntimeIntent (guid) {
+    this._data.runtimeIntents.delete(guid)
+  }
+
+  /**
    * @param {string} id
    * @param {number} wx
    * @param {number} wz
@@ -460,6 +491,7 @@ class ProjectGraph {
         break
       }
       case 'activeSceneName': {
+        this._data.runtimeIntents.clear()
         if (data === null) {
           this._data.activeSceneName = null
         } else if (typeof data === 'string' && data.length > 0) {
@@ -501,6 +533,7 @@ class ProjectGraph {
    * @param {string} rendererGuid
    */
   applyGraphInit (payload, rendererGuid) {
+    this._data.runtimeIntents.clear()
     this.applyConfig(payload, rendererGuid)
     const p = /** @type {Record<string, unknown> | null} */ (
       payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : null
@@ -566,7 +599,7 @@ class ProjectGraph {
       if (!entityType || !guid) continue
       switch (entityType) {
         case 'intent':
-          this._applyIntentDelta(guid, 'patch', update)
+          this._applyRuntimeIntentDelta(guid, update)
           break
         case 'fixture':
           this._applyFixtureDelta(guid, 'patch', update)
@@ -608,6 +641,7 @@ class ProjectGraph {
 
     const hubActive = typeof p.activeSceneName === 'string' && p.activeSceneName ? p.activeSceneName : null
     if (hubActive && this._data.scenes.some(s => s.name === hubActive)) {
+      if (this._data.activeSceneName !== hubActive) this._data.runtimeIntents.clear()
       this._data.activeSceneName = hubActive
     } else if (!this._data.activeSceneName && this._data.scenes.length > 0) {
       this._data.activeSceneName = this._data.scenes[0].name
@@ -683,6 +717,23 @@ class ProjectGraph {
       next = cloneAndDeleteAtDotPath(next, key)
     }
     this._data.intents.set(guid, next)
+  }
+
+  /**
+   * @param {string} guid
+   * @param {Record<string, unknown>} update
+   */
+  _applyRuntimeIntentDelta (guid, update) {
+    const current = this.getEffectiveIntent(guid) ?? { guid }
+    const value = update.value && typeof update.value === 'object' && !Array.isArray(update.value)
+      ? /** @type {Record<string, unknown>} */ (update.value)
+      : current
+    const patch = update.patch && typeof update.patch === 'object' && !Array.isArray(update.patch)
+      ? /** @type {Record<string, unknown>} */ (update.patch)
+      : {}
+    const remove = Array.isArray(update.remove) ? update.remove.map(String) : []
+    const next = applyDotPathPatch({ ...value, guid }, patch, remove)
+    this._data.runtimeIntents.set(guid, next)
   }
 
   /**
@@ -810,6 +861,7 @@ class ProjectGraph {
       ? /** @type {Record<string, unknown>} */ (delta.patch)
       : {}
     if (typeof patch.activeSceneName === 'string') {
+      if (this._data.activeSceneName !== patch.activeSceneName) this._data.runtimeIntents.clear()
       this._data.activeSceneName = patch.activeSceneName
     }
   }

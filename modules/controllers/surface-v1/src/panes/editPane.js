@@ -53,7 +53,7 @@ export class EditPane {
 
     this._actionBar = new ActionBar({
       onModify: () => this._onModifyClick(),
-      onCopy: () => {},
+      onCopy: () => { void this._onCopyClick() },
       onDelete: () => { void this._onDeleteClick() }
     })
     this._el.appendChild(this._actionBar.buildElement())
@@ -274,6 +274,88 @@ export class EditPane {
     const descriptors = resolveDescriptorsForClass('light')
     if (!descriptors) return
     this._drawer.open(descriptors, selectionState.getGuids())
+  }
+
+  async _onCopyClick () {
+    const activeScene = projectGraph.getActiveSceneName()
+    if (!activeScene) {
+      await modalWarn('Select or create a scene first.')
+      return
+    }
+    const sourceGuids = [...selectionState.getGuids()]
+    if (sourceGuids.length === 0) return
+
+    const cryptoApi = globalThis.crypto
+    /** @type {Array<{ srcGuid: string, newGuid: string, value: Record<string, unknown> }>} */
+    const created = []
+    let i = 0
+    for (const srcGuid of sourceGuids) {
+      const effective = projectGraph.getEffectiveIntent(srcGuid)
+      if (!effective) continue
+      /** @type {Record<string, unknown>} */
+      const raw = JSON.parse(JSON.stringify(effective))
+      delete raw.scheduled
+      const cls = String(raw.class ?? 'light')
+      const suffix = cryptoApi?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
+      const newGuid = `${cls}-${suffix}`
+      raw.guid = newGuid
+      const pos = /** @type {unknown} */ (raw.position)
+      if (Array.isArray(pos) && pos.length >= 3) {
+        const step = 0.25 * (i + 1)
+        raw.position = [Number(pos[0]) + step, Number(pos[1]), Number(pos[2]) + step]
+      }
+      i += 1
+
+      projectGraph.putIntentRecord(raw)
+      projectGraph.appendControllerIntentRef(newGuid)
+      projectGraph.addIntentRefToSceneIfMissing(activeScene, newGuid)
+      created.push({ srcGuid, newGuid, value: raw })
+    }
+
+    if (created.length === 0) {
+      await modalWarn('Nothing to copy.')
+      return
+    }
+
+    for (const { value, newGuid } of created) {
+      sendGraphCommand({
+        op: 'upsert',
+        entityType: 'intent',
+        guid: newGuid,
+        value,
+        persistence: 'runtimeAndDurable',
+      })
+    }
+
+    const controllerGuid = projectGraph.getControllerGuid()
+    if (controllerGuid) {
+      /** @type {Record<string, unknown>} */
+      const patch = { intents: projectGraph.getControllerIntentRefs() }
+      for (const { srcGuid, newGuid } of created) {
+        const enabled = !!projectGraph.getIntentConfig(srcGuid).performEnabled
+        projectGraph.setIntentConfig(newGuid, 'performEnabled', enabled)
+        projectGraph.patchControllerState(`interactionPolicies.performEnabled.${newGuid}`, enabled)
+        patch[`interactionPolicies.performEnabled.${newGuid}`] = enabled
+      }
+      sendGraphCommand({
+        op: 'patch',
+        entityType: 'controller',
+        guid: controllerGuid,
+        patch,
+        persistence: 'runtimeAndDurable',
+      })
+    }
+
+    sendSaveProject('scenes', projectGraph.getHubScenesWire())
+    if (activeScene === projectGraph.getActiveSceneName()) {
+      sendSceneActivate(activeScene)
+    }
+
+    selectionState.clearAll()
+    for (const { newGuid } of created) {
+      selectionState.toggleGuid(newGuid)
+    }
+    this._drawer.close()
   }
 
   async _onDeleteClick () {

@@ -291,6 +291,21 @@ class ProjectGraph {
   }
 
   /**
+   * Append a bare `{ guid }` scene ref if not already present (does not touch other scenes).
+   * @param {string} sceneName
+   * @param {string} guid
+   * @returns {boolean} true if a ref was added
+   */
+  addIntentRefToSceneIfMissing (sceneName, guid) {
+    const scene = this._data.scenes.find(s => s.name === sceneName)
+    if (!scene) return false
+    if (scene.intents.some(ref => ref.guid === guid)) return false
+    scene.intents.push({ guid })
+    this._notify()
+    return true
+  }
+
+  /**
    * Scenes array formatted for hub `project` save (ensures scene guids, clones overlays).
    * @returns {Array<{ guid: string, name: string, intents: SceneIntentRef[] }>}
    */

@@ -55,6 +55,6 @@ export class ActionBar {
     const show = selectModeActive && size > 0
     this._el.style.display = show ? '' : 'none'
     if (this._deleteBtn) this._deleteBtn.disabled = size === 0
-    if (this._copyBtn) this._copyBtn.disabled = true
+    if (this._copyBtn) this._copyBtn.disabled = size === 0
   }
 }

@@ -17,6 +17,7 @@ systemCapabilities:
         name: Layer
         type: scalar
         range: [1, 200]
+        step: 1
         defaultValue: 100
         noMultiple: true
       - dotKey: params.alpha
@@ -24,6 +25,7 @@ systemCapabilities:
         allowOverlay: true
         type: scalar
         range: [0, 1]
+        step: 0.01
         defaultValue: 1
         isMandatory: true
         delta:
@@ -41,6 +43,8 @@ systemCapabilities:
         allowOverlay: true
         type: scalar
         range: [0, 20]
+        step: 0.1
+        stepFunction: quadratic
         defaultValue: 5
         isMandatory: true
         delta:
@@ -82,6 +86,7 @@ systemCapabilities:
         allowOverlay: true
         type: scalar
         range: [0, 1]
+        step: 0.01
         defaultValue: 0
         delta:
           value: { fn: ADD, range: [-1, 1] }
@@ -90,6 +95,7 @@ systemCapabilities:
         allowOverlay: true
         type: scalar
         range: [0, 1]
+        step: 0.01
         defaultValue: 0
         delta:
           value: { fn: ADD, range: [-1, 1] }

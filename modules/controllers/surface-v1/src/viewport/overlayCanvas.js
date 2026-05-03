@@ -47,9 +47,11 @@ export class OverlayCanvas {
     this._draggedFixtures = new Map()
     /** @type {((guid: string) => void) | null} */
     this._doubleTapIntentCallback = null
-    /** @type {{ pointerId: number, downX: number, downY: number, intentGuid: string | null } | null} */
+    /** @type {((detail: { clientX: number, clientY: number }) => void) | null} */
+    this._doubleTapEmptyCallback = null
+    /** @type {{ pointerId: number, downX: number, downY: number, downClientX: number, downClientY: number, intentGuid: string | null } | null} */
     this._tapTracker = null
-    /** @type {{ x: number, y: number, t: number, intentGuid: string | null } | null} */
+    /** @type {{ x: number, y: number, t: number, clientX: number, clientY: number, intentGuid: string | null } | null} */
     this._lastTap = null
 
     this._bindPointerEvents()
@@ -83,6 +85,30 @@ export class OverlayCanvas {
     this._tapTracker = null
   }
 
+  /**
+   * Second tap on empty canvas (no intent under first tap), same time/distance window as intent double-tap.
+   * @param {((detail: { clientX: number, clientY: number }) => void) | null} fn
+   */
+  setDoubleTapEmptyCallback (fn) {
+    this._doubleTapEmptyCallback = fn
+    this._lastTap = null
+    this._tapTracker = null
+  }
+
+  /**
+   * @param {number} clientX
+   * @param {number} clientY
+   * @returns {{ wx: number, wy: number, wz: number } | null}
+   */
+  worldFromClient (clientX, clientY) {
+    const spatial = projectGraph.getSpatial()
+    const simRect = this._viewport.getSimCanvasRect()
+    if (!spatial || !simRect) return null
+    const m = clientToWorldViaSimCanvas(clientX, clientY, spatial, simRect)
+    if (!m) return null
+    return { wx: m.wx, wy: spatial.y1, wz: m.wz }
+  }
+
   resize () {
     const rect = this._stack.getBoundingClientRect()
     const dpr = window.devicePixelRatio || 1
@@ -106,10 +132,10 @@ export class OverlayCanvas {
   _onPointerDown (ev) {
     if (ev.button !== undefined && ev.button !== 0) return
     const { x, y } = this._canvasPoint(ev)
+    const spatial = projectGraph.getSpatial()
 
     // Selection mode: route taps to the manager, block all drag interaction
     if (this._selectionManager) {
-      const spatial = projectGraph.getSpatial()
       const simRect = this._viewport.getSimCanvasRect()
       if (spatial && simRect) {
         this._selectionManager.handleTap(x, y, spatial, simRect, this._canvas.getBoundingClientRect())
@@ -117,25 +143,41 @@ export class OverlayCanvas {
       return
     }
 
-    // Double-tap detection: fire callback if second tap lands close to first within 300ms
-    if (this._doubleTapIntentCallback && this._lastTap?.intentGuid) {
+    // Double-tap detection: second tap close to first within 300ms (intent edit or empty-canvas create)
+    if (this._lastTap) {
       const elapsed = performance.now() - this._lastTap.t
       const dist = Math.hypot(x - this._lastTap.x, y - this._lastTap.y)
       if (elapsed < 300 && dist < 40) {
-        const guid = this._lastTap.intentGuid
+        if (this._lastTap.intentGuid && this._doubleTapIntentCallback) {
+          const guid = this._lastTap.intentGuid
+          this._lastTap = null
+          this._doubleTapIntentCallback(guid)
+          return
+        }
+        const secondOnIntent = spatial ? this._findIntentAt(x, y, spatial) : null
+        if (!this._lastTap.intentGuid && !secondOnIntent && this._doubleTapEmptyCallback) {
+          const { clientX, clientY } = this._lastTap
+          this._lastTap = null
+          this._doubleTapEmptyCallback({ clientX, clientY })
+          return
+        }
         this._lastTap = null
-        this._doubleTapIntentCallback(guid)
-        return
+      } else {
+        this._lastTap = null
       }
-      this._lastTap = null
     }
-
-    const spatial = projectGraph.getSpatial()
 
     // Track this pointer for tap-vs-drag detection
     if (spatial) {
       const intentGuid = this._findIntentAt(x, y, spatial)
-      this._tapTracker = { pointerId: ev.pointerId, downX: x, downY: y, intentGuid }
+      this._tapTracker = {
+        pointerId: ev.pointerId,
+        downX: x,
+        downY: y,
+        downClientX: ev.clientX,
+        downClientY: ev.clientY,
+        intentGuid
+      }
     }
 
     if (spatial) {
@@ -191,7 +233,14 @@ export class OverlayCanvas {
       const { x, y } = this._canvasPoint(ev)
       const dist = Math.hypot(x - this._tapTracker.downX, y - this._tapTracker.downY)
       this._lastTap = dist < 10
-        ? { x: this._tapTracker.downX, y: this._tapTracker.downY, t: performance.now(), intentGuid: this._tapTracker.intentGuid }
+        ? {
+            x: this._tapTracker.downX,
+            y: this._tapTracker.downY,
+            t: performance.now(),
+            clientX: this._tapTracker.downClientX,
+            clientY: this._tapTracker.downClientY,
+            intentGuid: this._tapTracker.intentGuid
+          }
         : null
       this._tapTracker = null
     }

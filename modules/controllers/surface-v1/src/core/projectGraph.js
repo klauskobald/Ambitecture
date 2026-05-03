@@ -249,6 +249,17 @@ class ProjectGraph {
    * @param {string} sceneName
    * @param {string} guid
    */
+  /**
+   * Insert or replace intent definition in the local map (optimistic UI before hub delta).
+   * @param {Record<string, unknown>} record must include string `guid`
+   */
+  putIntentRecord (record) {
+    const guid = String(record.guid ?? '')
+    if (!guid) return
+    this._data.intents.set(guid, record)
+    this._notify()
+  }
+
   toggleSceneIntent (sceneName, guid) {
     const scene = this._data.scenes.find(s => s.name === sceneName)
     if (!scene) return

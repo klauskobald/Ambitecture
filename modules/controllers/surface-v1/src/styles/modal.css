@@ -113,3 +113,17 @@
 .btn--primary:hover {
   filter: brightness(1.15);
 }
+
+/* ── Intent type picker ───────────────────────────────────── */
+
+.modal-choice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.modal-choice-list__btn {
+  width: 100%;
+  justify-content: center;
+  text-align: center;
+}

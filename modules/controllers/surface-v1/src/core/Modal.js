@@ -11,6 +11,10 @@
  *   Modal.prompt('New scene', [
  *     { label: 'Name', key: 'name', placeholder: 'untitled' }
  *   ]).then(values => { ... })  // values is null if cancelled
+ *   pickChoice('Pick one', [
+ *     { value: 'a', label: 'Option A' },
+ *     { value: 'b', label: 'Option B', disabled: true, title: 'Soon' }
+ *   ]).then(v => { ... })  // v is chosen value string, or null if cancelled
  */
 
 /** @type {HTMLElement | null} */
@@ -192,6 +196,60 @@ function _buildAlert (text) {
   return card
 }
 
+/**
+ * Stacked action buttons + cancel — domain-agnostic; caller supplies labels and `value` per option.
+ * @param {string} message
+ * @param {Array<{ value: string, label: string, disabled?: boolean, title?: string }>} options
+ * @param {{ cancel?: string }} [opts]
+ * @returns {HTMLElement}
+ */
+function _buildChoiceListModal (message, options, opts) {
+  const card = document.createElement('div')
+  card.className = 'modal'
+  card.addEventListener('click', (e) => e.stopPropagation())
+
+  if (message) {
+    const p = document.createElement('p')
+    p.className = 'modal-text'
+    p.textContent = message
+    card.appendChild(p)
+  }
+
+  const list = document.createElement('div')
+  list.className = 'modal-choice-list'
+  for (const c of options) {
+    const btn = document.createElement('button')
+    btn.type = 'button'
+    btn.className = 'btn modal-choice-list__btn'
+    btn.textContent = c.label
+    btn.disabled = !!c.disabled
+    if (c.title) btn.title = c.title
+    btn.addEventListener('click', () => {
+      if (btn.disabled) return
+      _dismiss(c.value)
+    })
+    list.appendChild(btn)
+  }
+  card.appendChild(list)
+
+  const actions = document.createElement('div')
+  actions.className = 'modal-actions'
+  const cancelBtn = document.createElement('button')
+  cancelBtn.className = 'btn'
+  cancelBtn.textContent = opts?.cancel ?? 'Cancel'
+  cancelBtn.addEventListener('click', () => _dismiss(null))
+  actions.appendChild(cancelBtn)
+  card.appendChild(actions)
+
+  requestAnimationFrame(() => {
+    const el = list.querySelector('button:not([disabled])')
+    if (el instanceof HTMLElement) el.focus()
+    else cancelBtn.focus()
+  })
+
+  return card
+}
+
 // ── Public API ─────────────────────────────────────────────────────────────────
 
 /**
@@ -256,6 +314,27 @@ export function prompt (text, fields, buttons, callback) {
       callback?.(/** @type {Record<string, string> | null} */ (val))
     }
     _overlay.appendChild(_buildPrompt(text, fields, buttons))
+    _overlay.classList.add('is-open')
+  })
+}
+
+/**
+ * Modal with a short message, a vertical list of choices, and Cancel.
+ * Returns the chosen option’s `value`, or `null` if the user cancels (Cancel or overlay click).
+ * @param {string} message
+ * @param {Array<{ value: string, label: string, disabled?: boolean, title?: string }>} options
+ * @param {{ cancel?: string, callback?: (choice: string | null) => void }} [opts]
+ * @returns {Promise<string | null>}
+ */
+export function pickChoice (message, options, opts) {
+  _dismiss(null)
+  _ensureOverlay()
+  return new Promise((resolve) => {
+    _resolve = (val) => {
+      resolve(/** @type {string | null} */ (val))
+      opts?.callback?.(/** @type {string | null} */ (val))
+    }
+    _overlay.appendChild(_buildChoiceListModal(message, options, opts))
     _overlay.classList.add('is-open')
   })
 }

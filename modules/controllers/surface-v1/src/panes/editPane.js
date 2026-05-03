@@ -1,7 +1,7 @@
 import { editPolicy, noopPolicy, getEditFixturesUnlocked, setEditFixturesUnlocked } from '../viewport/interactionPolicies.js'
 import { intentGuid } from '../core/stores.js'
 import { projectGraph } from '../core/projectGraph.js'
-import { queueIntentUpdate, sendGraphCommand } from '../core/outboundQueue.js'
+import { sendGraphCommand, sendSaveProject, sendSceneActivate } from '../core/outboundQueue.js'
 import { SelectionManager } from '../viewport/selectionManager.js'
 import { ColorPicker } from '../ui/colorPicker.js'
 import { hslPalette } from '../ui/palettes/hslPalette.js'
@@ -10,6 +10,7 @@ import { selectionState } from '../edit/selectionState.js'
 import { ActionBar } from '../edit/ActionBar.js'
 import { PropertiesDrawer } from '../edit/PropertiesDrawer.js'
 import { resolveDescriptorsForClass } from '../core/systemCapabilities.js'
+import { warn as modalWarn, pickChoice } from '../core/Modal.js'
 
 export class EditPane {
   /**
@@ -79,6 +80,9 @@ export class EditPane {
     this._refreshActionBar()
 
     this._overlay.setDoubleTapIntentCallback(guid => this._handleDoubleTapIntent(guid))
+    this._overlay.setDoubleTapEmptyCallback(detail => {
+      void this._onDoubleTapEmpty(detail)
+    })
   }
 
   deactivate () {
@@ -86,6 +90,7 @@ export class EditPane {
     this._colorPicker.close()
     this._el.hidden = true
     this._overlay.setDoubleTapIntentCallback(null)
+    this._overlay.setDoubleTapEmptyCallback(null)
 
     if (this._selectionUnsub) {
       this._selectionUnsub()
@@ -273,6 +278,62 @@ export class EditPane {
 
   /** @param {string} guid */
   _handleDoubleTapIntent (guid) {
+    selectionState.clearAll()
+    selectionState.toggleGuid(guid)
+    this._onModifyClick()
+  }
+
+  /**
+   * @param {{ clientX: number, clientY: number }} detail
+   */
+  async _onDoubleTapEmpty (detail) {
+    const activeScene = projectGraph.getActiveSceneName()
+    if (!activeScene) {
+      await modalWarn('Select or create a scene before adding an intent.')
+      return
+    }
+    const world = this._overlay.worldFromClient(detail.clientX, detail.clientY)
+    if (!world) {
+      await modalWarn('Tap inside the simulator view to place an intent.')
+      return
+    }
+    const choice = await pickChoice('New intent', [
+      { value: 'light', label: 'Light' },
+      {
+        value: 'master',
+        label: 'Master',
+        disabled: true,
+        title: 'Coming soon'
+      }
+    ])
+    if (choice !== 'light') return
+
+    const cryptoApi = globalThis.crypto
+    const suffix = cryptoApi?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const guid = `light-${suffix}`
+    /** @type {Record<string, unknown>} */
+    const value = {
+      guid,
+      class: 'light',
+      layer: 100,
+      position: [world.wx, world.wy, world.wz],
+      radius: 1,
+      params: {}
+    }
+
+    projectGraph.putIntentRecord(value)
+    projectGraph.toggleSceneIntent(activeScene, guid)
+
+    sendGraphCommand({
+      op: 'upsert',
+      entityType: 'intent',
+      guid,
+      value,
+      persistence: 'runtimeAndDurable'
+    })
+    sendSaveProject('scenes', projectGraph.getScenesData())
+    sendSceneActivate(activeScene)
+
     selectionState.clearAll()
     selectionState.toggleGuid(guid)
     this._onModifyClick()

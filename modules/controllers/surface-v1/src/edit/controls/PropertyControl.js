@@ -3,6 +3,12 @@ import { queueIntentUpdate, sendSaveProject, sendSceneActivate } from '../../cor
 import { warn as modalWarn } from '../../core/Modal.js'
 import { resolveMultiSelectState, resolveEnableState } from './controlHelpers.js'
 
+/** @param {unknown} value @returns {unknown} */
+function cloneDefaultValue (value) {
+  if (value === null || typeof value !== 'object') return value
+  return JSON.parse(JSON.stringify(value))
+}
+
 export class PropertyControl {
   /**
    * @param {Record<string, unknown>} descriptor
@@ -243,7 +249,7 @@ export class PropertyControl {
       }
     } else {
       for (const guid of this._currentGuids) {
-        this._updateProperty(guid, dotKey, defaultValue)
+        this._updateProperty(guid, dotKey, cloneDefaultValue(defaultValue))
       }
     }
 

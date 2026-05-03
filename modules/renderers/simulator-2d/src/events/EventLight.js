@@ -21,3 +21,5 @@ class EventLight extends EventBase {
         CanvasDraw.drawLabel(ctx, cx, cy, half, label);
     }
 }
+
+EventBase.registerClass('light', EventLight);

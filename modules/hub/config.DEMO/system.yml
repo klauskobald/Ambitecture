@@ -7,6 +7,18 @@ systemCapabilities:
     - smoothstep
   intentProperties:
     # these are the properties that are available for all intents and show up in the controllers.
+    master:
+      - dotKey: name
+        name: Name
+        type: string
+        noMultiple: true
+        isMandatory: true
+      - dotKey: params.brightness
+        name: Brightness
+        type: scalar
+        range: [0, 2]
+        step: 0.005
+        defaultValue: 1
     light:
       - dotKey: name
         name: Name

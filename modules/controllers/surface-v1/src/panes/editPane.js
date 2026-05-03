@@ -21,6 +21,37 @@ import { PropertiesDrawer } from '../edit/PropertiesDrawer.js'
 import { resolveDescriptorsForClass } from '../core/systemCapabilities.js'
 import { warn as modalWarn, pickChoice } from '../core/Modal.js'
 
+/** @param {unknown} value @returns {unknown} */
+function cloneDefaultValue (value) {
+  if (value === null || typeof value !== 'object') return value
+  return JSON.parse(JSON.stringify(value))
+}
+
+/**
+ * @param {Record<string, unknown>} target
+ * @param {string} dotKey
+ * @param {unknown} value
+ */
+function setAtDotPath (target, dotKey, value) {
+  const parts = dotKey.split('.').filter(Boolean)
+  if (parts.length === 0) return
+  let cursor = target
+  for (let i = 0; i < parts.length - 1; i += 1) {
+    const key = parts[i]
+    const next = cursor[key]
+    if (next === null || typeof next !== 'object' || Array.isArray(next)) {
+      cursor[key] = {}
+    }
+    cursor = /** @type {Record<string, unknown>} */ (cursor[key])
+  }
+  cursor[parts[parts.length - 1]] = cloneDefaultValue(value)
+}
+
+/** @param {string} intentClass @returns {string} */
+function fallbackIntentName (intentClass) {
+  return `${intentClass.slice(0, 1).toUpperCase()}${intentClass.slice(1)}`
+}
+
 export class EditPane {
   /**
    * @param {import('../viewport/overlayCanvas.js').OverlayCanvas} overlay
@@ -306,9 +337,18 @@ export class EditPane {
     })
   }
 
-  _onModifyClick () {
-    const descriptors = resolveDescriptorsForClass('light')
-    if (!descriptors) return
+  async _onModifyClick () {
+    const selectedGuids = selectionState.getGuids()
+    const intentClass = this._selectedIntentClass(selectedGuids)
+    if (!intentClass) {
+      await modalWarn('Select intents of one class before modifying.')
+      return
+    }
+    const descriptors = resolveDescriptorsForClass(intentClass)
+    if (!descriptors) {
+      await modalWarn(`No properties configured for intent class "${intentClass}".`)
+      return
+    }
     this._drawer.open(descriptors, selectionState.getGuids())
   }
 
@@ -477,7 +517,7 @@ export class EditPane {
   _handleDoubleTapIntent (guid) {
     selectionState.clearAll()
     selectionState.toggleGuid(guid)
-    this._onModifyClick()
+    void this._onModifyClick()
   }
 
   /**
@@ -496,29 +536,22 @@ export class EditPane {
     }
     const choice = await pickChoice('New intent', [
       { value: 'light', label: 'Light' },
-      {
-        value: 'master',
-        label: 'Master',
-        disabled: true,
-        title: 'Coming soon'
-      }
+      { value: 'master', label: 'Master' }
     ])
-    if (choice !== 'light') return
+    if (!choice) return
+
+    const descriptors = resolveDescriptorsForClass(choice)
+    if (!descriptors) {
+      await modalWarn(`No properties configured for intent class "${choice}".`)
+      return
+    }
 
     const cryptoApi = globalThis.crypto
     const suffix =
       cryptoApi?.randomUUID?.() ??
       `${Date.now()}-${Math.random().toString(36).slice(2)}`
-    const guid = `light-${suffix}`
-    /** @type {Record<string, unknown>} */
-    const value = {
-      guid,
-      class: 'light',
-      layer: 100,
-      position: [world.wx, world.wy, world.wz],
-      radius: 1,
-      params: {}
-    }
+    const guid = `${choice}-${suffix}`
+    const value = this._createIntentRecord(choice, guid, descriptors, world)
 
     projectGraph.putIntentRecord(value)
     projectGraph.appendControllerIntentRef(guid)
@@ -546,6 +579,50 @@ export class EditPane {
 
     selectionState.clearAll()
     selectionState.toggleGuid(guid)
-    this._onModifyClick()
+    void this._onModifyClick()
+  }
+
+  /**
+   * @param {Set<string>} guids
+   * @returns {string | null}
+   */
+  _selectedIntentClass (guids) {
+    const classes = new Set()
+    for (const guid of guids) {
+      const intent = projectGraph.getEffectiveIntent(guid) ?? projectGraph.getIntents().get(guid)
+      if (!intent) continue
+      const cls = /** @type {Record<string, unknown>} */ (intent).class
+      classes.add(typeof cls === 'string' && cls.length > 0 ? cls : 'light')
+    }
+    if (classes.size !== 1) return null
+    return [...classes][0]
+  }
+
+  /**
+   * @param {string} intentClass
+   * @param {string} guid
+   * @param {unknown[]} descriptors
+   * @param {{ wx: number, wy: number, wz: number }} world
+   * @returns {Record<string, unknown>}
+   */
+  _createIntentRecord (intentClass, guid, descriptors, world) {
+    /** @type {Record<string, unknown>} */
+    const value = {
+      guid,
+      class: intentClass,
+      position: [world.wx, world.wy, world.wz],
+      params: {}
+    }
+
+    for (const descriptor of descriptors) {
+      const d = /** @type {Record<string, unknown>} */ (descriptor)
+      const dotKey = typeof d.dotKey === 'string' ? d.dotKey : ''
+      if (!dotKey || !d.isMandatory || d.defaultValue === undefined) continue
+      setAtDotPath(value, dotKey, d.defaultValue)
+    }
+
+    if (value.name === undefined) value.name = fallbackIntentName(intentClass)
+    if (intentClass === 'master' && value.radius === undefined) value.radius = 0
+    return value
   }
 }

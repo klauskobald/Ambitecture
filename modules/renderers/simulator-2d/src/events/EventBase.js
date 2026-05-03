@@ -1,4 +1,14 @@
 class EventBase {
+    static _classes = new Map();
+
+    static registerClass(intentType, eventClass) {
+        this._classes.set(intentType, eventClass);
+    }
+
+    static getClass(intentType) {
+        return this._classes.get(intentType);
+    }
+
     constructor(intent, drawConfig) {
         this._layer = intent.layer ?? 0;
         this._name = typeof intent.name === 'string' ? intent.name : '';

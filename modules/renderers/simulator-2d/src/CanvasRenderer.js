@@ -21,7 +21,6 @@ class CanvasRenderer {
 
         this._events = new Map();
         this._eventDrawConfig = bootConfig.EVENT_DRAW;
-        this._eventClasses = { light: EventLight, master: EventMaster };
     }
 
     /**
@@ -83,7 +82,7 @@ class CanvasRenderer {
     setIntentLayers(intentsByLayer) {
         this._events = new Map();
         for (const [guid, intent] of intentsByLayer) {
-            const EventClass = this._eventClasses[intent.intentType];
+            const EventClass = EventBase.getClass(intent.intentType);
             if (!EventClass) continue;
             this._events.set(guid, new EventClass(intent, this._eventDrawConfig));
         }

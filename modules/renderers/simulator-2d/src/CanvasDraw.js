@@ -9,6 +9,19 @@ const CanvasDraw = {
         ctx.stroke();
     },
 
+    drawTriangle(ctx, cx, cy, radius, fillColor, strokeColor) {
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - radius);
+        ctx.lineTo(cx + radius, cy + radius);
+        ctx.lineTo(cx - radius, cy + radius);
+        ctx.closePath();
+        ctx.fillStyle = fillColor;
+        ctx.fill();
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    },
+
     drawLabel(ctx, cx, cy, radius, text) {
         ctx.fillStyle = '#666';
         ctx.font = '10px monospace';

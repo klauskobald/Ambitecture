@@ -3,6 +3,7 @@ import { hslPalette } from '../../ui/palettes/hslPalette.js'
 import { projectGraph } from '../../core/projectGraph.js'
 import { toHSL } from '../../core/color.js'
 import { applyDelta } from './controlHelpers.js'
+import { ScalarDragSlider } from '../components/ScalarDragSlider.js'
 
 const HSL_CHANNEL_DEFAULTS = {
   h: { fn: 'ADD', range: /** @type {[number, number]} */ ([-10, 10]),   label: 'ΔH', step: '1',    wrap: true },
@@ -20,8 +21,10 @@ export class ColorControl extends PropertyControl {
     // Delta sliders are only built when selectionSize > 1
     /** @type {HTMLElement | null} */
     this._relativeArea = null
-    /** @type {HTMLInputElement[]} */
+    /** @type {{ slider: ScalarDragSlider, channel: string }[]} */
     this._relSliders = []
+    /** last _applyState had HSL delta row visible — only then reset thumbs to no-op when entering */
+    this._wasHslDeltaMode = false
   }
 
   /** @param {HTMLElement} area */
@@ -52,6 +55,9 @@ export class ColorControl extends PropertyControl {
   /** @param {HTMLElement} container */
   _buildDeltaSliders (container) {
     const configs = this._getChannelConfigs()
+    const bubbleRaw = this._descriptor.bubbleCharWidth
+    const bubbleCharWidth = Number(bubbleRaw) > 0 ? Number(bubbleRaw) : undefined
+
     for (const [channelKey, cfg] of Object.entries(configs)) {
       const row = document.createElement('div')
       row.className = 'prop-relative-row'
@@ -59,25 +65,27 @@ export class ColorControl extends PropertyControl {
       const lbl = document.createElement('span')
       lbl.className = 'prop-relative-label'
       lbl.textContent = cfg.label
-
-      const noOpValue = cfg.fn === 'MULTIPLY' ? '1' : '0'
-      const slider = document.createElement('input')
-      slider.type = 'range'
-      slider.className = 'prop-slider prop-slider--relative'
-      slider.min = String(cfg.range[0])
-      slider.max = String(cfg.range[1])
-      slider.step = cfg.step
-      slider.value = noOpValue
-      slider.dataset.channel = channelKey
-      slider.dataset.fn = cfg.fn
-      slider.dataset.wrap = cfg.wrap ? 'true' : 'false'
-      slider.addEventListener('input', () => this._handleRelativeSlider(slider))
-      slider.addEventListener('change', () => this._saveProject())
-
       row.appendChild(lbl)
-      row.appendChild(slider)
+
+      const [dMin, dMax] = cfg.range
+      const noOpValue = cfg.fn === 'MULTIPLY' ? 1 : 0
+      const stepParsed = Number(cfg.step)
+      const stepOpt = Number.isFinite(stepParsed) && stepParsed > 0 ? stepParsed : undefined
+
+      const slider = new ScalarDragSlider({
+        min: dMin,
+        max: dMax,
+        step: stepOpt,
+        value: noOpValue,
+        relativeTrack: true,
+        bubbleCharWidth,
+        onInput: delta => this._applyHslDelta(channelKey, cfg.fn, cfg.wrap, delta),
+        onCommit: () => this._saveProject()
+      })
+      slider.mount(row)
+
       container.appendChild(row)
-      this._relSliders.push(slider)
+      this._relSliders.push({ slider, channel: channelKey })
     }
   }
 
@@ -94,20 +102,26 @@ export class ColorControl extends PropertyControl {
       }
     }
 
-    if (isDelta) {
-      for (const slider of this._relSliders) {
-        slider.value = slider.dataset.fn === 'MULTIPLY' ? '1' : '0'
+    if (isDelta && !this._wasHslDeltaMode) {
+      const configs = this._getChannelConfigs()
+      for (const entry of this._relSliders) {
+        const cfg = configs[entry.channel]
+        const noOp = cfg.fn === 'MULTIPLY' ? 1 : 0
+        entry.slider.setDomainValue(noOp)
       }
     }
+
+    this._wasHslDeltaMode = isDelta
   }
 
-  /** @param {HTMLInputElement} slider */
-  _handleRelativeSlider (slider) {
+  /**
+   * @param {string} channel
+   * @param {string} fn
+   * @param {boolean} wrap
+   * @param {number} delta
+   */
+  _applyHslDelta (channel, fn, wrap, delta) {
     const dotKey = /** @type {string} */ (this._descriptor.dotKey)
-    const channel = /** @type {string} */ (slider.dataset.channel)
-    const fn = slider.dataset.fn ?? 'ADD'
-    const wrap = slider.dataset.wrap === 'true'
-    const delta = parseFloat(slider.value)
     const absRange = this._getAbsoluteRange()
 
     for (const guid of this._currentGuids) {
@@ -171,6 +185,10 @@ export class ColorControl extends PropertyControl {
   }
 
   destroy () {
+    for (const entry of this._relSliders) {
+      entry.slider.destroy()
+    }
+    this._relSliders = []
     this._paletteInstance?.destroy()
     this._paletteInstance = null
   }

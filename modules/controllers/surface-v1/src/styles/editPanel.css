@@ -253,6 +253,11 @@
   gap: 0.5rem;
 }
 
+.prop-relative-row .prop-slider-wrapper {
+  flex: 1;
+  min-width: 0;
+}
+
 .prop-relative-label {
   font-size: 0.75rem;
   color: var(--color-text-muted);

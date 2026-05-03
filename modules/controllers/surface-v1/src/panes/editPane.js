@@ -322,6 +322,7 @@ export class EditPane {
     }
 
     projectGraph.putIntentRecord(value)
+    projectGraph.appendControllerIntentRef(guid)
     projectGraph.toggleSceneIntent(activeScene, guid)
 
     sendGraphCommand({
@@ -331,6 +332,16 @@ export class EditPane {
       value,
       persistence: 'runtimeAndDurable'
     })
+    const controllerGuid = projectGraph.getControllerGuid()
+    if (controllerGuid) {
+      sendGraphCommand({
+        op: 'patch',
+        entityType: 'controller',
+        guid: controllerGuid,
+        patch: { intents: projectGraph.getControllerIntentRefs() },
+        persistence: 'runtimeAndDurable'
+      })
+    }
     sendSaveProject('scenes', projectGraph.getScenesData())
     sendSceneActivate(activeScene)
 

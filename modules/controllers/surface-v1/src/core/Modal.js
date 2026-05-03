@@ -10,7 +10,7 @@
  *   Modal.confirm('Delete this?', { yes: 'Delete', no: 'Cancel' }).then(ok => { ... })
  *   Modal.prompt('New scene', [
  *     { label: 'Name', key: 'name', placeholder: 'untitled' }
- *   ]).then(values => { ... })  // values is null if cancelled
+ *   ]).then(values => { ... })  // values is null if cancelled; string fields are trimmed
  *   pickChoice('Pick one', [
  *     { value: 'a', label: 'Option A' },
  *     { value: 'b', label: 'Option B', disabled: true, title: 'Soon' }
@@ -119,7 +119,7 @@ function _submit (inputs, fields) {
   /** @type {Record<string, string>} */
   const values = {}
   for (let i = 0; i < fields.length; i++) {
-    values[fields[i].key] = inputs[i]?.value ?? ''
+    values[fields[i].key] = (inputs[i]?.value ?? '').trim()
   }
   _dismiss(values)
 }
@@ -299,6 +299,7 @@ export function confirm (text, buttons, callback) {
 }
 
 /**
+ * Each field’s value is returned with {@link String.prototype.trim} applied (whitespace-only becomes `""`).
  * @param {string} text
  * @param {Array<{ label: string, key: string, type?: string, placeholder?: string, value?: string }>} fields
  * @param {{ submit?: string, cancel?: string }} [buttons]

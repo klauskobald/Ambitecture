@@ -32,7 +32,7 @@ export class ModalControl extends PropertyControl {
 
     const result = await Modal.prompt(
       `Edit ${fieldName}`,
-      [{ label: fieldName, key: 'value', placeholder: current }]
+      [{ label: fieldName, key: 'value', value: current }]
     )
     if (result === null) return
 
@@ -41,5 +41,6 @@ export class ModalControl extends PropertyControl {
       this._updateProperty(guid, dotKey, newValue)
     }
     this._saveProject()
+    this.refresh(this._currentGuids)
   }
 }

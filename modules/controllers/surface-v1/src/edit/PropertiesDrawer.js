@@ -1,5 +1,7 @@
 import { PropertyPanel } from './PropertyPanel.js'
 import { selectionState } from './selectionState.js'
+import { projectGraph } from '../core/projectGraph.js'
+import { intentName } from '../core/stores.js'
 
 export class PropertiesDrawer {
   constructor () {
@@ -19,12 +21,19 @@ export class PropertiesDrawer {
     this._lastDescriptors = []
     /** @type {(() => void) | null} */
     this._selectionUnsub = null
+    /** @type {(() => void) | null} */
+    this._graphUnsub = null
     /** @type {number | null} */
     this._outsideCloserRaf = null
     this._onOutsidePointerDown = /** @param {PointerEvent} e */ (e) => {
       if (!this.isOpen() || !this._el) return
       const t = e.target
       if (t instanceof Node && this._el.contains(t)) return
+      // Capture phase runs before modal buttons receive the event; treat modal UI as inert for closing.
+      if (t instanceof Element) {
+        const modal = t.closest('.modal-overlay')
+        if (modal?.classList.contains('is-open')) return
+      }
       this.close()
     }
   }
@@ -85,6 +94,9 @@ export class PropertiesDrawer {
     if (!this._selectionUnsub) {
       this._selectionUnsub = selectionState.subscribe(() => this._onSelectionChange())
     }
+    if (!this._graphUnsub) {
+      this._graphUnsub = projectGraph.subscribe(() => this._onProjectGraphChange())
+    }
   }
 
   close () {
@@ -106,6 +118,10 @@ export class PropertiesDrawer {
       this._selectionUnsub()
       this._selectionUnsub = null
     }
+    if (this._graphUnsub) {
+      this._graphUnsub()
+      this._graphUnsub = null
+    }
   }
 
   /** @returns {boolean} */
@@ -126,11 +142,38 @@ export class PropertiesDrawer {
 
     this._currentGuids = guids
     const size = guids.size
-    this._title.textContent = `Modifying ${size} intent${size === 1 ? '' : 's'}`
+    this._refreshTitle()
 
     this._panel = new PropertyPanel(this._lastDescriptors, size)
     this._body.appendChild(this._panel.buildElement())
     this._panel.refresh(guids)
+  }
+
+  _refreshTitle () {
+    if (!this._title) return
+    const guids = this._currentGuids
+    const size = guids.size
+    if (size === 0) return
+    if (size === 1) {
+      const [g] = [...guids]
+      const intent = projectGraph.getEffectiveIntent(g)
+      const n = intentName(intent)
+      this._title.textContent = n ? `Modify: ${n}` : `Modify: ${g}`
+      return
+    }
+    this._title.textContent = `Modifying ${size} intents`
+  }
+
+  _onProjectGraphChange () {
+    if (!this.isOpen() || !this._panel) return
+    const guids = selectionState.getGuids()
+    if (guids.size === 0) {
+      this.close()
+      return
+    }
+    this._currentGuids = guids
+    this._panel.refresh(guids)
+    this._refreshTitle()
   }
 
   _onSelectionChange () {

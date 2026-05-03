@@ -39,6 +39,8 @@ class ProjectGraph {
       controller: {
         state: /** @type {Record<string, unknown>} */ ({}),
         intentConfig: /** @type {Map<string, Record<string, unknown>>} */ (new Map()),
+        /** Hub `controller[].intents` — refs this controller may drive; mirrors projectPatch `intents` / graph:init list. */
+        intentRefs: /** @type {Array<{ guid: string }>} */ ([]),
       },
     }
 
@@ -479,6 +481,7 @@ class ProjectGraph {
     switch (key) {
       case 'intents': {
         const list = Array.isArray(data) ? data : []
+        this._setControllerIntentRefsFromIntentsList(list)
         this.reconcileIntents(list, null, { pruneMissing: true })
         return
       }
@@ -550,7 +553,37 @@ class ProjectGraph {
       payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : null
     )
     const intents = Array.isArray(p?.intents) ? /** @type {unknown[]} */ (p.intents) : []
+    this._setControllerIntentRefsFromIntentsList(intents)
     this.reconcileIntents(intents, null)
+  }
+
+  /**
+   * @param {unknown[]} intents full intent records (as in graph:init / controller intents patch)
+   */
+  _setControllerIntentRefsFromIntentsList (intents) {
+    /** @type {Array<{ guid: string }>} */
+    const refs = []
+    for (const raw of intents) {
+      const g = intentGuid(raw)
+      if (g) refs.push({ guid: g })
+    }
+    this._data.controller.intentRefs = refs
+  }
+
+  /**
+   * Append `{ guid }` to this controller’s project `intents` ref list if missing (local + durable via graph:command).
+   * @param {string} guid
+   */
+  appendControllerIntentRef (guid) {
+    if (!guid) return
+    if (this._data.controller.intentRefs.some(r => r.guid === guid)) return
+    this._data.controller.intentRefs = [...this._data.controller.intentRefs, { guid }]
+    this._notify()
+  }
+
+  /** @returns {Array<{ guid: string }>} copy for hub patch */
+  getControllerIntentRefs () {
+    return this._data.controller.intentRefs.map(r => ({ guid: r.guid }))
   }
 
   /**
@@ -895,6 +928,17 @@ class ProjectGraph {
       this._applyControllerStateDerivedValues(this._data.controller.state)
     }
     for (const [key, patchValue] of Object.entries(patch)) {
+      if (key === 'intents' && Array.isArray(patchValue)) {
+        this._data.controller.intentRefs = patchValue
+          .map(item => {
+            if (item && typeof item === 'object' && !Array.isArray(item) && typeof /** @type {Record<string, unknown>} */ (item).guid === 'string') {
+              return { guid: String(/** @type {Record<string, unknown>} */ (item).guid) }
+            }
+            return null
+          })
+          .filter(/** @returns {v is { guid: string }} */ v => v !== null)
+        continue
+      }
       this._data.controller.state = cloneAndSetAtDotPath(this._data.controller.state, key, patchValue)
       this._applyControllerStateDerivedValue(key, patchValue)
     }

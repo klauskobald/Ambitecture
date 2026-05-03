@@ -76,6 +76,7 @@ export interface InputDefinition {
   guid?: string;
   name: string;
   type: string;
+  params?: Record<string, unknown>;
   action?: string;
   target?: {
     type: string;

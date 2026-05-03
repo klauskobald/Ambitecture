@@ -406,6 +406,7 @@
 
 .perform-input--button {
   min-width: 5rem;
+  touch-action: none;
 }
 
 @media (max-width: 400px) {

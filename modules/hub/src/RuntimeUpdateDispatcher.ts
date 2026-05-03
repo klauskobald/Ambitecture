@@ -19,11 +19,19 @@ function applyRuntimePatch(base: Record<string, unknown>, update: RuntimeUpdate)
 }
 
 export class RuntimeUpdateDispatcher {
+  /** Last merged intent per guid for incremental `runtime:command` patches (hub project file is not updated on every drag). */
+  private runtimeIntentMergeCache = new Map<string, Record<string, unknown>>();
+
   constructor(
     private registry: ConnectionRegistry,
     private projectManager: ProjectManager,
     private eventQueue: EventQueue,
   ) {}
+
+  /** Drop cached merges when project/scene/intent definitions change so the next baseline matches disk. */
+  clearRuntimeIntentMergeCache(): void {
+    this.runtimeIntentMergeCache.clear();
+  }
 
   dispatch(updates: RuntimeUpdate[], location?: [number, number], now = Date.now()): void {
     if (updates.length === 0) return;
@@ -69,11 +77,14 @@ export class RuntimeUpdateDispatcher {
     if (!this.projectManager.isIntentInActiveScene(update.guid)) {
       return null;
     }
-    const existing = this.projectManager.getActiveSceneIntent(update.guid);
-    if (!existing) {
+    const fromProject = this.projectManager.getActiveSceneIntent(update.guid);
+    if (!fromProject) {
       return null;
     }
-    const intent = applyRuntimePatch(existing as unknown as Record<string, unknown>, update) as unknown as ControllerIntent;
+    const previous = this.runtimeIntentMergeCache.get(update.guid);
+    const baseline = previous ?? cloneRecord(fromProject as unknown as Record<string, unknown>);
+    const intent = applyRuntimePatch(baseline, update) as unknown as ControllerIntent;
+    this.runtimeIntentMergeCache.set(update.guid, cloneRecord(intent as unknown as Record<string, unknown>));
     return intentToEvent(normalizeIntentColor(intent), now + (intent.scheduled ?? 0));
   }
 }

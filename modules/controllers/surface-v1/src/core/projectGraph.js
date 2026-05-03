@@ -222,6 +222,9 @@ class ProjectGraph {
 
   /** @param {string} name */
   setActiveScene (name) {
+    // Always clear: re-tapping the same scene must drop perform/runtime overlays so
+    // getEffectiveIntent() follows hub definitions + scene refs after projectPatch.
+    this._data.runtimeIntents.clear()
     this._data.activeSceneName = name
     this._notify()
   }
@@ -239,6 +242,9 @@ class ProjectGraph {
       if (source) intents = source.intents.map(ref => cloneSceneIntentRef(ref))
     }
     this._data.scenes.push({ guid: this._newGuid('scene'), name, intents })
+    if (this._data.activeSceneName !== name) {
+      this._data.runtimeIntents.clear()
+    }
     this._data.activeSceneName = name
     this._notify()
     return true
@@ -250,6 +256,7 @@ class ProjectGraph {
     if (idx === -1) return
     this._data.scenes.splice(idx, 1)
     if (this._data.activeSceneName === name) {
+      this._data.runtimeIntents.clear()
       this._data.activeSceneName = this._data.scenes[0]?.name ?? null
     }
     this._notify()
@@ -620,6 +627,7 @@ class ProjectGraph {
   applyPatch (key, data) {
     switch (key) {
       case 'intents': {
+        this._data.runtimeIntents.clear()
         const list = Array.isArray(data) ? data : []
         this._setControllerIntentRefsFromIntentsList(list)
         this.reconcileIntents(list, null, { pruneMissing: true })

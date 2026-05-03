@@ -4,6 +4,7 @@ import { ConnectionRegistry } from '../ConnectionRegistry';
 import { MessageHandler, WsMessage } from '../MessageRouter';
 import { ProjectManager, ControllerIntent } from '../ProjectManager';
 import { EventQueue } from '../EventQueue';
+import { RuntimeUpdateDispatcher } from '../RuntimeUpdateDispatcher';
 import { normalizeIntentColor, intentToEvent } from './intentHelpers';
 
 function isIntentArray(payload: unknown): payload is ControllerIntent[] {
@@ -17,6 +18,7 @@ export class IntentsHandler implements MessageHandler {
     private registry: ConnectionRegistry,
     private projectManager: ProjectManager,
     private eventQueue: EventQueue,
+    private runtimeUpdateDispatcher?: RuntimeUpdateDispatcher,
   ) {}
 
   handle(ws: WebSocket, message: WsMessage, _registry: ConnectionRegistry): void {
@@ -32,6 +34,7 @@ export class IntentsHandler implements MessageHandler {
 
     const intents = message.payload;
     this.projectManager.updateIntents(info.guid, intents);
+    this.runtimeUpdateDispatcher?.clearRuntimeIntentMergeCache();
 
     const now = Date.now();
     const entries = intents.map(normalizeIntentColor).map(intent => ({

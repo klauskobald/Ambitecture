@@ -30,10 +30,13 @@ const projectManager = new ProjectManager(
   serverConfig.get<string>('fixturesPath'),
 );
 const actionInputManager = new ActionInputManager(projectManager);
-const graphStore = new ProjectGraphStore(projectManager, actionInputManager);
 
 const registry = new ConnectionRegistry();
 const router = new MessageRouter(registry);
+const rateLimitEventsPerSecond = serverConfig.get<number>('rateLimitEventsPerSecond');
+const eventQueue = new EventQueue(registry);
+const runtimeUpdateDispatcher = new RuntimeUpdateDispatcher(registry, projectManager, eventQueue);
+const graphStore = new ProjectGraphStore(projectManager, actionInputManager, runtimeUpdateDispatcher);
 
 const buildActiveSceneEventsMsg = (): string | null => {
   const events = graphStore.getActiveSceneEvents();
@@ -156,11 +159,47 @@ const publishGraphMutation = (source: import('ws').WebSocket, result: GraphMutat
       ws.send(JSON.stringify({ message: { type: 'config', payload: graphStore.buildRendererConfig(info.guid) } }));
     }
   }
+
+  // Controllers mutate local intent definitions during perform drag; the activating
+  // client does not receive its own graph:delta echo. After scene change, push hub
+  // authoritative intent list so overlay/HUD match simulator (graph:init parity).
+  const sceneActivateResync = result.controllerDeltas.some(d => {
+    if (d.entityType !== 'project' || d.guid !== 'active' || d.op !== 'patch') return false;
+    const p = d.patch;
+    return (
+      p !== undefined
+      && typeof p === 'object'
+      && !Array.isArray(p)
+      && typeof /** @type {Record<string, unknown>} */ (p).activeSceneName === 'string'
+    );
+  });
+  if (sceneActivateResync && result.durableChanged) {
+    const scenesWire = projectManager.getScenesWirePayload();
+    for (const ws of registry.getByRole('controller')) {
+      if (ws.readyState !== WebSocket.OPEN) continue;
+      const info = registry.get(ws);
+      if (!info) continue;
+      const intents = projectManager.getControllerIntents(info.guid);
+      ws.send(
+        JSON.stringify({
+          message: {
+            type: 'projectPatch',
+            payload: { key: 'intents', data: intents },
+          },
+        })
+      );
+      ws.send(
+        JSON.stringify({
+          message: {
+            type: 'projectPatch',
+            payload: { key: 'scenes', data: scenesWire },
+          },
+        })
+      );
+    }
+  }
 };
 
-const rateLimitEventsPerSecond = serverConfig.get<number>('rateLimitEventsPerSecond');
-const eventQueue = new EventQueue(registry);
-const runtimeUpdateDispatcher = new RuntimeUpdateDispatcher(registry, projectManager, eventQueue);
 router.register('register', new RegisterHandler(registry, graphStore, rateLimitEventsPerSecond, systemConfig));
 router.register('graph:command', new GraphCommandHandler(registry, graphStore, publishGraphMutation));
 router.register('runtime:command', new RuntimeCommandHandler(registry, runtimeUpdateDispatcher, rateLimitEventsPerSecond));
@@ -168,12 +207,12 @@ const actionHandler = new ActionHandler(registry, graphStore, actionInputManager
 router.register('action:input', actionHandler);
 router.register('action:trigger', actionHandler);
 router.register('events', new EventsHandler(registry));
-router.register('intents', new IntentsHandler(registry, projectManager, eventQueue));
+router.register('intents', new IntentsHandler(registry, projectManager, eventQueue, runtimeUpdateDispatcher));
 router.register(
   'fixtures',
   new FixturesHandler(registry, projectManager, () => pushConfigsToModules(false)),
 );
-const sceneHandler = new SceneHandler(registry, projectManager, eventQueue);
+const sceneHandler = new SceneHandler(registry, projectManager, eventQueue, runtimeUpdateDispatcher);
 router.register('scene:activate', sceneHandler);
 router.register('saveProject', new SaveProjectHandler(projectManager));
 

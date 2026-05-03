@@ -1,4 +1,5 @@
 import { ProjectManager, ControllerIntent, FixtureMoveUpdate } from './ProjectManager';
+import type { RuntimeUpdateDispatcher } from './RuntimeUpdateDispatcher';
 import {
   GraphCommand,
   GraphDelta,
@@ -18,11 +19,13 @@ export class ProjectGraphStore {
   constructor(
     private projectManager: ProjectManager,
     private actionInputManager?: ActionInputManager,
+    private runtimeMerge?: RuntimeUpdateDispatcher,
   ) {}
 
   useProject(name: string, callback: () => void): void {
     this.projectManager.useProject(name, () => {
       this.revision += 1;
+      this.runtimeMerge?.clearRuntimeIntentMergeCache();
       callback();
     });
   }
@@ -96,6 +99,7 @@ export class ProjectGraphStore {
   }
 
   activateScene(sceneName: string, location?: [number, number]): GraphMutationResult {
+    this.runtimeMerge?.clearRuntimeIntentMergeCache();
     const newIntents = this.projectManager.setActiveScene(sceneName);
     const now = Date.now();
     const newGuids = new Set(newIntents.map(intent => intent.guid));
@@ -132,6 +136,7 @@ export class ProjectGraphStore {
       const remaining = this.projectManager.getAllIntentDefinitions()
         .filter(intent => intent.guid !== command.guid);
       this.projectManager.setProjectData('intents', remaining);
+      this.runtimeMerge?.clearRuntimeIntentMergeCache();
       const now = Date.now();
       const delta = this.makeDelta({ ...command, persistence: 'runtimeAndDurable' });
       return {
@@ -166,6 +171,7 @@ export class ProjectGraphStore {
     const rendererEvents = effectiveIntent
       ? [intentToEvent(normalizeIntentColor(effectiveIntent), now + (effectiveIntent.scheduled ?? 0))]
       : [];
+    this.runtimeMerge?.clearRuntimeIntentMergeCache();
     return {
       revision: this.revision,
       controllerDeltas: [delta],
@@ -233,6 +239,7 @@ export class ProjectGraphStore {
       nextScenes.push(value as unknown as typeof scenes[number]);
     }
     this.projectManager.setProjectData('scenes', nextScenes);
+    this.runtimeMerge?.clearRuntimeIntentMergeCache();
     const delta = this.makeDelta({ ...command, persistence: command.persistence ?? 'runtimeAndDurable' });
     const cleanupResults = cleanupCommands.map(cleanupCommand => this.applyGraphCommand(cleanupCommand));
     return {

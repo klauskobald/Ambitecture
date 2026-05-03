@@ -4,6 +4,7 @@ import { ConnectionRegistry } from '../ConnectionRegistry';
 import { MessageHandler, WsMessage } from '../MessageRouter';
 import { ProjectManager, ControllerIntent } from '../ProjectManager';
 import { EventQueue } from '../EventQueue';
+import { RuntimeUpdateDispatcher } from '../RuntimeUpdateDispatcher';
 import { normalizeIntentColor, intentToEvent, intentRemovalEvent } from './intentHelpers';
 
 interface SceneActivatePayload {
@@ -20,6 +21,7 @@ export class SceneHandler implements MessageHandler {
     private registry: ConnectionRegistry,
     private projectManager: ProjectManager,
     private eventQueue: EventQueue,
+    private runtimeUpdateDispatcher?: RuntimeUpdateDispatcher,
   ) {}
 
   handle(ws: WebSocket, message: WsMessage, _registry: ConnectionRegistry): void {
@@ -35,6 +37,7 @@ export class SceneHandler implements MessageHandler {
           Logger.warn('[scene] invalid scene:activate payload');
           return;
         }
+        this.runtimeUpdateDispatcher?.clearRuntimeIntentMergeCache();
         const newIntents = this.projectManager.setActiveScene(message.payload.sceneName);
 
         const now = Date.now();
@@ -70,8 +73,28 @@ export class SceneHandler implements MessageHandler {
             payload: { sceneName: message.payload.sceneName, intents: newIntents },
           },
         });
+        const scenesWire = this.projectManager.getScenesWirePayload();
         for (const controllerWs of controllers) {
           controllerWs.send(stateMsg);
+          const cinfo = this.registry.get(controllerWs);
+          if (!cinfo) continue;
+          const intentWire = this.projectManager.getControllerIntents(cinfo.guid);
+          controllerWs.send(
+            JSON.stringify({
+              message: {
+                type: 'projectPatch',
+                payload: { key: 'intents', data: intentWire },
+              },
+            })
+          );
+          controllerWs.send(
+            JSON.stringify({
+              message: {
+                type: 'projectPatch',
+                payload: { key: 'scenes', data: scenesWire },
+              },
+            })
+          );
         }
 
         Logger.info(`[scene] controller ${info.guid} activated scene "${message.payload.sceneName}": ${removalEntries.length} removed, ${activeEntries.length} active`);

@@ -89,6 +89,7 @@ interface ControllerDef {
   name: string;
   guid: string;
   intents?: { guid: string }[];
+  inputs?: InputDefinition[];
   interactionPolicies?: Record<string, unknown>;
   [key: string]: unknown;  // pass-through for controller-specific config
 }
@@ -125,7 +126,6 @@ interface Project {
   intents?: ControllerIntent[];
   scenes?: Scene[];
   actions?: ActionDefinition[];
-  inputs?: InputDefinition[];
   activeScene?: string;
   zones: Zone[];
   controller?: ControllerDef[];
@@ -215,9 +215,6 @@ export class ProjectManager {
     for (const action of this.project.actions ?? []) {
       ensureGuid(action as unknown as Record<string, unknown>, 'action');
     }
-    for (const input of this.project.inputs ?? []) {
-      ensureGuid(input as unknown as Record<string, unknown>, 'input');
-    }
     for (const zone of this.project.zones) {
       ensureGuid(zone as unknown as Record<string, unknown>, 'zone');
       for (const fixture of zone.fixtures) {
@@ -226,8 +223,11 @@ export class ProjectManager {
     }
     for (const controller of this.project.controller ?? []) {
       ensureGuid(controller as unknown as Record<string, unknown>, 'controller');
+      for (const input of controller.inputs ?? []) {
+        ensureGuid(input as unknown as Record<string, unknown>, 'input');
+      }
     }
-    const knownTopLevel = new Set(['name', 'zone-to-renderer', 'intents', 'scenes', 'actions', 'inputs', 'activeScene', 'zones', 'controller']);
+    const knownTopLevel = new Set(['name', 'zone-to-renderer', 'intents', 'scenes', 'actions', 'activeScene', 'zones', 'controller']);
     for (const [key, value] of Object.entries(this.project as unknown as Record<string, unknown>)) {
       if (knownTopLevel.has(key) || !Array.isArray(value)) continue;
       const prefix = key.endsWith('s') ? key.slice(0, -1) : key;
@@ -362,7 +362,7 @@ export class ProjectManager {
     if (!match) return {};
     const state: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(match)) {
-      if (key === 'name' || key === 'guid' || key === 'intents') continue;
+      if (key === 'name' || key === 'guid' || key === 'intents' || key === 'inputs') continue;
       state[key] = value;
     }
     return state;
@@ -379,6 +379,40 @@ export class ProjectManager {
     }
     this._scheduleSave();
     return true;
+  }
+
+  private getControllerRecord(controllerGuid: string): ControllerDef | undefined {
+    return (this.project?.controller ?? []).find(c => c.guid === controllerGuid);
+  }
+
+  getInputsWirePayload(controllerGuid: string): InputDefinition[] {
+    return this.getControllerRecord(controllerGuid)?.inputs ?? [];
+  }
+
+  setControllerInputs(controllerGuid: string, inputs: InputDefinition[]): void {
+    const match = this.getControllerRecord(controllerGuid);
+    if (!match || !this.project) return;
+    match.inputs = inputs;
+    this.project.controller = [...(this.project.controller ?? [])];
+    this._scheduleSave();
+  }
+
+  findControllerGuidForInput(inputGuid: string): string | undefined {
+    for (const controller of this.project?.controller ?? []) {
+      const inputs = controller.inputs ?? [];
+      if (inputs.some(input => input.guid === inputGuid)) {
+        return controller.guid;
+      }
+    }
+    return undefined;
+  }
+
+  getInputByGuid(inputGuid: string): InputDefinition | undefined {
+    for (const controller of this.project?.controller ?? []) {
+      const found = (controller.inputs ?? []).find(input => input.guid === inputGuid);
+      if (found) return found;
+    }
+    return undefined;
   }
 
   getAllIntentDefinitions(): ControllerIntent[] {
@@ -401,11 +435,11 @@ export class ProjectManager {
     for (const action of this.project?.actions ?? []) {
       add('action', action.guid, { ...action });
     }
-    for (const input of this.project?.inputs ?? []) {
-      add('input', input.guid, { ...input });
-    }
     for (const controller of this.project?.controller ?? []) {
       add('controller', controller.guid, { ...controller });
+      for (const input of controller.inputs ?? []) {
+        add('input', input.guid, { ...input });
+      }
     }
     for (const zone of this.runtimeZones) {
       add('zone', zone.guid, this.serializeZone(zone));
@@ -417,7 +451,7 @@ export class ProjectManager {
         });
       }
     }
-    const knownTopLevel = new Set(['name', 'zone-to-renderer', 'intents', 'scenes', 'actions', 'inputs', 'activeScene', 'zones', 'controller']);
+    const knownTopLevel = new Set(['name', 'zone-to-renderer', 'intents', 'scenes', 'actions', 'activeScene', 'zones', 'controller']);
     for (const [key, value] of Object.entries(this.project as unknown as Record<string, unknown>)) {
       if (knownTopLevel.has(key) || !Array.isArray(value)) continue;
       const entityType = key.endsWith('s') ? key.slice(0, -1) : key;
@@ -630,6 +664,10 @@ export class ProjectManager {
     return this.project?.['zone-to-renderer'] ?? {};
   }
 
+  getControllersWirePayload(): ControllerDef[] {
+    return this.project?.controller ?? [];
+  }
+
   getScenesWirePayload(): Scene[] {
     return this.project?.scenes ?? [];
   }
@@ -638,20 +676,12 @@ export class ProjectManager {
     return this.project?.actions ?? [];
   }
 
-  getInputsWirePayload(): InputDefinition[] {
-    return this.project?.inputs ?? [];
-  }
-
   getSceneByGuid(guid: string): Scene | undefined {
     return (this.project?.scenes ?? []).find(scene => scene.guid === guid);
   }
 
   getActionByGuid(guid: string): ActionDefinition | undefined {
     return (this.project?.actions ?? []).find(action => action.guid === guid);
-  }
-
-  getInputByGuid(guid: string): InputDefinition | undefined {
-    return (this.project?.inputs ?? []).find(input => input.guid === guid);
   }
 
   getWireProjectName(): string {
@@ -706,7 +736,7 @@ export class ProjectManager {
     const passThrough: Record<string, unknown> = {};
     if (match) {
       for (const key of Object.keys(match)) {
-        if (key !== 'name' && key !== 'guid' && key !== 'intents') {
+        if (key !== 'name' && key !== 'guid' && key !== 'intents' && key !== 'inputs') {
           passThrough[key] = match[key];
         }
       }
@@ -714,7 +744,7 @@ export class ProjectManager {
 
     const scenes = this.project.scenes ?? [];
     const actions = this.project.actions ?? [];
-    const inputs = this.project.inputs ?? [];
+    const inputs = match?.inputs ?? [];
     Logger.info(`[project] buildControllerConfig(${guid}): ${this.runtimeZones.length} zone(s), ${intents.length} intent(s), ${scenes.length} scene(s)`);
     return {
       projectName: this.project.name,

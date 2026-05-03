@@ -51,7 +51,6 @@ const pushControllerProjectPatches = (includeIntentsPatch: boolean): void => {
   const zones = projectManager.getSerializedRuntimeZones();
   const scenes = projectManager.getScenesWirePayload();
   const actions = projectManager.getActionsWirePayload();
-  const inputs = projectManager.getInputsWirePayload();
   const zoneToRenderer = projectManager.getZoneToRendererPayload();
   const activeSceneName = projectManager.getActiveSceneName();
   const projectName = projectManager.getWireProjectName();
@@ -64,9 +63,6 @@ const pushControllerProjectPatches = (includeIntentsPatch: boolean): void => {
   });
   const actionsMsg = JSON.stringify({
     message: { type: 'projectPatch', payload: { key: 'actions', data: actions } },
-  });
-  const inputsMsg = JSON.stringify({
-    message: { type: 'projectPatch', payload: { key: 'inputs', data: inputs } },
   });
   const ztrMsg = JSON.stringify({
     message: { type: 'projectPatch', payload: { key: 'zoneToRenderer', data: zoneToRenderer } },
@@ -87,7 +83,10 @@ const pushControllerProjectPatches = (includeIntentsPatch: boolean): void => {
     ws.send(zonesMsg);
     ws.send(scenesMsg);
     ws.send(actionsMsg);
-    ws.send(inputsMsg);
+    const inputs = projectManager.getInputsWirePayload(info.guid);
+    ws.send(JSON.stringify({
+      message: { type: 'projectPatch', payload: { key: 'inputs', data: inputs } },
+    }));
     ws.send(ztrMsg);
     ws.send(activeMsg);
     ws.send(nameMsg);

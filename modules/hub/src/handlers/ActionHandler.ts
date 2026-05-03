@@ -56,7 +56,7 @@ export class ActionHandler implements MessageHandler {
 
     switch (message.type) {
       case 'action:input':
-        this.handleInputCommand(ws, message);
+        this.handleInputCommand(ws, message, info.guid);
         break;
       case 'action:trigger':
         this.handleTrigger(ws, message, info.guid);
@@ -67,12 +67,12 @@ export class ActionHandler implements MessageHandler {
     }
   }
 
-  private handleInputCommand(ws: WebSocket, message: WsMessage): void {
+  private handleInputCommand(ws: WebSocket, message: WsMessage, controllerGuid: string): void {
     if (!isActionInputCommand(message.payload)) {
       Logger.warn('[action] invalid action:input payload');
       return;
     }
-    const commands = this.actionInputManager.buildCommands(message.payload);
+    const commands = this.actionInputManager.buildCommands(message.payload, controllerGuid);
     for (const command of commands) {
       const result = this.graphStore.applyGraphCommand(command);
       this.sendResultToSource(ws, result);

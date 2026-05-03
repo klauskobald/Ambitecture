@@ -273,7 +273,14 @@ export class ProjectGraphStore {
   }
 
   private applyInputCommand(command: GraphCommand): GraphMutationResult {
-    const inputs = this.projectManager.getInputsWirePayload();
+    const parent = command.parent;
+    if (!parent || parent.entityType !== 'controller' || typeof parent.guid !== 'string' || parent.guid.length === 0) {
+      Logger.warn('[graph] input command missing parent controller — ignored');
+      return emptyMutationResult(this.revision);
+    }
+    const controllerGuid = parent.guid;
+
+    const inputs = this.projectManager.getInputsWirePayload(controllerGuid);
     const nextInputs = command.op === 'remove'
       ? inputs.filter(input => input.guid !== command.guid)
       : inputs.map(input => {
@@ -289,7 +296,7 @@ export class ProjectGraphStore {
       value['guid'] = command.guid;
       nextInputs.push(value as unknown as typeof inputs[number]);
     }
-    this.projectManager.setProjectData('inputs', nextInputs);
+    this.projectManager.setControllerInputs(controllerGuid, nextInputs);
     const delta = this.makeDelta({ ...command, persistence: command.persistence ?? 'runtimeAndDurable' });
     return {
       revision: this.revision,

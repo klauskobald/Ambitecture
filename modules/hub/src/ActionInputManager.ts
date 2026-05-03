@@ -15,14 +15,14 @@ export type ActionInputCommand =
 export class ActionInputManager {
   constructor(private projectManager: ProjectManager) {}
 
-  buildCommands(command: ActionInputCommand): GraphCommand[] {
+  buildCommands(command: ActionInputCommand, controllerGuid: string): GraphCommand[] {
     switch (command.command) {
       case 'ensureSceneButton':
-        return this.ensureSceneButtonCommands(command.sceneGuid);
+        return this.ensureSceneButtonCommands(controllerGuid, command.sceneGuid);
       case 'disableSceneButton':
-        return this.disableSceneButtonCommands(command.sceneGuid);
+        return this.disableSceneButtonCommands(controllerGuid, command.sceneGuid);
       case 'renameInput':
-        return this.renameInputCommands(command.inputGuid, command.name);
+        return this.renameInputCommands(controllerGuid, command.inputGuid, command.name);
     }
   }
 
@@ -47,12 +47,12 @@ export class ActionInputManager {
       : undefined;
   }
 
-  private ensureSceneButtonCommands(sceneGuid: string): GraphCommand[] {
+  private ensureSceneButtonCommands(controllerGuid: string, sceneGuid: string): GraphCommand[] {
     const scene = this.projectManager.getSceneByGuid(sceneGuid);
     if (!scene?.guid) return [];
 
     const existingAction = this.findSceneAction(scene.guid);
-    const existingInput = this.findSceneInput(scene.guid, existingAction?.guid);
+    const existingInput = this.findSceneInput(controllerGuid, scene.guid, existingAction?.guid);
     const actionGuid = existingAction?.guid ?? `action-${randomUUID()}`;
     const inputGuid = existingInput?.guid ?? `input-${randomUUID()}`;
 
@@ -72,11 +72,16 @@ export class ActionInputManager {
 
     return [
       this.upsertCommand('action', actionGuid, action as unknown as Record<string, unknown>),
-      this.upsertCommand('input', inputGuid, input as unknown as Record<string, unknown>),
+      this.upsertCommand(
+        'input',
+        inputGuid,
+        input as unknown as Record<string, unknown>,
+        { entityType: 'controller', guid: controllerGuid },
+      ),
     ];
   }
 
-  private disableSceneButtonCommands(sceneGuid: string): GraphCommand[] {
+  private disableSceneButtonCommands(controllerGuid: string, sceneGuid: string): GraphCommand[] {
     const actionGuids = this.projectManager.getActionsWirePayload()
       .filter(action => this.actionTargetsScene(action, sceneGuid))
       .map(action => action.guid)
@@ -89,7 +94,7 @@ export class ActionInputManager {
       persistence: 'runtimeAndDurable',
     }));
 
-    for (const input of this.projectManager.getInputsWirePayload()) {
+    for (const input of this.projectManager.getInputsWirePayload(controllerGuid)) {
       if (!input.guid) continue;
       const hasSceneTarget = input.target?.type === 'scene' && input.target.guid === sceneGuid;
       const pointsAtSceneAction = typeof input.action === 'string' && actionGuidSet.has(input.action);
@@ -98,21 +103,31 @@ export class ActionInputManager {
       delete next.action;
       next.target = { type: 'scene', guid: sceneGuid };
       next.display = next.display ?? { type: 'button' };
-      commands.push(this.upsertCommand('input', input.guid, next as unknown as Record<string, unknown>));
+      commands.push(this.upsertCommand(
+        'input',
+        input.guid,
+        next as unknown as Record<string, unknown>,
+        { entityType: 'controller', guid: controllerGuid },
+      ));
     }
 
     return commands;
   }
 
-  private renameInputCommands(inputGuid: string, name: string): GraphCommand[] {
+  private renameInputCommands(controllerGuid: string, inputGuid: string, name: string): GraphCommand[] {
     const nextName = name.trim();
     const input = this.projectManager.getInputByGuid(inputGuid);
     if (!input?.guid || nextName.length === 0 || input.name === nextName) return [];
     return [
-      this.upsertCommand('input', input.guid, {
-        ...(input as unknown as Record<string, unknown>),
-        name: nextName,
-      }),
+      this.upsertCommand(
+        'input',
+        input.guid,
+        {
+          ...(input as unknown as Record<string, unknown>),
+          name: nextName,
+        },
+        { entityType: 'controller', guid: controllerGuid },
+      ),
     ];
   }
 
@@ -124,17 +139,23 @@ export class ActionInputManager {
     const actionGuidSet = new Set(actionGuids);
     const commands: GraphCommand[] = [];
 
-    for (const input of this.projectManager.getInputsWirePayload()) {
-      if (!input.guid) continue;
-      const hasSceneTarget = input.target?.type === 'scene' && input.target.guid === sceneGuid;
-      const pointsAtSceneAction = typeof input.action === 'string' && actionGuidSet.has(input.action);
-      if (!hasSceneTarget && !pointsAtSceneAction) continue;
-      commands.push({
-        op: 'remove',
-        entityType: 'input',
-        guid: input.guid,
-        persistence: 'runtimeAndDurable',
-      });
+    const controllers = this.projectManager.getControllersWirePayload();
+    for (const controller of controllers) {
+      const controllerGuid = controller.guid;
+      if (!controllerGuid) continue;
+      for (const input of this.projectManager.getInputsWirePayload(controllerGuid)) {
+        if (!input.guid) continue;
+        const hasSceneTarget = input.target?.type === 'scene' && input.target.guid === sceneGuid;
+        const pointsAtSceneAction = typeof input.action === 'string' && actionGuidSet.has(input.action);
+        if (!hasSceneTarget && !pointsAtSceneAction) continue;
+        commands.push({
+          op: 'remove',
+          entityType: 'input',
+          guid: input.guid,
+          persistence: 'runtimeAndDurable',
+          parent: { entityType: 'controller', guid: controllerGuid },
+        });
+      }
     }
     for (const guid of actionGuids) {
       commands.push({
@@ -153,8 +174,8 @@ export class ActionInputManager {
       .find(action => this.actionTargetsScene(action, sceneGuid));
   }
 
-  private findSceneInput(sceneGuid: string, actionGuid?: string): InputDefinition | undefined {
-    return this.projectManager.getInputsWirePayload()
+  private findSceneInput(controllerGuid: string, sceneGuid: string, actionGuid?: string): InputDefinition | undefined {
+    return this.projectManager.getInputsWirePayload(controllerGuid)
       .find(input => {
         const hasSceneTarget = input.target?.type === 'scene' && input.target.guid === sceneGuid;
         const pointsAtSceneAction = actionGuid !== undefined && input.action === actionGuid;
@@ -167,13 +188,19 @@ export class ActionInputManager {
     return action.execute.some(item => item.type === 'scene' && item.guid === sceneGuid);
   }
 
-  private upsertCommand(entityType: 'action' | 'input', guid: string, value: Record<string, unknown>): GraphCommand {
+  private upsertCommand(
+    entityType: 'action' | 'input',
+    guid: string,
+    value: Record<string, unknown>,
+    parent?: { entityType: 'controller'; guid: string },
+  ): GraphCommand {
     return {
       op: 'upsert',
       entityType,
       guid,
       value,
       persistence: 'runtimeAndDurable',
+      ...(parent !== undefined ? { parent } : {}),
     };
   }
 }

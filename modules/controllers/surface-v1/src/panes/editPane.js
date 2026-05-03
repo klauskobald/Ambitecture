@@ -421,6 +421,14 @@ export class EditPane {
           enabled
         )
         patch[`interactionPolicies.performEnabled.${newGuid}`] = enabled
+        const qpKeys = projectGraph.getQuickPanelDotKeys(srcGuid)
+        if (qpKeys.length > 0) {
+          projectGraph.patchControllerState(
+            `interactionPolicies.quickPanel.${newGuid}`,
+            qpKeys
+          )
+          patch[`interactionPolicies.quickPanel.${newGuid}`] = qpKeys
+        }
       }
       sendGraphCommand({
         op: 'patch',
@@ -484,6 +492,7 @@ export class EditPane {
       const performRemoveKeys = []
       for (const guid of toPurge) {
         performRemoveKeys.push(`interactionPolicies.performEnabled.${guid}`)
+        performRemoveKeys.push(`interactionPolicies.quickPanel.${guid}`)
         projectGraph.purgeIntentFromProject(guid)
       }
       sendSaveProject('scenes', projectGraph.getHubScenesWire())

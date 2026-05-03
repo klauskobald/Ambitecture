@@ -121,6 +121,15 @@ export class OverlayCanvas {
     this._ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   }
 
+  /**
+   * Overlay canvas plus simulator iframe viewport — use with {@link worldToCanvas}
+   * to position HUD elements in screen space matching intent markers.
+   * @returns {{ canvas: HTMLCanvasElement, viewport: import('./simulatorViewport.js').SimulatorViewport }}
+   */
+  getHudPositioningContext () {
+    return { canvas: this._canvas, viewport: this._viewport }
+  }
+
   _bindPointerEvents () {
     this._canvas.addEventListener('pointerdown', ev => this._onPointerDown(ev))
     this._canvas.addEventListener('pointermove', ev => this._onPointerMove(ev))

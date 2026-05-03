@@ -67,7 +67,8 @@ export class SliderControl extends PropertyControl {
         max: dMax,
         step: deltaStep,
         mapping: 'linear',
-        relativeTrack: true
+        relativeTrack: true,
+        defaultDomainValue: noOp
       }
       if (enteringDelta) {
         patch.value = noOp
@@ -83,6 +84,8 @@ export class SliderControl extends PropertyControl {
         initialV = Number(state.value)
       }
 
+      const defAbs = Number(this._descriptor.defaultValue)
+      const defaultDomainValue = Number.isFinite(defAbs) ? defAbs : undefined
       if (stepFnName == null) {
         this._scalar.configure({
           min,
@@ -90,7 +93,8 @@ export class SliderControl extends PropertyControl {
           step: absStep,
           value: initialV,
           mapping: 'linear',
-          relativeTrack: false
+          relativeTrack: false,
+          defaultDomainValue
         })
       } else {
         this._scalar.configure({
@@ -99,6 +103,7 @@ export class SliderControl extends PropertyControl {
           step: absStep,
           value: initialV,
           relativeTrack: false,
+          defaultDomainValue,
           valueAtT: (t) => {
             const u = fnEvaluate(stepFnName, t)
             const raw = min + span * u

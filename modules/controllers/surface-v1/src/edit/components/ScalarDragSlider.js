@@ -18,6 +18,7 @@
  * @property {() => void} onCommit
  * @property {() => void} [onDragStart] invoked at pointer-down (after validation, before capture)
  * @property {() => void} [onDragEnd] invoked after onCommit on pointer-up / cancel
+ * @property {number} [defaultDomainValue] when set, a second tap within the double-tap window resets to this snapped domain value
  */
 
 export class ScalarDragSlider {
@@ -42,6 +43,21 @@ export class ScalarDragSlider {
     this._onDragStart = opts.onDragStart
     /** @type {(() => void) | undefined} */
     this._onDragEnd = opts.onDragEnd
+    /** @type {number | undefined} */
+    this._defaultDomainValue =
+      opts.defaultDomainValue !== undefined &&
+      Number.isFinite(Number(opts.defaultDomainValue))
+        ? Number(opts.defaultDomainValue)
+        : undefined
+
+    /** @type {{ clientX: number, clientY: number, t: number } | null} */
+    this._lastTap = null
+    /** @type {number} */
+    this._downClientX = 0
+    /** @type {number} */
+    this._downClientY = 0
+    /** @type {boolean} */
+    this._dragMoved = false
 
     /** @type {HTMLElement | null} */
     this._wrapper = null
@@ -91,6 +107,15 @@ export class ScalarDragSlider {
     if (patch.onCommit !== undefined) this._onCommit = patch.onCommit
     if (patch.onDragStart !== undefined) this._onDragStart = patch.onDragStart
     if (patch.onDragEnd !== undefined) this._onDragEnd = patch.onDragEnd
+    if ('defaultDomainValue' in patch) {
+      const d = patch.defaultDomainValue
+      this._defaultDomainValue =
+        d !== undefined &&
+        d !== null &&
+        Number.isFinite(Number(d))
+          ? Number(d)
+          : undefined
+    }
 
     this._displayDecimals = this._decimalPlacesFromStep(this._step)
     if (patch.value !== undefined) {
@@ -145,7 +170,7 @@ export class ScalarDragSlider {
     track.addEventListener('pointerdown', e => this._onPointerDown(e), { signal })
     track.addEventListener('pointermove', e => this._onPointerMove(e), { signal })
     track.addEventListener('pointerup', e => this._onPointerUp(e), { signal })
-    track.addEventListener('pointercancel', e => this._onPointerUp(e), { signal })
+    track.addEventListener('pointercancel', e => this._onPointerCancel(e), { signal })
     track.addEventListener('keydown', e => this._onKeyDown(e), { signal })
 
     return wrapper
@@ -212,6 +237,28 @@ export class ScalarDragSlider {
   _onPointerDown (e) {
     if (!this._track) return
     if (e.button !== 0) return
+
+    if (this._lastTap) {
+      const elapsed = performance.now() - this._lastTap.t
+      const dist = Math.hypot(
+        e.clientX - this._lastTap.clientX,
+        e.clientY - this._lastTap.clientY
+      )
+      if (elapsed < 300 && dist < 40 && this._defaultDomainValue !== undefined) {
+        const v = this._snap(Number(this._defaultDomainValue))
+        this._setTFromDomainValue(v)
+        this._commitFromT()
+        this._onCommit()
+        this._lastTap = null
+        e.preventDefault()
+        return
+      }
+      this._lastTap = null
+    }
+
+    this._downClientX = e.clientX
+    this._downClientY = e.clientY
+    this._dragMoved = false
     this._onDragStart?.()
     this._dragPointerId = e.pointerId
     this._dragStartX = e.clientX
@@ -227,6 +274,7 @@ export class ScalarDragSlider {
     const slidePx = this._dragSlidePx
     if (slidePx <= 0) return
     const dx = e.clientX - this._dragStartX
+    if (Math.abs(dx) > 10) this._dragMoved = true
     this._t = Math.max(0, Math.min(1, this._dragStartT + dx / slidePx))
     this._commitFromT()
     e.preventDefault()
@@ -237,6 +285,34 @@ export class ScalarDragSlider {
     if (this._dragPointerId !== e.pointerId || !this._track) return
     this._track.releasePointerCapture(e.pointerId)
     this._dragPointerId = null
+    this._onCommit()
+    this._onDragEnd?.()
+    const tapDist = Math.hypot(
+      e.clientX - this._downClientX,
+      e.clientY - this._downClientY
+    )
+    if (!this._dragMoved && tapDist < 12) {
+      this._lastTap = {
+        clientX: this._downClientX,
+        clientY: this._downClientY,
+        t: performance.now()
+      }
+    } else {
+      this._lastTap = null
+    }
+    e.preventDefault()
+  }
+
+  /** @param {PointerEvent} e */
+  _onPointerCancel (e) {
+    if (this._dragPointerId !== e.pointerId || !this._track) return
+    try {
+      this._track.releasePointerCapture(e.pointerId)
+    } catch {
+      /* ignore */
+    }
+    this._dragPointerId = null
+    this._lastTap = null
     this._onCommit()
     this._onDragEnd?.()
     e.preventDefault()

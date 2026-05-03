@@ -80,6 +80,7 @@ export class ColorControl extends PropertyControl {
         step: stepOpt,
         value: noOpValue,
         relativeTrack: true,
+        defaultDomainValue: noOpValue,
         bubbleCharWidth,
         onInput: delta => this._applyHslDelta(channelKey, cfg.fn, cfg.wrap, delta),
         onCommit: () => this._saveProject(),

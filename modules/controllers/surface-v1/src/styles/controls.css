@@ -409,6 +409,89 @@
   touch-action: none;
 }
 
+.quick-panel-hud {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.quick-panel-hud__knobs {
+  display: flex;
+  flex-wrap: nowrap;
+  flex-direction: row;
+  gap: 0.35rem;
+  padding: 0.25rem 0.35rem;
+  border-radius: 10px;
+  background: rgba(10, 10, 10, 0.93);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+}
+
+.quick-panel-knob {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.12rem;
+  min-width: 3.1rem;
+  touch-action: none;
+}
+
+.quick-panel-knob__caption {
+  font-size: 0.55rem;
+  max-width: 3.8rem;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+}
+
+.quick-panel-knob__dial {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 2px solid var(--color-border);
+  background: radial-gradient(circle at 50% 32%, #2c2c2c, #0f0f0f);
+  cursor: grab;
+  touch-action: none;
+  box-sizing: border-box;
+}
+
+.quick-panel-knob__dial:active {
+  cursor: grabbing;
+}
+
+.quick-panel-knob__needle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  height: 17px;
+  margin: 0;
+  background: var(--color-accent);
+  border-radius: 2px;
+  transform-origin: bottom center;
+  transform: translate(-50%, -100%) rotate(0deg);
+  pointer-events: none;
+}
+
+.quick-panel-knob__value {
+  position: absolute;
+  left: 50%;
+  top: 63%;
+  transform: translate(-50%, -50%);
+  font-size: 0.5rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+  pointer-events: none;
+}
+
+.quick-panel-knob__dial:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-accent);
+}
+
 @media (max-width: 400px) {
   .scenes-layout {
     grid-template-columns: 1fr;

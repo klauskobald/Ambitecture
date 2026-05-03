@@ -105,6 +105,17 @@
   text-align: center;
 }
 
+.intent-quick-panel {
+  min-width: 2rem;
+  padding: 0.18rem 0.4rem;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.intent-quick-panel--inactive {
+  opacity: 0.75;
+}
+
 .prop-row__toggle--mixed {
   border-color: #a80;
   color: #a80;

@@ -1,6 +1,7 @@
 import { performPolicy } from '../viewport/interactionPolicies.js'
 import { projectGraph } from '../core/projectGraph.js'
 import { sendActionTrigger } from '../core/outboundQueue.js'
+import { PerformQuickPanelHud } from '../perform/performQuickPanelHud.js'
 
 /**
  * @param {unknown} value
@@ -35,6 +36,8 @@ export class PerformPane {
     this._momentaryPointersByGuid = new Map()
     /** @type {(() => void) | null} */
     this._unsubscribe = null
+    /** @type {PerformQuickPanelHud | null} */
+    this._quickHud = null
   }
 
   /** @param {HTMLElement} container */
@@ -45,6 +48,12 @@ export class PerformPane {
   activate () {
     this._overlay.setPolicy(performPolicy)
     this._overlay.resize()
+    try {
+      this._quickHud = new PerformQuickPanelHud(this._overlay)
+      this._quickHud.start()
+    } catch {
+      this._quickHud = null
+    }
     this._render()
     this._el.hidden = false
     this._unsubscribe = projectGraph.subscribe(() => this._render())
@@ -54,6 +63,10 @@ export class PerformPane {
     this._el.hidden = true
     this._unsubscribe?.()
     this._unsubscribe = null
+    if (this._quickHud) {
+      this._quickHud.stop()
+      this._quickHud = null
+    }
   }
 
   _render () {

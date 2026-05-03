@@ -74,6 +74,14 @@ class ProjectGraph {
     for (const fn of this._runtimeListeners) fn()
   }
 
+  /**
+   * Wakes graph subscribers without mutating project data. Used when
+   * `systemCapabilities` arrives so UI that resolves intent descriptors can rebuild.
+   */
+  notifyListeners () {
+    this._notify()
+  }
+
   // ─── Derived state ────────────────────────────────────────────────────────────
 
   /** @returns {HubSpatialState | null} */
@@ -337,8 +345,11 @@ class ProjectGraph {
     const base = state && typeof state === 'object' && !Array.isArray(state)
       ? /** @type {Record<string, unknown>} */ (state)
       : /** @type {Record<string, unknown>} */ ({})
-    const dotKey = `interactionPolicies.performEnabled.${guid}`
-    this._data.controller.state = cloneAndDeleteAtDotPath(base, dotKey)
+    const dotKeyPerform = `interactionPolicies.performEnabled.${guid}`
+    const dotKeyQuick = `interactionPolicies.quickPanel.${guid}`
+    let nextState = cloneAndDeleteAtDotPath(base, dotKeyPerform)
+    nextState = cloneAndDeleteAtDotPath(nextState, dotKeyQuick)
+    this._data.controller.state = nextState
     this._notify()
   }
 
@@ -428,6 +439,59 @@ class ProjectGraph {
     }
     this._notify()
     return { guid, patch: { [dotKey]: value } }
+  }
+
+  /**
+   * Live Perform / quick-panel updates: respects scene overlay like edit controls,
+   * and mirrors overlay position behavior by merging into runtime intents for realtime output.
+   * @param {string} guid
+   * @param {string} dotKey
+   * @param {unknown} value
+   * @param {boolean} allowOverlay
+   * @returns {{ guid: string, patch: Record<string, unknown> } | null}
+   */
+  applyPerformIntentParamUpdate (guid, dotKey, value, allowOverlay) {
+    const activeScene = this.getActiveSceneName()
+    const useOverlay = !!(
+      allowOverlay &&
+      activeScene &&
+      this.isSceneIntentOverlayed(activeScene, guid, dotKey)
+    )
+    if (useOverlay && activeScene) {
+      this.setSceneIntentOverlay(activeScene, guid, dotKey, value)
+      const merged = this._getSceneEffectiveIntent(guid)
+      if (merged) {
+        /** @type {Record<string, unknown>} */
+        const next = /** @type {Record<string, unknown>} */ (
+          JSON.parse(JSON.stringify(merged))
+        )
+        // Perform drag with position overlay only mutates runtime; base/scene
+        // position stays stale until edit saves. Rebuilding runtime from merged
+        // alone would snap the intent back — keep live position from runtime.
+        const prevRuntime = this._data.runtimeIntents.get(guid)
+        const prevPos = prevRuntime?.position
+        if (Array.isArray(prevPos) && prevPos.length >= 3) {
+          next.position = [
+            Number(prevPos[0]),
+            Number(prevPos[1] ?? 0),
+            Number(prevPos[2])
+          ]
+        }
+        this._data.runtimeIntents.set(guid, next)
+      }
+      this._notify()
+      return { guid, patch: { [dotKey]: value } }
+    }
+    return this.updateIntentProperty(guid, dotKey, value)
+  }
+
+  /**
+   * @param {string} guid
+   * @returns {string[]} stable unique dotKeys for Perform quick panel
+   */
+  getQuickPanelDotKeys (guid) {
+    const raw = /** @type {unknown} */ (this.getIntentConfig(guid).quickPanelDotKeys)
+    return normalizeQuickPanelDotKeys(raw)
   }
 
   /**
@@ -1033,20 +1097,39 @@ class ProjectGraph {
    * @param {unknown} value
    */
   _applyControllerStateDerivedValue (dotKey, value) {
-    const prefix = 'interactionPolicies.performEnabled.'
-    if (!dotKey.startsWith(prefix)) return
-    const intentGuid = dotKey.slice(prefix.length)
-    if (!intentGuid) return
-    const current = this._data.controller.intentConfig.get(intentGuid) ?? Object.create(null)
-    this._data.controller.intentConfig.set(intentGuid, { ...current, performEnabled: Boolean(value) })
+    const performPrefix = 'interactionPolicies.performEnabled.'
+    const quickPrefix = 'interactionPolicies.quickPanel.'
+    if (dotKey.startsWith(performPrefix)) {
+      const intentGuid = dotKey.slice(performPrefix.length)
+      if (!intentGuid) return
+      const current = this._data.controller.intentConfig.get(intentGuid) ?? Object.create(null)
+      this._data.controller.intentConfig.set(intentGuid, { ...current, performEnabled: Boolean(value) })
+      return
+    }
+    if (dotKey.startsWith(quickPrefix)) {
+      const intentGuid = dotKey.slice(quickPrefix.length)
+      if (!intentGuid) return
+      const current = this._data.controller.intentConfig.get(intentGuid) ?? Object.create(null)
+      this._data.controller.intentConfig.set(intentGuid, {
+        ...current,
+        quickPanelDotKeys: normalizeQuickPanelDotKeys(value)
+      })
+    }
   }
 
   /** @param {Record<string, unknown>} policies */
   _applyInteractionPolicies (policies) {
     const performEnabled = policies.performEnabled
-    if (!performEnabled || typeof performEnabled !== 'object' || Array.isArray(performEnabled)) return
-    for (const [guid, enabled] of Object.entries(/** @type {Record<string, unknown>} */ (performEnabled))) {
-      this.setIntentConfig(guid, 'performEnabled', Boolean(enabled))
+    if (performEnabled && typeof performEnabled === 'object' && !Array.isArray(performEnabled)) {
+      for (const [guid, enabled] of Object.entries(/** @type {Record<string, unknown>} */ (performEnabled))) {
+        this.setIntentConfig(guid, 'performEnabled', Boolean(enabled))
+      }
+    }
+    const quickPanel = policies.quickPanel
+    if (quickPanel && typeof quickPanel === 'object' && !Array.isArray(quickPanel)) {
+      for (const [guid, keys] of Object.entries(/** @type {Record<string, unknown>} */ (quickPanel))) {
+        this.setIntentConfig(guid, 'quickPanelDotKeys', normalizeQuickPanelDotKeys(keys))
+      }
     }
   }
 
@@ -1244,6 +1327,23 @@ function actionTargetsScene (action, sceneGuid) {
     const record = /** @type {Record<string, unknown>} */ (item)
     return record.type === 'scene' && record.guid === sceneGuid
   })
+}
+
+/**
+ * @param {unknown} value
+ * @returns {string[]}
+ */
+function normalizeQuickPanelDotKeys (value) {
+  if (!Array.isArray(value)) return []
+  const out = []
+  const seen = new Set()
+  for (const item of value) {
+    const s = typeof item === 'string' ? item : ''
+    if (!s || seen.has(s)) continue
+    seen.add(s)
+    out.push(s)
+  }
+  return out
 }
 
 export const projectGraph = new ProjectGraph()

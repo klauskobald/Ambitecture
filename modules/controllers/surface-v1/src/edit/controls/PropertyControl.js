@@ -1,5 +1,5 @@
 import { projectGraph } from '../../core/projectGraph.js'
-import { queueIntentUpdate, sendSaveProject, sendSceneActivate } from '../../core/outboundQueue.js'
+import { queueIntentUpdate, sendGraphCommand, sendSaveProject, sendSceneActivate } from '../../core/outboundQueue.js'
 import { warn as modalWarn } from '../../core/Modal.js'
 import { resolveMultiSelectState, resolveEnableState } from './controlHelpers.js'
 
@@ -27,6 +27,8 @@ export class PropertyControl {
     this._toggleBtn = null
     /** @type {HTMLButtonElement | null} */
     this._overlayBtn = null
+    /** @type {HTMLButtonElement | null} */
+    this._quickPanelBtn = null
     /** @type {Set<string>} */
     this._currentGuids = new Set()
     this._sceneDirty = false
@@ -45,6 +47,7 @@ export class PropertyControl {
 
     header.appendChild(label)
 
+    const showQuickPanel = this._descriptor.type === 'scalar' && !!this._descriptor.quickPanel
     if (!this._isMandatory) {
       this._toggleBtn = document.createElement('button')
       this._toggleBtn.className = 'prop-row__toggle intent-toggle'
@@ -52,6 +55,19 @@ export class PropertyControl {
       this._toggleBtn.setAttribute('aria-checked', 'false')
       this._toggleBtn.addEventListener('click', () => this._onToggleClick())
       header.appendChild(this._toggleBtn)
+    }
+
+    if (showQuickPanel) {
+      this._quickPanelBtn = document.createElement('button')
+      this._quickPanelBtn.className =
+        'prop-row__toggle intent-quick-panel intent-quick-panel--inactive'
+      this._quickPanelBtn.type = 'button'
+      this._quickPanelBtn.textContent = '\u2742'
+      this._quickPanelBtn.setAttribute('aria-label', 'Quick panel')
+      this._quickPanelBtn.setAttribute('aria-checked', 'false')
+      this._quickPanelBtn.title = 'Quick panel — show knobs in Perform'
+      this._quickPanelBtn.addEventListener('click', () => this._onQuickPanelClick())
+      header.appendChild(this._quickPanelBtn)
     }
 
     if (this._allowOverlay) {
@@ -84,6 +100,7 @@ export class PropertyControl {
       this._applyOverlayState(this._resolveOverlayState(guids, dotKey))
       const multiState = resolveMultiSelectState(guids, dotKey)
       this._applyState({ ...multiState, enableState: 'on', selectionSize: guids.size })
+      this._refreshQuickPanel(guids)
       return
     }
 
@@ -95,6 +112,7 @@ export class PropertyControl {
     if (enableState !== 'off') {
       this._applyState({ ...multiState, enableState, selectionSize: guids.size })
     }
+    this._refreshQuickPanel(guids)
   }
 
   destroy () {}
@@ -247,6 +265,30 @@ export class PropertyControl {
       for (const guid of this._currentGuids) {
         this._removeProperty(guid, dotKey)
       }
+      if (this._quickPanelBtn) {
+        const controllerGuid = projectGraph.getControllerGuid()
+        if (controllerGuid) {
+          for (const guid of this._currentGuids) {
+            if (!projectGraph.getIntents().has(guid)) continue
+            let keys = projectGraph.getQuickPanelDotKeys(guid)
+            if (!keys.includes(dotKey)) continue
+            keys = keys.filter(k => k !== dotKey)
+            const cmd = projectGraph.patchControllerState(
+              `interactionPolicies.quickPanel.${guid}`,
+              keys
+            )
+            if (cmd) {
+              sendGraphCommand({
+                op: 'patch',
+                entityType: 'controller',
+                guid: controllerGuid,
+                patch: cmd.patch,
+                persistence: 'runtimeAndDurable'
+              })
+            }
+          }
+        }
+      }
     } else {
       for (const guid of this._currentGuids) {
         this._updateProperty(guid, dotKey, cloneDefaultValue(defaultValue))
@@ -283,6 +325,116 @@ export class PropertyControl {
 
     sendSaveProject('scenes', projectGraph.getScenesData())
     sendSceneActivate(activeScene)
+    this.refresh(this._currentGuids)
+  }
+
+  /**
+   * @param {Set<string>} guids
+   */
+  _refreshQuickPanel (guids) {
+    if (!this._quickPanelBtn) return
+    const dotKey = /** @type {string} */ (this._descriptor.dotKey)
+    const qpState = this._resolveQuickPanelState(guids, dotKey)
+    this._applyQuickPanelVisual(qpState)
+    const enableState = this._isMandatory ? 'on' : resolveEnableState(guids, dotKey)
+    const blockQuickPanel = enableState === 'off'
+    this._quickPanelBtn.disabled = blockQuickPanel
+    this._quickPanelBtn.setAttribute('aria-disabled', blockQuickPanel ? 'true' : 'false')
+    if (blockQuickPanel) {
+      this._quickPanelBtn.title =
+        'Turn property ON to use quick panel'
+    } else {
+      this._quickPanelBtn.title = 'Quick panel — show knobs in Perform'
+    }
+  }
+
+  /**
+   * @param {Set<string>} guids
+   * @param {string} dotKey
+   * @returns {'on'|'off'|'mixed'}
+   */
+  _resolveQuickPanelState (guids, dotKey) {
+    let onCount = 0
+    let total = 0
+    for (const guid of guids) {
+      if (!projectGraph.getIntents().has(guid)) continue
+      total++
+      if (projectGraph.getQuickPanelDotKeys(guid).includes(dotKey)) onCount++
+    }
+    if (total === 0 || onCount === 0) return 'off'
+    if (onCount === total) return 'on'
+    return 'mixed'
+  }
+
+  /** @param {'on'|'off'|'mixed'} qpState */
+  _applyQuickPanelVisual (qpState) {
+    if (!this._quickPanelBtn) return
+    switch (qpState) {
+      case 'on':
+        this._quickPanelBtn.setAttribute('aria-checked', 'true')
+        this._quickPanelBtn.classList.add(
+          'intent-toggle--enabled',
+          'intent-quick-panel--active'
+        )
+        this._quickPanelBtn.classList.remove(
+          'intent-quick-panel--inactive',
+          'prop-row__toggle--mixed'
+        )
+        break
+      case 'mixed':
+        this._quickPanelBtn.setAttribute('aria-checked', 'mixed')
+        this._quickPanelBtn.classList.add(
+          'prop-row__toggle--mixed',
+          'intent-quick-panel--inactive'
+        )
+        this._quickPanelBtn.classList.remove(
+          'intent-toggle--enabled',
+          'intent-quick-panel--active'
+        )
+        break
+      case 'off':
+      default:
+        this._quickPanelBtn.setAttribute('aria-checked', 'false')
+        this._quickPanelBtn.classList.add('intent-quick-panel--inactive')
+        this._quickPanelBtn.classList.remove(
+          'intent-toggle--enabled',
+          'intent-quick-panel--active',
+          'prop-row__toggle--mixed'
+        )
+        break
+    }
+  }
+
+  _onQuickPanelClick () {
+    const dotKey = /** @type {string} */ (this._descriptor.dotKey)
+    if (resolveEnableState(this._currentGuids, dotKey) === 'off') return
+    const controllerGuid = projectGraph.getControllerGuid()
+    if (!controllerGuid) return
+    const prev = this._resolveQuickPanelState(this._currentGuids, dotKey)
+    const makeOn = prev !== 'on'
+
+    for (const guid of this._currentGuids) {
+      if (!projectGraph.getIntents().has(guid)) continue
+      let keys = projectGraph.getQuickPanelDotKeys(guid)
+      if (makeOn) {
+        if (!keys.includes(dotKey)) keys = [...keys, dotKey]
+      } else {
+        keys = keys.filter(k => k !== dotKey)
+      }
+      const cmd = projectGraph.patchControllerState(
+        `interactionPolicies.quickPanel.${guid}`,
+        keys
+      )
+      if (cmd) {
+        sendGraphCommand({
+          op: 'patch',
+          entityType: 'controller',
+          guid: controllerGuid,
+          patch: cmd.patch,
+          persistence: 'runtimeAndDurable'
+        })
+      }
+    }
     this.refresh(this._currentGuids)
   }
 }

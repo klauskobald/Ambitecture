@@ -19,6 +19,9 @@ systemCapabilities:
         range: [0, 2]
         step: 0.005
         defaultValue: 1
+        quickPanel: true
+        isMandatory: true
+
     light:
       - dotKey: name
         name: Name
@@ -41,6 +44,7 @@ systemCapabilities:
         step: 0.01
         defaultValue: 1
         isMandatory: true
+        quickPanel: true
         delta:
           value: { fn: ADD, range: [-1, 1] }
       - dotKey: params.blend
@@ -101,6 +105,7 @@ systemCapabilities:
         range: [0, 1]
         step: 0.01
         defaultValue: 0
+        quickPanel: true
         delta:
           value: { fn: ADD, range: [-1, 1] }
       - dotKey: params.aux.amber

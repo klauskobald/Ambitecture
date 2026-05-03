@@ -174,6 +174,7 @@ async function main () {
         }
         case 'systemCapabilities': {
           applySystemCapabilities(message.payload)
+          projectGraph.notifyListeners()
           break
         }
       }

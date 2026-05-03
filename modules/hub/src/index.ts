@@ -13,6 +13,7 @@ import { GraphCommandHandler } from './handlers/GraphCommandHandler';
 import { RuntimeCommandHandler } from './handlers/RuntimeCommandHandler';
 import { ActionHandler } from './handlers/ActionHandler';
 import { EventQueue } from './EventQueue';
+import { RuntimeUpdateDispatcher } from './RuntimeUpdateDispatcher';
 import { ProjectManager } from './ProjectManager';
 import { ProjectGraphStore } from './ProjectGraphStore';
 import { ActionInputManager } from './ActionInputManager';
@@ -160,10 +161,11 @@ const publishGraphMutation = (source: import('ws').WebSocket, result: GraphMutat
 
 const rateLimitEventsPerSecond = serverConfig.get<number>('rateLimitEventsPerSecond');
 const eventQueue = new EventQueue(registry);
+const runtimeUpdateDispatcher = new RuntimeUpdateDispatcher(registry, projectManager, eventQueue);
 router.register('register', new RegisterHandler(registry, graphStore, rateLimitEventsPerSecond, systemConfig));
 router.register('graph:command', new GraphCommandHandler(registry, graphStore, publishGraphMutation));
-router.register('runtime:command', new RuntimeCommandHandler(registry, projectManager, eventQueue, rateLimitEventsPerSecond));
-const actionHandler = new ActionHandler(registry, graphStore, actionInputManager, publishGraphMutation);
+router.register('runtime:command', new RuntimeCommandHandler(registry, runtimeUpdateDispatcher, rateLimitEventsPerSecond));
+const actionHandler = new ActionHandler(registry, graphStore, actionInputManager, publishGraphMutation, runtimeUpdateDispatcher);
 router.register('action:input', actionHandler);
 router.register('action:trigger', actionHandler);
 router.register('events', new EventsHandler(registry));

@@ -2,23 +2,8 @@ import { WebSocket } from 'ws';
 import { Logger } from '../Logger';
 import { ConnectionRegistry } from '../ConnectionRegistry';
 import { MessageHandler, WsMessage } from '../MessageRouter';
-import { ProjectManager, ControllerIntent } from '../ProjectManager';
-import { EventQueue } from '../EventQueue';
 import { RuntimeCommand, RuntimeUpdate, isRuntimeCommand } from '../RuntimeProtocol';
-import { intentToEvent, normalizeIntentColor } from './intentHelpers';
-import { cloneRecord, removeAtDotPath, setAtDotPath } from '../dotPath';
-
-function applyRuntimePatch(base: Record<string, unknown>, update: RuntimeUpdate): Record<string, unknown> {
-  const next = cloneRecord(update.value ?? base);
-  next['guid'] = update.guid;
-  for (const [key, value] of Object.entries(update.patch ?? {})) {
-    setAtDotPath(next, key, value);
-  }
-  for (const key of update.remove ?? []) {
-    removeAtDotPath(next, key);
-  }
-  return next;
-}
+import { RuntimeUpdateDispatcher } from '../RuntimeUpdateDispatcher';
 
 function mergeRuntimeUpdate(existing: RuntimeUpdate | undefined, next: RuntimeUpdate): RuntimeUpdate {
   if (!existing) return next;
@@ -44,8 +29,7 @@ export class RuntimeCommandHandler implements MessageHandler {
 
   constructor(
     private registry: ConnectionRegistry,
-    private projectManager: ProjectManager,
-    private eventQueue: EventQueue,
+    private runtimeUpdateDispatcher: RuntimeUpdateDispatcher,
     rateLimitEventsPerSecond: number,
   ) {
     this.minIntervalMs = rateLimitEventsPerSecond > 0 ? 1000 / rateLimitEventsPerSecond : 40;
@@ -95,52 +79,6 @@ export class RuntimeCommandHandler implements MessageHandler {
     this.pending.clear();
     this.lastFlushAt = Date.now();
 
-    this.forwardRuntimeUpdates(updates, location);
-    const rendererEvents = this.runtimeUpdatesToRendererEvents(updates, this.lastFlushAt);
-    if (rendererEvents.length > 0) {
-      this.eventQueue.schedule(rendererEvents.map(event => ({ event, scheduledAt: this.lastFlushAt })), location);
-    }
-  }
-
-  private forwardRuntimeUpdates(updates: RuntimeUpdate[], location?: [number, number]): void {
-    const outbound = JSON.stringify({
-      message: {
-        type: 'runtime:update',
-        ...(location !== undefined ? { location } : {}),
-        payload: updates,
-      },
-    });
-    for (const ws of this.registry.getByRole('controller')) {
-      if (ws.readyState !== WebSocket.OPEN) continue;
-      ws.send(outbound);
-    }
-  }
-
-  private runtimeUpdatesToRendererEvents(updates: RuntimeUpdate[], now: number): object[] {
-    const events: object[] = [];
-    for (const update of updates) {
-      switch (update.entityType) {
-        case 'intent': {
-          const event = this.runtimeIntentUpdateToEvent(update, now);
-          if (event) events.push(event);
-          break;
-        }
-        default:
-          break;
-      }
-    }
-    return events;
-  }
-
-  private runtimeIntentUpdateToEvent(update: RuntimeUpdate, now: number): object | null {
-    if (!this.projectManager.isIntentInActiveScene(update.guid)) {
-      return null;
-    }
-    const existing = this.projectManager.getActiveSceneIntent(update.guid);
-    if (!existing) {
-      return null;
-    }
-    const intent = applyRuntimePatch(existing as unknown as Record<string, unknown>, update) as unknown as ControllerIntent;
-    return intentToEvent(normalizeIntentColor(intent), now + (intent.scheduled ?? 0));
+    this.runtimeUpdateDispatcher.dispatch(updates, location, this.lastFlushAt);
   }
 }

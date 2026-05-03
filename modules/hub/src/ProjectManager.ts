@@ -40,10 +40,31 @@ export interface SceneIntentRef {
   overlay?: Record<string, unknown>;
 }
 
-export interface ActionExecuteItem {
-  type: string;
+export interface ActionSceneExecuteItem {
+  type: 'scene';
   guid: string;
 }
+
+export interface ActionIntentExecuteItem {
+  type: 'intent';
+  guid: string;
+  params?: Record<string, unknown>;
+  patch?: Record<string, unknown>;
+  remove?: string[];
+  value?: Record<string, unknown>;
+  scheduled?: number;
+}
+
+export interface ActionUnknownExecuteItem {
+  type: string;
+  guid?: string;
+  [key: string]: unknown;
+}
+
+export type ActionExecuteItem =
+  | ActionSceneExecuteItem
+  | ActionIntentExecuteItem
+  | ActionUnknownExecuteItem;
 
 export interface ActionDefinition {
   guid?: string;

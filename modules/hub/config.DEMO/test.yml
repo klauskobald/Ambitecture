@@ -391,3 +391,12 @@ testParams:
           strobe: 0
           blend: ADD
           alpha: 1
+
+  002-intent-action.ts:
+    location: [0,0]
+    sceneName: one copy
+    actionGuid: action-intent-strobe-off
+    intentGuid: strobe-1
+    expectedParams:
+      strobe: 0
+      alpha: 0

@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { ActionDefinition, InputDefinition, ProjectManager, Scene } from './ProjectManager';
+import { ActionDefinition, ActionExecuteItem, InputDefinition, ProjectManager, Scene } from './ProjectManager';
 import { GraphCommand } from './GraphProtocol';
 
 type SceneTarget = {
@@ -34,7 +34,17 @@ export class ActionInputManager {
     const execute = Array.isArray(action.execute)
       ? action.execute.find(item => item.type === 'scene')
       : undefined;
-    return execute ? this.projectManager.getSceneByGuid(execute.guid) : undefined;
+    return execute ? this.getSceneForExecuteItem(execute) : undefined;
+  }
+
+  getExecuteItemsForAction(action: ActionDefinition): ActionExecuteItem[] {
+    return Array.isArray(action.execute) ? action.execute : [];
+  }
+
+  getSceneForExecuteItem(item: ActionExecuteItem): Scene | undefined {
+    return item.type === 'scene' && typeof item.guid === 'string'
+      ? this.projectManager.getSceneByGuid(item.guid)
+      : undefined;
   }
 
   private ensureSceneButtonCommands(sceneGuid: string): GraphCommand[] {

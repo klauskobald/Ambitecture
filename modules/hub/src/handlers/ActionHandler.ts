@@ -5,6 +5,9 @@ import { MessageHandler, WsMessage } from '../MessageRouter';
 import { ActionInputCommand, ActionInputManager } from '../ActionInputManager';
 import { GraphMutationResult } from '../GraphProtocol';
 import { ProjectGraphStore } from '../ProjectGraphStore';
+import { RuntimeUpdate } from '../RuntimeProtocol';
+import { RuntimeUpdateDispatcher } from '../RuntimeUpdateDispatcher';
+import { ActionExecuteItem } from '../ProjectManager';
 
 type ActionTriggerPayload = {
   actionGuid: string;
@@ -37,11 +40,12 @@ export class ActionHandler implements MessageHandler {
     private graphStore: ProjectGraphStore,
     private actionInputManager: ActionInputManager,
     private publishMutation: (source: WebSocket, result: GraphMutationResult, location?: [number, number]) => void,
+    private runtimeUpdateDispatcher: RuntimeUpdateDispatcher,
   ) {}
 
   handle(ws: WebSocket, message: WsMessage, _registry: ConnectionRegistry): void {
     const info = this.registry.get(ws);
-    if (info?.role !== 'controller') {
+    if (!info || info.role !== 'controller') {
       Logger.warn('[action] ignored — sender is not a controller');
       return;
     }
@@ -51,7 +55,7 @@ export class ActionHandler implements MessageHandler {
         this.handleInputCommand(ws, message);
         break;
       case 'action:trigger':
-        this.handleTrigger(ws, message);
+        this.handleTrigger(ws, message, info.guid);
         break;
       default:
         Logger.warn(`[action] unknown message type: ${message.type}`);
@@ -72,7 +76,7 @@ export class ActionHandler implements MessageHandler {
     }
   }
 
-  private handleTrigger(ws: WebSocket, message: WsMessage): void {
+  private handleTrigger(ws: WebSocket, message: WsMessage, sourceGuid: string): void {
     if (!isActionTriggerPayload(message.payload)) {
       Logger.warn('[action] invalid action:trigger payload');
       return;
@@ -82,15 +86,94 @@ export class ActionHandler implements MessageHandler {
       Logger.warn(`[action] action ${message.payload.actionGuid} not found`);
       return;
     }
-    const scene = this.actionInputManager.getSceneForAction(action);
-    if (!scene?.name) {
-      Logger.warn(`[action] action ${message.payload.actionGuid} has no supported scene target`);
+    const executeItems = this.actionInputManager.getExecuteItemsForAction(action);
+    if (executeItems.length === 0) {
+      Logger.warn(`[action] action ${message.payload.actionGuid} has no execute targets`);
       return;
+    }
+
+    let handled = 0;
+    for (const item of executeItems) {
+      switch (item.type) {
+        case 'scene':
+          handled += this.executeSceneItem(ws, item, message);
+          break;
+        case 'intent':
+          handled += this.executeIntentItem(item, sourceGuid, message.location);
+          break;
+        default:
+          Logger.warn(`[action] unsupported execute type "${item.type}" on ${action.guid ?? message.payload.actionGuid}`);
+          break;
+      }
+    }
+    if (handled === 0) {
+      Logger.warn(`[action] action ${message.payload.actionGuid} has no supported execute targets`);
+      return;
+    }
+    Logger.info(`[action] triggered ${action.guid ?? message.payload.actionGuid} (${handled} execute item(s))`);
+  }
+
+  private executeSceneItem(ws: WebSocket, item: ActionExecuteItem, message: WsMessage): number {
+    const scene = this.actionInputManager.getSceneForExecuteItem(item);
+    if (!scene?.name) {
+      Logger.warn(`[action] scene target ${item.guid ?? 'unknown'} not found`);
+      return 0;
     }
     const result = this.graphStore.activateScene(scene.name, message.location);
     this.sendResultToSource(ws, result);
     this.publishMutation(ws, result, message.location);
-    Logger.info(`[action] triggered ${action.guid ?? message.payload.actionGuid} → scene "${scene.name}"`);
+    return 1;
+  }
+
+  private executeIntentItem(item: ActionExecuteItem, sourceGuid: string, location?: [number, number]): number {
+    const update = this.intentExecuteItemToRuntimeUpdate(item, sourceGuid);
+    if (!update) return 0;
+    this.runtimeUpdateDispatcher.dispatch([update], location);
+    return 1;
+  }
+
+  private intentExecuteItemToRuntimeUpdate(item: ActionExecuteItem, sourceGuid: string): RuntimeUpdate | null {
+    if (item.type !== 'intent' || typeof item.guid !== 'string' || item.guid.length === 0) {
+      Logger.warn('[action] invalid intent execute item');
+      return null;
+    }
+    const itemRecord = item as Record<string, unknown>;
+    const paramsPatch = this.paramsToRuntimePatch(itemRecord['params']);
+    const explicitPatch = this.recordOrUndefined(itemRecord['patch']);
+    const patch = {
+      ...paramsPatch,
+      ...(explicitPatch ?? {}),
+    };
+    const remove = Array.isArray(itemRecord['remove'])
+      ? itemRecord['remove'].filter((entry): entry is string => typeof entry === 'string')
+      : undefined;
+    const value = this.recordOrUndefined(itemRecord['value']);
+    const scheduled = typeof itemRecord['scheduled'] === 'number' ? itemRecord['scheduled'] : undefined;
+
+    return {
+      entityType: 'intent',
+      guid: item.guid,
+      source: sourceGuid,
+      ...(Object.keys(patch).length > 0 ? { patch } : {}),
+      ...(remove !== undefined ? { remove } : {}),
+      ...(value !== undefined ? { value } : {}),
+      ...(scheduled !== undefined ? { scheduled } : {}),
+    };
+  }
+
+  private paramsToRuntimePatch(params: unknown): Record<string, unknown> {
+    const record = this.recordOrUndefined(params);
+    if (!record) return {};
+    const patch: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(record)) {
+      patch[`params.${key}`] = value;
+    }
+    return patch;
+  }
+
+  private recordOrUndefined(value: unknown): Record<string, unknown> | undefined {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+    return value as Record<string, unknown>;
   }
 
   private sendResultToSource(ws: WebSocket, result: GraphMutationResult): void {

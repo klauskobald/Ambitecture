@@ -60,7 +60,7 @@ export class PropertyControl {
     if (showQuickPanel) {
       this._quickPanelBtn = document.createElement('button')
       this._quickPanelBtn.className =
-        'prop-row__toggle intent-quick-panel intent-quick-panel--inactive'
+        'prop-row__toggle intent-toggle intent-quick-panel'
       this._quickPanelBtn.type = 'button'
       this._quickPanelBtn.textContent = '\u2742'
       this._quickPanelBtn.setAttribute('aria-label', 'Quick panel')
@@ -372,33 +372,19 @@ export class PropertyControl {
     switch (qpState) {
       case 'on':
         this._quickPanelBtn.setAttribute('aria-checked', 'true')
-        this._quickPanelBtn.classList.add(
-          'intent-toggle--enabled',
-          'intent-quick-panel--active'
-        )
-        this._quickPanelBtn.classList.remove(
-          'intent-quick-panel--inactive',
-          'prop-row__toggle--mixed'
-        )
+        this._quickPanelBtn.classList.add('intent-toggle--enabled')
+        this._quickPanelBtn.classList.remove('prop-row__toggle--mixed')
         break
       case 'mixed':
         this._quickPanelBtn.setAttribute('aria-checked', 'mixed')
-        this._quickPanelBtn.classList.add(
-          'prop-row__toggle--mixed',
-          'intent-quick-panel--inactive'
-        )
-        this._quickPanelBtn.classList.remove(
-          'intent-toggle--enabled',
-          'intent-quick-panel--active'
-        )
+        this._quickPanelBtn.classList.add('prop-row__toggle--mixed')
+        this._quickPanelBtn.classList.remove('intent-toggle--enabled')
         break
       case 'off':
       default:
         this._quickPanelBtn.setAttribute('aria-checked', 'false')
-        this._quickPanelBtn.classList.add('intent-quick-panel--inactive')
         this._quickPanelBtn.classList.remove(
           'intent-toggle--enabled',
-          'intent-quick-panel--active',
           'prop-row__toggle--mixed'
         )
         break

@@ -169,15 +169,21 @@ export function sendActionInputCommand (command) {
   }))
 }
 
-/** @param {string} actionGuid */
-export function sendActionTrigger (actionGuid) {
+/**
+ * @param {string} actionGuid
+ * @param {Record<string, unknown>=} args
+ */
+export function sendActionTrigger (actionGuid, args) {
   if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation)
     return
+  const payload = args && typeof args === 'object' && !Array.isArray(args)
+    ? { actionGuid, args }
+    : { actionGuid }
   activeWs.send(JSON.stringify({
     message: {
       type: 'action:trigger',
       location: activeLocation,
-      payload: { actionGuid }
+      payload
     }
   }))
 }

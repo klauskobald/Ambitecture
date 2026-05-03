@@ -11,6 +11,7 @@ import { ActionExecuteItem } from '../ProjectManager';
 
 type ActionTriggerPayload = {
   actionGuid: string;
+  args?: Record<string, unknown>;
 };
 
 function isActionInputCommand(payload: unknown): payload is ActionInputCommand {
@@ -31,7 +32,10 @@ function isActionInputCommand(payload: unknown): payload is ActionInputCommand {
 
 function isActionTriggerPayload(payload: unknown): payload is ActionTriggerPayload {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false;
-  return typeof (payload as Record<string, unknown>)['actionGuid'] === 'string';
+  const p = payload as Record<string, unknown>;
+  const args = p['args'];
+  const hasValidArgs = args === undefined || (typeof args === 'object' && args !== null && !Array.isArray(args));
+  return typeof p['actionGuid'] === 'string' && hasValidArgs;
 }
 
 export class ActionHandler implements MessageHandler {
@@ -99,7 +103,7 @@ export class ActionHandler implements MessageHandler {
           handled += this.executeSceneItem(ws, item, message);
           break;
         case 'intent':
-          handled += this.executeIntentItem(item, sourceGuid, message.location);
+          handled += this.executeIntentItem(item, sourceGuid, message.payload.args, message.location);
           break;
         default:
           Logger.warn(`[action] unsupported execute type "${item.type}" on ${action.guid ?? message.payload.actionGuid}`);
@@ -125,14 +129,23 @@ export class ActionHandler implements MessageHandler {
     return 1;
   }
 
-  private executeIntentItem(item: ActionExecuteItem, sourceGuid: string, location?: [number, number]): number {
-    const update = this.intentExecuteItemToRuntimeUpdate(item, sourceGuid);
+  private executeIntentItem(
+    item: ActionExecuteItem,
+    sourceGuid: string,
+    args: Record<string, unknown> | undefined,
+    location?: [number, number]
+  ): number {
+    const update = this.intentExecuteItemToRuntimeUpdate(item, sourceGuid, args);
     if (!update) return 0;
     this.runtimeUpdateDispatcher.dispatch([update], location);
     return 1;
   }
 
-  private intentExecuteItemToRuntimeUpdate(item: ActionExecuteItem, sourceGuid: string): RuntimeUpdate | null {
+  private intentExecuteItemToRuntimeUpdate(
+    item: ActionExecuteItem,
+    sourceGuid: string,
+    args: Record<string, unknown> | undefined
+  ): RuntimeUpdate | null {
     if (item.type !== 'intent' || typeof item.guid !== 'string' || item.guid.length === 0) {
       Logger.warn('[action] invalid intent execute item');
       return null;
@@ -143,6 +156,7 @@ export class ActionHandler implements MessageHandler {
     const patch = {
       ...paramsPatch,
       ...(explicitPatch ?? {}),
+      ...(args ?? {}),
     };
     const remove = Array.isArray(itemRecord['remove'])
       ? itemRecord['remove'].filter((entry): entry is string => typeof entry === 'string')

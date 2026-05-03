@@ -14,6 +14,15 @@ const DOUBLE_TAP_DIST_PX = 40
 const TAP_MAX_MOVE_PX = 12
 const SCRUB_MOVE_THRESHOLD_PX = 10
 
+/** Scale while the user is dragging (1 = normal). Clamped down if it would leave the viewport. */
+export const RADIAL_KNOB_ENGAGED_TARGET_SCALE = 3
+
+/** Minimum inset from window / visualViewport edges when scaled. */
+export const RADIAL_KNOB_VIEW_MARGIN_PX = 10
+
+/** Step when reducing scale so the enlarged dial fits on screen. */
+export const RADIAL_KNOB_SCALE_SHRINK_STEP = 0.04
+
 /** Clock positions as clockwise degrees from 12 o’clock (rotate(0) = needle at top). */
 const DEG_7_OCLOCK = 210
 const DEG_5_OCLOCK = 150
@@ -94,6 +103,13 @@ export class ScalarRadialKnob {
       this._domainMin,
       this._domainMax
     )
+
+    /** @type {boolean} */
+    this._dialEngaged = false
+    /** @type {() => void} */
+    this._boundResizeRelayout = () => {
+      if (this._dialEngaged) this._ensureEngagedDialOnScreen()
+    }
   }
 
   /**
@@ -174,6 +190,7 @@ export class ScalarRadialKnob {
   }
 
   destroy () {
+    this._setDialEngaged(false)
     this._abort?.abort()
     this._abort = null
     this._root = null
@@ -181,6 +198,95 @@ export class ScalarRadialKnob {
     this._needle = null
     this._label = null
     this._valueEl = null
+  }
+
+  /**
+   * @param {boolean} engaged
+   */
+  _setDialEngaged (engaged) {
+    if (engaged === this._dialEngaged) return
+    const root = this._root
+    if (!engaged) {
+      this._dialEngaged = false
+      window.removeEventListener('resize', this._boundResizeRelayout)
+      const vvOff = window.visualViewport
+      if (vvOff) {
+        vvOff.removeEventListener('resize', this._boundResizeRelayout)
+        vvOff.removeEventListener('scroll', this._boundResizeRelayout)
+      }
+      if (root) {
+        root.classList.remove('quick-panel-knob--engaged')
+        root.style.transform = ''
+        root.style.zIndex = ''
+      }
+      return
+    }
+    if (!root || !this._dial) return
+    this._dialEngaged = true
+    root.classList.add('quick-panel-knob--engaged')
+    window.addEventListener('resize', this._boundResizeRelayout)
+    const vvOn = window.visualViewport
+    if (vvOn) {
+      vvOn.addEventListener('resize', this._boundResizeRelayout)
+      vvOn.addEventListener('scroll', this._boundResizeRelayout)
+    }
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => this._ensureEngagedDialOnScreen())
+    })
+  }
+
+  /** Fits scaled knob (caption + dial) inside the visual viewport; may reduce scale below {@link RADIAL_KNOB_ENGAGED_TARGET_SCALE}. */
+  _ensureEngagedDialOnScreen () {
+    if (!this._dialEngaged || !this._root) return
+    const box = this._root
+    const m = RADIAL_KNOB_VIEW_MARGIN_PX
+    const vv = window.visualViewport
+    const vw = vv?.width ?? window.innerWidth
+    const vh = vv?.height ?? window.innerHeight
+    const vx = vv?.offsetLeft ?? 0
+    const vy = vv?.offsetTop ?? 0
+    const leftBound = vx + m
+    const topBound = vy + m
+    const rightBound = vx + vw - m
+    const bottomBound = vy + vh - m
+
+    let s = RADIAL_KNOB_ENGAGED_TARGET_SCALE
+    let tx = 0
+    let ty = 0
+    const apply = () => {
+      box.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`
+    }
+
+    apply()
+    box.offsetWidth
+    let r = box.getBoundingClientRect()
+    while (
+      s > 1.02 &&
+      (r.width > rightBound - leftBound ||
+        r.height > bottomBound - topBound)
+    ) {
+      s -= RADIAL_KNOB_SCALE_SHRINK_STEP
+      apply()
+      r = box.getBoundingClientRect()
+    }
+
+    for (let pass = 0; pass < 6; pass++) {
+      r = box.getBoundingClientRect()
+      if (
+        r.left >= leftBound - 0.5 &&
+        r.top >= topBound - 0.5 &&
+        r.right <= rightBound + 0.5 &&
+        r.bottom <= bottomBound + 0.5
+      ) {
+        break
+      }
+      if (r.left < leftBound) tx += leftBound - r.left
+      if (r.right > rightBound) tx += rightBound - r.right
+      if (r.top < topBound) ty += topBound - r.top
+      if (r.bottom > bottomBound) ty += bottomBound - r.bottom
+      apply()
+      box.offsetWidth
+    }
   }
 
   // ── Geometry / mapping ────────────────────────────────────────────────────
@@ -339,6 +445,7 @@ export class ScalarRadialKnob {
     this._dragStartClientX = e.clientX
     this._dragStartClientY = e.clientY
     this._dragStartT = this._t
+    this._setDialEngaged(true)
     this._dial.setPointerCapture(e.pointerId)
     e.preventDefault()
   }
@@ -366,6 +473,7 @@ export class ScalarRadialKnob {
   /** @param {PointerEvent} e */
   _onPointerUp (e) {
     if (!this._dial || this._dragPointerId !== e.pointerId) return
+    this._setDialEngaged(false)
     try {
       this._dial.releasePointerCapture(e.pointerId)
     } catch {
@@ -391,6 +499,7 @@ export class ScalarRadialKnob {
   /** @param {PointerEvent} e */
   _onPointerCancel (e) {
     if (!this._dial || this._dragPointerId !== e.pointerId) return
+    this._setDialEngaged(false)
     try {
       this._dial.releasePointerCapture(e.pointerId)
     } catch {

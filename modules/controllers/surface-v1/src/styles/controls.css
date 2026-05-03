@@ -435,16 +435,27 @@
   gap: 0.12rem;
   min-width: 3.1rem;
   touch-action: none;
+  transform-origin: center center;
+  transition: transform 0.16s ease-out;
+}
+
+.quick-panel-knob--engaged {
+  z-index: 30;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.55);
+}
+
+.quick-panel-knob--engaged .quick-panel-knob__dial {
+  cursor: grabbing;
 }
 
 .quick-panel-knob__caption {
-  font-size: 0.55rem;
+  font-size: 0.755rem;
   max-width: 3.8rem;
   text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--color-text-muted);
+  color: var(--color-text);
 }
 
 .quick-panel-knob__dial {
@@ -467,8 +478,8 @@
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 3px;
-  height: 17px;
+  width: 7px;
+  height: 20px;
   margin: 0;
   background: var(--color-accent);
   border-radius: 2px;

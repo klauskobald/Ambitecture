@@ -16,7 +16,7 @@ export class ActionBar {
   buildElement () {
     this._el = document.createElement('div')
     this._el.className = 'action-bar'
-    this._el.hidden = true
+    this._el.style.display = 'none'
 
     this._modifyBtn = document.createElement('button')
     this._modifyBtn.className = 'btn action-bar__btn'
@@ -42,10 +42,13 @@ export class ActionBar {
     return this._el
   }
 
-  /** @param {number} size */
-  refresh (size) {
-    if (!this._el || !this._modifyBtn) return
-    this._el.hidden = size === 0
-    this._modifyBtn.disabled = size === 0
+  /**
+   * @param {number} size
+   * @param {boolean} selectModeActive — multi-select mode is on (Select toolbar button)
+   */
+  refresh (size, selectModeActive) {
+    if (!this._el) return
+    const show = selectModeActive && size > 0
+    this._el.style.display = show ? '' : 'none'
   }
 }

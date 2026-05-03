@@ -74,9 +74,9 @@ export class EditPane {
     this._el.hidden = false
 
     this._selectionUnsub = selectionState.subscribe(() => {
-      this._actionBar.refresh(selectionState.getSize())
+      this._refreshActionBar()
     })
-    this._actionBar.refresh(selectionState.getSize())
+    this._refreshActionBar()
 
     this._overlay.setDoubleTapIntentCallback(guid => this._handleDoubleTapIntent(guid))
   }
@@ -94,6 +94,10 @@ export class EditPane {
   }
 
   // ── Mode registry ─────────────────────────────────────────────────────────────
+
+  _refreshActionBar () {
+    this._actionBar.refresh(selectionState.getSize(), this._activeMode === 'select')
+  }
 
   _toggleFixtureLock () {
     setEditFixturesUnlocked(!getEditFixturesUnlocked())
@@ -151,6 +155,7 @@ export class EditPane {
     const btn = this._modeBar.querySelector(`[data-mode-id="${modeId}"]`)
     btn?.classList.add('btn--active')
     if (modeId === 'performEnable') btn && (btn.textContent = 'Done')
+    this._refreshActionBar()
   }
 
   _exitCurrentMode () {
@@ -168,6 +173,7 @@ export class EditPane {
     btn?.classList.remove('btn--active')
     const mode = this._modes().find(m => m.id === prev)
     if (btn && mode) btn.textContent = mode.label
+    this._refreshActionBar()
   }
 
   // ── Manager builders ──────────────────────────────────────────────────────────

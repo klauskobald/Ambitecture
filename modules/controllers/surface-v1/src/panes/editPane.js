@@ -54,7 +54,7 @@ export class EditPane {
     this._actionBar = new ActionBar({
       onModify: () => this._onModifyClick(),
       onCopy: () => {},
-      onDelete: () => {}
+      onDelete: () => { void this._onDeleteClick() }
     })
     this._el.appendChild(this._actionBar.buildElement())
 
@@ -274,6 +274,78 @@ export class EditPane {
     const descriptors = resolveDescriptorsForClass('light')
     if (!descriptors) return
     this._drawer.open(descriptors, selectionState.getGuids())
+  }
+
+  async _onDeleteClick () {
+    const guids = [...selectionState.getGuids()]
+    if (guids.length === 0) return
+
+    const choice = await pickChoice('Delete selected intent(s)', [
+      { value: 'purge', label: 'Delete completely' },
+      { value: 'scene', label: 'Remove from Scene' },
+    ])
+    if (!choice) return
+
+    if (choice === 'scene') {
+      const activeScene = projectGraph.getActiveSceneName()
+      if (!activeScene) {
+        await modalWarn('Select or create a scene first.')
+        return
+      }
+      let changed = false
+      for (const guid of guids) {
+        if (projectGraph.removeIntentRefFromScene(activeScene, guid)) changed = true
+      }
+      if (!changed) {
+        await modalWarn('Selected intent(s) are not in the active scene.')
+        return
+      }
+      sendSaveProject('scenes', projectGraph.getHubScenesWire())
+      if (activeScene === projectGraph.getActiveSceneName()) {
+        sendSceneActivate(activeScene)
+      }
+      selectionState.clearAll()
+      this._drawer.close()
+      return
+    }
+
+    if (choice === 'purge') {
+      const toPurge = guids.filter(g => projectGraph.getIntents().has(g))
+      if (toPurge.length === 0) {
+        await modalWarn('Nothing to delete.')
+        return
+      }
+      /** @type {string[]} */
+      const performRemoveKeys = []
+      for (const guid of toPurge) {
+        performRemoveKeys.push(`interactionPolicies.performEnabled.${guid}`)
+        projectGraph.purgeIntentFromProject(guid)
+      }
+      sendSaveProject('scenes', projectGraph.getHubScenesWire())
+      for (const guid of toPurge) {
+        sendGraphCommand({
+          op: 'remove',
+          entityType: 'intent',
+          guid,
+          persistence: 'runtimeAndDurable',
+        })
+      }
+      const controllerGuid = projectGraph.getControllerGuid()
+      if (controllerGuid) {
+        sendGraphCommand({
+          op: 'patch',
+          entityType: 'controller',
+          guid: controllerGuid,
+          patch: { intents: projectGraph.getControllerIntentRefs() },
+          remove: performRemoveKeys,
+          persistence: 'runtimeAndDurable',
+        })
+      }
+      const activeScene = projectGraph.getActiveSceneName()
+      if (activeScene) sendSceneActivate(activeScene)
+      selectionState.clearAll()
+      this._drawer.close()
+    }
   }
 
   /** @param {string} guid */

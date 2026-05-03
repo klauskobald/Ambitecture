@@ -8,6 +8,10 @@ export class ActionBar {
     this._onDelete = onDelete
     /** @type {HTMLButtonElement | null} */
     this._modifyBtn = null
+    /** @type {HTMLButtonElement | null} */
+    this._copyBtn = null
+    /** @type {HTMLButtonElement | null} */
+    this._deleteBtn = null
     /** @type {HTMLElement | null} */
     this._el = null
   }
@@ -23,21 +27,21 @@ export class ActionBar {
     this._modifyBtn.textContent = 'Modify'
     this._modifyBtn.addEventListener('click', () => this._onModify())
 
-    const copyBtn = document.createElement('button')
-    copyBtn.className = 'btn action-bar__btn'
-    copyBtn.textContent = 'Copy'
-    copyBtn.disabled = true
-    copyBtn.addEventListener('click', () => this._onCopy())
+    this._copyBtn = document.createElement('button')
+    this._copyBtn.className = 'btn action-bar__btn'
+    this._copyBtn.textContent = 'Copy'
+    this._copyBtn.disabled = true
+    this._copyBtn.addEventListener('click', () => this._onCopy())
 
-    const deleteBtn = document.createElement('button')
-    deleteBtn.className = 'btn action-bar__btn btn--danger'
-    deleteBtn.textContent = 'Delete'
-    deleteBtn.disabled = true
-    deleteBtn.addEventListener('click', () => this._onDelete())
+    this._deleteBtn = document.createElement('button')
+    this._deleteBtn.className = 'btn action-bar__btn btn--danger'
+    this._deleteBtn.textContent = 'Delete'
+    this._deleteBtn.disabled = true
+    this._deleteBtn.addEventListener('click', () => this._onDelete())
 
     this._el.appendChild(this._modifyBtn)
-    this._el.appendChild(copyBtn)
-    this._el.appendChild(deleteBtn)
+    this._el.appendChild(this._copyBtn)
+    this._el.appendChild(this._deleteBtn)
 
     return this._el
   }
@@ -50,5 +54,7 @@ export class ActionBar {
     if (!this._el) return
     const show = selectModeActive && size > 0
     this._el.style.display = show ? '' : 'none'
+    if (this._deleteBtn) this._deleteBtn.disabled = size === 0
+    if (this._copyBtn) this._copyBtn.disabled = true
   }
 }

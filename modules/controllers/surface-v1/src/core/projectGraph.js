@@ -275,6 +275,59 @@ class ProjectGraph {
   }
 
   /**
+   * Remove an intent ref from one scene if present (does not add). Mirrors turning an intent off in Scenes pane.
+   * @param {string} sceneName
+   * @param {string} guid
+   * @returns {boolean} true if a ref was removed
+   */
+  removeIntentRefFromScene (sceneName, guid) {
+    const scene = this._data.scenes.find(s => s.name === sceneName)
+    if (!scene) return false
+    const idx = scene.intents.findIndex(ref => ref.guid === guid)
+    if (idx === -1) return false
+    scene.intents.splice(idx, 1)
+    this._notify()
+    return true
+  }
+
+  /**
+   * Scenes array formatted for hub `project` save (ensures scene guids, clones overlays).
+   * @returns {Array<{ guid: string, name: string, intents: SceneIntentRef[] }>}
+   */
+  getHubScenesWire () {
+    return this._data.scenes.map(s => ({
+      guid: s.guid || this._newGuid('scene'),
+      name: s.name,
+      intents: s.intents.map(cloneSceneIntentRef),
+    }))
+  }
+
+  /**
+   * Remove intent definition, all scene refs, controller ref, runtime copy, config, and perform-enable state (local graph only).
+   * @param {string} guid
+   */
+  purgeIntentFromProject (guid) {
+    if (!guid) return
+    this._data.intents.delete(guid)
+    this._data.runtimeIntents.delete(guid)
+    this._data.controller.intentConfig.delete(guid)
+    for (const scene of this._data.scenes) {
+      scene.intents = scene.intents.filter(ref => ref.guid !== guid)
+    }
+    const nextRefs = this._data.controller.intentRefs.filter(r => r.guid !== guid)
+    if (nextRefs.length !== this._data.controller.intentRefs.length) {
+      this._data.controller.intentRefs = nextRefs
+    }
+    const state = this._data.controller.state
+    const base = state && typeof state === 'object' && !Array.isArray(state)
+      ? /** @type {Record<string, unknown>} */ (state)
+      : /** @type {Record<string, unknown>} */ ({})
+    const dotKey = `interactionPolicies.performEnabled.${guid}`
+    this._data.controller.state = cloneAndDeleteAtDotPath(base, dotKey)
+    this._notify()
+  }
+
+  /**
    * @param {string} sceneName
    * @param {string} guid
    * @param {string} dotKey

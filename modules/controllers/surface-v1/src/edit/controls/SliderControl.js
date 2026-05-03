@@ -40,6 +40,12 @@ export class SliderControl extends PropertyControl {
     this._dragStartX = 0
     /** @type {number} */
     this._dragStartT = 0
+    /** @type {number} cached slide width divisor (track px minus bubble) for active drag */
+    this._dragSlidePx = 1
+    /** @type {number} decimals for label from current step */
+    this._displayDecimals = 2
+    /** @type {number} last estimated bubble width (px) for layout */
+    this._bubbleWidthPx = 32
   }
 
   destroy () {
@@ -104,12 +110,14 @@ export class SliderControl extends PropertyControl {
       this._dMax = deltaConfig.range[1]
       const dSpan = this._dMax - this._dMin
       this._deltaStep = this._resolveStep(deltaConfig.step, this._dMin, this._dMax)
+      this._displayDecimals = this._decimalPlacesFromStep(this._deltaStep)
 
       const noOp = deltaConfig.fn === 'MULTIPLY' ? 1 : 0
       this._t = dSpan !== 0 ? (noOp - this._dMin) / dSpan : 0
       this._t = Math.max(0, Math.min(1, this._t))
 
       this._track.className = 'prop-slider-track prop-slider-track--relative'
+      this._applyBubbleFixedWidth(this._dMin, this._dMax)
       this._setAriaDelta()
       this._syncVisualFromT()
       this._refreshBubbleLabel()
@@ -117,6 +125,7 @@ export class SliderControl extends PropertyControl {
       this._absMin = min
       this._absMax = max
       this._absStep = this._resolveStep(this._descriptor.step, min, max)
+      this._displayDecimals = this._decimalPlacesFromStep(this._absStep)
       const rawFn = this._descriptor.stepFunction
       this._stepFnName = typeof rawFn === 'string' && rawFn.length > 0 ? rawFn : null
 
@@ -130,6 +139,7 @@ export class SliderControl extends PropertyControl {
       this._t = Math.max(0, Math.min(1, this._t))
 
       this._track.className = 'prop-slider-track'
+      this._applyBubbleFixedWidth(min, max)
       this._setAriaAbsolute()
       this._syncVisualFromT()
       this._refreshBubbleLabel()
@@ -155,6 +165,7 @@ export class SliderControl extends PropertyControl {
     this._dragPointerId = e.pointerId
     this._dragStartX = e.clientX
     this._dragStartT = this._t
+    this._dragSlidePx = this._slideWidthPx()
     this._track.setPointerCapture(e.pointerId)
     e.preventDefault()
   }
@@ -162,11 +173,10 @@ export class SliderControl extends PropertyControl {
   /** @param {PointerEvent} e */
   _onPointerMove (e) {
     if (this._dragPointerId !== e.pointerId || !this._track) return
-    const rect = this._track.getBoundingClientRect()
-    const width = rect.width
-    if (width <= 0) return
+    const slidePx = this._dragSlidePx
+    if (slidePx <= 0) return
     const dx = e.clientX - this._dragStartX
-    this._t = Math.max(0, Math.min(1, this._dragStartT + dx / width))
+    this._t = Math.max(0, Math.min(1, this._dragStartT + dx / slidePx))
     this._commitFromT()
     e.preventDefault()
   }
@@ -239,10 +249,115 @@ export class SliderControl extends PropertyControl {
   }
 
   _syncVisualFromT () {
-    if (!this._fill || !this._bubble) return
-    const pct = this._t * 100
-    this._fill.style.width = `${pct}%`
-    this._bubble.style.left = `${pct}%`
+    if (!this._fill || !this._bubble || !this._track) return
+    const rect = this._track.getBoundingClientRect()
+    const W = rect.width
+    if (W <= 0) return
+    const halfBubble = this._bubbleHalfWidthPx(W)
+    const usable = Math.max(0, W - 2 * halfBubble)
+    const centerX = halfBubble + this._t * usable
+    const leftPct = (centerX / W) * 100
+    this._fill.style.width = `${leftPct}%`
+    this._bubble.style.left = `${leftPct}%`
+  }
+
+  /**
+   * Horizontal travel for t in [0,1] (px), excluding bubble margin at both ends.
+   * @returns {number}
+   */
+  _slideWidthPx () {
+    if (!this._track) return 1
+    const W = this._track.getBoundingClientRect().width
+    if (W <= 0) return 1
+    const halfBubble = this._bubbleHalfWidthPx(W)
+    return Math.max(1, W - 2 * halfBubble)
+  }
+
+  /**
+   * @param {number} trackWidthPx
+   * @returns {number}
+   */
+  _bubbleHalfWidthPx (trackWidthPx) {
+    const w = this._bubbleWidthPx
+    const half = w / 2
+    const maxHalf = Math.max(0, trackWidthPx / 2 - 0.5)
+    return Math.min(half, maxHalf)
+  }
+
+  /**
+   * Fixed pill width from longest label in range + guessed char width.
+   * Optional descriptor.bubbleCharWidth (px per digit).
+   * @param {number} rangeMin
+   * @param {number} rangeMax
+   */
+  _applyBubbleFixedWidth (rangeMin, rangeMax) {
+    if (!this._bubble) return
+    const dec = this._displayDecimals
+    const w = this._estimateBubbleWidthPx(dec, rangeMin, rangeMax)
+    this._bubbleWidthPx = w
+    this._bubble.style.width = `${w}px`
+    this._bubble.style.minWidth = `${w}px`
+    this._bubble.style.maxWidth = `${w}px`
+  }
+
+  /**
+   * @returns {number}
+   */
+  _bubbleCharWidthPx () {
+    const raw = this._descriptor.bubbleCharWidth
+    const n = Number(raw)
+    return n > 0 ? n : 7.2
+  }
+
+  /**
+   * Horizontal padding + border estimate for .prop-slider-bubble (matches CSS ~0.45rem * 2 + border).
+   * @returns {number}
+   */
+  _bubbleHorizontalChromePx () {
+    return 16
+  }
+
+  /**
+   * @param {number} decimals
+   * @param {number} rangeMin
+   * @param {number} rangeMax
+   * @returns {number}
+   */
+  _estimateBubbleWidthPx (decimals, rangeMin, rangeMax) {
+    const charW = this._bubbleCharWidthPx()
+    const pad = this._bubbleHorizontalChromePx()
+    const sMin = this._formatDisplayFixed(rangeMin, decimals)
+    const sMax = this._formatDisplayFixed(rangeMax, decimals)
+    const len = Math.max(sMin.length, sMax.length)
+    return Math.max(28, len * charW + pad)
+  }
+
+  /**
+   * @param {number} step
+   * @returns {number}
+   */
+  _decimalPlacesFromStep (step) {
+    if (!Number.isFinite(step) || step <= 0) return 2
+    if (Math.abs(step - Math.round(step)) < 1e-9) return 0
+    let n = 0
+    let x = step
+    for (; n < 12; n++) {
+      const r = Math.round(x)
+      if (Math.abs(x - r) < 1e-7) break
+      x *= 10
+    }
+    return Math.min(n, 8)
+  }
+
+  /**
+   * @param {number} value
+   * @param {number} decimals
+   * @returns {string}
+   */
+  _formatDisplayFixed (value, decimals) {
+    if (!Number.isFinite(value)) return ''
+    if (decimals <= 0) return String(Math.round(value))
+    return value.toFixed(decimals)
   }
 
   /**
@@ -331,17 +446,12 @@ export class SliderControl extends PropertyControl {
 
   /**
    * @param {number} value
-   * @param {number} step
+   * @param {number} _step
    * @returns {string}
    */
-  _formatDisplay (value, step) {
+  _formatDisplay (value, _step) {
     if (!Number.isFinite(value)) return ''
-    const s = Number(step)
-    if (s >= 1) return String(Math.round(value))
-    const str = String(s)
-    const dot = str.indexOf('.')
-    const dec = dot < 0 ? 0 : Math.min(6, str.length - dot - 1)
-    return String(Number(value.toFixed(dec)))
+    return this._formatDisplayFixed(value, this._displayDecimals)
   }
 
   /** @returns {{ fn: string, range: [number, number], step?: number }} */

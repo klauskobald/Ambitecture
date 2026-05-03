@@ -20,6 +20,7 @@ systemCapabilities:
         step: 1
         defaultValue: 100
         noMultiple: true
+        isMandatory: true
       - dotKey: params.alpha
         name: Alpha
         allowOverlay: true

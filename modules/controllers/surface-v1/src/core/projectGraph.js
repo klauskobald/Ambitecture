@@ -354,6 +354,10 @@ class ProjectGraph {
     if (!intent) return null
     const updated = cloneAndSetAtDotPath(/** @type {Record<string, unknown>} */ (intent), dotKey, value)
     this._data.intents.set(guid, updated)
+    const runtime = this._data.runtimeIntents.get(guid)
+    if (runtime) {
+      this._data.runtimeIntents.set(guid, cloneAndSetAtDotPath(runtime, dotKey, value))
+    }
     this._notify()
     return { guid, patch: { [dotKey]: value } }
   }
@@ -370,6 +374,10 @@ class ProjectGraph {
     if (!intent) return null
     const updated = cloneAndDeleteAtDotPath(/** @type {Record<string, unknown>} */ (intent), dotKey)
     this._data.intents.set(guid, updated)
+    const runtime = this._data.runtimeIntents.get(guid)
+    if (runtime) {
+      this._data.runtimeIntents.set(guid, cloneAndDeleteAtDotPath(runtime, dotKey))
+    }
     this._notify()
     return { guid, remove: [dotKey] }
   }

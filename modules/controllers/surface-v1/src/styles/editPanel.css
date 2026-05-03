@@ -172,7 +172,7 @@
   top: 50%;
   left: 0%;
   transform: translate(-50%, -50%);
-  min-width: 2rem;
+  box-sizing: border-box;
   padding: 0.15rem 0.45rem;
   border-radius: 999px;
   font-size: 0.72rem;

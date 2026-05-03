@@ -64,6 +64,10 @@ export class HubSocket {
     return this.sendMessage('runtime:command', command);
   }
 
+  sendActionTrigger(actionGuid: string): boolean {
+    return this.sendMessage('action:trigger', { actionGuid });
+  }
+
   sendMessage(type: string, payload: unknown): boolean {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       return false;

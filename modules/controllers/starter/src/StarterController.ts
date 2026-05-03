@@ -8,9 +8,11 @@ export class StarterController {
   private readonly graph = new ProjectGraph();
   private readonly socket: HubSocket;
   private sampleTimer: ReturnType<typeof setInterval> | null = null;
+  private sampleActionTimer: ReturnType<typeof setInterval> | null = null;
   private sampleBounds: MovementBounds | null = null;
   private sampleStartedAt = 0;
   private lastSampleLogAt = 0;
+  private nextSampleActionIndex = 0;
 
   constructor(
     private readonly config: ControllerConfig,
@@ -32,6 +34,7 @@ export class StarterController {
 
   stop(): void {
     this.stopSampleLoop();
+    this.stopSampleActionLoop();
     this.socket.disconnect();
     this.onStopping();
   }
@@ -54,6 +57,7 @@ export class StarterController {
 
     // Start TESTING LOOP
     this.startSampleLoopIfReady();
+    this.startSampleActionLoopIfReady();
 
   }
 
@@ -63,6 +67,7 @@ export class StarterController {
 
     // Start TESTING LOOP
     this.startSampleLoopIfReady();
+    this.startSampleActionLoopIfReady();
 
   }
 
@@ -142,6 +147,68 @@ export class StarterController {
     this.sampleTimer = null;
     this.sampleBounds = null;
     this.logger.info('sample loop stopped');
+  }
+
+  /**
+   * Start a simple alternating action trigger loop. It demonstrates the minimum
+   * flow a controller needs: receive graph:init, find action GUIDs in the graph,
+   * and trigger them by sending `action:trigger`.
+   */
+  private startSampleActionLoopIfReady(): void {
+    if (this.sampleActionTimer) {
+      return;
+    }
+
+    const configuredGuids = this.config.sampleActionLoop.actionGuids
+      .filter(guid => guid.length > 0);
+    if (configuredGuids.length !== 2) {
+      this.logger.warn('sample action loop disabled: SAMPLE_ACTION_GUID_1 and SAMPLE_ACTION_GUID_2 are required');
+      return;
+    }
+
+    for (const guid of configuredGuids) {
+      const action = this.graph.getAction(guid);
+      if (!action) {
+        this.logger.warn(`sample action loop waiting for action "${guid}"`);
+        return;
+      }
+      this.logger.info(`sample action found "${action.name ?? guid}" (${guid})`);
+    }
+
+    this.nextSampleActionIndex = 0;
+    this.logger.info(`sample action loop started with interval ${this.config.sampleActionLoop.intervalMs}ms`);
+    this.sampleActionTimer = setInterval(() => this.tickSampleActionLoop(), this.config.sampleActionLoop.intervalMs);
+  }
+
+  private stopSampleActionLoop(): void {
+    if (!this.sampleActionTimer) {
+      return;
+    }
+    clearInterval(this.sampleActionTimer);
+    this.sampleActionTimer = null;
+    this.logger.info('sample action loop stopped');
+  }
+
+  private tickSampleActionLoop(): void {
+    const guid = this.config.sampleActionLoop.actionGuids[this.nextSampleActionIndex];
+    this.nextSampleActionIndex = (this.nextSampleActionIndex + 1) % this.config.sampleActionLoop.actionGuids.length;
+    if (!guid) {
+      this.logger.warn('sample action loop stopped: missing configured action GUID');
+      this.stopSampleActionLoop();
+      return;
+    }
+
+    const action = this.graph.getAction(guid);
+    if (!action) {
+      this.logger.warn(`sample action loop stopped: action "${guid}" is no longer available`);
+      this.stopSampleActionLoop();
+      return;
+    }
+
+    const sent = this.socket.sendActionTrigger(guid);
+    if (sent) {
+      this.logger.info(`sample action trigger "${action.name ?? guid}" (${guid})`);
+    }
   }
 
   private tickSampleLoop(): void {

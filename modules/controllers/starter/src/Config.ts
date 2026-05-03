@@ -7,12 +7,18 @@ export interface SampleLoopConfig {
   radius: number;
 }
 
+export interface SampleActionLoopConfig {
+  actionGuids: [string, string];
+  intervalMs: number;
+}
+
 export interface ControllerConfig {
   hubUrl: string;
   name: string;
   guid: string;
   location: [number, number];
   sampleLoop: SampleLoopConfig;
+  sampleActionLoop: SampleActionLoopConfig;
 }
 
 function requiredEnv(key: string): string {
@@ -84,6 +90,9 @@ export function loadConfig(): ControllerConfig {
   const intentGuid = optionalEnv('SAMPLE_INTENT_GUID', 'color-1');
   const intervalMs = parsePositiveInteger('SAMPLE_LOOP_INTERVAL_MS', 250);
   const radius = parsePositiveNumber('SAMPLE_LOOP_RADIUS', 0.75);
+  const actionGuid1 = optionalEnv('SAMPLE_ACTION_GUID_1', '');
+  const actionGuid2 = optionalEnv('SAMPLE_ACTION_GUID_2', '');
+  const actionIntervalMs = parsePositiveInteger('SAMPLE_ACTION_INTERVAL_MS', 2_000);
 
   return {
     hubUrl,
@@ -95,6 +104,10 @@ export function loadConfig(): ControllerConfig {
       intentGuid,
       intervalMs,
       radius,
+    },
+    sampleActionLoop: {
+      actionGuids: [actionGuid1, actionGuid2],
+      intervalMs: actionIntervalMs,
     },
   };
 }

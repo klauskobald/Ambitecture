@@ -47,6 +47,11 @@ export interface IntentRecord extends Record<string, unknown> {
   position?: Position3;
 }
 
+export interface ActionRecord extends Record<string, unknown> {
+  guid: string;
+  name?: string;
+}
+
 export interface SceneRecord {
   guid: string;
   name: string;

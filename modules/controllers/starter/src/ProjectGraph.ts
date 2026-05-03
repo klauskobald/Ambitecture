@@ -1,4 +1,4 @@
-import { GraphDelta, IntentRecord, Position3, SceneRecord, ZoneRecord } from './GraphProtocol';
+import { ActionRecord, GraphDelta, IntentRecord, Position3, SceneRecord, ZoneRecord } from './GraphProtocol';
 
 export interface MovementBounds {
   center: Position3;
@@ -125,6 +125,21 @@ function toIntentRecord(value: unknown): IntentRecord | null {
   };
 }
 
+function toActionRecord(value: unknown): ActionRecord | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const guid = stringValue(value['guid']);
+  if (!guid) {
+    return null;
+  }
+  return {
+    ...value,
+    guid,
+    ...(typeof value['name'] === 'string' ? { name: value['name'] } : {}),
+  };
+}
+
 function toZoneRecord(value: unknown): ZoneRecord | null {
   if (!isRecord(value)) {
     return null;
@@ -153,6 +168,7 @@ export class ProjectGraph {
   private activeSceneName: string | null = null;
   private readonly intents = new Map<string, IntentRecord>();
   private readonly scenes = new Map<string, SceneRecord>();
+  private readonly actions = new Map<string, ActionRecord>();
   private zones: ZoneRecord[] = [];
 
   applyGraphInit(payload: unknown): void {
@@ -178,6 +194,14 @@ export class ProjectGraph {
       const scene = toSceneRecord(rawScene);
       if (scene) {
         this.scenes.set(scene.name, scene);
+      }
+    }
+
+    this.actions.clear();
+    for (const rawAction of Array.isArray(payload['actions']) ? payload['actions'] : []) {
+      const action = toActionRecord(rawAction);
+      if (action) {
+        this.actions.set(action.guid, action);
       }
     }
 
@@ -207,6 +231,9 @@ export class ProjectGraph {
         case 'scene':
           this.applySceneDelta(guid, op, delta);
           break;
+        case 'action':
+          this.applyActionDelta(guid, op, delta);
+          break;
         case 'project':
           this.applyProjectDelta(delta);
           break;
@@ -231,6 +258,10 @@ export class ProjectGraph {
 
   getIntent(guid: string): IntentRecord | null {
     return this.intents.get(guid) ?? null;
+  }
+
+  getAction(guid: string): ActionRecord | null {
+    return this.actions.get(guid) ?? null;
   }
 
   getIntentPosition(guid: string): Position3 | null {
@@ -327,6 +358,22 @@ export class ProjectGraph {
         this.scenes.delete(current.name);
       }
       this.scenes.set(scene.name, scene);
+    }
+  }
+
+  private applyActionDelta(guid: string, op: string, delta: GraphDelta): void {
+    if (op === 'remove') {
+      this.actions.delete(guid);
+      return;
+    }
+    const base = delta.value && isRecord(delta.value)
+      ? delta.value
+      : this.actions.get(guid) ?? { guid };
+    const next = delta.patch || delta.remove ? applyPatch(base, delta.patch, delta.remove) : cloneRecord(base);
+    next['guid'] = guid;
+    const action = toActionRecord(next);
+    if (action) {
+      this.actions.set(guid, action);
     }
   }
 

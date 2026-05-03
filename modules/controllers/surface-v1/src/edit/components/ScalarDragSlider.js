@@ -16,6 +16,8 @@
  * @property {boolean} [relativeTrack] use prop-slider-track--relative styling
  * @property {(value: number) => void} onInput
  * @property {() => void} onCommit
+ * @property {() => void} [onDragStart] invoked at pointer-down (after validation, before capture)
+ * @property {() => void} [onDragEnd] invoked after onCommit on pointer-up / cancel
  */
 
 export class ScalarDragSlider {
@@ -36,6 +38,10 @@ export class ScalarDragSlider {
     this._relativeTrack = opts.relativeTrack === true
     this._onInput = opts.onInput
     this._onCommit = opts.onCommit
+    /** @type {(() => void) | undefined} */
+    this._onDragStart = opts.onDragStart
+    /** @type {(() => void) | undefined} */
+    this._onDragEnd = opts.onDragEnd
 
     /** @type {HTMLElement | null} */
     this._wrapper = null
@@ -83,6 +89,8 @@ export class ScalarDragSlider {
     if (patch.relativeTrack !== undefined) this._relativeTrack = patch.relativeTrack === true
     if (patch.onInput !== undefined) this._onInput = patch.onInput
     if (patch.onCommit !== undefined) this._onCommit = patch.onCommit
+    if (patch.onDragStart !== undefined) this._onDragStart = patch.onDragStart
+    if (patch.onDragEnd !== undefined) this._onDragEnd = patch.onDragEnd
 
     this._displayDecimals = this._decimalPlacesFromStep(this._step)
     if (patch.value !== undefined) {
@@ -204,6 +212,7 @@ export class ScalarDragSlider {
   _onPointerDown (e) {
     if (!this._track) return
     if (e.button !== 0) return
+    this._onDragStart?.()
     this._dragPointerId = e.pointerId
     this._dragStartX = e.clientX
     this._dragStartT = this._t
@@ -229,6 +238,7 @@ export class ScalarDragSlider {
     this._track.releasePointerCapture(e.pointerId)
     this._dragPointerId = null
     this._onCommit()
+    this._onDragEnd?.()
     e.preventDefault()
   }
 

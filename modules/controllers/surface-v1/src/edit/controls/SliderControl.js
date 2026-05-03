@@ -13,6 +13,8 @@ export class SliderControl extends PropertyControl {
     this._isDelta = false
     /** whether the last _applyState was multi-select delta mode (avoid resetting thumb on every graph refresh) */
     this._wasDeltaMode = false
+    /** @type {Map<string, number> | null} frozen property values at drag start for delta multi-select */
+    this._deltaBaseline = null
   }
 
   destroy () {
@@ -33,7 +35,9 @@ export class SliderControl extends PropertyControl {
       relativeTrack: false,
       bubbleCharWidth,
       onInput: (v) => this._onScalarInput(v),
-      onCommit: () => this._saveProject()
+      onCommit: () => this._saveProject(),
+      onDragStart: () => this._captureDeltaBaseline(),
+      onDragEnd: () => { this._deltaBaseline = null }
     })
     this._scalar.mount(area)
   }
@@ -143,11 +147,25 @@ export class SliderControl extends PropertyControl {
     const pMin = range?.[0] ?? 0
     const pMax = range?.[1] ?? 1
     const { fn } = this._getDeltaConfig()
+    const baseline = this._deltaBaseline
     for (const guid of this._currentGuids) {
-      const original = /** @type {number} */ (projectGraph.getEffectiveIntentProperty(guid, dotKey) ?? pMin)
+      const fromGraph = /** @type {number} */ (projectGraph.getEffectiveIntentProperty(guid, dotKey) ?? pMin)
+      const original = baseline !== null ? (baseline.get(guid) ?? fromGraph) : fromGraph
       const newVal = applyDelta(original, deltaVal, fn, pMin, pMax)
       this._updateProperty(guid, dotKey, newVal)
     }
+  }
+
+  _captureDeltaBaseline () {
+    if (!this._isDelta) return
+    const dotKey = /** @type {string} */ (this._descriptor.dotKey)
+    const range = /** @type {number[] | undefined} */ (this._descriptor.range)
+    const pMin = range?.[0] ?? 0
+    const map = new Map()
+    for (const guid of this._currentGuids) {
+      map.set(guid, Number(projectGraph.getEffectiveIntentProperty(guid, dotKey) ?? pMin))
+    }
+    this._deltaBaseline = map
   }
 
   /**

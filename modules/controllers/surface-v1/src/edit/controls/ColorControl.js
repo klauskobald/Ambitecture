@@ -25,6 +25,8 @@ export class ColorControl extends PropertyControl {
     this._relSliders = []
     /** last _applyState had HSL delta row visible — only then reset thumbs to no-op when entering */
     this._wasHslDeltaMode = false
+    /** @type {Record<string, Map<string, { h: number, s: number, l: number }>>} per-channel HSL at drag start */
+    this._hslBaselineByChannel = {}
   }
 
   /** @param {HTMLElement} area */
@@ -80,7 +82,9 @@ export class ColorControl extends PropertyControl {
         relativeTrack: true,
         bubbleCharWidth,
         onInput: delta => this._applyHslDelta(channelKey, cfg.fn, cfg.wrap, delta),
-        onCommit: () => this._saveProject()
+        onCommit: () => this._saveProject(),
+        onDragStart: () => this._captureHslBaseline(channelKey),
+        onDragEnd: () => this._clearHslBaseline(channelKey)
       })
       slider.mount(row)
 
@@ -123,10 +127,11 @@ export class ColorControl extends PropertyControl {
   _applyHslDelta (channel, fn, wrap, delta) {
     const dotKey = /** @type {string} */ (this._descriptor.dotKey)
     const absRange = this._getAbsoluteRange()
+    const baselineMap = this._hslBaselineByChannel[channel]
 
     for (const guid of this._currentGuids) {
-      const currentColor = projectGraph.getEffectiveIntentProperty(guid, dotKey)
-      const hsl = toHSL(currentColor)
+      const stored = baselineMap?.get(guid)
+      const hsl = stored ?? toHSL(projectGraph.getEffectiveIntentProperty(guid, dotKey))
 
       let newH = hsl.h, newS = hsl.s, newL = hsl.l
       switch (channel) {
@@ -155,6 +160,26 @@ export class ColorControl extends PropertyControl {
 
       this._updateProperty(guid, dotKey, { h: newH, s: newS, l: newL })
     }
+  }
+
+  /**
+   * @param {string} channelKey
+   */
+  _captureHslBaseline (channelKey) {
+    const dotKey = /** @type {string} */ (this._descriptor.dotKey)
+    const map = new Map()
+    for (const guid of this._currentGuids) {
+      const hsl = toHSL(projectGraph.getEffectiveIntentProperty(guid, dotKey))
+      map.set(guid, { h: hsl.h, s: hsl.s, l: hsl.l })
+    }
+    this._hslBaselineByChannel[channelKey] = map
+  }
+
+  /**
+   * @param {string} channelKey
+   */
+  _clearHslBaseline (channelKey) {
+    delete this._hslBaselineByChannel[channelKey]
   }
 
   /** @returns {{ h: [number, number], s: [number, number], l: [number, number] }} */
@@ -189,6 +214,7 @@ export class ColorControl extends PropertyControl {
       entry.slider.destroy()
     }
     this._relSliders = []
+    this._hslBaselineByChannel = {}
     this._paletteInstance?.destroy()
     this._paletteInstance = null
   }

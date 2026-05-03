@@ -4,7 +4,11 @@ import { projectGraph } from '../core/projectGraph.js'
 import { intentName } from '../core/stores.js'
 
 export class PropertiesDrawer {
-  constructor () {
+  /**
+   * @param {{ onAfterCloseSingleModify?: () => void }} [opts]
+   */
+  constructor (opts = {}) {
+    this._onAfterCloseSingleModify = opts.onAfterCloseSingleModify ?? null
     /** @type {HTMLElement | null} */
     this._backdrop = null
     /** @type {HTMLElement | null} */
@@ -101,6 +105,7 @@ export class PropertiesDrawer {
 
   close () {
     if (!this._el) return
+    const hadSingleModifyTarget = this._currentGuids.size === 1
     if (this._outsideCloserRaf != null) {
       cancelAnimationFrame(this._outsideCloserRaf)
       this._outsideCloserRaf = null
@@ -121,6 +126,11 @@ export class PropertiesDrawer {
     if (this._graphUnsub) {
       this._graphUnsub()
       this._graphUnsub = null
+    }
+    this._currentGuids = new Set()
+    if (hadSingleModifyTarget) {
+      selectionState.clearAll()
+      this._onAfterCloseSingleModify?.()
     }
   }
 

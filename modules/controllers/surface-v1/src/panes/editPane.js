@@ -58,7 +58,9 @@ export class EditPane {
     })
     this._el.appendChild(this._actionBar.buildElement())
 
-    this._drawer = new PropertiesDrawer()
+    this._drawer = new PropertiesDrawer({
+      onAfterCloseSingleModify: () => this._exitSelectModeIfActive(),
+    })
   }
 
   /** @param {HTMLElement} container */
@@ -179,6 +181,13 @@ export class EditPane {
     const mode = this._modes().find(m => m.id === prev)
     if (btn && mode) btn.textContent = mode.label
     this._refreshActionBar()
+  }
+
+  /** Leaves Select mode (toolbar + overlay); no-op if not in Select. */
+  _exitSelectModeIfActive () {
+    if (this._activeMode === 'select') {
+      this._exitCurrentMode()
+    }
   }
 
   // ── Manager builders ──────────────────────────────────────────────────────────
@@ -351,11 +360,8 @@ export class EditPane {
       sendSceneActivate(activeScene)
     }
 
-    selectionState.clearAll()
-    for (const { newGuid } of created) {
-      selectionState.toggleGuid(newGuid)
-    }
     this._drawer.close()
+    this._exitSelectModeIfActive()
   }
 
   async _onDeleteClick () {
@@ -386,8 +392,8 @@ export class EditPane {
       if (activeScene === projectGraph.getActiveSceneName()) {
         sendSceneActivate(activeScene)
       }
-      selectionState.clearAll()
       this._drawer.close()
+      this._exitSelectModeIfActive()
       return
     }
 
@@ -425,8 +431,8 @@ export class EditPane {
       }
       const activeScene = projectGraph.getActiveSceneName()
       if (activeScene) sendSceneActivate(activeScene)
-      selectionState.clearAll()
       this._drawer.close()
+      this._exitSelectModeIfActive()
     }
   }
 

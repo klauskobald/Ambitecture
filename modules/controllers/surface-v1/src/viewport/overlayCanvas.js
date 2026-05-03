@@ -138,7 +138,13 @@ export class OverlayCanvas {
     if (this._selectionManager) {
       const simRect = this._viewport.getSimCanvasRect()
       if (spatial && simRect) {
-        this._selectionManager.handleTap(x, y, spatial, simRect, this._canvas.getBoundingClientRect())
+        this._selectionManager.handleTap(
+          x,
+          y,
+          spatial,
+          simRect,
+          this._canvas.getBoundingClientRect()
+        )
       }
       return
     }
@@ -154,8 +160,14 @@ export class OverlayCanvas {
           this._doubleTapIntentCallback(guid)
           return
         }
-        const secondOnIntent = spatial ? this._findIntentAt(x, y, spatial) : null
-        if (!this._lastTap.intentGuid && !secondOnIntent && this._doubleTapEmptyCallback) {
+        const secondOnIntent = spatial
+          ? this._findIntentAt(x, y, spatial)
+          : null
+        if (
+          !this._lastTap.intentGuid &&
+          !secondOnIntent &&
+          this._doubleTapEmptyCallback
+        ) {
           const { clientX, clientY } = this._lastTap
           this._lastTap = null
           this._doubleTapEmptyCallback({ clientX, clientY })
@@ -206,7 +218,12 @@ export class OverlayCanvas {
       const spatial = projectGraph.getSpatial()
       const simRect = this._viewport.getSimCanvasRect()
       if (!spatial || !simRect) return
-      const m = clientToWorldViaSimCanvas(ev.clientX, ev.clientY, spatial, simRect)
+      const m = clientToWorldViaSimCanvas(
+        ev.clientX,
+        ev.clientY,
+        spatial,
+        simRect
+      )
       if (!m) return
       this._policy.onFixtureMove(fixtureId, m.wx, m.wz)
       return
@@ -216,7 +233,12 @@ export class OverlayCanvas {
       const spatial = projectGraph.getSpatial()
       const simRect = this._viewport.getSimCanvasRect()
       if (!spatial || !simRect) return
-      const m = clientToWorldViaSimCanvas(ev.clientX, ev.clientY, spatial, simRect)
+      const m = clientToWorldViaSimCanvas(
+        ev.clientX,
+        ev.clientY,
+        spatial,
+        simRect
+      )
       if (!m) return
       this._policy.onIntentMove(guid, m.wx, m.wz)
       return
@@ -231,17 +253,21 @@ export class OverlayCanvas {
     // Confirm tap if pointer didn't move far (enables double-tap on next down)
     if (this._tapTracker?.pointerId === ev.pointerId) {
       const { x, y } = this._canvasPoint(ev)
-      const dist = Math.hypot(x - this._tapTracker.downX, y - this._tapTracker.downY)
-      this._lastTap = dist < 10
-        ? {
-            x: this._tapTracker.downX,
-            y: this._tapTracker.downY,
-            t: performance.now(),
-            clientX: this._tapTracker.downClientX,
-            clientY: this._tapTracker.downClientY,
-            intentGuid: this._tapTracker.intentGuid
-          }
-        : null
+      const dist = Math.hypot(
+        x - this._tapTracker.downX,
+        y - this._tapTracker.downY
+      )
+      this._lastTap =
+        dist < 10
+          ? {
+              x: this._tapTracker.downX,
+              y: this._tapTracker.downY,
+              t: performance.now(),
+              clientX: this._tapTracker.downClientX,
+              clientY: this._tapTracker.downClientY,
+              intentGuid: this._tapTracker.intentGuid
+            }
+          : null
       this._tapTracker = null
     }
 
@@ -250,13 +276,21 @@ export class OverlayCanvas {
     this._activePointers.delete(ev.pointerId)
     this._draggedIntents.delete(ev.pointerId)
     this._draggedFixtures.delete(ev.pointerId)
-    try { this._canvas.releasePointerCapture(ev.pointerId) } catch { /* ignore */ }
+    try {
+      this._canvas.releasePointerCapture(ev.pointerId)
+    } catch {
+      /* ignore */
+    }
   }
 
   /** @param {PointerEvent} ev */
   _capture (ev) {
     this._activePointers.add(ev.pointerId)
-    try { this._canvas.setPointerCapture(ev.pointerId) } catch { /* ignore */ }
+    try {
+      this._canvas.setPointerCapture(ev.pointerId)
+    } catch {
+      /* ignore */
+    }
   }
 
   /**
@@ -302,9 +336,18 @@ export class OverlayCanvas {
       const i = /** @type {Record<string, unknown>} */ (intent)
       const pos = /** @type {number[] | undefined} */ (i.position)
       if (!pos) continue
-      const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, overlayRect)
+      const { px, py } = worldToCanvas(
+        pos[0],
+        pos[2],
+        spatial,
+        simRect,
+        overlayRect
+      )
       const dist = Math.hypot(cx - px, cy - py)
-      if (dist < nearestDist) { nearest = guid; nearestDist = dist }
+      if (dist < nearestDist) {
+        nearest = guid
+        nearestDist = dist
+      }
     }
     return nearest
   }
@@ -328,9 +371,18 @@ export class OverlayCanvas {
       const f = /** @type {Record<string, unknown>} */ (fixture)
       const pos = /** @type {number[] | undefined} */ (f.position)
       if (!pos) continue
-      const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, overlayRect)
+      const { px, py } = worldToCanvas(
+        pos[0],
+        pos[2],
+        spatial,
+        simRect,
+        overlayRect
+      )
       const dist = Math.hypot(cx - px, cy - py)
-      if (dist < nearestDist) { nearest = id; nearestDist = dist }
+      if (dist < nearestDist) {
+        nearest = id
+        nearestDist = dist
+      }
     }
     return nearest
   }
@@ -340,7 +392,8 @@ export class OverlayCanvas {
     requestAnimationFrame(t => this._frame(t))
     const L = this._L
     const fadeMs = L.overlayTrailFadeMs
-    while (this._samples.length > 0 && now - this._samples[0].t > fadeMs) this._samples.shift()
+    while (this._samples.length > 0 && now - this._samples[0].t > fadeMs)
+      this._samples.shift()
 
     const rect = this._canvas.getBoundingClientRect()
     const ctx = this._ctx
@@ -369,7 +422,9 @@ export class OverlayCanvas {
     // dragged intent highlights
     if (this._draggedIntents.size > 0) {
       for (const guid of this._draggedIntents.values()) {
-        const intent = projectGraph.getEffectiveIntent(guid) ?? projectGraph.getIntents().get(guid)
+        const intent =
+          projectGraph.getEffectiveIntent(guid) ??
+          projectGraph.getIntents().get(guid)
         if (!intent) continue
         const i = /** @type {Record<string, unknown>} */ (intent)
         const pos = /** @type {number[] | undefined} */ (i.position)
@@ -413,7 +468,13 @@ export class OverlayCanvas {
       const radius = intentRadius(intent)
       if (!pos || pos.length < 3 || radius <= 0) continue
       const center = worldToCanvas(pos[0], pos[2], spatial, simRect, rect)
-      const edge = worldToCanvas(pos[0] + radius, pos[2], spatial, simRect, rect)
+      const edge = worldToCanvas(
+        pos[0] + radius,
+        pos[2],
+        spatial,
+        simRect,
+        rect
+      )
       const radiusPx = Math.abs(edge.px - center.px)
       if (!Number.isFinite(radiusPx) || radiusPx <= 0) continue
       ctx.save()

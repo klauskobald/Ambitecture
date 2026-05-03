@@ -1,7 +1,16 @@
-import { editPolicy, noopPolicy, getEditFixturesUnlocked, setEditFixturesUnlocked } from '../viewport/interactionPolicies.js'
+import {
+  editPolicy,
+  noopPolicy,
+  getEditFixturesUnlocked,
+  setEditFixturesUnlocked
+} from '../viewport/interactionPolicies.js'
 import { intentGuid } from '../core/stores.js'
 import { projectGraph } from '../core/projectGraph.js'
-import { sendGraphCommand, sendSaveProject, sendSceneActivate } from '../core/outboundQueue.js'
+import {
+  sendGraphCommand,
+  sendSaveProject,
+  sendSceneActivate
+} from '../core/outboundQueue.js'
 import { SelectionManager } from '../viewport/selectionManager.js'
 import { ColorPicker } from '../ui/colorPicker.js'
 import { hslPalette } from '../ui/palettes/hslPalette.js'
@@ -37,7 +46,9 @@ export class EditPane {
     this._fixtureLockBtn = document.createElement('button')
     this._fixtureLockBtn.className = 'btn btn-mode-toggle'
     this._fixtureLockBtn.type = 'button'
-    this._fixtureLockBtn.addEventListener('click', () => this._toggleFixtureLock())
+    this._fixtureLockBtn.addEventListener('click', () =>
+      this._toggleFixtureLock()
+    )
     this._modeBar.appendChild(this._fixtureLockBtn)
     this._refreshFixtureLockButton()
 
@@ -53,13 +64,17 @@ export class EditPane {
 
     this._actionBar = new ActionBar({
       onModify: () => this._onModifyClick(),
-      onCopy: () => { void this._onCopyClick() },
-      onDelete: () => { void this._onDeleteClick() }
+      onCopy: () => {
+        void this._onCopyClick()
+      },
+      onDelete: () => {
+        void this._onDeleteClick()
+      }
     })
     this._el.appendChild(this._actionBar.buildElement())
 
     this._drawer = new PropertiesDrawer({
-      onAfterCloseSingleModify: () => this._exitSelectModeIfActive(),
+      onAfterCloseSingleModify: () => this._exitSelectModeIfActive()
     })
   }
 
@@ -81,7 +96,9 @@ export class EditPane {
     })
     this._refreshActionBar()
 
-    this._overlay.setDoubleTapIntentCallback(guid => this._handleDoubleTapIntent(guid))
+    this._overlay.setDoubleTapIntentCallback(guid =>
+      this._handleDoubleTapIntent(guid)
+    )
     this._overlay.setDoubleTapEmptyCallback(detail => {
       void this._onDoubleTapEmpty(detail)
     })
@@ -103,7 +120,10 @@ export class EditPane {
   // ── Mode registry ─────────────────────────────────────────────────────────────
 
   _refreshActionBar () {
-    this._actionBar.refresh(selectionState.getSize(), this._activeMode === 'select')
+    this._actionBar.refresh(
+      selectionState.getSize(),
+      this._activeMode === 'select'
+    )
   }
 
   _toggleFixtureLock () {
@@ -115,7 +135,9 @@ export class EditPane {
     const unlocked = getEditFixturesUnlocked()
     this._fixtureLockBtn.textContent = unlocked ? '🔓 Fixtures' : '🔒 Fixtures'
     this._fixtureLockBtn.classList.toggle('btn--active', unlocked)
-    this._fixtureLockBtn.title = unlocked ? 'Fixture dragging enabled' : 'Fixture dragging locked'
+    this._fixtureLockBtn.title = unlocked
+      ? 'Fixture dragging enabled'
+      : 'Fixture dragging locked'
     this._fixtureLockBtn.setAttribute('aria-pressed', String(unlocked))
   }
 
@@ -213,7 +235,10 @@ export class EditPane {
       onTap (id, obj) {
         const guid = intentGuid(obj)
         const enabled = !projectGraph.getIntentConfig(guid).performEnabled
-        const command = projectGraph.patchControllerState(`interactionPolicies.performEnabled.${guid}`, enabled)
+        const command = projectGraph.patchControllerState(
+          `interactionPolicies.performEnabled.${guid}`,
+          enabled
+        )
         if (!command) return
         sendGraphCommand({
           op: 'patch',
@@ -225,12 +250,14 @@ export class EditPane {
       },
       drawBubble (ctx, px, py, id, obj) {
         const guid = intentGuid(obj)
-        const enabled = !!(projectGraph.getIntentConfig(guid).performEnabled)
+        const enabled = !!projectGraph.getIntentConfig(guid).performEnabled
         const R = 24
         ctx.save()
         ctx.beginPath()
         ctx.arc(px, py, R, 0, Math.PI * 2)
-        ctx.fillStyle = enabled ? 'rgba(85, 170, 255, 0.88)' : 'rgba(30, 30, 30, 0.82)'
+        ctx.fillStyle = enabled
+          ? 'rgba(85, 170, 255, 0.88)'
+          : 'rgba(30, 30, 30, 0.82)'
         ctx.fill()
         ctx.strokeStyle = enabled ? '#5af' : '#444'
         ctx.lineWidth = 2
@@ -305,13 +332,19 @@ export class EditPane {
       const raw = JSON.parse(JSON.stringify(effective))
       delete raw.scheduled
       const cls = String(raw.class ?? 'light')
-      const suffix = cryptoApi?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
+      const suffix =
+        cryptoApi?.randomUUID?.() ??
+        `${Date.now()}-${Math.random().toString(36).slice(2)}`
       const newGuid = `${cls}-${suffix}`
       raw.guid = newGuid
       const pos = /** @type {unknown} */ (raw.position)
       if (Array.isArray(pos) && pos.length >= 3) {
         const step = 0.25 * (i + 1)
-        raw.position = [Number(pos[0]) + step, Number(pos[1]), Number(pos[2]) + step]
+        raw.position = [
+          Number(pos[0]) + step,
+          Number(pos[1]),
+          Number(pos[2]) + step
+        ]
       }
       i += 1
 
@@ -332,7 +365,7 @@ export class EditPane {
         entityType: 'intent',
         guid: newGuid,
         value,
-        persistence: 'runtimeAndDurable',
+        persistence: 'runtimeAndDurable'
       })
     }
 
@@ -343,7 +376,10 @@ export class EditPane {
       for (const { srcGuid, newGuid } of created) {
         const enabled = !!projectGraph.getIntentConfig(srcGuid).performEnabled
         projectGraph.setIntentConfig(newGuid, 'performEnabled', enabled)
-        projectGraph.patchControllerState(`interactionPolicies.performEnabled.${newGuid}`, enabled)
+        projectGraph.patchControllerState(
+          `interactionPolicies.performEnabled.${newGuid}`,
+          enabled
+        )
         patch[`interactionPolicies.performEnabled.${newGuid}`] = enabled
       }
       sendGraphCommand({
@@ -351,7 +387,7 @@ export class EditPane {
         entityType: 'controller',
         guid: controllerGuid,
         patch,
-        persistence: 'runtimeAndDurable',
+        persistence: 'runtimeAndDurable'
       })
     }
 
@@ -370,7 +406,7 @@ export class EditPane {
 
     const choice = await pickChoice('Delete selected intent(s)', [
       { value: 'purge', label: 'Delete completely' },
-      { value: 'scene', label: 'Remove from Scene' },
+      { value: 'scene', label: 'Remove from Scene' }
     ])
     if (!choice) return
 
@@ -382,7 +418,8 @@ export class EditPane {
       }
       let changed = false
       for (const guid of guids) {
-        if (projectGraph.removeIntentRefFromScene(activeScene, guid)) changed = true
+        if (projectGraph.removeIntentRefFromScene(activeScene, guid))
+          changed = true
       }
       if (!changed) {
         await modalWarn('Selected intent(s) are not in the active scene.')
@@ -415,7 +452,7 @@ export class EditPane {
           op: 'remove',
           entityType: 'intent',
           guid,
-          persistence: 'runtimeAndDurable',
+          persistence: 'runtimeAndDurable'
         })
       }
       const controllerGuid = projectGraph.getControllerGuid()
@@ -426,7 +463,7 @@ export class EditPane {
           guid: controllerGuid,
           patch: { intents: projectGraph.getControllerIntentRefs() },
           remove: performRemoveKeys,
-          persistence: 'runtimeAndDurable',
+          persistence: 'runtimeAndDurable'
         })
       }
       const activeScene = projectGraph.getActiveSceneName()
@@ -469,7 +506,9 @@ export class EditPane {
     if (choice !== 'light') return
 
     const cryptoApi = globalThis.crypto
-    const suffix = cryptoApi?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const suffix =
+      cryptoApi?.randomUUID?.() ??
+      `${Date.now()}-${Math.random().toString(36).slice(2)}`
     const guid = `light-${suffix}`
     /** @type {Record<string, unknown>} */
     const value = {

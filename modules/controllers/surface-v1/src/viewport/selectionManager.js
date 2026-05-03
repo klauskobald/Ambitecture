@@ -46,7 +46,13 @@ export class SelectionManager {
     for (const [id, obj] of this._getObjects()) {
       const pos = this._getWorldPos(obj)
       if (!pos) continue
-      const { px, py } = worldToCanvas(pos.wx, pos.wz, spatial, simRect, overlayRect)
+      const { px, py } = worldToCanvas(
+        pos.wx,
+        pos.wz,
+        spatial,
+        simRect,
+        overlayRect
+      )
       this._drawBubble(ctx, px, py, id, obj)
     }
   }
@@ -68,7 +74,13 @@ export class SelectionManager {
     for (const [id, obj] of this._getObjects()) {
       const pos = this._getWorldPos(obj)
       if (!pos) continue
-      const { px, py } = worldToCanvas(pos.wx, pos.wz, spatial, simRect, overlayRect)
+      const { px, py } = worldToCanvas(
+        pos.wx,
+        pos.wz,
+        spatial,
+        simRect,
+        overlayRect
+      )
       const dist = Math.hypot(cx - px, cy - py)
       if (dist < nearestDist) {
         nearestId = id

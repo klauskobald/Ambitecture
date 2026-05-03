@@ -64,6 +64,7 @@ systemCapabilities:
         stepFunction: quadratic
         defaultValue: 5
         isMandatory: true
+        quickPanel: true
         delta:
           value: { fn: MULTIPLY, range: [0.1, 10] }
       - dotKey: radiusFunction

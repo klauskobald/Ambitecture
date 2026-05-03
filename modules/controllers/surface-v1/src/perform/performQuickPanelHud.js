@@ -5,8 +5,17 @@ import { resolveDescriptorsForClass } from '../core/systemCapabilities.js'
 import { queueIntentUpdate } from '../core/outboundQueue.js'
 import { ScalarRadialKnob } from './ScalarRadialKnob.js'
 
-/** Anchor HUD above mapped intent pivot (bubble center). */
-const ANCHOR_OFFSET_PX = 56
+/** World height (meters, XZ) of the nominal pivot marker — not intent spread radius. Scales with map zoom. */
+export const PERFORM_HUD_ICON_WORLD_METERS = 0.28
+
+/** Extra screen pixels between marker top and HUD bottom (after {@link PERFORM_HUD_ICON_ANCHOR_FRAC}). */
+export const PERFORM_HUD_ICON_EXTRA_GAP_PX = 2
+
+/**
+ * Where the HUD anchor sits between pivot and “top of nominal marker”:
+ * 0.5 = flush with top of marker (HUD covers upper half when overlapping); lower = overlap more; higher = HUD higher.
+ */
+export const PERFORM_HUD_ICON_ANCHOR_FRAC = 0.5
 
 export class PerformQuickPanelHud {
   /**
@@ -204,8 +213,17 @@ export class PerformQuickPanelHud {
         continue
       }
       const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, overlayRect)
+      const spanM = Math.max(1e-9, spatial.x2 - spatial.x1)
+      const mPerPx = spanM / Math.max(1, simRect.width)
+      const iconPx = PERFORM_HUD_ICON_WORLD_METERS / mPerPx
       const lx = overlayRect.left - layerRect.left + px
-      const ly = overlayRect.top - layerRect.top + py - ANCHOR_OFFSET_PX
+      // translate(-50%,-100%): (lx, ly) is bottom-center of HUD — stack on small pivot marker, not spread radius.
+      const ly =
+        overlayRect.top -
+        layerRect.top +
+        py -
+        iconPx * PERFORM_HUD_ICON_ANCHOR_FRAC -
+        PERFORM_HUD_ICON_EXTRA_GAP_PX
       pane.root.style.position = 'absolute'
       pane.root.style.visibility = ''
       pane.root.style.left = `${Math.round(lx)}px`

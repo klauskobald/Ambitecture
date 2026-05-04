@@ -89,7 +89,7 @@ export class ArraySorter {
     normalizeUndefinedSortKeys(ordered, key)
     renumberSortKeysContiguous(ordered, key)
     onReorder(ordered)
-    /** @type {{ pointerId: number, fromIndex: number, item: Record<string, unknown>, row: HTMLElement } | null} */
+    /** @type {{ pointerId: number, fromIndex: number, item: Record<string, unknown>, row: HTMLElement, ghost: HTMLElement | null, dx: number, dy: number } | null} */
     let dragState = null
     const clearDropMarkers = () => {
       for (const node of host.querySelectorAll('.array-sort-row')) {
@@ -113,12 +113,25 @@ export class ArraySorter {
       target.row.classList.add(target.dropBefore ? 'array-sort-row--drop-before' : 'array-sort-row--drop-after')
       return target
     }
+    const removeGhost = () => {
+      const ghost = dragState?.ghost
+      if (!ghost) return
+      ghost.remove()
+      if (dragState) dragState.ghost = null
+    }
+    const updateGhostPosition = (clientX, clientY) => {
+      const ghost = dragState?.ghost
+      if (!ghost || !dragState) return
+      ghost.style.left = `${Math.round(clientX - dragState.dx)}px`
+      ghost.style.top = `${Math.round(clientY - dragState.dy)}px`
+    }
     const finalizeDrag = (clientX, clientY) => {
       if (!dragState) return
       const { fromIndex, row, item } = dragState
       const target = resolveDropTarget(clientX, clientY)
       row.classList.remove('array-sort-row--dragging')
       clearDropMarkers()
+      removeGhost()
       callbackLifecycle(item, 'hasBeenDragged')
       dragState = null
       if (!target) return
@@ -144,15 +157,34 @@ export class ArraySorter {
           if (e.button !== 0) return
           if (dragState) return
           e.preventDefault()
+          const rect = row.getBoundingClientRect()
+          const ghost = row.cloneNode(true)
+          if (ghost instanceof HTMLElement) {
+            ghost.classList.add('array-sort-ghost')
+            ghost.style.width = `${Math.round(rect.width)}px`
+            ghost.style.left = `${Math.round(rect.left)}px`
+            ghost.style.top = `${Math.round(rect.top)}px`
+            document.body.appendChild(ghost)
+          }
           row.classList.add('array-sort-row--dragging')
           row.setPointerCapture?.(e.pointerId)
-          dragState = { pointerId: e.pointerId, fromIndex: index, item, row }
+          dragState = {
+            pointerId: e.pointerId,
+            fromIndex: index,
+            item,
+            row,
+            ghost: ghost instanceof HTMLElement ? ghost : null,
+            dx: e.clientX - rect.left,
+            dy: e.clientY - rect.top,
+          }
+          updateGhostPosition(e.clientX, e.clientY)
           callbackLifecycle(item, 'willBeDragged')
         })
 
         row.addEventListener('pointermove', e => {
           if (!dragState || dragState.pointerId !== e.pointerId) return
           e.preventDefault()
+          updateGhostPosition(e.clientX, e.clientY)
           applyDropMarker(e.clientX, e.clientY)
         })
 

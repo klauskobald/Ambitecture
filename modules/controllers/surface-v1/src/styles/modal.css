@@ -230,6 +230,16 @@ textarea.modal-input.input-assign-modal__json {
   opacity: 0.55;
 }
 
+.array-sort-ghost {
+  position: fixed;
+  z-index: 10000;
+  pointer-events: none;
+  opacity: 0.92;
+  transform: translateZ(0);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  border-color: #5af;
+}
+
 .array-sort-row--drop-before {
   box-shadow: inset 0 3px 0 #5af;
 }

@@ -1,7 +1,8 @@
 import { confirm as modalConfirm, prompt as modalPrompt } from '../core/Modal.js'
 import { intentName } from '../core/stores.js'
 import { projectGraph } from '../core/projectGraph.js'
-import { sendActionInputCommand, sendGraphCommand, sendSceneActivate, sendSaveProject } from '../core/outboundQueue.js'
+import { sendGraphCommand, sendSceneActivate, sendSaveProject } from '../core/outboundQueue.js'
+import { InputAssignManager } from '../edit/InputAssignManager.js'
 
 export class ScenesPane {
   constructor () {
@@ -154,33 +155,15 @@ export class ScenesPane {
     const sceneGuid = projectGraph.getSceneGuid(activeScene)
     if (!sceneGuid) return
 
-    const input = projectGraph.getSceneButtonInput(sceneGuid)
-    const action = projectGraph.getSceneAction(sceneGuid)
-    const isActive = Boolean(input?.action && action)
-    const label = String(input?.name ?? activeScene)
-
-    const row = document.createElement('div')
-    row.className = 'scene-perform-row' + (isActive ? ' scene-perform-row--active' : '')
-
-    const button = document.createElement('button')
-    button.className = 'intent-toggle scene-perform-button' + (isActive ? ' intent-toggle--enabled' : '')
-    button.textContent = 'Button'
-    button.addEventListener('click', () => {
-      sendActionInputCommand({
-        command: isActive ? 'disableSceneButton' : 'ensureSceneButton',
-        sceneGuid
-      })
+    const iam = new InputAssignManager({
+      context: { type: 'scene', guid: sceneGuid },
+      labelDefault: activeScene,
     })
-
-    const labelButton = document.createElement('button')
-    labelButton.className = 'btn scene-perform-label'
-    labelButton.textContent = label
-    labelButton.disabled = !isActive || !input?.guid
-    labelButton.addEventListener('click', () => this._onPerformLabelClick(input))
-
-    row.appendChild(button)
-    row.appendChild(labelButton)
-    this._performBody.appendChild(row)
+    this._performBody.appendChild(iam.getInlinePane({
+      rowClass: 'scene-perform-row',
+      toggleClass: 'intent-toggle scene-perform-button',
+      labelClass: 'btn scene-perform-label',
+    }))
   }
 
   // ── Intent toggles ────────────────────────────────────────────────────────────
@@ -226,22 +209,6 @@ export class ScenesPane {
     projectGraph.setActiveScene(nextName)
     sendSaveProject('scenes', toHubScenes(scenes))
     sendSceneActivate(nextName)
-  }
-
-  /** @param {Record<string, unknown> | null} input */
-  async _onPerformLabelClick (input) {
-    const inputGuid = typeof input?.guid === 'string' ? input.guid : ''
-    if (!inputGuid) return
-    const values = await modalPrompt('', [
-      { label: 'Name', key: 'name', value: String(input?.name ?? ''), placeholder: 'input name' },
-    ], { submit: 'Rename' })
-    const nextName = values?.name?.trim()
-    if (!nextName || nextName === input?.name) return
-    sendActionInputCommand({
-      command: 'renameInput',
-      inputGuid,
-      name: nextName
-    })
   }
 
   async _onCopyClick () {

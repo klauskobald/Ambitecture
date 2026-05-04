@@ -77,9 +77,8 @@ export class PropertyPanel {
     const intent = projectGraph.getEffectiveIntent(guid)
     const intentName = typeof intent?.name === 'string' ? intent.name : guid
     this._inputAssignManager = new InputAssignManager({
-      targetType: 'intent',
-      targetGuid: guid,
-      targetName: intentName,
+      context: { type: 'intent', guid },
+      labelDefault: intentName,
     })
     const section = document.createElement('div')
     section.className = 'prop-row prop-row--assign'

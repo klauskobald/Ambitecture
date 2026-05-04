@@ -101,3 +101,18 @@ export function getDisplayTypes () {
   }
   return out.length > 0 ? out : null
 }
+
+/**
+ * Default perform input/display classes (matches hub `resolveDefaultPerformTypes`):
+ * prefers `class: button`, else first list entry.
+ * @returns {{ type: string, displayType: string } | null}
+ */
+export function resolveDefaultPerformTypes () {
+  const inputTypes = getInputTypes()
+  const displayTypes = getDisplayTypes()
+  if (!inputTypes || !displayTypes || inputTypes.length === 0 || displayTypes.length === 0) return null
+  const type = inputTypes.find(t => t.class === 'button')?.class ?? inputTypes[0]?.class
+  const displayType = displayTypes.find(t => t.class === 'button')?.class ?? displayTypes[0]?.class
+  if (!type || !displayType) return null
+  return { type, displayType }
+}

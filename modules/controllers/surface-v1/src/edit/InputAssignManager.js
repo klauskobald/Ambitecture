@@ -1,17 +1,18 @@
 import { projectGraph } from '../core/projectGraph.js'
-import { openModalCard } from '../core/Modal.js'
+import { openModalCard, prompt as modalPrompt } from '../core/Modal.js'
 import { sendActionInputCommand } from '../core/outboundQueue.js'
-import { getDisplayTypes, getInputTypes } from '../core/systemCapabilities.js'
+import { getDisplayTypes, getInputTypes, resolveDefaultPerformTypes } from '../core/systemCapabilities.js'
 import { parseParamFromForm, stringifyJsonStringParam } from './inputAssign/paramKindHandlers.js'
 
 export class InputAssignManager {
   /**
-   * @param {{ targetType: string, targetGuid: string, targetName?: string }} opts
+   * @param {{ context: { type: string, guid: string }, labelDefault?: string }} opts
    */
   constructor (opts) {
-    this._targetType = String(opts.targetType ?? '')
-    this._targetGuid = String(opts.targetGuid ?? '')
-    this._targetName = String(opts.targetName ?? this._targetGuid)
+    const ctx = opts.context
+    this._contextType = String(ctx?.type ?? '')
+    this._contextGuid = String(ctx?.guid ?? '')
+    this._labelDefault = String(opts.labelDefault ?? this._contextGuid)
     /** @type {HTMLButtonElement | null} */
     this._invokeButton = null
   }
@@ -34,15 +35,90 @@ export class InputAssignManager {
     this._refreshInvokeButton()
   }
 
-  /** @returns {HTMLElement} */
-  getInlinePane () {
-    const el = document.createElement('div')
-    el.className = 'input-assign__inline'
-    return el
+  /**
+   * Inline assign toggle + label (target-agnostic). Caller supplies CSS class names for layout.
+   * @param {{ rowClass?: string, toggleClass?: string, labelClass?: string }} [opts]
+   * @returns {HTMLElement}
+   */
+  getInlinePane (opts = {}) {
+    const rowClass = opts.rowClass ?? 'input-assign-inline-row'
+    const toggleClass = opts.toggleClass ?? 'intent-toggle'
+    const labelClass = opts.labelClass ?? 'btn input-assign-inline-label'
+
+    const row = document.createElement('div')
+    const toggle = document.createElement('button')
+    toggle.type = 'button'
+    const labelBtn = document.createElement('button')
+
+    const sync = () => {
+      const input = projectGraph.getAssignedInput(this._contextType, this._contextGuid)
+      const action = projectGraph.getAssignedAction(this._contextType, this._contextGuid)
+      const isActive = Boolean(input?.action && action)
+      row.className = isActive ? `${rowClass} ${rowClass}--active`.trim() : rowClass
+      toggle.className = isActive ? `${toggleClass} intent-toggle--enabled`.trim() : toggleClass
+      const defaults = resolveDefaultPerformTypes()
+      const effType = defaults?.type ?? 'button'
+      const inputTypes = getInputTypes()
+      const typeEntry = inputTypes?.find(t => t.class === effType) ?? inputTypes?.[0]
+      toggle.textContent = typeEntry?.name ?? effType ?? 'Button'
+      labelBtn.className = labelClass
+      labelBtn.textContent = String(input?.name ?? this._labelDefault)
+      const inputGuid = typeof input?.guid === 'string' ? input.guid : ''
+      labelBtn.disabled = !isActive || !inputGuid
+    }
+
+    sync()
+
+    toggle.addEventListener('click', () => {
+      const inputNow = projectGraph.getAssignedInput(this._contextType, this._contextGuid)
+      const actionNow = projectGraph.getAssignedAction(this._contextType, this._contextGuid)
+      const active = Boolean(inputNow?.action && actionNow)
+      if (active) {
+        sendActionInputCommand({
+          command: 'removeInputAssignment',
+          targetType: this._contextType,
+          targetGuid: this._contextGuid,
+        })
+      } else {
+        const d = resolveDefaultPerformTypes()
+        const type = d?.type ?? 'button'
+        const displayType = d?.displayType ?? 'button'
+        const name = this._labelDefault.trim() || this._contextGuid
+        sendActionInputCommand({
+          command: 'ensureInputAssignment',
+          targetType: this._contextType,
+          targetGuid: this._contextGuid,
+          input: { name, type, displayType },
+        })
+      }
+    })
+
+    labelBtn.type = 'button'
+    labelBtn.addEventListener('click', () => void this._onInlineLabelClick())
+
+    row.appendChild(toggle)
+    row.appendChild(labelBtn)
+    return row
+  }
+
+  async _onInlineLabelClick () {
+    const input = projectGraph.getAssignedInput(this._contextType, this._contextGuid)
+    const inputGuid = typeof input?.guid === 'string' ? input.guid : ''
+    if (!inputGuid) return
+    const values = await modalPrompt('', [
+      { label: 'Name', key: 'name', value: String(input?.name ?? ''), placeholder: 'input name' },
+    ], { submit: 'Rename' })
+    const nextName = values?.name?.trim()
+    if (!nextName || nextName === input?.name) return
+    sendActionInputCommand({
+      command: 'renameInput',
+      inputGuid,
+      name: nextName,
+    })
   }
 
   async showControl () {
-    if (!this._targetType || !this._targetGuid) return
+    if (!this._contextType || !this._contextGuid) return
     const inputTypes = getInputTypes()
     const displayTypes = getDisplayTypes()
     if (!inputTypes || !displayTypes) {
@@ -72,10 +148,10 @@ export class InputAssignManager {
       return
     }
 
-    const assignedInput = projectGraph.getAssignedInput(this._targetType, this._targetGuid)
+    const assignedInput = projectGraph.getAssignedInput(this._contextType, this._contextGuid)
     const isAssigned = Boolean(assignedInput)
-    const action = isAssigned ? projectGraph.getAssignedAction(this._targetType, this._targetGuid) : null
-    const title = this._targetName || this._targetGuid
+    const action = isAssigned ? projectGraph.getAssignedAction(this._contextType, this._contextGuid) : null
+    const title = this._labelDefault || this._contextGuid
     const params = this._recordOrUndefined(assignedInput?.params)
     const existingType = typeof assignedInput?.type === 'string' ? assignedInput.type : ''
     const currentName = typeof assignedInput?.name === 'string'
@@ -213,8 +289,8 @@ export class InputAssignManager {
       removeBtn.addEventListener('click', () => {
         sendActionInputCommand({
           command: 'removeInputAssignment',
-          targetType: this._targetType,
-          targetGuid: this._targetGuid,
+          targetType: this._contextType,
+          targetGuid: this._contextGuid,
         })
         dismiss('removed')
       })
@@ -267,8 +343,8 @@ export class InputAssignManager {
 
         sendActionInputCommand({
           command: 'ensureInputAssignment',
-          targetType: this._targetType,
-          targetGuid: this._targetGuid,
+          targetType: this._contextType,
+          targetGuid: this._contextGuid,
           input: inputPayload,
         })
         dismiss('saved')
@@ -297,7 +373,7 @@ export class InputAssignManager {
 
   _refreshInvokeButton () {
     if (!this._invokeButton) return
-    const isAssigned = Boolean(projectGraph.getAssignedInput(this._targetType, this._targetGuid))
+    const isAssigned = Boolean(projectGraph.getAssignedInput(this._contextType, this._contextGuid))
     this._invokeButton.textContent = isAssigned ? 'Assigned' : 'Assign'
     this._invokeButton.classList.toggle('intent-toggle--enabled', isAssigned)
     this._invokeButton.setAttribute('aria-pressed', isAssigned ? 'true' : 'false')

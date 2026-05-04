@@ -31,9 +31,6 @@ function isActionInputCommand(payload: unknown): payload is ActionInputCommand {
         && p['targetType'].length > 0
         && typeof p['targetGuid'] === 'string'
         && p['targetGuid'].length > 0;
-    case 'ensureSceneButton':
-    case 'disableSceneButton':
-      return typeof p['sceneGuid'] === 'string' && p['sceneGuid'].length > 0;
     case 'renameInput':
       return typeof p['inputGuid'] === 'string'
         && p['inputGuid'].length > 0

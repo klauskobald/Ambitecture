@@ -11,11 +11,6 @@ import {
   resolveDefaultPerformTypes,
 } from './inputAssignment/composeInputParams';
 
-type SceneTarget = {
-  type: 'scene';
-  guid: string;
-};
-
 type AssignTargetType = 'scene' | 'intent' | 'sequence' | string;
 
 export type InputAssignConfig = {
@@ -27,8 +22,6 @@ export type InputAssignConfig = {
 export type ActionInputCommand =
   | { command: 'ensureInputAssignment'; targetType: AssignTargetType; targetGuid: string; input: InputAssignConfig }
   | { command: 'removeInputAssignment'; targetType: AssignTargetType; targetGuid: string }
-  | { command: 'ensureSceneButton'; sceneGuid: string }
-  | { command: 'disableSceneButton'; sceneGuid: string }
   | { command: 'renameInput'; inputGuid: string; name: string };
 
 export class ActionInputManager {
@@ -43,10 +36,6 @@ export class ActionInputManager {
         return this.ensureInputAssignmentCommands(controllerGuid, command.targetType, command.targetGuid, command.input);
       case 'removeInputAssignment':
         return this.removeInputAssignmentCommands(controllerGuid, command.targetType, command.targetGuid);
-      case 'ensureSceneButton':
-        return this.ensureSceneButtonCommands(controllerGuid, command.sceneGuid);
-      case 'disableSceneButton':
-        return this.disableSceneButtonCommands(controllerGuid, command.sceneGuid);
       case 'renameInput':
         return this.renameInputCommands(controllerGuid, command.inputGuid, command.name);
     }
@@ -71,60 +60,6 @@ export class ActionInputManager {
     return item.type === 'scene' && typeof item.guid === 'string'
       ? this.projectManager.getSceneByGuid(item.guid)
       : undefined;
-  }
-
-  private ensureSceneButtonCommands(controllerGuid: string, sceneGuid: string): GraphCommand[] {
-    const scene = this.projectManager.getSceneByGuid(sceneGuid);
-    if (!scene?.guid) return [];
-    const caps = this.getSystemCapabilities();
-    const defaults = resolveDefaultPerformTypes(caps);
-    const type = defaults?.type ?? 'button';
-    const displayType = defaults?.displayType ?? 'button';
-    if (!defaults) {
-      Logger.warn('[action] ensureSceneButton: missing systemCapabilities inputTypes/displayTypes; using button/button');
-    }
-    return this.ensureInputAssignmentCommands(controllerGuid, 'scene', scene.guid, {
-      name: scene.name,
-      type,
-      displayType,
-    });
-  }
-
-  private disableSceneButtonCommands(controllerGuid: string, sceneGuid: string): GraphCommand[] {
-    const actionGuids = this.projectManager.getActionsWirePayload()
-      .filter(action => this.actionTargetsScene(action, sceneGuid))
-      .map(action => action.guid)
-      .filter((guid): guid is string => typeof guid === 'string' && guid.length > 0);
-    const actionGuidSet = new Set(actionGuids);
-    const commands: GraphCommand[] = actionGuids.map(guid => ({
-      op: 'remove',
-      entityType: 'action',
-      guid,
-      persistence: 'runtimeAndDurable',
-    }));
-
-    const caps = this.getSystemCapabilities();
-    const displayFallback = resolveDefaultPerformTypes(caps)?.displayType ?? 'button';
-
-    for (const input of this.projectManager.getInputsWirePayload(controllerGuid)) {
-      if (!input.guid) continue;
-      const hasSceneTarget = this.inputTargetsScene(input, sceneGuid);
-      const pointsAtSceneAction = typeof input.action === 'string' && actionGuidSet.has(input.action);
-      if (!hasSceneTarget && !pointsAtSceneAction) continue;
-      const next = { ...input };
-      delete next.action;
-      next.context = sceneGuid;
-      delete next.target;
-      next.display = next.display ?? { type: displayFallback };
-      commands.push(this.upsertCommand(
-        'input',
-        input.guid,
-        next as unknown as Record<string, unknown>,
-        { entityType: 'controller', guid: controllerGuid },
-      ));
-    }
-
-    return commands;
   }
 
   private ensureInputAssignmentCommands(

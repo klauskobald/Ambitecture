@@ -1,6 +1,11 @@
 /* ── Modal overlay ──────────────────────────────────────────── */
 
+/*
+ * Proportional sizing: tune --modal-scale on .modal-overlay (default 0.72).
+ * All modal card typography and spacing derive from this one knob.
+ */
 .modal-overlay {
+  --modal-scale: 1;
   display: none;
   position: fixed;
   inset: 0;
@@ -10,7 +15,7 @@
   z-index: 300;
   align-items: center;
   justify-content: center;
-  padding: 1rem;
+  padding: calc(0.75rem * var(--modal-scale) + 0.35rem);
 }
 
 .modal-overlay.is-open {
@@ -22,22 +27,25 @@
 .modal {
   background: var(--color-bg-raised);
   border: 1px solid var(--color-border);
-  border-radius: 12px;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.7);
-  min-width: 300px;
-  max-width: 420px;
+  border-radius: calc(8px + 4px * var(--modal-scale));
+  box-shadow: 0 calc(6px * var(--modal-scale)) calc(28px * var(--modal-scale)) rgba(0, 0, 0, 0.7);
+  min-width: min(92vw, calc(16rem + 8rem * var(--modal-scale)));
+  max-width: min(96vw, calc(14rem + 14rem * var(--modal-scale)));
+  max-height: min(88vh, calc(20rem + 14rem * var(--modal-scale)));
   width: 100%;
-  padding: 1.25rem 1.25rem 1rem;
+  padding: calc(0.95rem * var(--modal-scale) + 0.35rem) calc(1.05rem * var(--modal-scale) + 0.35rem) calc(0.75rem * var(--modal-scale) + 0.25rem);
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: calc(0.65rem * var(--modal-scale) + 0.25rem);
+  overflow-y: auto;
+  box-sizing: border-box;
   animation: modal-in 0.15s ease-out;
 }
 
 @keyframes modal-in {
   from {
     opacity: 0;
-    transform: translateY(8px) scale(0.98);
+    transform: translateY(6px) scale(0.98);
   }
 
   to {
@@ -50,8 +58,8 @@
 
 .modal-text {
   margin: 0;
-  font-size: 2rem;
-  /* line-height: 2.1; */
+  font-size: calc(1.2rem * var(--modal-scale) + 0.35rem);
+  line-height: 1.25;
   color: var(--color-text);
 }
 
@@ -60,19 +68,19 @@
 .modal-fields {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: calc(0.45rem * var(--modal-scale) + 0.2rem);
 }
 
 .modal-input {
   display: block;
   width: 100%;
-  padding: 0.5rem 0.75rem;
+  padding: calc(0.35rem * var(--modal-scale) + 0.25rem) calc(0.5rem * var(--modal-scale) + 0.3rem);
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: calc(6px + 2px * var(--modal-scale));
   background: var(--color-bg);
   color: var(--color-text);
-  font-size: 2rem;
-  /* line-height: 2.1; */
+  font-size: calc(0.95rem * var(--modal-scale) + 0.3rem);
+  line-height: 1.3;
   font-family: inherit;
   outline: none;
   box-sizing: border-box;
@@ -87,12 +95,21 @@
   border-color: var(--color-accent);
 }
 
+/*
+ * First letter of each word to uppercase (native “ucfirst” per word).
+ * Use on <select> for assignment value labels; keep JSON <textarea> without this class.
+ */
+select.modal-select-capitalize,
+select.modal-select-capitalize option {
+  text-transform: capitalize;
+}
+
 /* ── Action buttons ────────────────────────────────────────── */
 
 .modal-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.5rem;
+  gap: calc(0.4rem * var(--modal-scale) + 0.2rem);
 }
 
 .modal-actions--split {
@@ -103,7 +120,7 @@
 
 .modal-actions__end {
   display: flex;
-  gap: 0.5rem;
+  gap: calc(0.4rem * var(--modal-scale) + 0.2rem);
   flex-wrap: wrap;
   justify-content: flex-end;
 }
@@ -112,38 +129,39 @@
 
 .input-assign-modal__hint {
   margin: 0;
-  font-size: 1.35rem;
+  font-size: calc(0.8rem * var(--modal-scale) + 0.35rem);
   line-height: 1.35;
   color: var(--color-text-muted);
 }
 
 .input-assign-modal__error {
   margin: 0;
-  font-size: 1.4rem;
+  font-size: calc(0.82rem * var(--modal-scale) + 0.35rem);
   line-height: 1.35;
   color: #c44;
 }
 
 .input-assign-modal__label {
   display: block;
-  font-size: 1.35rem;
+  font-size: calc(0.78rem * var(--modal-scale) + 0.35rem);
+  line-height: 1.25;
   color: var(--color-text-muted);
-  margin-bottom: 0.2rem;
+  margin-bottom: calc(0.12rem * var(--modal-scale) + 0.08rem);
 }
 
 textarea.modal-input.input-assign-modal__json {
-  min-height: 5.5rem;
+  min-height: calc(3.5rem + 4rem * var(--modal-scale));
   resize: vertical;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 1.35rem;
+  font-size: calc(0.75rem * var(--modal-scale) + 0.32rem);
   line-height: 1.35;
 }
 
 .modal-actions .btn {
-  min-width: 5rem;
-  padding: 0.45rem 1rem;
-  font-size: 1.5rem;
-  border-radius: 8px;
+  min-width: calc(4rem * var(--modal-scale) + 1.5rem);
+  padding: calc(0.28rem * var(--modal-scale) + 0.22rem) calc(0.75rem * var(--modal-scale) + 0.35rem);
+  font-size: calc(0.82rem * var(--modal-scale) + 0.32rem);
+  border-radius: calc(6px + 2px * var(--modal-scale));
 }
 
 /* Primary / affirmative action */
@@ -163,11 +181,13 @@ textarea.modal-input.input-assign-modal__json {
 .modal-choice-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: calc(0.35rem * var(--modal-scale) + 0.2rem);
 }
 
 .modal-choice-list__btn {
   width: 100%;
   justify-content: center;
   text-align: center;
+  font-size: calc(0.85rem * var(--modal-scale) + 0.3rem);
+  padding: calc(0.35rem * var(--modal-scale) + 0.2rem) calc(0.6rem * var(--modal-scale) + 0.25rem);
 }

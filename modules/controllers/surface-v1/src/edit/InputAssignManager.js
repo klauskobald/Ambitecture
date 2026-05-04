@@ -85,8 +85,6 @@ export class InputAssignManager {
     const currentName = typeof assignedInput?.name === 'string'
       ? assignedInput.name
       : (typeof action?.name === 'string' ? action.name : title)
-    const currentDisplayType = this._resolveDisplayType(assignedInput)
-
     const outcome = await openModalCard((dismiss) => {
       const card = document.createElement('div')
       card.className = 'modal input-assign-modal'
@@ -114,15 +112,15 @@ export class InputAssignManager {
       typeLabel.className = 'input-assign-modal__label'
       typeLabel.textContent = 'Input type'
       const typeSelect = document.createElement('select')
-      typeSelect.className = 'modal-input'
+      typeSelect.className = 'modal-input modal-select-capitalize'
       typeSelect.setAttribute('aria-label', 'Input type')
       for (const opt of [
-        { value: 'button', label: 'button (tap)' },
-        { value: 'momentarySwitch', label: 'momentarySwitch (hold)' },
+        { value: 'button', hint: 'tap' },
+        { value: 'momentarySwitch', hint: 'hold' },
       ]) {
         const o = document.createElement('option')
         o.value = opt.value
-        o.textContent = opt.label
+        o.textContent = `${opt.value} (${opt.hint})`
         typeSelect.appendChild(o)
       }
       typeSelect.value = existingType === 'momentarySwitch' ? 'momentarySwitch' : 'button'
@@ -140,12 +138,16 @@ export class InputAssignManager {
       const displayLabel = document.createElement('label')
       displayLabel.className = 'input-assign-modal__label'
       displayLabel.textContent = 'Display type'
-      const displayInput = document.createElement('input')
-      displayInput.className = 'modal-input'
-      displayInput.type = 'text'
-      displayInput.placeholder = 'button'
-      displayInput.value = currentDisplayType
-      displayInput.setAttribute('aria-label', 'Display type')
+      const displaySelect = document.createElement('select')
+      displaySelect.className = 'modal-input modal-select-capitalize'
+      displaySelect.setAttribute('aria-label', 'Display type')
+      for (const opt of [{ value: 'button', label: 'button' }]) {
+        const o = document.createElement('option')
+        o.value = opt.value
+        o.textContent = opt.label
+        displaySelect.appendChild(o)
+      }
+      displaySelect.value = 'button'
 
       const argsBlock = document.createElement('div')
       argsBlock.className = 'input-assign-modal__args-button'
@@ -189,7 +191,7 @@ export class InputAssignManager {
       fields.appendChild(nameLabel)
       fields.appendChild(nameInput)
       fields.appendChild(displayLabel)
-      fields.appendChild(displayInput)
+      fields.appendChild(displaySelect)
       fields.appendChild(argsBlock)
       fields.appendChild(momentaryBlock)
 
@@ -250,7 +252,7 @@ export class InputAssignManager {
           nameInput.focus()
           return
         }
-        const displayType = displayInput.value.trim() || 'button'
+        const displayType = displaySelect.value || 'button'
         const inputType = typeSelect.value
 
         if (inputType === 'momentarySwitch') {
@@ -327,17 +329,6 @@ export class InputAssignManager {
     this._invokeButton.textContent = isAssigned ? 'Assigned' : 'Assign'
     this._invokeButton.classList.toggle('intent-toggle--enabled', isAssigned)
     this._invokeButton.setAttribute('aria-pressed', isAssigned ? 'true' : 'false')
-  }
-
-  /**
-   * @param {Record<string, unknown> | null | undefined} input
-   * @returns {string}
-   */
-  _resolveDisplayType (input) {
-    const display = input?.display
-    if (!display || typeof display !== 'object' || Array.isArray(display)) return 'button'
-    const record = /** @type {Record<string, unknown>} */ (display)
-    return typeof record.type === 'string' && record.type.length > 0 ? record.type : 'button'
   }
 
   /**

@@ -1,4 +1,20 @@
 systemCapabilities:
+  inputTypes:
+    - class: button
+      name: Button
+      hint: tap
+      params:
+        args: jsonString 
+    - class: momentarySwitch
+      name: Momentary Switch
+      hint: hold
+      params:
+        argsOn: jsonString
+        argsOff: jsonString
+  displayTypes:
+    - class: button
+      name: Button
+      
   functionCurves:
     - linear
     - quadratic

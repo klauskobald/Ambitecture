@@ -29,10 +29,6 @@ export class PropertyPanel {
   buildElement () {
     const panel = document.createElement('div')
     panel.className = 'prop-panel'
-    const assignSection = this._buildAssignSection()
-    if (assignSection) {
-      panel.appendChild(assignSection)
-    }
 
     for (const descriptor of this._descriptors) {
       const d = /** @type {Record<string, unknown>} */ (descriptor)
@@ -43,6 +39,11 @@ export class PropertyPanel {
 
       this._controls.push(control)
       panel.appendChild(control.buildRow())
+    }
+
+    const assignSection = this._buildAssignSection()
+    if (assignSection) {
+      panel.appendChild(assignSection)
     }
 
     return panel

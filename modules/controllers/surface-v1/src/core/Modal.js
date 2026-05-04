@@ -15,6 +15,7 @@
  *     { value: 'a', label: 'Option A' },
  *     { value: 'b', label: 'Option B', disabled: true, title: 'Soon' }
  *   ]).then(v => { ... })  // v is chosen value string, or null if cancelled
+ *   openModalCard(dismiss => { ... build card, call dismiss(result) ... }).then(...)
  */
 
 /** @type {HTMLElement | null} */
@@ -336,6 +337,31 @@ export function pickChoice (message, options, opts) {
       opts?.callback?.(/** @type {string | null} */ (val))
     }
     _overlay.appendChild(_buildChoiceListModal(message, options, opts))
+    _overlay.classList.add('is-open')
+  })
+}
+
+/**
+ * Caller builds the full modal card (same `.modal` styling as other dialogs).
+ * Call `dismiss(payload)` when finished; the returned promise resolves with that payload,
+ * or `null` if the user dismissed via overlay click (same as other modals).
+ *
+ * @template T
+ * @param {(dismiss: (value: T | null) => void) => HTMLElement} factory
+ * @returns {Promise<T | null>}
+ */
+export function openModalCard (factory) {
+  _dismiss(null)
+  _ensureOverlay()
+  return new Promise((resolve) => {
+    _resolve = (val) => {
+      resolve(/** @type {T | null} */ (val))
+    }
+    const dismiss = (value) => {
+      _dismiss(value)
+    }
+    const card = factory(dismiss)
+    _overlay.appendChild(card)
     _overlay.classList.add('is-open')
   })
 }

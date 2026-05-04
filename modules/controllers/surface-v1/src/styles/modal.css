@@ -95,6 +95,50 @@
   gap: 0.5rem;
 }
 
+.modal-actions--split {
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.modal-actions__end {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* ── Input assignment modal (custom card) ───────────────────── */
+
+.input-assign-modal__hint {
+  margin: 0;
+  font-size: 1.35rem;
+  line-height: 1.35;
+  color: var(--color-text-muted);
+}
+
+.input-assign-modal__error {
+  margin: 0;
+  font-size: 1.4rem;
+  line-height: 1.35;
+  color: #c44;
+}
+
+.input-assign-modal__label {
+  display: block;
+  font-size: 1.35rem;
+  color: var(--color-text-muted);
+  margin-bottom: 0.2rem;
+}
+
+textarea.modal-input.input-assign-modal__json {
+  min-height: 5.5rem;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 1.35rem;
+  line-height: 1.35;
+}
+
 .modal-actions .btn {
   min-width: 5rem;
   padding: 0.45rem 1rem;

@@ -1,20 +1,30 @@
 import { projectGraph } from '../core/projectGraph.js'
-import { confirm, pickChoice, prompt, warn } from '../core/Modal.js'
+import { openModalCard } from '../core/Modal.js'
 import { sendActionInputCommand } from '../core/outboundQueue.js'
 
 /**
- * @param {string} value
- * @returns {Record<string, unknown> | undefined}
+ * @param {string} raw
+ * @param {string} fieldLabel
+ * @returns {{ ok: true, value: Record<string, unknown> | undefined } | { ok: false, message: string }}
  */
-function parseOptionalJsonObject (value) {
-  const raw = value.trim()
-  if (!raw) return undefined
+function tryParseJsonObjectField (raw, fieldLabel) {
+  const trimmed = raw.trim()
+  if (!trimmed) return { ok: true, value: undefined }
   try {
-    const parsed = JSON.parse(raw)
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined
-    return /** @type {Record<string, unknown>} */ (parsed)
-  } catch {
-    return undefined
+    const parsed = JSON.parse(trimmed)
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {
+        ok: false,
+        message: `${fieldLabel} must be one JSON object using { ... }, not an array [...] or a bare string.`,
+      }
+    }
+    return { ok: true, value: /** @type {Record<string, unknown>} */ (parsed) }
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : 'parse error'
+    return {
+      ok: false,
+      message: `${fieldLabel} is not valid JSON (${detail}). Example: {"params.alpha":0.5}`,
+    }
   }
 }
 
@@ -70,121 +80,245 @@ export class InputAssignManager {
     const isAssigned = Boolean(assignedInput)
     const action = isAssigned ? projectGraph.getAssignedAction(this._targetType, this._targetGuid) : null
     const title = this._targetName || this._targetGuid
-    const choice = await pickChoice(
-      `${title}: manage input assignment`,
-      [
-        { value: 'edit', label: isAssigned ? 'Update assignment' : 'Create assignment' },
-        { value: 'remove', label: 'Remove assignment', disabled: !isAssigned },
-      ],
-      { cancel: 'Close' },
-    )
-    if (!choice) return
-    if (choice === 'remove') {
-      const ok = await confirm(`Remove input assignment from ${title}?`, { yes: 'Remove', no: 'Cancel' })
-      if (!ok) return
-      sendActionInputCommand({
-        command: 'removeInputAssignment',
-        targetType: this._targetType,
-        targetGuid: this._targetGuid,
-      })
-      this._refreshInvokeButton()
-      return
-    }
-
-    const existingType = typeof assignedInput?.type === 'string' ? assignedInput.type : 'button'
-    const selectedType = await pickChoice('Select input type', [
-      { value: 'button', label: 'button' },
-      { value: 'momentarySwitch', label: 'momentarySwitch' },
-    ], { cancel: 'Back' })
-    if (!selectedType) return
     const params = this._recordOrUndefined(assignedInput?.params)
+    const existingType = typeof assignedInput?.type === 'string' ? assignedInput.type : 'button'
     const currentName = typeof assignedInput?.name === 'string'
       ? assignedInput.name
       : (typeof action?.name === 'string' ? action.name : title)
     const currentDisplayType = this._resolveDisplayType(assignedInput)
-    const fields = selectedType === 'momentarySwitch'
-      ? [
-          { label: 'Label', key: 'name', placeholder: 'Button label', value: currentName },
-          { label: 'Display type', key: 'displayType', placeholder: 'button', value: currentDisplayType },
-          {
-            label: 'Args On JSON',
-            key: 'argsOnJson',
-            placeholder: '{}',
-            value: existingType === 'momentarySwitch' ? stringifyOptionalJsonObject(params?.argsOn) : '',
-          },
-          {
-            label: 'Args Off JSON',
-            key: 'argsOffJson',
-            placeholder: '{}',
-            value: existingType === 'momentarySwitch' ? stringifyOptionalJsonObject(params?.argsOff) : '',
-          },
-        ]
-      : [
-          { label: 'Label', key: 'name', placeholder: 'Button label', value: currentName },
-          { label: 'Display type', key: 'displayType', placeholder: 'button', value: currentDisplayType },
-          {
-            label: 'Args JSON',
-            key: 'argsJson',
-            placeholder: '{}',
-            value: existingType === 'button' ? stringifyOptionalJsonObject(params?.args) : '',
-          },
-        ]
-    const values = await prompt('Assignment configuration', fields, {
-      submit: isAssigned ? 'Update' : 'Create',
-      cancel: 'Cancel',
-    })
-    if (!values) return
 
-    const name = values.name?.trim() ?? ''
-    const displayType = values.displayType?.trim() || 'button'
-    if (!name) {
-      warn('Label is required.')
-      return
-    }
+    const outcome = await openModalCard((dismiss) => {
+      const card = document.createElement('div')
+      card.className = 'modal input-assign-modal'
+      card.addEventListener('click', (e) => e.stopPropagation())
 
-    if (selectedType === 'momentarySwitch') {
-      const parsedOn = parseOptionalJsonObject(values.argsOnJson ?? '')
-      const parsedOff = parseOptionalJsonObject(values.argsOffJson ?? '')
-      const hasInvalidOn = (values.argsOnJson ?? '').trim().length > 0 && parsedOn === undefined
-      const hasInvalidOff = (values.argsOffJson ?? '').trim().length > 0 && parsedOff === undefined
-      if (hasInvalidOn || hasInvalidOff) {
-        warn('Args On/Off must be valid JSON objects.')
-        return
+      const heading = document.createElement('p')
+      heading.className = 'modal-text'
+      heading.textContent = `${title}`
+
+      const sub = document.createElement('p')
+      sub.className = 'input-assign-modal__hint'
+      sub.textContent = isAssigned
+        ? 'Edit the perform control for this target, or remove it. Args are optional JSON objects (runtime patch keys such as params.alpha).'
+        : 'Create a perform control: pick input type, set the label, optionally paste a JSON object for args.'
+
+      const errorEl = document.createElement('p')
+      errorEl.className = 'input-assign-modal__error'
+      errorEl.hidden = true
+      errorEl.setAttribute('role', 'alert')
+
+      const fields = document.createElement('div')
+      fields.className = 'modal-fields'
+
+      const typeLabel = document.createElement('label')
+      typeLabel.className = 'input-assign-modal__label'
+      typeLabel.textContent = 'Input type'
+      const typeSelect = document.createElement('select')
+      typeSelect.className = 'modal-input'
+      typeSelect.setAttribute('aria-label', 'Input type')
+      for (const opt of [
+        { value: 'button', label: 'button (tap)' },
+        { value: 'momentarySwitch', label: 'momentarySwitch (hold)' },
+      ]) {
+        const o = document.createElement('option')
+        o.value = opt.value
+        o.textContent = opt.label
+        typeSelect.appendChild(o)
       }
-      sendActionInputCommand({
-        command: 'ensureInputAssignment',
-        targetType: this._targetType,
-        targetGuid: this._targetGuid,
-        input: {
-          name,
-          type: selectedType,
-          displayType,
-          ...(parsedOn !== undefined ? { argsOn: parsedOn } : {}),
-          ...(parsedOff !== undefined ? { argsOff: parsedOff } : {}),
-        },
-      })
-      this._refreshInvokeButton()
-      return
-    }
+      typeSelect.value = existingType === 'momentarySwitch' ? 'momentarySwitch' : 'button'
 
-    const parsedArgs = parseOptionalJsonObject(values.argsJson ?? '')
-    const hasInvalidArgs = (values.argsJson ?? '').trim().length > 0 && parsedArgs === undefined
-    if (hasInvalidArgs) {
-      warn('Args must be a valid JSON object.')
-      return
-    }
-    sendActionInputCommand({
-      command: 'ensureInputAssignment',
-      targetType: this._targetType,
-      targetGuid: this._targetGuid,
-      input: {
-        name,
-        type: selectedType,
-        displayType,
-        ...(parsedArgs !== undefined ? { args: parsedArgs } : {}),
-      },
+      const nameLabel = document.createElement('label')
+      nameLabel.className = 'input-assign-modal__label'
+      nameLabel.textContent = 'Label (shown on controller)'
+      const nameInput = document.createElement('input')
+      nameInput.className = 'modal-input'
+      nameInput.type = 'text'
+      nameInput.placeholder = 'e.g. Flash red'
+      nameInput.value = currentName
+      nameInput.setAttribute('aria-label', 'Label')
+
+      const displayLabel = document.createElement('label')
+      displayLabel.className = 'input-assign-modal__label'
+      displayLabel.textContent = 'Display type'
+      const displayInput = document.createElement('input')
+      displayInput.className = 'modal-input'
+      displayInput.type = 'text'
+      displayInput.placeholder = 'button'
+      displayInput.value = currentDisplayType
+      displayInput.setAttribute('aria-label', 'Display type')
+
+      const argsBlock = document.createElement('div')
+      argsBlock.className = 'input-assign-modal__args-button'
+      const argsLabel = document.createElement('label')
+      argsLabel.className = 'input-assign-modal__label'
+      argsLabel.textContent = 'Args (JSON object, optional)'
+      const argsTextarea = document.createElement('textarea')
+      argsTextarea.className = 'modal-input input-assign-modal__json'
+      argsTextarea.placeholder = '{}'
+      argsTextarea.value = existingType === 'button' ? stringifyOptionalJsonObject(params?.args) : ''
+      argsTextarea.setAttribute('aria-label', 'Args JSON')
+      argsBlock.appendChild(argsLabel)
+      argsBlock.appendChild(argsTextarea)
+
+      const momentaryBlock = document.createElement('div')
+      momentaryBlock.className = 'input-assign-modal__args-momentary'
+      momentaryBlock.hidden = true
+      const onLabel = document.createElement('label')
+      onLabel.className = 'input-assign-modal__label'
+      onLabel.textContent = 'Args On (JSON object, optional)'
+      const onTextarea = document.createElement('textarea')
+      onTextarea.className = 'modal-input input-assign-modal__json'
+      onTextarea.placeholder = '{}'
+      onTextarea.value = existingType === 'momentarySwitch' ? stringifyOptionalJsonObject(params?.argsOn) : ''
+      onTextarea.setAttribute('aria-label', 'Args On JSON')
+      const offLabel = document.createElement('label')
+      offLabel.className = 'input-assign-modal__label'
+      offLabel.textContent = 'Args Off (JSON object, optional)'
+      const offTextarea = document.createElement('textarea')
+      offTextarea.className = 'modal-input input-assign-modal__json'
+      offTextarea.placeholder = '{}'
+      offTextarea.value = existingType === 'momentarySwitch' ? stringifyOptionalJsonObject(params?.argsOff) : ''
+      offTextarea.setAttribute('aria-label', 'Args Off JSON')
+      momentaryBlock.appendChild(onLabel)
+      momentaryBlock.appendChild(onTextarea)
+      momentaryBlock.appendChild(offLabel)
+      momentaryBlock.appendChild(offTextarea)
+
+      fields.appendChild(typeLabel)
+      fields.appendChild(typeSelect)
+      fields.appendChild(nameLabel)
+      fields.appendChild(nameInput)
+      fields.appendChild(displayLabel)
+      fields.appendChild(displayInput)
+      fields.appendChild(argsBlock)
+      fields.appendChild(momentaryBlock)
+
+      const setError = (message) => {
+        if (!message) {
+          errorEl.textContent = ''
+          errorEl.hidden = true
+          return
+        }
+        errorEl.textContent = message
+        errorEl.hidden = false
+      }
+
+      const syncArgsVisibility = () => {
+        const t = typeSelect.value
+        argsBlock.hidden = t !== 'button'
+        momentaryBlock.hidden = t !== 'momentarySwitch'
+        setError('')
+      }
+      typeSelect.addEventListener('change', syncArgsVisibility)
+      syncArgsVisibility()
+
+      const actions = document.createElement('div')
+      actions.className = 'modal-actions modal-actions--split'
+
+      const removeBtn = document.createElement('button')
+      removeBtn.type = 'button'
+      removeBtn.className = 'btn btn--danger'
+      removeBtn.textContent = 'Remove'
+      removeBtn.title = 'Deletes this controller input and its linked action for this target.'
+      removeBtn.disabled = !isAssigned
+      removeBtn.addEventListener('click', () => {
+        sendActionInputCommand({
+          command: 'removeInputAssignment',
+          targetType: this._targetType,
+          targetGuid: this._targetGuid,
+        })
+        dismiss('removed')
+      })
+
+      const end = document.createElement('div')
+      end.className = 'modal-actions__end'
+
+      const cancelBtn = document.createElement('button')
+      cancelBtn.type = 'button'
+      cancelBtn.className = 'btn'
+      cancelBtn.textContent = 'Cancel'
+      cancelBtn.addEventListener('click', () => dismiss(null))
+
+      const saveBtn = document.createElement('button')
+      saveBtn.type = 'button'
+      saveBtn.className = 'btn btn--primary'
+      saveBtn.textContent = isAssigned ? 'Save' : 'Create'
+      saveBtn.addEventListener('click', () => {
+        const name = nameInput.value.trim()
+        if (!name) {
+          setError('Enter a label: this is the text shown on the perform button.')
+          nameInput.focus()
+          return
+        }
+        const displayType = displayInput.value.trim() || 'button'
+        const inputType = typeSelect.value
+
+        if (inputType === 'momentarySwitch') {
+          const onR = tryParseJsonObjectField(onTextarea.value, 'Args On')
+          const offR = tryParseJsonObjectField(offTextarea.value, 'Args Off')
+          if (!onR.ok) {
+            setError(onR.message)
+            onTextarea.focus()
+            return
+          }
+          if (!offR.ok) {
+            setError(offR.message)
+            offTextarea.focus()
+            return
+          }
+          sendActionInputCommand({
+            command: 'ensureInputAssignment',
+            targetType: this._targetType,
+            targetGuid: this._targetGuid,
+            input: {
+              name,
+              type: 'momentarySwitch',
+              displayType,
+              ...(onR.value !== undefined ? { argsOn: onR.value } : {}),
+              ...(offR.value !== undefined ? { argsOff: offR.value } : {}),
+            },
+          })
+        } else {
+          const argsR = tryParseJsonObjectField(argsTextarea.value, 'Args')
+          if (!argsR.ok) {
+            setError(argsR.message)
+            argsTextarea.focus()
+            return
+          }
+          sendActionInputCommand({
+            command: 'ensureInputAssignment',
+            targetType: this._targetType,
+            targetGuid: this._targetGuid,
+            input: {
+              name,
+              type: 'button',
+              displayType,
+              ...(argsR.value !== undefined ? { args: argsR.value } : {}),
+            },
+          })
+        }
+        dismiss('saved')
+      })
+
+      end.appendChild(cancelBtn)
+      end.appendChild(saveBtn)
+      actions.appendChild(removeBtn)
+      actions.appendChild(end)
+
+      card.appendChild(heading)
+      card.appendChild(sub)
+      card.appendChild(errorEl)
+      card.appendChild(fields)
+      card.appendChild(actions)
+
+      requestAnimationFrame(() => nameInput.focus())
+
+      return card
     })
-    this._refreshInvokeButton()
+
+    if (outcome === 'saved' || outcome === 'removed') {
+      this._refreshInvokeButton()
+    }
   }
 
   _refreshInvokeButton () {

@@ -69,6 +69,10 @@ export class ScalarRadialKnob {
     this._dragStartClientY = 0
     /** t at pointer-down (scrub baseline) */
     this._dragStartT = 0
+    /** @type {number} latest client X for active drag pointer (post-zoom scrub baseline refresh) */
+    this._lastPointerClientX = 0
+    /** @type {number} */
+    this._lastPointerClientY = 0
 
     /** @type {{ clientX: number, clientY: number, t: number } | null} */
     this._lastTap = null
@@ -287,6 +291,11 @@ export class ScalarRadialKnob {
       apply()
       box.offsetWidth
     }
+
+    if (this._dragPointerId !== null) {
+      this._dragStartClientX = this._lastPointerClientX
+      this._dragStartClientY = this._lastPointerClientY
+    }
   }
 
   // ── Geometry / mapping ────────────────────────────────────────────────────
@@ -444,6 +453,8 @@ export class ScalarRadialKnob {
     this._dragPointerId = e.pointerId
     this._dragStartClientX = e.clientX
     this._dragStartClientY = e.clientY
+    this._lastPointerClientX = e.clientX
+    this._lastPointerClientY = e.clientY
     this._dragStartT = this._t
     this._setDialEngaged(true)
     this._dial.setPointerCapture(e.pointerId)
@@ -453,6 +464,8 @@ export class ScalarRadialKnob {
   /** @param {PointerEvent} e */
   _onPointerMove (e) {
     if (!this._dial || this._dragPointerId !== e.pointerId) return
+    this._lastPointerClientX = e.clientX
+    this._lastPointerClientY = e.clientY
     const slide = SCRUB_PIXELS_PER_FULL_RANGE
     if (slide <= 0) return
     const dx = e.clientX - this._dragStartClientX
@@ -473,13 +486,13 @@ export class ScalarRadialKnob {
   /** @param {PointerEvent} e */
   _onPointerUp (e) {
     if (!this._dial || this._dragPointerId !== e.pointerId) return
-    this._setDialEngaged(false)
+    this._dragPointerId = null
     try {
       this._dial.releasePointerCapture(e.pointerId)
     } catch {
       /* ignore */
     }
-    this._dragPointerId = null
+    this._setDialEngaged(false)
     const tapDist = Math.hypot(
       e.clientX - this._downClientX,
       e.clientY - this._downClientY
@@ -499,13 +512,13 @@ export class ScalarRadialKnob {
   /** @param {PointerEvent} e */
   _onPointerCancel (e) {
     if (!this._dial || this._dragPointerId !== e.pointerId) return
-    this._setDialEngaged(false)
+    this._dragPointerId = null
     try {
       this._dial.releasePointerCapture(e.pointerId)
     } catch {
       /* ignore */
     }
-    this._dragPointerId = null
+    this._setDialEngaged(false)
     this._lastTap = null
     e.preventDefault()
   }

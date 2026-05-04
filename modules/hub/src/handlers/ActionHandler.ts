@@ -123,7 +123,7 @@ export class ActionHandler implements MessageHandler {
       Logger.warn(`[action] scene target ${item.guid ?? 'unknown'} not found`);
       return 0;
     }
-    const result = this.graphStore.activateScene(scene.name, message.location);
+    const result = this.graphStore.activateScene(scene.name, message.location, 'runtime');
     this.sendResultToSource(ws, result);
     this.publishMutation(ws, result, message.location);
     return 1;

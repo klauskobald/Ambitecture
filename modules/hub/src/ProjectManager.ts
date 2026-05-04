@@ -545,7 +545,11 @@ export class ProjectManager {
     }, 2000);
   }
 
-  setActiveScene(sceneName: string): ControllerIntent[] {
+  /**
+   * @param persistDurable When false, updates live hub scene only (no `project.activeScene` write,
+   * no disk save). Use for perform / action scene switches; use true for edit-pane commits.
+   */
+  setActiveScene(sceneName: string, persistDurable = true): ControllerIntent[] {
     const scenes = this.project?.scenes ?? [];
     const scene = scenes.find(s => s.name === sceneName);
     if (!scene) {
@@ -553,12 +557,14 @@ export class ProjectManager {
       return [];
     }
     this.activeSceneName = sceneName;
-    if (this.project) {
+    if (this.project && persistDurable) {
       this.project.activeScene = sceneName;
       this._scheduleSave();
     }
     const intents = this.getActiveSceneIntents();
-    Logger.info(`[project] Activated scene "${sceneName}" with ${intents.length} intent(s)`);
+    Logger.info(
+      `[project] Activated scene "${sceneName}" with ${intents.length} intent(s)${persistDurable ? '' : ' (runtime only, not persisted)'}`,
+    );
     return intents;
   }
 

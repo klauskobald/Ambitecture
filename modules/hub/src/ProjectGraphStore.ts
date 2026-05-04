@@ -88,7 +88,11 @@ export class ProjectGraphStore {
         return this.applyInputCommand(command);
       case 'project':
         if (command.patch && typeof command.patch['activeSceneName'] === 'string') {
-          return this.activateScene(command.patch['activeSceneName']);
+          return this.activateScene(
+            command.patch['activeSceneName'],
+            undefined,
+            command.persistence ?? 'runtimeAndDurable',
+          );
         }
         return this.applyOpaqueCommand(command);
       case 'controller':
@@ -98,9 +102,14 @@ export class ProjectGraphStore {
     }
   }
 
-  activateScene(sceneName: string, location?: [number, number]): GraphMutationResult {
+  activateScene(
+    sceneName: string,
+    location?: [number, number],
+    persistence: GraphPersistence = 'runtimeAndDurable',
+  ): GraphMutationResult {
     this.runtimeMerge?.clearRuntimeIntentMergeCache();
-    const newIntents = this.projectManager.setActiveScene(sceneName);
+    const persistDurable = persistence === 'durable' || persistence === 'runtimeAndDurable';
+    const newIntents = this.projectManager.setActiveScene(sceneName, persistDurable);
     const now = Date.now();
     const newGuids = new Set(newIntents.map(intent => intent.guid));
     const removalEvents = this.projectManager.getAllIntentDefinitionGuids()
@@ -117,15 +126,17 @@ export class ProjectGraphStore {
       entityType: 'project',
       guid: 'active',
       patch: { activeSceneName: sceneName },
-      persistence: 'runtimeAndDurable',
+      persistence,
     });
-    Logger.info(`[graph] activated scene "${sceneName}" at ${location?.join(', ') ?? 'unknown location'}`);
+    Logger.info(
+      `[graph] activated scene "${sceneName}" at ${location?.join(', ') ?? 'unknown location'} (${persistence})`,
+    );
     return {
       revision: this.revision,
       controllerDeltas: [delta],
       rendererEvents: [...removalEvents, ...activeEvents],
       rendererConfigChangedFor: [],
-      durableChanged: true,
+      durableChanged: persistDurable,
     };
   }
 

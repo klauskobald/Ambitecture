@@ -38,7 +38,7 @@ export class SceneHandler implements MessageHandler {
           return;
         }
         this.runtimeUpdateDispatcher?.clearRuntimeIntentMergeCache();
-        const newIntents = this.projectManager.setActiveScene(message.payload.sceneName);
+        const newIntents = this.projectManager.setActiveScene(message.payload.sceneName, false);
 
         const now = Date.now();
         const newGuids = new Set(newIntents.map(i => i.guid));

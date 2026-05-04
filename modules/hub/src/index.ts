@@ -173,7 +173,7 @@ const publishGraphMutation = (source: import('ws').WebSocket, result: GraphMutat
       && typeof /** @type {Record<string, unknown>} */ (p).activeSceneName === 'string'
     );
   });
-  if (sceneActivateResync && result.durableChanged) {
+  if (sceneActivateResync) {
     const scenesWire = projectManager.getScenesWirePayload();
     for (const ws of registry.getByRole('controller')) {
       if (ws.readyState !== WebSocket.OPEN) continue;

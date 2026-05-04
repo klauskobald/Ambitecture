@@ -59,7 +59,7 @@ systemCapabilities:
         name: Radius
         allowOverlay: true
         type: scalar
-        range: [0, 20]
+        range: [0.1, 20]
         step: 0.1
         stepFunction: quadratic
         defaultValue: 5

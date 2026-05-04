@@ -103,7 +103,7 @@ export class ActionHandler implements MessageHandler {
           handled += this.executeSceneItem(ws, item, message);
           break;
         case 'intent':
-          handled += this.executeIntentItem(item, sourceGuid, message.payload.args, message.location);
+          handled += this.executeIntentItem(ws, item, sourceGuid, message.payload.args, message.location);
           break;
         default:
           Logger.warn(`[action] unsupported execute type "${item.type}" on ${action.guid ?? message.payload.actionGuid}`);
@@ -130,6 +130,7 @@ export class ActionHandler implements MessageHandler {
   }
 
   private executeIntentItem(
+    ws: WebSocket,
     item: ActionExecuteItem,
     sourceGuid: string,
     args: Record<string, unknown> | undefined,
@@ -137,7 +138,7 @@ export class ActionHandler implements MessageHandler {
   ): number {
     const update = this.intentExecuteItemToRuntimeUpdate(item, sourceGuid, args);
     if (!update) return 0;
-    this.runtimeUpdateDispatcher.dispatch([update], location);
+    this.runtimeUpdateDispatcher.dispatch([update], location, Date.now(), new Set([ws]));
     return 1;
   }
 

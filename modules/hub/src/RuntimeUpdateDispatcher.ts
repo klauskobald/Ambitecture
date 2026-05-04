@@ -33,17 +33,31 @@ export class RuntimeUpdateDispatcher {
     this.runtimeIntentMergeCache.clear();
   }
 
-  dispatch(updates: RuntimeUpdate[], location?: [number, number], now = Date.now()): void {
+  /**
+   * @param excludeControllerSockets Sockets that must not receive `runtime:update` (typically
+   * the sender(s) of the underlying `runtime:command` batch). Use WebSocket identity — multiple
+   * tabs can share the same controller config GUID.
+   */
+  dispatch(
+    updates: RuntimeUpdate[],
+    location?: [number, number],
+    now = Date.now(),
+    excludeControllerSockets?: Set<WebSocket>,
+  ): void {
     if (updates.length === 0) return;
 
-    this.forwardRuntimeUpdates(updates, location);
+    this.forwardRuntimeUpdates(updates, location, excludeControllerSockets);
     const rendererEvents = this.runtimeUpdatesToRendererEvents(updates, now);
     if (rendererEvents.length > 0) {
       this.eventQueue.schedule(rendererEvents.map(event => ({ event, scheduledAt: now })), location);
     }
   }
 
-  private forwardRuntimeUpdates(updates: RuntimeUpdate[], location?: [number, number]): void {
+  private forwardRuntimeUpdates(
+    updates: RuntimeUpdate[],
+    location?: [number, number],
+    excludeControllerSockets?: Set<WebSocket>,
+  ): void {
     const outbound = JSON.stringify({
       message: {
         type: 'runtime:update',
@@ -53,6 +67,7 @@ export class RuntimeUpdateDispatcher {
     });
     for (const ws of this.registry.getByRole('controller')) {
       if (ws.readyState !== WebSocket.OPEN) continue;
+      if (excludeControllerSockets?.has(ws)) continue;
       ws.send(outbound);
     }
   }

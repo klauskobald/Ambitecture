@@ -89,45 +89,84 @@ export class ArraySorter {
     normalizeUndefinedSortKeys(ordered, key)
     renumberSortKeysContiguous(ordered, key)
     onReorder(ordered)
+    /** @type {{ pointerId: number, fromIndex: number, item: Record<string, unknown>, row: HTMLElement } | null} */
+    let dragState = null
+    const clearDropMarkers = () => {
+      for (const node of host.querySelectorAll('.array-sort-row')) {
+        node.classList.remove('array-sort-row--drop-before', 'array-sort-row--drop-after')
+      }
+    }
+    const resolveDropTarget = (clientX, clientY) => {
+      const el = document.elementFromPoint(clientX, clientY)
+      const row = el instanceof Element ? el.closest('.array-sort-row') : null
+      if (!(row instanceof HTMLElement)) return null
+      const rect = row.getBoundingClientRect()
+      const dropBefore = clientY < (rect.top + rect.height / 2)
+      const anchor = parseInt(row.dataset.index ?? '', 10)
+      if (Number.isNaN(anchor)) return null
+      return { row, anchor, dropBefore }
+    }
+    const applyDropMarker = (clientX, clientY) => {
+      clearDropMarkers()
+      const target = resolveDropTarget(clientX, clientY)
+      if (!target) return null
+      target.row.classList.add(target.dropBefore ? 'array-sort-row--drop-before' : 'array-sort-row--drop-after')
+      return target
+    }
+    const finalizeDrag = (clientX, clientY) => {
+      if (!dragState) return
+      const { fromIndex, row, item } = dragState
+      const target = resolveDropTarget(clientX, clientY)
+      row.classList.remove('array-sort-row--dragging')
+      clearDropMarkers()
+      callbackLifecycle(item, 'hasBeenDragged')
+      dragState = null
+      if (!target) return
+      let to = target.anchor + (target.dropBefore ? 0 : 1)
+      if (fromIndex < to) to -= 1
+      if (fromIndex === to) return
+      const [moved] = ordered.splice(fromIndex, 1)
+      ordered.splice(to, 0, moved)
+      renumberSortKeysContiguous(ordered, key)
+      this._liveOrder = ordered
+      render()
+      onReorder(ordered)
+    }
 
     const render = () => {
       host.replaceChildren()
       ordered.forEach((item, index) => {
         const row = document.createElement('div')
         row.className = 'array-sort-row'
-        row.draggable = true
         row.dataset.index = String(index)
 
-        row.addEventListener('dragstart', e => {
-          if (!e.dataTransfer) return
-          e.dataTransfer.effectAllowed = 'move'
-          e.dataTransfer.setData('text/plain', String(index))
+        row.addEventListener('pointerdown', e => {
+          if (e.button !== 0) return
+          if (dragState) return
+          e.preventDefault()
           row.classList.add('array-sort-row--dragging')
+          row.setPointerCapture?.(e.pointerId)
+          dragState = { pointerId: e.pointerId, fromIndex: index, item, row }
           callbackLifecycle(item, 'willBeDragged')
         })
 
-        row.addEventListener('dragend', () => {
-          row.classList.remove('array-sort-row--dragging')
-          callbackLifecycle(item, 'hasBeenDragged')
+        row.addEventListener('pointermove', e => {
+          if (!dragState || dragState.pointerId !== e.pointerId) return
+          e.preventDefault()
+          applyDropMarker(e.clientX, e.clientY)
         })
 
-        row.addEventListener('dragover', e => {
+        row.addEventListener('pointerup', e => {
+          if (!dragState || dragState.pointerId !== e.pointerId) return
           e.preventDefault()
-          if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+          if (row.hasPointerCapture?.(e.pointerId)) row.releasePointerCapture(e.pointerId)
+          finalizeDrag(e.clientX, e.clientY)
         })
 
-        row.addEventListener('drop', e => {
-          e.preventDefault()
-          const rawFrom = e.dataTransfer?.getData('text/plain') ?? ''
-          const from = parseInt(rawFrom, 10)
-          const to = parseInt(row.dataset.index ?? '', 10)
-          if (Number.isNaN(from) || Number.isNaN(to) || from === to) return
-          const [moved] = ordered.splice(from, 1)
-          ordered.splice(to, 0, moved)
-          renumberSortKeysContiguous(ordered, key)
-          this._liveOrder = ordered
-          render()
-          onReorder(ordered)
+        row.addEventListener('pointercancel', e => {
+          if (!dragState || dragState.pointerId !== e.pointerId) return
+          if (row.hasPointerCapture?.(e.pointerId)) row.releasePointerCapture(e.pointerId)
+          finalizeDrag(e.clientX, e.clientY)
         })
 
         const inner = callbackDisplay(item)

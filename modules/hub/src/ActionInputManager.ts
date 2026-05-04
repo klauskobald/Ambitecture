@@ -1,6 +1,15 @@
 import { randomUUID } from 'crypto';
 import { ActionDefinition, ActionExecuteItem, InputDefinition, ProjectManager, Scene } from './ProjectManager';
 import { GraphCommand } from './GraphProtocol';
+import { Logger } from './Logger';
+import {
+  composeInputParamsFromCapabilities,
+  hasCapabilityDisplayTypes,
+  hasCapabilityInputTypes,
+  isKnownDisplayType,
+  isKnownInputType,
+  resolveDefaultPerformTypes,
+} from './inputAssignment/composeInputParams';
 
 type SceneTarget = {
   type: 'scene';
@@ -9,14 +18,11 @@ type SceneTarget = {
 
 type AssignTargetType = 'scene' | 'intent' | 'sequence' | string;
 
-type InputAssignConfig = {
+export type InputAssignConfig = {
   name?: string;
-  type?: 'button' | 'momentarySwitch' | string;
-  displayType?: 'button' | string;
-  args?: Record<string, unknown>;
-  argsOn?: Record<string, unknown>;
-  argsOff?: Record<string, unknown>;
-};
+  type?: string;
+  displayType?: string;
+} & Record<string, unknown>;
 
 export type ActionInputCommand =
   | { command: 'ensureInputAssignment'; targetType: AssignTargetType; targetGuid: string; input: InputAssignConfig }
@@ -26,7 +32,10 @@ export type ActionInputCommand =
   | { command: 'renameInput'; inputGuid: string; name: string };
 
 export class ActionInputManager {
-  constructor(private projectManager: ProjectManager) {}
+  constructor(
+    private projectManager: ProjectManager,
+    private getSystemCapabilities: () => unknown = () => ({}),
+  ) {}
 
   buildCommands(command: ActionInputCommand, controllerGuid: string): GraphCommand[] {
     switch (command.command) {
@@ -67,10 +76,17 @@ export class ActionInputManager {
   private ensureSceneButtonCommands(controllerGuid: string, sceneGuid: string): GraphCommand[] {
     const scene = this.projectManager.getSceneByGuid(sceneGuid);
     if (!scene?.guid) return [];
+    const caps = this.getSystemCapabilities();
+    const defaults = resolveDefaultPerformTypes(caps);
+    const type = defaults?.type ?? 'button';
+    const displayType = defaults?.displayType ?? 'button';
+    if (!defaults) {
+      Logger.warn('[action] ensureSceneButton: missing systemCapabilities inputTypes/displayTypes; using button/button');
+    }
     return this.ensureInputAssignmentCommands(controllerGuid, 'scene', scene.guid, {
       name: scene.name,
-      type: 'button',
-      displayType: 'button',
+      type,
+      displayType,
     });
   }
 
@@ -87,6 +103,9 @@ export class ActionInputManager {
       persistence: 'runtimeAndDurable',
     }));
 
+    const caps = this.getSystemCapabilities();
+    const displayFallback = resolveDefaultPerformTypes(caps)?.displayType ?? 'button';
+
     for (const input of this.projectManager.getInputsWirePayload(controllerGuid)) {
       if (!input.guid) continue;
       const hasSceneTarget = this.inputTargetsScene(input, sceneGuid);
@@ -96,7 +115,7 @@ export class ActionInputManager {
       delete next.action;
       next.context = sceneGuid;
       delete next.target;
-      next.display = next.display ?? { type: 'button' };
+      next.display = next.display ?? { type: displayFallback };
       commands.push(this.upsertCommand(
         'input',
         input.guid,
@@ -115,26 +134,50 @@ export class ActionInputManager {
     inputConfig: InputAssignConfig,
   ): GraphCommand[] {
     if (targetGuid.length === 0 || targetType.length === 0) return [];
+    const caps = this.getSystemCapabilities();
+    const defaults = resolveDefaultPerformTypes(caps);
+    const fallbackType = defaults?.type ?? 'button';
+    const fallbackDisplay = defaults?.displayType ?? 'button';
+    if (!defaults) {
+      Logger.warn('[action] ensureInputAssignment: missing systemCapabilities inputTypes/displayTypes; using button/button');
+    }
+
+    const configuredType = typeof inputConfig.type === 'string' && inputConfig.type.length > 0
+      ? inputConfig.type
+      : fallbackType;
+    const configuredDisplayType = typeof inputConfig.displayType === 'string' && inputConfig.displayType.length > 0
+      ? inputConfig.displayType
+      : fallbackDisplay;
+    const configuredName = typeof inputConfig.name === 'string' ? inputConfig.name.trim() : '';
+
+    const cfgRecord = inputConfig as Record<string, unknown>;
+    if (hasCapabilityInputTypes(caps) && !isKnownInputType(caps, configuredType)) {
+      Logger.warn(`[action] ensureInputAssignment: unknown input type "${configuredType}"`);
+      return [];
+    }
+    if (hasCapabilityDisplayTypes(caps) && !isKnownDisplayType(caps, configuredDisplayType)) {
+      Logger.warn(`[action] ensureInputAssignment: unknown display type "${configuredDisplayType}"`);
+      return [];
+    }
+
+    const composed = composeInputParamsFromCapabilities(caps, configuredType, cfgRecord);
+    if (!composed.ok) {
+      Logger.warn(`[action] ensureInputAssignment: ${composed.reason}`);
+      return [];
+    }
+
     const targetName = this.getTargetName(targetType, targetGuid);
     const existingAction = this.findActionByTarget(targetType, targetGuid);
     const existingInput = this.findInputByTarget(controllerGuid, targetType, targetGuid, existingAction?.guid);
     const actionGuid = existingAction?.guid ?? `action-${randomUUID()}`;
     const inputGuid = existingInput?.guid ?? `input-${randomUUID()}`;
-
-    const configuredType = typeof inputConfig.type === 'string' && inputConfig.type.length > 0
-      ? inputConfig.type
-      : 'button';
-    const configuredDisplayType = typeof inputConfig.displayType === 'string' && inputConfig.displayType.length > 0
-      ? inputConfig.displayType
-      : 'button';
-    const configuredName = typeof inputConfig.name === 'string' ? inputConfig.name.trim() : '';
     const action: ActionDefinition = {
       guid: actionGuid,
       name: configuredName || existingAction?.name || targetName,
       execute: [{ type: targetType, guid: targetGuid }],
     };
 
-    const params = this.buildInputParams(configuredType, inputConfig);
+    const params = composed.params;
     const input: InputDefinition = {
       guid: inputGuid,
       name: configuredName || existingInput?.name || targetName,
@@ -314,21 +357,6 @@ export class ActionInputManager {
   private actionTargets(action: ActionDefinition, targetType: AssignTargetType, targetGuid: string): boolean {
     if (!Array.isArray(action.execute)) return false;
     return action.execute.some(item => item.type === targetType && item.guid === targetGuid);
-  }
-
-  private buildInputParams(inputType: string, inputConfig: InputAssignConfig): Record<string, unknown> | undefined {
-    const params: Record<string, unknown> = {};
-    switch (inputType) {
-      case 'momentarySwitch':
-        if (inputConfig.argsOn !== undefined) params['argsOn'] = inputConfig.argsOn;
-        if (inputConfig.argsOff !== undefined) params['argsOff'] = inputConfig.argsOff;
-        break;
-      case 'button':
-      default:
-        if (inputConfig.args !== undefined) params['args'] = inputConfig.args;
-        break;
-    }
-    return Object.keys(params).length > 0 ? params : undefined;
   }
 
   private getTargetName(targetType: AssignTargetType, targetGuid: string): string {

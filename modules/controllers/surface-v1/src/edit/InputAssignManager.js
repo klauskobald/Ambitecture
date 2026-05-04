@@ -1,41 +1,8 @@
 import { projectGraph } from '../core/projectGraph.js'
 import { openModalCard } from '../core/Modal.js'
 import { sendActionInputCommand } from '../core/outboundQueue.js'
-
-/**
- * @param {string} raw
- * @param {string} fieldLabel
- * @returns {{ ok: true, value: Record<string, unknown> | undefined } | { ok: false, message: string }}
- */
-function tryParseJsonObjectField (raw, fieldLabel) {
-  const trimmed = raw.trim()
-  if (!trimmed) return { ok: true, value: undefined }
-  try {
-    const parsed = JSON.parse(trimmed)
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return {
-        ok: false,
-        message: `${fieldLabel} must be one JSON object using { ... }, not an array [...] or a bare string.`,
-      }
-    }
-    return { ok: true, value: /** @type {Record<string, unknown>} */ (parsed) }
-  } catch (err) {
-    const detail = err instanceof Error ? err.message : 'parse error'
-    return {
-      ok: false,
-      message: `${fieldLabel} is not valid JSON (${detail}). Example: {"params.alpha":0.5}`,
-    }
-  }
-}
-
-/**
- * @param {unknown} value
- * @returns {string}
- */
-function stringifyOptionalJsonObject (value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return ''
-  return JSON.stringify(value)
-}
+import { getDisplayTypes, getInputTypes } from '../core/systemCapabilities.js'
+import { parseParamFromForm, stringifyJsonStringParam } from './inputAssign/paramKindHandlers.js'
 
 export class InputAssignManager {
   /**
@@ -76,15 +43,53 @@ export class InputAssignManager {
 
   async showControl () {
     if (!this._targetType || !this._targetGuid) return
+    const inputTypes = getInputTypes()
+    const displayTypes = getDisplayTypes()
+    if (!inputTypes || !displayTypes) {
+      await openModalCard((dismiss) => {
+        const card = document.createElement('div')
+        card.className = 'modal input-assign-modal'
+        card.addEventListener('click', (e) => e.stopPropagation())
+        const p = document.createElement('p')
+        p.className = 'modal-text'
+        p.textContent = 'System capabilities not loaded'
+        const sub = document.createElement('p')
+        sub.className = 'input-assign-modal__hint'
+        sub.textContent = 'Wait for hub registration or reconnect. Input/display types come from system.yml.'
+        const actions = document.createElement('div')
+        actions.className = 'modal-actions'
+        const ok = document.createElement('button')
+        ok.type = 'button'
+        ok.className = 'btn btn--primary'
+        ok.textContent = 'OK'
+        ok.addEventListener('click', () => dismiss(null))
+        actions.appendChild(ok)
+        card.appendChild(p)
+        card.appendChild(sub)
+        card.appendChild(actions)
+        return card
+      })
+      return
+    }
+
     const assignedInput = projectGraph.getAssignedInput(this._targetType, this._targetGuid)
     const isAssigned = Boolean(assignedInput)
     const action = isAssigned ? projectGraph.getAssignedAction(this._targetType, this._targetGuid) : null
     const title = this._targetName || this._targetGuid
     const params = this._recordOrUndefined(assignedInput?.params)
-    const existingType = typeof assignedInput?.type === 'string' ? assignedInput.type : 'button'
+    const existingType = typeof assignedInput?.type === 'string' ? assignedInput.type : ''
     const currentName = typeof assignedInput?.name === 'string'
       ? assignedInput.name
       : (typeof action?.name === 'string' ? action.name : title)
+    const existingDisplayType = this._displayClassFromInput(assignedInput)
+
+    const initialInputClass = inputTypes.some(t => t.class === existingType)
+      ? existingType
+      : inputTypes[0].class
+    const initialDisplayClass = displayTypes.some(d => d.class === existingDisplayType)
+      ? existingDisplayType
+      : displayTypes[0].class
+
     const outcome = await openModalCard((dismiss) => {
       const card = document.createElement('div')
       card.className = 'modal input-assign-modal'
@@ -97,8 +102,8 @@ export class InputAssignManager {
       const sub = document.createElement('p')
       sub.className = 'input-assign-modal__hint'
       sub.textContent = isAssigned
-        ? 'Edit the perform control for this target, or remove it. Args are optional JSON objects (runtime patch keys such as params.alpha).'
-        : 'Create a perform control: pick input type, set the label, optionally paste a JSON object for args.'
+        ? 'Edit the perform control for this target, or remove it. Param fields follow system.yml for the selected input type.'
+        : 'Create a perform control: types and param fields are defined in hub systemCapabilities.'
 
       const errorEl = document.createElement('p')
       errorEl.className = 'input-assign-modal__error'
@@ -114,16 +119,13 @@ export class InputAssignManager {
       const typeSelect = document.createElement('select')
       typeSelect.className = 'modal-input modal-select-capitalize'
       typeSelect.setAttribute('aria-label', 'Input type')
-      for (const opt of [
-        { value: 'button', hint: 'tap' },
-        { value: 'momentarySwitch', hint: 'hold' },
-      ]) {
+      for (const t of inputTypes) {
         const o = document.createElement('option')
-        o.value = opt.value
-        o.textContent = `${opt.value} (${opt.hint})`
+        o.value = t.class
+        o.textContent = t.hint ? `${t.name} (${t.hint})` : t.name
         typeSelect.appendChild(o)
       }
-      typeSelect.value = existingType === 'momentarySwitch' ? 'momentarySwitch' : 'button'
+      typeSelect.value = initialInputClass
 
       const nameLabel = document.createElement('label')
       nameLabel.className = 'input-assign-modal__label'
@@ -141,59 +143,16 @@ export class InputAssignManager {
       const displaySelect = document.createElement('select')
       displaySelect.className = 'modal-input modal-select-capitalize'
       displaySelect.setAttribute('aria-label', 'Display type')
-      for (const opt of [{ value: 'button', label: 'button' }]) {
+      for (const d of displayTypes) {
         const o = document.createElement('option')
-        o.value = opt.value
-        o.textContent = opt.label
+        o.value = d.class
+        o.textContent = d.name
         displaySelect.appendChild(o)
       }
-      displaySelect.value = 'button'
+      displaySelect.value = initialDisplayClass
 
-      const argsBlock = document.createElement('div')
-      argsBlock.className = 'input-assign-modal__args-button'
-      const argsLabel = document.createElement('label')
-      argsLabel.className = 'input-assign-modal__label'
-      argsLabel.textContent = 'Args (JSON object, optional)'
-      const argsTextarea = document.createElement('textarea')
-      argsTextarea.className = 'modal-input input-assign-modal__json'
-      argsTextarea.placeholder = '{}'
-      argsTextarea.value = existingType === 'button' ? stringifyOptionalJsonObject(params?.args) : ''
-      argsTextarea.setAttribute('aria-label', 'Args JSON')
-      argsBlock.appendChild(argsLabel)
-      argsBlock.appendChild(argsTextarea)
-
-      const momentaryBlock = document.createElement('div')
-      momentaryBlock.className = 'input-assign-modal__args-momentary'
-      momentaryBlock.hidden = true
-      const onLabel = document.createElement('label')
-      onLabel.className = 'input-assign-modal__label'
-      onLabel.textContent = 'Args On (JSON object, optional)'
-      const onTextarea = document.createElement('textarea')
-      onTextarea.className = 'modal-input input-assign-modal__json'
-      onTextarea.placeholder = '{}'
-      onTextarea.value = existingType === 'momentarySwitch' ? stringifyOptionalJsonObject(params?.argsOn) : ''
-      onTextarea.setAttribute('aria-label', 'Args On JSON')
-      const offLabel = document.createElement('label')
-      offLabel.className = 'input-assign-modal__label'
-      offLabel.textContent = 'Args Off (JSON object, optional)'
-      const offTextarea = document.createElement('textarea')
-      offTextarea.className = 'modal-input input-assign-modal__json'
-      offTextarea.placeholder = '{}'
-      offTextarea.value = existingType === 'momentarySwitch' ? stringifyOptionalJsonObject(params?.argsOff) : ''
-      offTextarea.setAttribute('aria-label', 'Args Off JSON')
-      momentaryBlock.appendChild(onLabel)
-      momentaryBlock.appendChild(onTextarea)
-      momentaryBlock.appendChild(offLabel)
-      momentaryBlock.appendChild(offTextarea)
-
-      fields.appendChild(typeLabel)
-      fields.appendChild(typeSelect)
-      fields.appendChild(nameLabel)
-      fields.appendChild(nameInput)
-      fields.appendChild(displayLabel)
-      fields.appendChild(displaySelect)
-      fields.appendChild(argsBlock)
-      fields.appendChild(momentaryBlock)
+      const paramHost = document.createElement('div')
+      paramHost.className = 'input-assign-modal__param-host'
 
       const setError = (message) => {
         if (!message) {
@@ -205,14 +164,42 @@ export class InputAssignManager {
         errorEl.hidden = false
       }
 
-      const syncArgsVisibility = () => {
-        const t = typeSelect.value
-        argsBlock.hidden = t !== 'button'
-        momentaryBlock.hidden = t !== 'momentarySwitch'
-        setError('')
+      const rebuildParamFields = () => {
+        paramHost.innerHTML = ''
+        const def = inputTypes.find(t => t.class === typeSelect.value)
+        if (!def) return
+        const keys = Object.keys(def.params)
+        if (keys.length === 0) return
+        for (const paramKey of keys) {
+          const kind = def.params[paramKey]
+          const label = document.createElement('label')
+          label.className = 'input-assign-modal__label'
+          label.textContent = `${paramKey} (${kind})`
+          const ta = document.createElement('textarea')
+          ta.className = 'modal-input input-assign-modal__json'
+          ta.placeholder = '{}'
+          ta.dataset.paramKey = paramKey
+          ta.dataset.paramKind = kind
+          ta.setAttribute('aria-label', paramKey)
+          ta.value = stringifyJsonStringParam(params?.[paramKey])
+          paramHost.appendChild(label)
+          paramHost.appendChild(ta)
+        }
       }
-      typeSelect.addEventListener('change', syncArgsVisibility)
-      syncArgsVisibility()
+
+      typeSelect.addEventListener('change', () => {
+        setError('')
+        rebuildParamFields()
+      })
+
+      fields.appendChild(typeLabel)
+      fields.appendChild(typeSelect)
+      fields.appendChild(nameLabel)
+      fields.appendChild(nameInput)
+      fields.appendChild(displayLabel)
+      fields.appendChild(displaySelect)
+      fields.appendChild(paramHost)
+      rebuildParamFields()
 
       const actions = document.createElement('div')
       actions.className = 'modal-actions modal-actions--split'
@@ -252,53 +239,38 @@ export class InputAssignManager {
           nameInput.focus()
           return
         }
-        const displayType = displaySelect.value || 'button'
+        const displayType = displaySelect.value
         const inputType = typeSelect.value
-
-        if (inputType === 'momentarySwitch') {
-          const onR = tryParseJsonObjectField(onTextarea.value, 'Args On')
-          const offR = tryParseJsonObjectField(offTextarea.value, 'Args Off')
-          if (!onR.ok) {
-            setError(onR.message)
-            onTextarea.focus()
-            return
-          }
-          if (!offR.ok) {
-            setError(offR.message)
-            offTextarea.focus()
-            return
-          }
-          sendActionInputCommand({
-            command: 'ensureInputAssignment',
-            targetType: this._targetType,
-            targetGuid: this._targetGuid,
-            input: {
-              name,
-              type: 'momentarySwitch',
-              displayType,
-              ...(onR.value !== undefined ? { argsOn: onR.value } : {}),
-              ...(offR.value !== undefined ? { argsOff: offR.value } : {}),
-            },
-          })
-        } else {
-          const argsR = tryParseJsonObjectField(argsTextarea.value, 'Args')
-          if (!argsR.ok) {
-            setError(argsR.message)
-            argsTextarea.focus()
-            return
-          }
-          sendActionInputCommand({
-            command: 'ensureInputAssignment',
-            targetType: this._targetType,
-            targetGuid: this._targetGuid,
-            input: {
-              name,
-              type: 'button',
-              displayType,
-              ...(argsR.value !== undefined ? { args: argsR.value } : {}),
-            },
-          })
+        const def = inputTypes.find(t => t.class === inputType)
+        if (!def) {
+          setError('Selected input type is not defined in system capabilities.')
+          return
         }
+
+        /** @type {Record<string, unknown>} */
+        const inputPayload = { name, type: inputType, displayType }
+
+        for (const ta of paramHost.querySelectorAll('textarea[data-param-key]')) {
+          const paramKey = ta.getAttribute('data-param-key') ?? ''
+          const kind = ta.getAttribute('data-param-kind') ?? ''
+          if (!paramKey || !kind) continue
+          const r = parseParamFromForm(kind, ta.value, paramKey)
+          if (!r.ok) {
+            setError(r.message)
+            ta.focus()
+            return
+          }
+          if (r.value !== undefined) {
+            inputPayload[paramKey] = r.value
+          }
+        }
+
+        sendActionInputCommand({
+          command: 'ensureInputAssignment',
+          targetType: this._targetType,
+          targetGuid: this._targetGuid,
+          input: inputPayload,
+        })
         dismiss('saved')
       })
 
@@ -329,6 +301,17 @@ export class InputAssignManager {
     this._invokeButton.textContent = isAssigned ? 'Assigned' : 'Assign'
     this._invokeButton.classList.toggle('intent-toggle--enabled', isAssigned)
     this._invokeButton.setAttribute('aria-pressed', isAssigned ? 'true' : 'false')
+  }
+
+  /**
+   * @param {Record<string, unknown> | null | undefined} input
+   * @returns {string}
+   */
+  _displayClassFromInput (input) {
+    const display = input?.display
+    if (!display || typeof display !== 'object' || Array.isArray(display)) return ''
+    const record = /** @type {Record<string, unknown>} */ (display)
+    return typeof record.type === 'string' ? record.type : ''
   }
 
   /**

@@ -29,7 +29,10 @@ const projectManager = new ProjectManager(
   serverConfig.get<string>('projectsPath'),
   serverConfig.get<string>('fixturesPath'),
 );
-const actionInputManager = new ActionInputManager(projectManager);
+const actionInputManager = new ActionInputManager(
+  projectManager,
+  () => systemConfig.getOrDefault<unknown>('systemCapabilities', {}),
+);
 
 const registry = new ConnectionRegistry();
 const router = new MessageRouter(registry);

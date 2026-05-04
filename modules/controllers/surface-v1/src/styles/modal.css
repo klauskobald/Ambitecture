@@ -157,6 +157,12 @@ textarea.modal-input.input-assign-modal__json {
   line-height: 1.35;
 }
 
+.input-assign-modal__param-host {
+  display: flex;
+  flex-direction: column;
+  gap: calc(0.45rem * var(--modal-scale) + 0.2rem);
+}
+
 .modal-actions .btn {
   min-width: calc(4rem * var(--modal-scale) + 1.5rem);
   padding: calc(0.28rem * var(--modal-scale) + 0.22rem) calc(0.75rem * var(--modal-scale) + 0.35rem);

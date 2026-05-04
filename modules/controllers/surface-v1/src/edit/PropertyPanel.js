@@ -3,17 +3,23 @@ import { ColorControl } from './controls/ColorControl.js'
 import { PillControl } from './controls/PillControl.js'
 import { ModalControl } from './controls/ModalControl.js'
 import { InfoTextControl } from './controls/InfoTextControl.js'
+import { projectGraph } from '../core/projectGraph.js'
+import { InputAssignManager } from './InputAssignManager.js'
 
 export class PropertyPanel {
   /**
    * @param {unknown[]} descriptors  resolved descriptor list from systemCapabilities
    * @param {number} selectionSize
+   * @param {Set<string>} [selectedGuids]
    */
-  constructor (descriptors, selectionSize) {
+  constructor (descriptors, selectionSize, selectedGuids = new Set()) {
     this._descriptors = descriptors
     this._selectionSize = selectionSize
+    this._selectedGuids = selectedGuids
     /** @type {import('./controls/PropertyControl.js').PropertyControl[]} */
     this._controls = []
+    /** @type {InputAssignManager | null} */
+    this._inputAssignManager = null
   }
 
   /**
@@ -23,6 +29,10 @@ export class PropertyPanel {
   buildElement () {
     const panel = document.createElement('div')
     panel.className = 'prop-panel'
+    const assignSection = this._buildAssignSection()
+    if (assignSection) {
+      panel.appendChild(assignSection)
+    }
 
     for (const descriptor of this._descriptors) {
       const d = /** @type {Record<string, unknown>} */ (descriptor)
@@ -43,6 +53,8 @@ export class PropertyPanel {
    * @param {Set<string>} guids
    */
   refresh (guids) {
+    this._selectedGuids = guids
+    this._inputAssignManager?.refresh()
     for (const control of this._controls) {
       control.refresh(guids)
     }
@@ -53,6 +65,32 @@ export class PropertyPanel {
       control.destroy()
     }
     this._controls = []
+    this._inputAssignManager = null
+  }
+
+  /** @returns {HTMLElement | null} */
+  _buildAssignSection () {
+    if (this._selectionSize !== 1) return null
+    const [guid] = [...this._selectedGuids]
+    if (!guid || !projectGraph.getIntents().has(guid)) return null
+    const intent = projectGraph.getEffectiveIntent(guid)
+    const intentName = typeof intent?.name === 'string' ? intent.name : guid
+    this._inputAssignManager = new InputAssignManager({
+      targetType: 'intent',
+      targetGuid: guid,
+      targetName: intentName,
+    })
+    const section = document.createElement('div')
+    section.className = 'prop-row prop-row--assign'
+    const header = document.createElement('div')
+    header.className = 'prop-row__header'
+    const label = document.createElement('span')
+    label.className = 'prop-row__label'
+    label.textContent = 'Input'
+    header.appendChild(label)
+    header.appendChild(this._inputAssignManager.getInvokeButton())
+    section.appendChild(header)
+    return section
   }
 
   /**

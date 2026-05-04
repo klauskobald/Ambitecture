@@ -120,27 +120,41 @@ class ProjectGraph {
   /** @returns {Map<string, Record<string, unknown>>} */
   getInputs () { return this._data.inputs }
 
-  /** @param {string} sceneGuid @returns {Record<string, unknown> | null} */
-  getSceneButtonInput (sceneGuid) {
+  /**
+   * @param {string} targetType
+   * @param {string} targetGuid
+   * @returns {Record<string, unknown> | null}
+   */
+  getAssignedInput (targetType, targetGuid) {
     for (const input of this._data.inputs.values()) {
-      const target = input.target
-      if (target && typeof target === 'object' && !Array.isArray(target)) {
-        const t = /** @type {Record<string, unknown>} */ (target)
-        if (t.type === 'scene' && t.guid === sceneGuid) return input
-      }
+      if (inputTargets(input, targetType, targetGuid)) return input
       const actionGuid = typeof input.action === 'string' ? input.action : ''
       const action = actionGuid ? this._data.actions.get(actionGuid) : null
-      if (action && actionTargetsScene(action, sceneGuid)) return input
+      if (action && actionTargets(action, targetType, targetGuid)) return input
+    }
+    return null
+  }
+
+  /**
+   * @param {string} targetType
+   * @param {string} targetGuid
+   * @returns {Record<string, unknown> | null}
+   */
+  getAssignedAction (targetType, targetGuid) {
+    for (const action of this._data.actions.values()) {
+      if (actionTargets(action, targetType, targetGuid)) return action
     }
     return null
   }
 
   /** @param {string} sceneGuid @returns {Record<string, unknown> | null} */
+  getSceneButtonInput (sceneGuid) {
+    return this.getAssignedInput('scene', sceneGuid)
+  }
+
+  /** @param {string} sceneGuid @returns {Record<string, unknown> | null} */
   getSceneAction (sceneGuid) {
-    for (const action of this._data.actions.values()) {
-      if (actionTargetsScene(action, sceneGuid)) return action
-    }
-    return null
+    return this.getAssignedAction('scene', sceneGuid)
   }
 
   /** @param {string} sceneName @returns {string | null} */
@@ -1324,17 +1338,37 @@ function normalizeEntityMap (raw) {
 
 /**
  * @param {Record<string, unknown>} action
- * @param {string} sceneGuid
+ * @param {string} targetType
+ * @param {string} targetGuid
  * @returns {boolean}
  */
-function actionTargetsScene (action, sceneGuid) {
+function actionTargets (action, targetType, targetGuid) {
   const execute = action.execute
   if (!Array.isArray(execute)) return false
   return execute.some(item => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return false
     const record = /** @type {Record<string, unknown>} */ (item)
-    return record.type === 'scene' && record.guid === sceneGuid
+    return record.type === targetType && record.guid === targetGuid
   })
+}
+
+/**
+ * @param {Record<string, unknown>} input
+ * @param {string} targetType
+ * @param {string} targetGuid
+ * @returns {boolean}
+ */
+function inputTargets (input, targetType, targetGuid) {
+  const target = input.target
+  if (target && typeof target === 'object' && !Array.isArray(target)) {
+    const t = /** @type {Record<string, unknown>} */ (target)
+    if (t.type === targetType && t.guid === targetGuid) return true
+  }
+  if (targetType === 'scene') {
+    const context = typeof input.context === 'string' ? input.context : ''
+    if (context && context === targetGuid) return true
+  }
+  return false
 }
 
 /**

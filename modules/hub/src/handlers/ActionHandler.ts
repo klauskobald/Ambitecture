@@ -17,7 +17,20 @@ type ActionTriggerPayload = {
 function isActionInputCommand(payload: unknown): payload is ActionInputCommand {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false;
   const p = payload as Record<string, unknown>;
+  const input = p['input'];
+  const hasValidInput = input !== undefined && typeof input === 'object' && input !== null && !Array.isArray(input);
   switch (p['command']) {
+    case 'ensureInputAssignment':
+      return typeof p['targetType'] === 'string'
+        && p['targetType'].length > 0
+        && typeof p['targetGuid'] === 'string'
+        && p['targetGuid'].length > 0
+        && hasValidInput;
+    case 'removeInputAssignment':
+      return typeof p['targetType'] === 'string'
+        && p['targetType'].length > 0
+        && typeof p['targetGuid'] === 'string'
+        && p['targetGuid'].length > 0;
     case 'ensureSceneButton':
     case 'disableSceneButton':
       return typeof p['sceneGuid'] === 'string' && p['sceneGuid'].length > 0;

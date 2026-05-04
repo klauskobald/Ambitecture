@@ -7,7 +7,20 @@ type SceneTarget = {
   guid: string;
 };
 
+type AssignTargetType = 'scene' | 'intent' | 'sequence' | string;
+
+type InputAssignConfig = {
+  name?: string;
+  type?: 'button' | 'momentarySwitch' | string;
+  displayType?: 'button' | string;
+  args?: Record<string, unknown>;
+  argsOn?: Record<string, unknown>;
+  argsOff?: Record<string, unknown>;
+};
+
 export type ActionInputCommand =
+  | { command: 'ensureInputAssignment'; targetType: AssignTargetType; targetGuid: string; input: InputAssignConfig }
+  | { command: 'removeInputAssignment'; targetType: AssignTargetType; targetGuid: string }
   | { command: 'ensureSceneButton'; sceneGuid: string }
   | { command: 'disableSceneButton'; sceneGuid: string }
   | { command: 'renameInput'; inputGuid: string; name: string };
@@ -17,6 +30,10 @@ export class ActionInputManager {
 
   buildCommands(command: ActionInputCommand, controllerGuid: string): GraphCommand[] {
     switch (command.command) {
+      case 'ensureInputAssignment':
+        return this.ensureInputAssignmentCommands(controllerGuid, command.targetType, command.targetGuid, command.input);
+      case 'removeInputAssignment':
+        return this.removeInputAssignmentCommands(controllerGuid, command.targetType, command.targetGuid);
       case 'ensureSceneButton':
         return this.ensureSceneButtonCommands(controllerGuid, command.sceneGuid);
       case 'disableSceneButton':
@@ -50,35 +67,11 @@ export class ActionInputManager {
   private ensureSceneButtonCommands(controllerGuid: string, sceneGuid: string): GraphCommand[] {
     const scene = this.projectManager.getSceneByGuid(sceneGuid);
     if (!scene?.guid) return [];
-
-    const existingAction = this.findSceneAction(scene.guid);
-    const existingInput = this.findSceneInput(controllerGuid, scene.guid, existingAction?.guid);
-    const actionGuid = existingAction?.guid ?? `action-${randomUUID()}`;
-    const inputGuid = existingInput?.guid ?? `input-${randomUUID()}`;
-
-    const action: ActionDefinition = {
-      guid: actionGuid,
+    return this.ensureInputAssignmentCommands(controllerGuid, 'scene', scene.guid, {
       name: scene.name,
-      execute: [{ type: 'scene', guid: scene.guid }],
-    };
-    const input: InputDefinition = {
-      guid: inputGuid,
-      name: existingInput?.name || scene.name,
       type: 'button',
-      action: actionGuid,
-      target: { type: 'scene', guid: scene.guid },
-      display: { type: 'button' },
-    };
-
-    return [
-      this.upsertCommand('action', actionGuid, action as unknown as Record<string, unknown>),
-      this.upsertCommand(
-        'input',
-        inputGuid,
-        input as unknown as Record<string, unknown>,
-        { entityType: 'controller', guid: controllerGuid },
-      ),
-    ];
+      displayType: 'button',
+    });
   }
 
   private disableSceneButtonCommands(controllerGuid: string, sceneGuid: string): GraphCommand[] {
@@ -96,12 +89,13 @@ export class ActionInputManager {
 
     for (const input of this.projectManager.getInputsWirePayload(controllerGuid)) {
       if (!input.guid) continue;
-      const hasSceneTarget = input.target?.type === 'scene' && input.target.guid === sceneGuid;
+      const hasSceneTarget = this.inputTargetsScene(input, sceneGuid);
       const pointsAtSceneAction = typeof input.action === 'string' && actionGuidSet.has(input.action);
       if (!hasSceneTarget && !pointsAtSceneAction) continue;
       const next = { ...input };
       delete next.action;
-      next.target = { type: 'scene', guid: sceneGuid };
+      next.context = sceneGuid;
+      delete next.target;
       next.display = next.display ?? { type: 'button' };
       commands.push(this.upsertCommand(
         'input',
@@ -109,6 +103,106 @@ export class ActionInputManager {
         next as unknown as Record<string, unknown>,
         { entityType: 'controller', guid: controllerGuid },
       ));
+    }
+
+    return commands;
+  }
+
+  private ensureInputAssignmentCommands(
+    controllerGuid: string,
+    targetType: AssignTargetType,
+    targetGuid: string,
+    inputConfig: InputAssignConfig,
+  ): GraphCommand[] {
+    if (targetGuid.length === 0 || targetType.length === 0) return [];
+    const targetName = this.getTargetName(targetType, targetGuid);
+    const existingAction = this.findActionByTarget(targetType, targetGuid);
+    const existingInput = this.findInputByTarget(controllerGuid, targetType, targetGuid, existingAction?.guid);
+    const actionGuid = existingAction?.guid ?? `action-${randomUUID()}`;
+    const inputGuid = existingInput?.guid ?? `input-${randomUUID()}`;
+
+    const configuredType = typeof inputConfig.type === 'string' && inputConfig.type.length > 0
+      ? inputConfig.type
+      : 'button';
+    const configuredDisplayType = typeof inputConfig.displayType === 'string' && inputConfig.displayType.length > 0
+      ? inputConfig.displayType
+      : 'button';
+    const configuredName = typeof inputConfig.name === 'string' ? inputConfig.name.trim() : '';
+    const action: ActionDefinition = {
+      guid: actionGuid,
+      name: configuredName || existingAction?.name || targetName,
+      execute: [{ type: targetType, guid: targetGuid }],
+    };
+
+    const params = this.buildInputParams(configuredType, inputConfig);
+    const input: InputDefinition = {
+      guid: inputGuid,
+      name: configuredName || existingInput?.name || targetName,
+      type: configuredType,
+      action: actionGuid,
+      target: { type: targetType, guid: targetGuid },
+      display: { type: configuredDisplayType },
+      ...((targetType === 'scene'
+        ? { context: targetGuid }
+        : (typeof existingInput?.context === 'string' ? { context: existingInput.context } : {}))),
+      ...(params !== undefined ? { params } : {}),
+    };
+
+    return [
+      this.upsertCommand('action', actionGuid, action as unknown as Record<string, unknown>),
+      this.upsertCommand(
+        'input',
+        inputGuid,
+        input as unknown as Record<string, unknown>,
+        { entityType: 'controller', guid: controllerGuid },
+      ),
+    ];
+  }
+
+  private removeInputAssignmentCommands(
+    controllerGuid: string,
+    targetType: AssignTargetType,
+    targetGuid: string,
+  ): GraphCommand[] {
+    if (targetGuid.length === 0 || targetType.length === 0) return [];
+    const targetActionGuids = this.projectManager.getActionsWirePayload()
+      .filter(action => this.actionTargets(action, targetType, targetGuid))
+      .map(action => action.guid)
+      .filter((guid): guid is string => typeof guid === 'string' && guid.length > 0);
+    const actionGuidSet = new Set(targetActionGuids);
+    const controllerInputs = this.projectManager.getInputsWirePayload(controllerGuid);
+    const matchingInputs = controllerInputs.filter(input => {
+      const hasTarget = this.inputTargets(input, targetType, targetGuid);
+      const pointsAtTargetAction = typeof input.action === 'string' && actionGuidSet.has(input.action);
+      return hasTarget || pointsAtTargetAction;
+    });
+    const matchingInputGuidSet = new Set(
+      matchingInputs
+        .map(input => input.guid)
+        .filter((guid): guid is string => typeof guid === 'string' && guid.length > 0),
+    );
+    const commands: GraphCommand[] = [];
+
+    for (const input of matchingInputs) {
+      if (!input.guid) continue;
+      commands.push({
+        op: 'remove',
+        entityType: 'input',
+        guid: input.guid,
+        persistence: 'runtimeAndDurable',
+        parent: { entityType: 'controller', guid: controllerGuid },
+      });
+    }
+
+    for (const actionGuid of targetActionGuids) {
+      const referencedElsewhere = this.isActionReferencedByInputs(actionGuid, matchingInputGuidSet);
+      if (referencedElsewhere) continue;
+      commands.push({
+        op: 'remove',
+        entityType: 'action',
+        guid: actionGuid,
+        persistence: 'runtimeAndDurable',
+      });
     }
 
     return commands;
@@ -145,7 +239,7 @@ export class ActionInputManager {
       if (!controllerGuid) continue;
       for (const input of this.projectManager.getInputsWirePayload(controllerGuid)) {
         if (!input.guid) continue;
-        const hasSceneTarget = input.target?.type === 'scene' && input.target.guid === sceneGuid;
+        const hasSceneTarget = this.inputTargetsScene(input, sceneGuid);
         const pointsAtSceneAction = typeof input.action === 'string' && actionGuidSet.has(input.action);
         if (!hasSceneTarget && !pointsAtSceneAction) continue;
         commands.push({
@@ -177,15 +271,85 @@ export class ActionInputManager {
   private findSceneInput(controllerGuid: string, sceneGuid: string, actionGuid?: string): InputDefinition | undefined {
     return this.projectManager.getInputsWirePayload(controllerGuid)
       .find(input => {
-        const hasSceneTarget = input.target?.type === 'scene' && input.target.guid === sceneGuid;
+        const hasSceneTarget = this.inputTargetsScene(input, sceneGuid);
         const pointsAtSceneAction = actionGuid !== undefined && input.action === actionGuid;
         return hasSceneTarget || pointsAtSceneAction;
       });
   }
 
+  private inputTargetsScene(input: InputDefinition, sceneGuid: string): boolean {
+    if (typeof input.context === 'string' && input.context === sceneGuid) return true;
+    return input.target?.type === 'scene' && input.target.guid === sceneGuid;
+  }
+
   private actionTargetsScene(action: ActionDefinition, sceneGuid: string): boolean {
+    return this.actionTargets(action, 'scene', sceneGuid);
+  }
+
+  private findActionByTarget(targetType: AssignTargetType, targetGuid: string): ActionDefinition | undefined {
+    return this.projectManager.getActionsWirePayload()
+      .find(action => this.actionTargets(action, targetType, targetGuid));
+  }
+
+  private findInputByTarget(
+    controllerGuid: string,
+    targetType: AssignTargetType,
+    targetGuid: string,
+    actionGuid?: string,
+  ): InputDefinition | undefined {
+    return this.projectManager.getInputsWirePayload(controllerGuid)
+      .find(input => {
+        const hasTarget = this.inputTargets(input, targetType, targetGuid);
+        const pointsAtAction = actionGuid !== undefined && input.action === actionGuid;
+        return hasTarget || pointsAtAction;
+      });
+  }
+
+  private inputTargets(input: InputDefinition, targetType: AssignTargetType, targetGuid: string): boolean {
+    if (input.target?.type === targetType && input.target.guid === targetGuid) return true;
+    if (targetType === 'scene' && typeof input.context === 'string' && input.context === targetGuid) return true;
+    return false;
+  }
+
+  private actionTargets(action: ActionDefinition, targetType: AssignTargetType, targetGuid: string): boolean {
     if (!Array.isArray(action.execute)) return false;
-    return action.execute.some(item => item.type === 'scene' && item.guid === sceneGuid);
+    return action.execute.some(item => item.type === targetType && item.guid === targetGuid);
+  }
+
+  private buildInputParams(inputType: string, inputConfig: InputAssignConfig): Record<string, unknown> | undefined {
+    const params: Record<string, unknown> = {};
+    switch (inputType) {
+      case 'momentarySwitch':
+        if (inputConfig.argsOn !== undefined) params['argsOn'] = inputConfig.argsOn;
+        if (inputConfig.argsOff !== undefined) params['argsOff'] = inputConfig.argsOff;
+        break;
+      case 'button':
+      default:
+        if (inputConfig.args !== undefined) params['args'] = inputConfig.args;
+        break;
+    }
+    return Object.keys(params).length > 0 ? params : undefined;
+  }
+
+  private getTargetName(targetType: AssignTargetType, targetGuid: string): string {
+    switch (targetType) {
+      case 'scene':
+        return this.projectManager.getSceneByGuid(targetGuid)?.name ?? targetGuid;
+      case 'intent':
+        return this.projectManager.getIntentDefinition(targetGuid)?.name ?? targetGuid;
+      default:
+        return targetGuid;
+    }
+  }
+
+  private isActionReferencedByInputs(actionGuid: string, removedInputGuids: Set<string>): boolean {
+    for (const controller of this.projectManager.getControllersWirePayload()) {
+      for (const input of controller.inputs ?? []) {
+        if (typeof input.guid === 'string' && removedInputGuids.has(input.guid)) continue;
+        if (input.action === actionGuid) return true;
+      }
+    }
+    return false;
   }
 
   private upsertCommand(

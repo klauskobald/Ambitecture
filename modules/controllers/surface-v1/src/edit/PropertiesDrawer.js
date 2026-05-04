@@ -154,7 +154,7 @@ export class PropertiesDrawer {
     const size = guids.size
     this._refreshTitle()
 
-    this._panel = new PropertyPanel(this._lastDescriptors, size)
+    this._panel = new PropertyPanel(this._lastDescriptors, size, guids)
     this._body.appendChild(this._panel.buildElement())
     this._panel.refresh(guids)
   }

@@ -84,6 +84,8 @@ export interface InputDefinition {
     guid: string;
   };
   display?: Record<string, unknown>;
+  /** Perform pane / controller: explicit button order (lower first). */
+  _sortIdx?: number;
 }
 
 interface ControllerDef {

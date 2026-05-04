@@ -19,7 +19,9 @@ import { selectionState } from '../edit/selectionState.js'
 import { ActionBar } from '../edit/ActionBar.js'
 import { PropertiesDrawer } from '../edit/PropertiesDrawer.js'
 import { resolveDescriptorsForClass } from '../core/systemCapabilities.js'
-import { warn as modalWarn, pickChoice } from '../core/Modal.js'
+import { warn as modalWarn, pickChoice, openModalCard } from '../core/Modal.js'
+import { ArraySorter, DEFAULT_PERFORM_INPUT_SORT_KEY } from '../core/arraySorter.js'
+import { collectPerformButtonInputs } from '../core/performButtonInputs.js'
 
 /** @param {unknown} value @returns {unknown} */
 function cloneDefaultValue (value) {
@@ -91,6 +93,18 @@ export class EditPane {
       btn.addEventListener('click', () => this._toggleMode(mode.id))
       this._modeBar.appendChild(btn)
       this._managers.set(mode.id, null)
+    }
+
+    this._performSortBtn = document.createElement('button')
+    this._performSortBtn.type = 'button'
+    this._performSortBtn.className = 'btn btn-mode-toggle'
+    this._performSortBtn.textContent = 'Perform sort'
+    this._performSortBtn.addEventListener('click', () => void this._onPerformSortClick())
+    const selectModeBtn = this._modeBar.querySelector('[data-mode-id="select"]')
+    if (selectModeBtn) {
+      this._modeBar.insertBefore(this._performSortBtn, selectModeBtn)
+    } else {
+      this._modeBar.appendChild(this._performSortBtn)
     }
 
     this._actionBar = new ActionBar({
@@ -241,6 +255,78 @@ export class EditPane {
     if (this._activeMode === 'select') {
       this._exitCurrentMode()
     }
+  }
+
+  async _onPerformSortClick () {
+    const raw = collectPerformButtonInputs()
+    if (raw.length === 0) {
+      void modalWarn('No perform buttons to sort.')
+      return
+    }
+    const controllerGuid = projectGraph.getControllerGuid()
+    if (!controllerGuid) return
+    const sortKey = DEFAULT_PERFORM_INPUT_SORT_KEY
+    const sorter = new ArraySorter(raw, sortKey)
+
+    const patchOrderToHub = (ordered) => {
+      for (const item of ordered) {
+        const guid = String(item.guid ?? '')
+        if (!guid) continue
+        const idx = item[sortKey]
+        if (typeof idx !== 'number' || Number.isNaN(idx)) continue
+        sendGraphCommand({
+          op: 'patch',
+          entityType: 'input',
+          guid,
+          parent: { entityType: 'controller', guid: controllerGuid },
+          patch: { [sortKey]: idx },
+          persistence: 'runtimeAndDurable',
+        })
+      }
+      projectGraph.notifyListeners()
+    }
+
+    await openModalCard((dismiss) => {
+      const card = document.createElement('div')
+      card.className = 'modal perform-sort-modal'
+      card.addEventListener('click', e => e.stopPropagation())
+
+      const title = document.createElement('p')
+      title.className = 'modal-text'
+      title.textContent = 'Drag rows to set Perform button order'
+
+      const listHost = document.createElement('div')
+      listHost.className = 'perform-sort-list'
+
+      const actions = document.createElement('div')
+      actions.className = 'modal-actions'
+      const done = document.createElement('button')
+      done.type = 'button'
+      done.className = 'btn btn--primary'
+      done.textContent = 'Done'
+      done.addEventListener('click', () => dismiss('ok'))
+      actions.appendChild(done)
+
+      card.appendChild(title)
+      card.appendChild(listHost)
+      card.appendChild(actions)
+
+      sorter.displaySortDialog(
+        listHost,
+        item => {
+          const wrap = document.createElement('div')
+          wrap.className = 'array-sort-row__label'
+          wrap.textContent = String(item.name ?? item.guid ?? '')
+          return wrap
+        },
+        () => {},
+        ordered => patchOrderToHub(ordered),
+      )
+
+      return card
+    }).finally(() => {
+      patchOrderToHub(sorter.getLiveOrder())
+    })
   }
 
   // ── Manager builders ──────────────────────────────────────────────────────────

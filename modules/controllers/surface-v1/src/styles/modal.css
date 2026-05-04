@@ -197,3 +197,42 @@ textarea.modal-input.input-assign-modal__json {
   font-size: calc(0.85rem * var(--modal-scale) + 0.3rem);
   padding: calc(0.35rem * var(--modal-scale) + 0.2rem) calc(0.6rem * var(--modal-scale) + 0.25rem);
 }
+
+/* ── Perform button sort (Edit pane modal) ─────────────────── */
+
+.perform-sort-list {
+  display: flex;
+  flex-direction: column;
+  gap: calc(0.25rem * var(--modal-scale) + 0.15rem);
+  max-height: min(60vh, 28rem);
+  overflow-y: auto;
+  margin: calc(0.35rem * var(--modal-scale)) 0;
+}
+
+.array-sort-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: calc(0.35rem * var(--modal-scale) + 0.2rem) calc(0.45rem * var(--modal-scale) + 0.2rem);
+  border: 1px solid var(--color-border, #333);
+  border-radius: calc(4px + 1px * var(--modal-scale));
+  cursor: grab;
+  background: var(--color-surface-elevated, #1a1a1a);
+}
+
+.array-sort-row:active {
+  cursor: grabbing;
+}
+
+.array-sort-row--dragging {
+  opacity: 0.55;
+}
+
+.array-sort-row__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: calc(0.85rem * var(--modal-scale) + 0.25rem);
+}

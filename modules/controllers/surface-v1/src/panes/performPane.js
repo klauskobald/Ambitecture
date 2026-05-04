@@ -2,6 +2,8 @@ import { performPolicy } from '../viewport/interactionPolicies.js'
 import { projectGraph } from '../core/projectGraph.js'
 import { sendActionTrigger } from '../core/outboundQueue.js'
 import { PerformQuickPanelHud } from '../perform/performQuickPanelHud.js'
+import { ArraySorter, DEFAULT_PERFORM_INPUT_SORT_KEY } from '../core/arraySorter.js'
+import { collectPerformButtonInputs } from '../core/performButtonInputs.js'
 
 /**
  * @param {unknown} value
@@ -225,14 +227,7 @@ export class PerformPane {
 
   /** @returns {Record<string, unknown>[]} */
   _activeDisplayInputs () {
-    const actions = projectGraph.getActions()
-    return [...projectGraph.getInputs().values()]
-      .filter(input => {
-        const actionGuid = typeof input.action === 'string' ? input.action : ''
-        if (!actionGuid || !actions.has(actionGuid)) return false
-        const display = input.display
-        if (!display || typeof display !== 'object' || Array.isArray(display)) return false
-        return /** @type {Record<string, unknown>} */ (display).type === 'button'
-      })
+    const raw = collectPerformButtonInputs()
+    return new ArraySorter(raw, DEFAULT_PERFORM_INPUT_SORT_KEY).getItemsSorted()
   }
 }

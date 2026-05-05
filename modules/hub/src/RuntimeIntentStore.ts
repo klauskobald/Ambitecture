@@ -38,6 +38,15 @@ export class RuntimeIntentStore {
     this.mergeCache.clear();
   }
 
+  /** Drop merge overlays for specific intent GUIDs; other cached merges stay intact. */
+  evictMergeGuids(guids: Iterable<string>): void {
+    for (const guid of guids) {
+      if (guid.length > 0) {
+        this.mergeCache.delete(guid);
+      }
+    }
+  }
+
   /**
    * Intent GUIDs present in {@link mergeCache} that also belong to `sceneIntentGuids`
    * (active scene baseline row set).

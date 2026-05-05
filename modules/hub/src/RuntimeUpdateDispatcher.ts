@@ -16,6 +16,12 @@ export class RuntimeUpdateDispatcher {
     this.runtimeIntentStore.clear();
   }
 
+  /** Remove runtime merge overlays only for listed intent GUIDs. */
+  evictRuntimeIntentMergeGuids(guids: string[]): void {
+    if (guids.length === 0) return;
+    this.runtimeIntentStore.evictMergeGuids(guids);
+  }
+
   /**
    * `@param excludeControllerSockets` — when each sender should also receive `runtime:update`,
    * pass `undefined` so the performing controller applies the same merge as the hub (dumb replica).

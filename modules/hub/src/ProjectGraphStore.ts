@@ -109,17 +109,29 @@ export class ProjectGraphStore {
         return this.applyActionCommand(command);
       case 'input':
         return this.applyInputCommand(command);
-      case 'project':
-        if (command.patch && typeof command.patch['activeSceneName'] === 'string') {
-          const clearRuntime = command.patch['clearRuntimeIntentMerge'] === true;
-          return this.activateScene(
-            command.patch['activeSceneName'],
-            location,
-            command.persistence ?? 'runtimeAndDurable',
-            { clearRuntimeMergeBefore: clearRuntime },
-          );
+      case 'project': {
+        const patch = command.patch;
+        if (!patch) {
+          return this.applyOpaqueCommand(command);
         }
-        return this.applyOpaqueCommand(command);
+        const sceneName = patch['activeSceneName'];
+        if (typeof sceneName !== 'string') {
+          return this.applyOpaqueCommand(command);
+        }
+        const rmcRaw = patch['runtimeMergeClear'];
+        let runtimeMergeClear: 'all' | 'scene' | undefined;
+        if (rmcRaw === 'all' || rmcRaw === 'scene') {
+          runtimeMergeClear = rmcRaw;
+        } else if (patch['clearRuntimeIntentMerge'] === true) {
+          runtimeMergeClear = 'scene';
+        }
+        return this.activateScene(
+          sceneName,
+          location,
+          command.persistence ?? 'runtimeAndDurable',
+          runtimeMergeClear !== undefined ? { runtimeMergeClear } : undefined,
+        );
+      }
       case 'controller':
         return this.applyControllerCommand(command);
       default:
@@ -131,10 +143,14 @@ export class ProjectGraphStore {
     sceneName: string,
     location?: [number, number],
     persistence: GraphPersistence = 'runtimeAndDurable',
-    options?: { clearRuntimeMergeBefore?: boolean },
+    options?: { runtimeMergeClear?: 'all' | 'scene' },
   ): GraphMutationResult {
-    if (options?.clearRuntimeMergeBefore) {
+    const mergeClear = options?.runtimeMergeClear;
+    if (mergeClear === 'all') {
       this.runtimeMerge?.clearRuntimeIntentMergeCache();
+    } else if (mergeClear === 'scene') {
+      const guids = this.projectManager.getSceneIntentGuidsByName(sceneName);
+      this.runtimeMerge?.evictRuntimeIntentMergeGuids(guids);
     }
     const persistDurable = persistence === 'durable' || persistence === 'runtimeAndDurable';
     const newIntents = this.projectManager.setActiveScene(sceneName, persistDurable);
@@ -161,7 +177,10 @@ export class ProjectGraphStore {
       ? this.runtimeIntentStore.listRuntimeOverlayGuidsInActiveScene(sceneIntentGuids)
       : [];
     const delta = this.makeProjectActiveSceneDelta(sceneName, persistence, runtimeOverlayGuidsInScene);
-    const clearNote = options?.clearRuntimeMergeBefore ? ', clearRuntimeMerge' : '';
+    const clearNote =
+      mergeClear === 'all' ? ', runtimeMergeClear=all'
+        : mergeClear === 'scene' ? ', runtimeMergeClear=scene'
+          : '';
     Logger.info(
       `[graph] activated scene "${sceneName}" at ${location?.join(', ') ?? 'unknown location'} (${persistence}${clearNote})`,
     );
@@ -420,7 +439,7 @@ export class ProjectGraphStore {
     };
   }
 
-  /** Outbound project/active patch — never includes `clearRuntimeIntentMerge` (wire-only hub flag). */
+  /** Outbound project/active patch — never includes clear flags (`runtimeMergeClear`, legacy `clearRuntimeIntentMerge`). */
   private makeProjectActiveSceneDelta(
     sceneName: string,
     persistence: GraphPersistence,

@@ -610,6 +610,15 @@ export class ProjectManager {
       .filter((i): i is ControllerIntent => i !== undefined);
   }
 
+  /** Intent GUIDs referenced by scene `sceneName` (refs only; does not require scene to be active). */
+  getSceneIntentGuidsByName(sceneName: string): string[] {
+    const scene = this.project?.scenes?.find(s => s.name === sceneName);
+    if (!scene?.intents) return [];
+    return scene.intents
+      .map(ref => ref.guid)
+      .filter((g): g is string => typeof g === 'string' && g.length > 0);
+  }
+
   getActiveSceneIntent(guid: string): ControllerIntent | undefined {
     if (!this.activeSceneName || !this.project?.scenes) return this.intentDefinitions.get(guid);
     const scene = this.project.scenes.find(s => s.name === this.activeSceneName);

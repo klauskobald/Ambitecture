@@ -80,7 +80,7 @@ async function main () {
   overlayResetBtn?.addEventListener('click', () => {
     const name = projectGraph.getActiveSceneName()
     if (typeof name !== 'string' || name.length === 0) return
-    sendSceneActivate(name, { clearRuntimeIntentMerge: true })
+    sendSceneActivate(name, { runtimeMergeClear: 'scene' })
   })
   projectGraph.subscribe(syncRuntimeOverlayResetUi)
   syncRuntimeOverlayResetUi()

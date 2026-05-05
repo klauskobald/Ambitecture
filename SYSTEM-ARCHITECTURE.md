@@ -27,6 +27,10 @@ The hub is the **single source of truth** for system-wide configuration and grap
 - **`src/handlers/IntentsHandler.ts`** — Legacy controller `intents` path kept for compatibility. New controller code should send `graph:command` instead.
 - **`src/EventQueue.ts`** — Buckets/schedules generated renderer `events` by execution timestamp and dispatches to connected renderers.
 - **`src/ProjectManager.ts`** — Loads project + referenced fixtures, assigns missing GUIDs to mutable graph entities, serializes renderer/controller snapshots, saves durable YAML, and exposes project helper methods used by `ProjectGraphStore`.
+- **`src/RuntimeUpdateDispatcher.ts`** — Extracted dispatch layer for `runtime:command` and action-triggered intent execution: forwards `runtime:update` to all other connected controllers (excluding sender socket(s)), converts intent runtime updates to renderer events via a per-intent merge cache, and schedules them on `EventQueue`. Used by both `RuntimeCommandHandler` and `ActionHandler`.
+- **`src/ActionInputManager.ts`** — Builds `GraphCommand[]` from `ActionInputCommand` payloads (`ensureInputAssignment`, `removeInputAssignment`, `renameInput`). Validates input/display types against `systemCapabilities`, composes typed params via `composeInputParams.ts`, and wires actions ↔ inputs by target (`{ type, guid }`). Also provides `buildSceneCleanupCommands(sceneGuid)` for orphan removal when a scene is deleted.
+- **`src/inputAssignment/composeInputParams.ts`** — Pure stateless helpers for reading `systemCapabilities.inputTypes`/`displayTypes`, resolving defaults, validating type class strings, and composing typed `params` from `inputConfig` fields. Extend `applyParamKind()` here when adding new param kinds (currently only `jsonString`).
+- **`src/handlers/ActionHandler.ts`** — Handles `action:input` (delegates to `ActionInputManager` → `ProjectGraphStore`) and `action:trigger` (resolves action execute items: activates scenes or dispatches intent runtime updates via `RuntimeUpdateDispatcher`). Only registered controllers may send these messages.
 - **Profile example:** `config.DEMO/server.yml` defines `LISTEN_PORT` and `LISTEN_HOST` (demo uses `3000` and `0.0.0.0`). Use `.env` / `.env.DEMO` to point `CONFIG_PATH` at a profile such as `config.DEMO`.
 
 **Current runtime note:** The hub currently runs on Node's `http` server directly (not Express). WebSocket is attached to that server without a path restriction (not limited to `/ws` yet).
@@ -116,8 +120,22 @@ Renderer data authority model:
 - **Spatial math** (`src/viewport/spatialMath.js`): World ↔ canvas coordinate transforms, zone containment checks, client-to-world conversion via the simulator canvas rect.
 - **CSS split** by concern: `theme.css`, `layout.css`, `controls.css` (matching the frontend styling policy). Layout values driven from `config.json` `LAYOUT` block via CSS custom properties.
 - **HTML** (`index.html`): Semantic structure — app root, header with nav toggle/spatial readout, nav bar with pane links, sim area (iframe + overlay canvas), and pane host container.
+- **Modal** (`src/core/Modal.js`): Single-overlay dark-themed modal system. One modal at a time — calling any method auto-dismisses the current one. API: `alert()`, `warn()`, `confirm()`, `prompt()`, `pickChoice()`, `openModalCard(factory)`. All return `Promise`. **Use `Modal.*` for all confirm/prompt/dialog flows — never `window.alert/confirm/prompt`.**
+- **systemCapabilities** (`src/core/systemCapabilities.js`): Receives and caches `systemCapabilities` pushed by the hub on register. Exposes `getInputTypes()`, `getDisplayTypes()`, `resolveDefaultPerformTypes()`, `resolveDescriptorsForClass(intentClass)` (with `optionsRef` resolution). Never hardcode input/display types or intent property descriptors — always read from this module.
+- **performButtonInputs** (`src/core/performButtonInputs.js`): `collectPerformButtonInputs()` — the canonical filter for which inputs appear as Perform pane buttons (`display.type === 'button'` + valid linked action). Always call this function instead of filtering inputs inline.
+- **ArraySorter** (`src/core/arraySorter.js`): Generic drag-to-reorder UI for any object array with a numeric sort-key property. `getItemsSorted()` stable-sorts by key then `guid`. `displaySortDialog(host, callbackDisplay, callbackLifecycle, onReorder)` renders pointer-capture draggable rows with ghost and drop markers, writes sort keys in place. Default key: `DEFAULT_PERFORM_INPUT_SORT_KEY` (`'_sortIdx'`). Use for any list that operators need to reorder.
+- **InputAssignManager** (`src/edit/InputAssignManager.js`): Reusable per-target class for assigning/editing/removing a controller input. Constructor: `new InputAssignManager({ context: { type, guid }, labelDefault? })`. Provides `getInvokeButton()` (standalone toggle button), `getInlinePane()` (row with toggle + rename button, used in property panel), and `showControl()` (full modal with type/displayType/name/params from `systemCapabilities`). Sends via `sendActionInputCommand()`. Supports any `targetType` — scene, intent, and future entity types.
+- **paramKindHandlers** (`src/edit/inputAssign/paramKindHandlers.js`): Form-to-value parse/stringify for each input param `kind` (currently `jsonString`). Add new switch cases here when `system.yml` defines new param kinds.
+- **ScalarRadialKnob** (`src/perform/ScalarRadialKnob.js`): Canvas radial knob for continuous scalar values in the Perform HUD. Supports normal drag and zoomed precision mode (long-press expands the touch target). Driven by `requestAnimationFrame` layout from `PerformQuickPanelHud`.
+- **PerformQuickPanelHud** (`src/perform/performQuickPanelHud.js`): Per-intent floating HUD panel in the Perform pane. Reconciles panels against the live intent list via `projectGraph.subscribe()`. Creates `ScalarRadialKnob` instances for each descriptor with `quickPanel: true` in `systemCapabilities.intentProperties[class]`. Positioned by a `requestAnimationFrame` loop using world-to-canvas conversion. Activated/deactivated with the Perform pane via `start()`/`stop()`.
 
 **`controllers/web-test/`** — Legacy static controller shell (being replaced by surface-v1).
+
+**`controllers/starter/`** — Minimal TypeScript reference controller demonstrating the full connection lifecycle. Key classes:
+
+- **`HubSocket`** — WebSocket client with auto-reconnect, register-on-open, and typed `sendRuntimeCommand()` / `sendActionTrigger(guid, args?)` helpers.
+- **`ProjectGraph`** — Lightweight controller-side graph replica: applies `graph:init` / `graph:delta`, exposes `getIntent()`, `getAction()`, `isIntentInActiveScene()`, `getMovementBoundsForIntent()`.
+- **`StarterController`** — Orchestrator with `start()` / `stop()` and overridable lifecycle hooks (`onGraphInit`, `onGraphDelta`, etc.). Demonstrates both a `runtime:command` position loop and an `action:trigger` alternating loop. Extend this class to build custom headless controllers.
 
 ---
 
@@ -284,6 +302,108 @@ Policies are set on the overlay canvas via `overlay.setPolicy(policy)` when swit
 
 A generic interactive bubble overlay (`surface-v1/src/viewport/selectionManager.js`) that renders bubbles at world-space positions for any set of objects. It has no selection state of its own — the caller (e.g., the allowances graph in `stores.js`) owns the state. The `OverlayCanvas` can enable/disable a SelectionManager; when active, it intercepts all pointer events and routes taps to the manager's `onTap` callback. Used by the Edit pane to toggle fixture/intent allowances via tap on world-positioned bubbles.
 
+### Actions and Inputs
+
+Controller perform buttons are implemented through a three-entity graph structure: **Action** → **Input** → **UI control**.
+
+**Action** (`entityType: "action"`) — a named, executable graph entity stored at the top level of the project graph. Fields: `guid`, `name`, `execute[]`. Each execute item is `{ type, guid }` — current supported types: `scene` and `intent`.
+
+**Input** (`entityType: "input"`) — a controller-owned UI binding stored **inside the controller entity** (`parent: { entityType: "controller", guid }`). Key fields:
+- `type` — input class from `systemCapabilities.inputTypes` (e.g. `button`, `momentarySwitch`)
+- `display.type` — display class from `systemCapabilities.displayTypes` (e.g. `button`)
+- `action` — linked action GUID
+- `target` — `{ type, guid }` of the entity this input targets
+- `context` — scene GUID (legacy path for scene inputs; prefer `target` for new entity types)
+- `params` — typed per-input parameters (e.g. `args`, `argsOn`, `argsOff` as `jsonString` objects)
+- `_sortIdx` — numeric sort index for Perform pane button ordering
+
+**`action:input`** (controller → hub): sends `ActionInputCommand` payloads to create, update, or remove inputs and their linked actions atomically. Three commands:
+- `ensureInputAssignment` — creates or updates the action + input for `{ targetType, targetGuid, input: { name, type, displayType, ...params } }`
+- `removeInputAssignment` — removes matching inputs and their actions (unless referenced elsewhere)
+- `renameInput` — patches the input `name` field by `inputGuid`
+
+Hub validates types against `systemCapabilities`, composes params via `composeInputParams.ts`, applies as `graph:command` pairs, and broadcasts `graph:delta`.
+
+**`action:trigger`** (controller → hub): `{ actionGuid, args? }`. Hub resolves the action's `execute` items:
+- `type: "scene"` → activates scene via `ProjectGraphStore` (emits `graph:delta`)
+- `type: "intent"` → dispatches a `RuntimeUpdate` via `RuntimeUpdateDispatcher` (transient, no graph write, no `graph:delta`). The action's `execute` item may carry `params`, `patch`, `remove`, or `value`; `args` from the trigger call are merged on top.
+
+**Usage rules:**
+- Use `sendActionInputCommand(command)` from `outboundQueue.js` — never raw `sendGraphCommands` — to create/remove/rename inputs.
+- Use `sendActionTrigger(guid, args?)` from `outboundQueue.js` — never a graph command — to fire actions.
+- Collect Perform pane buttons via `collectPerformButtonInputs()` only; do not filter inputs inline in pane code.
+- When deleting a scene on the hub, call `ActionInputManager.buildSceneCleanupCommands(sceneGuid)` and apply the returned commands to remove orphaned inputs and actions.
+
+### systemCapabilities
+
+The hub reads `systemCapabilities` from `system.yml` and broadcasts it to all connecting controllers as a `systemCapabilities` message immediately after registration. Both controller and hub sides normalize these the same way.
+
+Structure:
+- `inputTypes[]` — `{ class, name, hint, params: { paramKey: kind } }`. Param `kind` is currently `jsonString` only. To add a new kind: add a case in `applyParamKind()` (`hub/src/inputAssignment/composeInputParams.ts`) **and** in `parseParamFromForm()` (`surface-v1/src/edit/inputAssign/paramKindHandlers.js`).
+- `displayTypes[]` — `{ class, name }`. Currently only `button`.
+- `functionCurves[]` — string array; referenced via `optionsRef: functionCurves` in intentProperties descriptors.
+- `intentProperties` — per-class descriptor arrays. Each descriptor has `dotKey`, `name`, `type`, and optional flags:
+  - `quickPanel: true` — shown as a knob in the Perform HUD (`PerformQuickPanelHud`)
+  - `allowOverlay: true` — editable via overlay controls in the Edit pane
+  - `isMandatory: true` — always shown in the property panel regardless of value state
+  - `optionsRef` — string referencing a top-level array key in `systemCapabilities` (e.g. `functionCurves`)
+  - `delta` — describes how values change when used with incremental controls (e.g. ADD/MULTIPLY with range)
+
+**Rule:** Never hardcode input types, display types, or intent property names in controller code. Always read from `systemCapabilities.js` via the exported helper functions.
+
+### Modal system
+
+`surface-v1/src/core/Modal.js` is the **only** approved dialog mechanism in `surface-v1`. It provides dark-themed, promise-based modals over a single full-screen overlay. Only one modal is active at a time; starting a new one auto-dismisses the current one.
+
+API:
+- `alert(text)` / `warn(text)` — informational, single OK button.
+- `confirm(text, { yes, no })` → `Promise<boolean>`.
+- `prompt(text, fields, { submit, cancel })` → `Promise<Record<string, string> | null>`. Field values are always `.trim()`'d. Fields: `{ label, key, type?, placeholder?, value? }`.
+- `pickChoice(message, options, { cancel? })` → `Promise<string | null>`. Options are a vertical stacked list; each has `{ value, label, disabled?, title? }`.
+- `openModalCard(factory)` → `Promise<T | null>`. Caller builds a full `.modal` card element and calls `dismiss(value)` when done. Overlay-click dismisses with `null`.
+
+**Rule:** Do not call `window.alert/confirm/prompt`. Do not build ad-hoc overlay elements for dialogs. Always use `Modal.*` or `openModalCard`.
+
+### ArraySorter — generic drag-to-reorder
+
+`surface-v1/src/core/arraySorter.js` provides reusable pointer-capture drag-and-drop list reordering for any array of objects with a numeric sort-key property.
+
+Usage pattern:
+
+```js
+const sorter = new ArraySorter(rawList, '_sortIdx')  // rawList references are mutated in place
+
+// Render sort UI into a host element:
+sorter.displaySortDialog(
+  hostEl,
+  item  => buildRowElement(item),          // returns HTMLElement per row
+  (item, phase) => { ... },               // 'willBeDragged' | 'hasBeenDragged' lifecycle
+  ordered => pushSortUpdate(ordered),     // called on mount and on every reorder; sort keys already written
+)
+
+// Read sorted items (e.g. for Perform pane rendering):
+const items = sorter.getItemsSorted()
+```
+
+CSS classes written by `ArraySorter`: `.array-sort-row`, `.array-sort-row--dragging`, `.array-sort-row--drop-before`, `.array-sort-row--drop-after`, `.array-sort-ghost`. Style these in the relevant CSS file.
+
+**Rules:**
+- Do not hand-roll index-based drag-to-reorder logic. Use `ArraySorter`.
+- The default sort key for perform inputs is `DEFAULT_PERFORM_INPUT_SORT_KEY` (`'_sortIdx'`). Use the same exported constant wherever sort indices are read or compared.
+- `displaySortDialog` calls `onReorder` immediately on mount (to seed contiguous indices) and on every drag completion.
+
+### Perform HUD
+
+The Perform pane renders a floating HUD panel above each intent's position on the canvas. It is driven by `PerformQuickPanelHud` (`surface-v1/src/perform/performQuickPanelHud.js`) and `ScalarRadialKnob` (`surface-v1/src/perform/ScalarRadialKnob.js`).
+
+- HUD panels are reconciled against the live intent list on each `projectGraph` change (subscribe callback).
+- Knob descriptors come from `resolveDescriptorsForClass(intent.class)` filtered to `quickPanel: true` — never hardcoded.
+- Panel position is calculated every `requestAnimationFrame` via world-to-canvas conversion using `worldToCanvas()` from `spatialMath.js`.
+- `ScalarRadialKnob` supports a zoomed precision mode (long-press): a larger overlay canvas appears for fine-grained control, then collapses on release.
+- Knob value changes are sent as `queueIntentUpdate()` (runtime, not graph commands).
+
+**Rule:** Add new Perform HUD controls by setting `quickPanel: true` on a descriptor in `system.yml → systemCapabilities.intentProperties`. Do not add special-case knob construction in `PerformQuickPanelHud` source.
+
 ---
 
 ## Demo data and zone routing
@@ -371,6 +491,27 @@ Minimal mutation message. Use this for new controller features instead of `inten
 **`graph:delta`** — hub -> controller:
 
 Minimal accepted mutation result. Controllers apply this by `entityType` and `guid`.
+
+**`action:input`** — controller -> hub:
+
+Manages controller input assignments and their linked actions. Payload is an `ActionInputCommand`:
+
+```json
+{ "command": "ensureInputAssignment", "targetType": "intent", "targetGuid": "intent-42",
+  "input": { "name": "Flash Red", "type": "button", "displayType": "button", "args": { "params.alpha": 1 } } }
+```
+
+Also supports `removeInputAssignment` and `renameInput`. Hub validates types against `systemCapabilities`, composes params, and returns `graph:delta` on success.
+
+**`action:trigger`** — controller -> hub:
+
+Fires a named action by GUID. Optional `args` are merged into intent execute patches.
+
+```json
+{ "actionGuid": "action-abc123", "args": { "params.alpha": 0.5 } }
+```
+
+Hub resolves execute items: scene → activates scene; intent → dispatches as `RuntimeUpdate` (transient, no YAML write).
 
 **`intents`** — legacy controller -> hub:
 
@@ -495,6 +636,18 @@ Mandatory graph-state rules:
 - Do not emit renderer events for disabled/out-of-active-scene intents when committing all durable intents from edit mode.
 - Do not rely on fixture names alone for synced mutable fixture identity. Use stable fixture GUIDs.
 - Do not remove existing comments while editing files.
+
+Mandatory actions/inputs rules:
+
+- Do not use `sendGraphCommands` directly to create or remove inputs or actions. Use `sendActionInputCommand(command)` from `outboundQueue.js`. This ensures types are validated against `systemCapabilities` and action/input graph entries are kept in sync.
+- Do not trigger actions via a graph command patch. Use `sendActionTrigger(guid, args?)` from `outboundQueue.js`. The hub's `ActionHandler` resolves execute items and routes to the correct runtime path.
+- Do not collect Perform pane buttons by filtering inputs inline. Call `collectPerformButtonInputs()` from `performButtonInputs.js` — it is the canonical filter.
+- Do not reorder list items with hand-rolled index logic. Use `ArraySorter` from `arraySorter.js`. The default sort key is `DEFAULT_PERFORM_INPUT_SORT_KEY`.
+- Do not show dialogs with `window.alert/confirm/prompt`. Use `Modal.*` or `openModalCard` from `surface-v1/src/core/Modal.js`.
+- Do not hardcode input types, display types, or intent property names in controller code. Read them from `systemCapabilities.js` via the exported helpers.
+- Do not add new Perform HUD knobs by modifying `PerformQuickPanelHud` source. Set `quickPanel: true` on the descriptor in `system.yml → systemCapabilities.intentProperties`.
+- Do not add new input param kinds only on one side. When adding a new `kind` to `system.yml`, implement the coercion in `hub/src/inputAssignment/composeInputParams.ts → applyParamKind()` **and** the form parse/stringify in `surface-v1/src/edit/inputAssign/paramKindHandlers.js → parseParamFromForm()`.
+- Do not build new headless controllers from scratch. Start from `controllers/starter/` — it has the correct registration flow, graph replica, `action:trigger` send path, and `runtime:command` position path.
 
 Mandatory dot-key rules:
 

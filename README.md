@@ -11,14 +11,16 @@ Ambitecture is open source and currently focused on production readiness for a l
 
 ```text
 modules/
-  hub/                 Central authority (WebSocket, config/project distribution)
-  deliver/             Allowlisted static HTTP host for browser-only UIs (deliver.yml mounts)
-  renderers/dmx-ts/    DMX renderer implementation (TypeScript)
+  hub/                    Central authority (WebSocket, config/project distribution)
+  deliver/                Allowlisted static HTTP host for browser-only UIs (deliver.yml mounts)
+  renderers/dmx-ts/       DMX renderer implementation (TypeScript)
   renderers/simulator-2d/ Browser renderer (2D simulator)
-  controllers/web-test/ Browser controller test surface
+  controllers/surface-v1/ Primary operator controller (touch SPA, perform/edit/setup panes)
+  controllers/starter/    Minimal TypeScript reference controller for building headless clients
+  controllers/web-test/   Legacy browser controller test surface
 var/
-  projects/            Project and zone definitions (YAML)
-  fixtures/            Fixture profiles (YAML)
+  projects/               Project and zone definitions (YAML)
+  fixtures/               Fixture profiles (YAML)
 ```
 
 Not every module has a Node package. `hub`, `renderers/dmx-ts`, and `deliver` have `package.json`; browser modules are static HTML/JS.

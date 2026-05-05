@@ -7,7 +7,6 @@ import { RegisterHandler } from './handlers/RegisterHandler';
 import { EventsHandler } from './handlers/EventsHandler';
 import { IntentsHandler } from './handlers/IntentsHandler';
 import { FixturesHandler } from './handlers/FixturesHandler';
-import { SceneHandler } from './handlers/SceneHandler';
 import { SaveProjectHandler } from './handlers/SaveProjectHandler';
 import { GraphCommandHandler } from './handlers/GraphCommandHandler';
 import { RuntimeCommandHandler } from './handlers/RuntimeCommandHandler';
@@ -215,8 +214,6 @@ router.register(
   'fixtures',
   new FixturesHandler(registry, projectManager, () => pushConfigsToModules(false)),
 );
-const sceneHandler = new SceneHandler(registry, projectManager, eventQueue, runtimeUpdateDispatcher);
-router.register('scene:activate', sceneHandler);
 router.register('saveProject', new SaveProjectHandler(projectManager));
 
 graphStore.useProject(serverConfig.get<string>('defaultProject'), () => {

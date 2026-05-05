@@ -1,5 +1,10 @@
 import { intentGuid, fixtureId } from './stores.js'
-import { applyDotPathPatch, cloneAndDeleteAtDotPath, cloneAndSetAtDotPath, readAtDotPath } from './dotPath.js'
+import {
+  applyDotPathPatch,
+  cloneAndDeleteAtDotPath,
+  cloneAndSetAtDotPath,
+  readAtDotPath
+} from './dotPath.js'
 
 /**
  * @typedef {object} HubSpatialState
@@ -31,17 +36,22 @@ class ProjectGraph {
       zoneToRenderer: /** @type {Record<string, string[]>} */ ({}),
       zones: /** @type {unknown[]} */ ([]),
       intents: /** @type {Map<string, unknown>} */ (new Map()),
-      runtimeIntents: /** @type {Map<string, Record<string, unknown>>} */ (new Map()),
-      scenes: /** @type {Array<{ guid?: string, name: string, intents: SceneIntentRef[] }>} */ ([]),
+      runtimeIntents: /** @type {Map<string, Record<string, unknown>>} */ (
+        new Map()
+      ),
+      scenes:
+        /** @type {Array<{ guid?: string, name: string, intents: SceneIntentRef[] }>} */ ([]),
       actions: /** @type {Map<string, Record<string, unknown>>} */ (new Map()),
       inputs: /** @type {Map<string, Record<string, unknown>>} */ (new Map()),
       activeSceneName: /** @type {string | null} */ (null),
       controller: {
         state: /** @type {Record<string, unknown>} */ ({}),
-        intentConfig: /** @type {Map<string, Record<string, unknown>>} */ (new Map()),
+        intentConfig: /** @type {Map<string, Record<string, unknown>>} */ (
+          new Map()
+        ),
         /** Hub `controller[].intents` — refs this controller may drive; mirrors projectPatch `intents` / graph:init list. */
-        intentRefs: /** @type {Array<{ guid: string }>} */ ([]),
-      },
+        intentRefs: /** @type {Array<{ guid: string }>} */ ([])
+      }
     }
 
     /** @type {HubSpatialState | null} */
@@ -85,21 +95,31 @@ class ProjectGraph {
   // ─── Derived state ────────────────────────────────────────────────────────────
 
   /** @returns {HubSpatialState | null} */
-  getSpatial () { return this._spatial }
+  getSpatial () {
+    return this._spatial
+  }
 
   /** @returns {number[][]} */
-  getZoneBoxes () { return this._zoneBoxes }
+  getZoneBoxes () {
+    return this._zoneBoxes
+  }
 
   /** @returns {Map<string, { guid: string, zoneName: string, fixtureName: string, position: [number, number, number] }>} */
-  getFixtures () { return this._fixtures }
+  getFixtures () {
+    return this._fixtures
+  }
 
   // ─── Project data ─────────────────────────────────────────────────────────────
 
   /** @returns {Map<string, unknown>} */
-  getIntents () { return this._data.intents }
+  getIntents () {
+    return this._data.intents
+  }
 
   /** @returns {string[]} */
-  getScenes () { return this._data.scenes.map(s => s.name) }
+  getScenes () {
+    return this._data.scenes.map(s => s.name)
+  }
 
   /** @param {string} sceneName @returns {string[]} guid list */
   getSceneIntents (sceneName) {
@@ -112,13 +132,19 @@ class ProjectGraph {
   }
 
   /** @returns {Array<{ guid?: string, name: string, intents: SceneIntentRef[] }>} */
-  getScenesData () { return this._data.scenes }
+  getScenesData () {
+    return this._data.scenes
+  }
 
   /** @returns {Map<string, Record<string, unknown>>} */
-  getActions () { return this._data.actions }
+  getActions () {
+    return this._data.actions
+  }
 
   /** @returns {Map<string, Record<string, unknown>>} */
-  getInputs () { return this._data.inputs }
+  getInputs () {
+    return this._data.inputs
+  }
 
   /**
    * @param {string} targetType
@@ -163,7 +189,9 @@ class ProjectGraph {
   }
 
   /** @returns {string | null} */
-  getActiveSceneName () { return this._data.activeSceneName }
+  getActiveSceneName () {
+    return this._data.activeSceneName
+  }
 
   /** @param {string} guid @returns {Record<string, unknown>} */
   getIntentConfig (guid) {
@@ -171,7 +199,9 @@ class ProjectGraph {
   }
 
   /** @returns {string} */
-  getControllerGuid () { return this._data.controllerGuid }
+  getControllerGuid () {
+    return this._data.controllerGuid
+  }
 
   /**
    * @param {string} guid
@@ -188,7 +218,9 @@ class ProjectGraph {
    * @returns {Record<string, unknown> | null}
    */
   _getSceneEffectiveIntent (guid) {
-    const intent = /** @type {Record<string, unknown> | undefined} */ (this._data.intents.get(guid))
+    const intent = /** @type {Record<string, unknown> | undefined} */ (
+      this._data.intents.get(guid)
+    )
     if (!intent) return null
     const active = this._data.activeSceneName
     const ref = active ? this._findSceneIntentRef(active, guid) : null
@@ -216,7 +248,11 @@ class ProjectGraph {
   getSceneIntentOverlayValue (sceneName, guid, dotKey) {
     if (!sceneName) return undefined
     const ref = this._findSceneIntentRef(sceneName, guid)
-    if (!ref?.overlay || !Object.prototype.hasOwnProperty.call(ref.overlay, dotKey)) return undefined
+    if (
+      !ref?.overlay ||
+      !Object.prototype.hasOwnProperty.call(ref.overlay, dotKey)
+    )
+      return undefined
     return ref.overlay[dotKey]
   }
 
@@ -229,7 +265,10 @@ class ProjectGraph {
   isSceneIntentOverlayed (sceneName, guid, dotKey) {
     if (!sceneName) return false
     const ref = this._findSceneIntentRef(sceneName, guid)
-    return !!ref?.overlay && Object.prototype.hasOwnProperty.call(ref.overlay, dotKey)
+    return (
+      !!ref?.overlay &&
+      Object.prototype.hasOwnProperty.call(ref.overlay, dotKey)
+    )
   }
 
   // ─── Mutations ────────────────────────────────────────────────────────────────
@@ -342,7 +381,7 @@ class ProjectGraph {
     return this._data.scenes.map(s => ({
       guid: s.guid || this._newGuid('scene'),
       name: s.name,
-      intents: s.intents.map(cloneSceneIntentRef),
+      intents: s.intents.map(cloneSceneIntentRef)
     }))
   }
 
@@ -358,14 +397,17 @@ class ProjectGraph {
     for (const scene of this._data.scenes) {
       scene.intents = scene.intents.filter(ref => ref.guid !== guid)
     }
-    const nextRefs = this._data.controller.intentRefs.filter(r => r.guid !== guid)
+    const nextRefs = this._data.controller.intentRefs.filter(
+      r => r.guid !== guid
+    )
     if (nextRefs.length !== this._data.controller.intentRefs.length) {
       this._data.controller.intentRefs = nextRefs
     }
     const state = this._data.controller.state
-    const base = state && typeof state === 'object' && !Array.isArray(state)
-      ? /** @type {Record<string, unknown>} */ (state)
-      : /** @type {Record<string, unknown>} */ ({})
+    const base =
+      state && typeof state === 'object' && !Array.isArray(state)
+        ? /** @type {Record<string, unknown>} */ (state)
+        : /** @type {Record<string, unknown>} */ ({})
     const dotKeyPerform = `interactionPolicies.performEnabled.${guid}`
     const dotKeyQuick = `interactionPolicies.quickPanel.${guid}`
     let nextState = cloneAndDeleteAtDotPath(base, dotKeyPerform)
@@ -397,7 +439,11 @@ class ProjectGraph {
    */
   removeSceneIntentOverlay (sceneName, guid, dotKey) {
     const ref = this._findSceneIntentRef(sceneName, guid)
-    if (!ref?.overlay || !Object.prototype.hasOwnProperty.call(ref.overlay, dotKey)) return false
+    if (
+      !ref?.overlay ||
+      !Object.prototype.hasOwnProperty.call(ref.overlay, dotKey)
+    )
+      return false
     const nextOverlay = { ...ref.overlay }
     delete nextOverlay[dotKey]
     if (Object.keys(nextOverlay).length > 0) {
@@ -415,7 +461,8 @@ class ProjectGraph {
    * @param {unknown} value
    */
   setIntentConfig (guid, key, value) {
-    const current = this._data.controller.intentConfig.get(guid) ?? Object.create(null)
+    const current =
+      this._data.controller.intentConfig.get(guid) ?? Object.create(null)
     this._data.controller.intentConfig.set(guid, { ...current, [key]: value })
     this._notify()
   }
@@ -427,7 +474,11 @@ class ProjectGraph {
    */
   patchControllerState (dotKey, value) {
     if (!this._data.controllerGuid) return null
-    this._data.controller.state = cloneAndSetAtDotPath(this._data.controller.state, dotKey, value)
+    this._data.controller.state = cloneAndSetAtDotPath(
+      this._data.controller.state,
+      dotKey,
+      value
+    )
     this._applyControllerStateDerivedValue(dotKey, value)
     this._notify()
     return { guid: this._data.controllerGuid, patch: { [dotKey]: value } }
@@ -452,11 +503,18 @@ class ProjectGraph {
   updateIntentProperty (guid, dotKey, value) {
     const intent = this._data.intents.get(guid)
     if (!intent) return null
-    const updated = cloneAndSetAtDotPath(/** @type {Record<string, unknown>} */ (intent), dotKey, value)
+    const updated = cloneAndSetAtDotPath(
+      /** @type {Record<string, unknown>} */ (intent),
+      dotKey,
+      value
+    )
     this._data.intents.set(guid, updated)
     const runtime = this._data.runtimeIntents.get(guid)
     if (runtime) {
-      this._data.runtimeIntents.set(guid, cloneAndSetAtDotPath(runtime, dotKey, value))
+      this._data.runtimeIntents.set(
+        guid,
+        cloneAndSetAtDotPath(runtime, dotKey, value)
+      )
     }
     this._notify()
     return { guid, patch: { [dotKey]: value } }
@@ -511,7 +569,9 @@ class ProjectGraph {
    * @returns {string[]} stable unique dotKeys for Perform quick panel
    */
   getQuickPanelDotKeys (guid) {
-    const raw = /** @type {unknown} */ (this.getIntentConfig(guid).quickPanelDotKeys)
+    const raw = /** @type {unknown} */ (
+      this.getIntentConfig(guid).quickPanelDotKeys
+    )
     return normalizeQuickPanelDotKeys(raw)
   }
 
@@ -525,11 +585,17 @@ class ProjectGraph {
   removeIntentProperty (guid, dotKey) {
     const intent = this._data.intents.get(guid)
     if (!intent) return null
-    const updated = cloneAndDeleteAtDotPath(/** @type {Record<string, unknown>} */ (intent), dotKey)
+    const updated = cloneAndDeleteAtDotPath(
+      /** @type {Record<string, unknown>} */ (intent),
+      dotKey
+    )
     this._data.intents.set(guid, updated)
     const runtime = this._data.runtimeIntents.get(guid)
     if (runtime) {
-      this._data.runtimeIntents.set(guid, cloneAndDeleteAtDotPath(runtime, dotKey))
+      this._data.runtimeIntents.set(
+        guid,
+        cloneAndDeleteAtDotPath(runtime, dotKey)
+      )
     }
     this._notify()
     return { guid, remove: [dotKey] }
@@ -580,8 +646,15 @@ class ProjectGraph {
     const intent = this.getEffectiveIntent(guid)
     if (!intent) return null
     const pos = /** @type {number[] | undefined} */ (intent.position)
-    const position = /** @type {[number, number, number]} */ ([wx, pos?.[1] ?? 0, wz])
-    this._data.runtimeIntents.set(guid, cloneAndSetAtDotPath(intent, 'position', position))
+    const position = /** @type {[number, number, number]} */ ([
+      wx,
+      pos?.[1] ?? 0,
+      wz
+    ])
+    this._data.runtimeIntents.set(
+      guid,
+      cloneAndSetAtDotPath(intent, 'position', position)
+    )
     return { guid, patch: { position } }
   }
 
@@ -599,7 +672,14 @@ class ProjectGraph {
   updateFixturePosition (id, wx, wz) {
     const fixture = this._fixtures.get(id)
     if (!fixture) return null
-    const updated = { ...fixture, position: /** @type {[number, number, number]} */ ([wx, fixture.position[1] ?? 0, wz]) }
+    const updated = {
+      ...fixture,
+      position: /** @type {[number, number, number]} */ ([
+        wx,
+        fixture.position[1] ?? 0,
+        wz
+      ])
+    }
     this._fixtures.set(id, updated)
     return updated
   }
@@ -655,9 +735,10 @@ class ProjectGraph {
         break
       }
       case 'zoneToRenderer': {
-        this._data.zoneToRenderer = (data && typeof data === 'object' && !Array.isArray(data))
-          ? /** @type {Record<string, string[]>} */ (data)
-          : {}
+        this._data.zoneToRenderer =
+          data && typeof data === 'object' && !Array.isArray(data)
+            ? /** @type {Record<string, string[]>} */ (data)
+            : {}
         this._spatial = this._computeSpatial()
         this._zoneBoxes = this._computeZoneBoxes()
         break
@@ -680,11 +761,14 @@ class ProjectGraph {
         break
       }
       case 'scenes': {
-        const rawScenes = Array.isArray(data) ? /** @type {Array<Record<string, unknown>>} */ (data) : []
-        this._data.scenes = rawScenes
-          .map(normalizeScene)
-          .filter(s => s.name)
-        if (this._data.activeSceneName && !this._data.scenes.some(s => s.name === this._data.activeSceneName)) {
+        const rawScenes = Array.isArray(data)
+          ? /** @type {Array<Record<string, unknown>>} */ (data)
+          : []
+        this._data.scenes = rawScenes.map(normalizeScene).filter(s => s.name)
+        if (
+          this._data.activeSceneName &&
+          !this._data.scenes.some(s => s.name === this._data.activeSceneName)
+        ) {
           this._data.activeSceneName = this._data.scenes[0]?.name ?? null
         }
         break
@@ -712,9 +796,13 @@ class ProjectGraph {
     this._data.runtimeIntents.clear()
     this.applyConfig(payload, rendererGuid)
     const p = /** @type {Record<string, unknown> | null} */ (
-      payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : null
+      payload && typeof payload === 'object' && !Array.isArray(payload)
+        ? payload
+        : null
     )
-    const intents = Array.isArray(p?.intents) ? /** @type {unknown[]} */ (p.intents) : []
+    const intents = Array.isArray(p?.intents)
+      ? /** @type {unknown[]} */ (p.intents)
+      : []
     this._setControllerIntentRefsFromIntentsList(intents)
     this.reconcileIntents(intents, null)
   }
@@ -739,7 +827,10 @@ class ProjectGraph {
   appendControllerIntentRef (guid) {
     if (!guid) return
     if (this._data.controller.intentRefs.some(r => r.guid === guid)) return
-    this._data.controller.intentRefs = [...this._data.controller.intentRefs, { guid }]
+    this._data.controller.intentRefs = [
+      ...this._data.controller.intentRefs,
+      { guid }
+    ]
     this._notify()
   }
 
@@ -829,33 +920,51 @@ class ProjectGraph {
     this._rendererGuid = rendererGuid
 
     const p = /** @type {Record<string, unknown> | null} */ (
-      payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : null
+      payload && typeof payload === 'object' && !Array.isArray(payload)
+        ? payload
+        : null
     )
     if (!p) return
 
     this._data.projectName = String(p.projectName ?? '')
-    this._data.controllerGuid = String(p.controllerGuid ?? this._data.controllerGuid)
-    this._data.zoneToRenderer = /** @type {Record<string, string[]>} */ (p.zoneToRenderer ?? {})
-    this._data.zones = Array.isArray(p.zones) ? /** @type {unknown[]} */ (p.zones) : []
+    this._data.controllerGuid = String(
+      p.controllerGuid ?? this._data.controllerGuid
+    )
+    this._data.zoneToRenderer = /** @type {Record<string, string[]>} */ (
+      p.zoneToRenderer ?? {}
+    )
+    this._data.zones = Array.isArray(p.zones)
+      ? /** @type {unknown[]} */ (p.zones)
+      : []
 
-    const rawScenes = Array.isArray(p.scenes) ? /** @type {Array<Record<string, unknown>>} */ (p.scenes) : []
-    this._data.scenes = rawScenes
-      .map(normalizeScene)
-      .filter(s => s.name)
+    const rawScenes = Array.isArray(p.scenes)
+      ? /** @type {Array<Record<string, unknown>>} */ (p.scenes)
+      : []
+    this._data.scenes = rawScenes.map(normalizeScene).filter(s => s.name)
     this._data.actions = normalizeEntityMap(p.actions)
     this._data.inputs = normalizeEntityMap(p.inputs)
 
-    const hubActive = typeof p.activeSceneName === 'string' && p.activeSceneName ? p.activeSceneName : null
+    const hubActive =
+      typeof p.activeSceneName === 'string' && p.activeSceneName
+        ? p.activeSceneName
+        : null
     if (hubActive && this._data.scenes.some(s => s.name === hubActive)) {
-      if (this._data.activeSceneName !== hubActive) this._data.runtimeIntents.clear()
+      if (this._data.activeSceneName !== hubActive)
+        this._data.runtimeIntents.clear()
       this._data.activeSceneName = hubActive
     } else if (!this._data.activeSceneName && this._data.scenes.length > 0) {
       this._data.activeSceneName = this._data.scenes[0].name
     }
 
     // Round-trip: restore intentConfig if hub sends it back (future persistence)
-    if (p.intentConfig && typeof p.intentConfig === 'object' && !Array.isArray(p.intentConfig)) {
-      const saved = /** @type {Record<string, Record<string, unknown>>} */ (p.intentConfig)
+    if (
+      p.intentConfig &&
+      typeof p.intentConfig === 'object' &&
+      !Array.isArray(p.intentConfig)
+    ) {
+      const saved = /** @type {Record<string, Record<string, unknown>>} */ (
+        p.intentConfig
+      )
       for (const [guid, config] of Object.entries(saved)) {
         if (!this._data.controller.intentConfig.has(guid)) {
           this._data.controller.intentConfig.set(guid, config)
@@ -863,11 +972,23 @@ class ProjectGraph {
       }
     }
 
-    if (p.interactionPolicies && typeof p.interactionPolicies === 'object' && !Array.isArray(p.interactionPolicies)) {
-      this._applyInteractionPolicies(/** @type {Record<string, unknown>} */ (p.interactionPolicies))
+    if (
+      p.interactionPolicies &&
+      typeof p.interactionPolicies === 'object' &&
+      !Array.isArray(p.interactionPolicies)
+    ) {
+      this._applyInteractionPolicies(
+        /** @type {Record<string, unknown>} */ (p.interactionPolicies)
+      )
     }
-    if (p.controllerState && typeof p.controllerState === 'object' && !Array.isArray(p.controllerState)) {
-      this._data.controller.state = /** @type {Record<string, unknown>} */ (p.controllerState)
+    if (
+      p.controllerState &&
+      typeof p.controllerState === 'object' &&
+      !Array.isArray(p.controllerState)
+    ) {
+      this._data.controller.state = /** @type {Record<string, unknown>} */ (
+        p.controllerState
+      )
       this._applyControllerStateDerivedValues(this._data.controller.state)
     }
 
@@ -892,8 +1013,8 @@ class ProjectGraph {
       activeSceneName: this._data.activeSceneName,
       controller: {
         state: this._data.controller.state,
-        intentConfig: Object.fromEntries(this._data.controller.intentConfig),
-      },
+        intentConfig: Object.fromEntries(this._data.controller.intentConfig)
+      }
     }
   }
 
@@ -907,14 +1028,22 @@ class ProjectGraph {
       this._data.intents.delete(guid)
       return
     }
-    const current = /** @type {Record<string, unknown>} */ (this._data.intents.get(guid) ?? { guid })
-    const value = delta.value && typeof delta.value === 'object' && !Array.isArray(delta.value)
-      ? /** @type {Record<string, unknown>} */ (delta.value)
-      : current
+    const current = /** @type {Record<string, unknown>} */ (
+      this._data.intents.get(guid) ?? { guid }
+    )
+    const value =
+      delta.value &&
+      typeof delta.value === 'object' &&
+      !Array.isArray(delta.value)
+        ? /** @type {Record<string, unknown>} */ (delta.value)
+        : current
     let next = { ...value, guid }
-    const patch = delta.patch && typeof delta.patch === 'object' && !Array.isArray(delta.patch)
-      ? /** @type {Record<string, unknown>} */ (delta.patch)
-      : {}
+    const patch =
+      delta.patch &&
+      typeof delta.patch === 'object' &&
+      !Array.isArray(delta.patch)
+        ? /** @type {Record<string, unknown>} */ (delta.patch)
+        : {}
     for (const [key, patchValue] of Object.entries(patch)) {
       next = cloneAndSetAtDotPath(next, key, patchValue)
     }
@@ -931,12 +1060,18 @@ class ProjectGraph {
    */
   _applyRuntimeIntentDelta (guid, update) {
     const current = this.getEffectiveIntent(guid) ?? { guid }
-    const value = update.value && typeof update.value === 'object' && !Array.isArray(update.value)
-      ? /** @type {Record<string, unknown>} */ (update.value)
-      : current
-    const patch = update.patch && typeof update.patch === 'object' && !Array.isArray(update.patch)
-      ? /** @type {Record<string, unknown>} */ (update.patch)
-      : {}
+    const value =
+      update.value &&
+      typeof update.value === 'object' &&
+      !Array.isArray(update.value)
+        ? /** @type {Record<string, unknown>} */ (update.value)
+        : current
+    const patch =
+      update.patch &&
+      typeof update.patch === 'object' &&
+      !Array.isArray(update.patch)
+        ? /** @type {Record<string, unknown>} */ (update.patch)
+        : {}
     const remove = Array.isArray(update.remove) ? update.remove.map(String) : []
     const next = applyDotPathPatch({ ...value, guid }, patch, remove)
     this._data.runtimeIntents.set(guid, next)
@@ -949,27 +1084,47 @@ class ProjectGraph {
    */
   _applyFixtureDelta (guid, op, delta) {
     if (op === 'remove') return
-    const value = delta.value && typeof delta.value === 'object' && !Array.isArray(delta.value)
-      ? /** @type {Record<string, unknown>} */ (delta.value)
-      : null
+    const value =
+      delta.value &&
+      typeof delta.value === 'object' &&
+      !Array.isArray(delta.value)
+        ? /** @type {Record<string, unknown>} */ (delta.value)
+        : null
     if (value) {
       const zoneName = String(value.zoneName ?? '')
       const targetZone = this._data.zones.find(zone => {
-        if (!zone || typeof zone !== 'object' || Array.isArray(zone)) return false
+        if (!zone || typeof zone !== 'object' || Array.isArray(zone))
+          return false
         const z = /** @type {Record<string, unknown>} */ (zone)
-        return String(z.name ?? '') === zoneName || String(z.guid ?? '') === String(value.zoneGuid ?? '')
+        return (
+          String(z.name ?? '') === zoneName ||
+          String(z.guid ?? '') === String(value.zoneGuid ?? '')
+        )
       })
-      if (targetZone && typeof targetZone === 'object' && !Array.isArray(targetZone)) {
+      if (
+        targetZone &&
+        typeof targetZone === 'object' &&
+        !Array.isArray(targetZone)
+      ) {
         for (const zone of this._data.zones) {
           if (!zone || typeof zone !== 'object' || Array.isArray(zone)) continue
-          const fixtures = /** @type {Record<string, unknown>} */ (zone).fixtures
+          const fixtures = /** @type {Record<string, unknown>} */ (zone)
+            .fixtures
           if (!Array.isArray(fixtures)) continue
-          const idx = fixtures.findIndex(fixture =>
-            fixture && typeof fixture === 'object' && !Array.isArray(fixture) && String(/** @type {Record<string, unknown>} */ (fixture).guid ?? '') === guid
+          const idx = fixtures.findIndex(
+            fixture =>
+              fixture &&
+              typeof fixture === 'object' &&
+              !Array.isArray(fixture) &&
+              String(
+                /** @type {Record<string, unknown>} */ (fixture).guid ?? ''
+              ) === guid
           )
           if (idx >= 0) fixtures.splice(idx, 1)
         }
-        const targetFixtures = /** @type {Record<string, unknown>} */ (targetZone).fixtures
+        const targetFixtures = /** @type {Record<string, unknown>} */ (
+          targetZone
+        ).fixtures
         if (Array.isArray(targetFixtures)) {
           const fixtureCopy = { ...value }
           delete fixtureCopy.zoneGuid
@@ -980,9 +1135,12 @@ class ProjectGraph {
         return
       }
     }
-    const patch = delta.patch && typeof delta.patch === 'object' && !Array.isArray(delta.patch)
-      ? /** @type {Record<string, unknown>} */ (delta.patch)
-      : {}
+    const patch =
+      delta.patch &&
+      typeof delta.patch === 'object' &&
+      !Array.isArray(delta.patch)
+        ? /** @type {Record<string, unknown>} */ (delta.patch)
+        : {}
     const position = patch.position
     if (!Array.isArray(position) || position.length < 3) return
     for (const zone of this._data.zones) {
@@ -990,15 +1148,17 @@ class ProjectGraph {
       const z = /** @type {Record<string, unknown>} */ (zone)
       const bb = z.boundingBox
       const fixtures = z.fixtures
-      if (!Array.isArray(bb) || bb.length < 6 || !Array.isArray(fixtures)) continue
+      if (!Array.isArray(bb) || bb.length < 6 || !Array.isArray(fixtures))
+        continue
       for (const fixture of fixtures) {
-        if (!fixture || typeof fixture !== 'object' || Array.isArray(fixture)) continue
+        if (!fixture || typeof fixture !== 'object' || Array.isArray(fixture))
+          continue
         const f = /** @type {Record<string, unknown>} */ (fixture)
         if (String(f.guid ?? '') !== guid) continue
         f.location = [
           Number(position[0]) - Number(bb[0]),
           Number(position[1]) - Number(bb[1]),
-          Number(position[2]) - Number(bb[2]),
+          Number(position[2]) - Number(bb[2])
         ]
       }
     }
@@ -1016,14 +1176,19 @@ class ProjectGraph {
       if (idx >= 0) this._data.scenes.splice(idx, 1)
       return
     }
-    const value = delta.value && typeof delta.value === 'object' && !Array.isArray(delta.value)
-      ? /** @type {Record<string, unknown>} */ (delta.value)
-      : {}
+    const value =
+      delta.value &&
+      typeof delta.value === 'object' &&
+      !Array.isArray(delta.value)
+        ? /** @type {Record<string, unknown>} */ (delta.value)
+        : {}
     const scene = normalizeScene({
       ...value,
       guid,
       name: String(value.name ?? this._data.scenes[idx]?.name ?? ''),
-      intents: Array.isArray(value.intents) ? value.intents : this._data.scenes[idx]?.intents ?? [],
+      intents: Array.isArray(value.intents)
+        ? value.intents
+        : this._data.scenes[idx]?.intents ?? []
     })
     if (idx >= 0) {
       this._data.scenes[idx] = scene
@@ -1044,13 +1209,19 @@ class ProjectGraph {
       return
     }
     const current = target.get(guid) ?? { guid }
-    const value = delta.value && typeof delta.value === 'object' && !Array.isArray(delta.value)
-      ? /** @type {Record<string, unknown>} */ (delta.value)
-      : current
+    const value =
+      delta.value &&
+      typeof delta.value === 'object' &&
+      !Array.isArray(delta.value)
+        ? /** @type {Record<string, unknown>} */ (delta.value)
+        : current
     let next = { ...value, guid }
-    const patch = delta.patch && typeof delta.patch === 'object' && !Array.isArray(delta.patch)
-      ? /** @type {Record<string, unknown>} */ (delta.patch)
-      : {}
+    const patch =
+      delta.patch &&
+      typeof delta.patch === 'object' &&
+      !Array.isArray(delta.patch)
+        ? /** @type {Record<string, unknown>} */ (delta.patch)
+        : {}
     for (const [key, patchValue] of Object.entries(patch)) {
       next = cloneAndSetAtDotPath(next, key, patchValue)
     }
@@ -1063,11 +1234,15 @@ class ProjectGraph {
 
   /** @param {Record<string, unknown>} delta */
   _applyProjectDelta (delta) {
-    const patch = delta.patch && typeof delta.patch === 'object' && !Array.isArray(delta.patch)
-      ? /** @type {Record<string, unknown>} */ (delta.patch)
-      : {}
+    const patch =
+      delta.patch &&
+      typeof delta.patch === 'object' &&
+      !Array.isArray(delta.patch)
+        ? /** @type {Record<string, unknown>} */ (delta.patch)
+        : {}
     if (typeof patch.activeSceneName === 'string') {
-      if (this._data.activeSceneName !== patch.activeSceneName) this._data.runtimeIntents.clear()
+      if (this._data.activeSceneName !== patch.activeSceneName)
+        this._data.runtimeIntents.clear()
       this._data.activeSceneName = patch.activeSceneName
     }
   }
@@ -1079,12 +1254,18 @@ class ProjectGraph {
    */
   _applyControllerDelta (guid, op, delta) {
     if (guid !== this._data.controllerGuid || op === 'remove') return
-    const patch = delta.patch && typeof delta.patch === 'object' && !Array.isArray(delta.patch)
-      ? /** @type {Record<string, unknown>} */ (delta.patch)
-      : {}
-    const value = delta.value && typeof delta.value === 'object' && !Array.isArray(delta.value)
-      ? /** @type {Record<string, unknown>} */ (delta.value)
-      : null
+    const patch =
+      delta.patch &&
+      typeof delta.patch === 'object' &&
+      !Array.isArray(delta.patch)
+        ? /** @type {Record<string, unknown>} */ (delta.patch)
+        : {}
+    const value =
+      delta.value &&
+      typeof delta.value === 'object' &&
+      !Array.isArray(delta.value)
+        ? /** @type {Record<string, unknown>} */ (delta.value)
+        : null
     if (value) {
       this._data.controller.state = { ...this._data.controller.state, ...value }
       this._applyControllerStateDerivedValues(this._data.controller.state)
@@ -1093,15 +1274,27 @@ class ProjectGraph {
       if (key === 'intents' && Array.isArray(patchValue)) {
         this._data.controller.intentRefs = patchValue
           .map(item => {
-            if (item && typeof item === 'object' && !Array.isArray(item) && typeof /** @type {Record<string, unknown>} */ (item).guid === 'string') {
-              return { guid: String(/** @type {Record<string, unknown>} */ (item).guid) }
+            if (
+              item &&
+              typeof item === 'object' &&
+              !Array.isArray(item) &&
+              typeof (/** @type {Record<string, unknown>} */ (item).guid) ===
+                'string'
+            ) {
+              return {
+                guid: String(/** @type {Record<string, unknown>} */ (item).guid)
+              }
             }
             return null
           })
           .filter(/** @returns {v is { guid: string }} */ v => v !== null)
         continue
       }
-      this._data.controller.state = cloneAndSetAtDotPath(this._data.controller.state, key, patchValue)
+      this._data.controller.state = cloneAndSetAtDotPath(
+        this._data.controller.state,
+        key,
+        patchValue
+      )
       this._applyControllerStateDerivedValue(key, patchValue)
     }
   }
@@ -1109,8 +1302,14 @@ class ProjectGraph {
   /** @param {Record<string, unknown>} state */
   _applyControllerStateDerivedValues (state) {
     const interactionPolicies = state.interactionPolicies
-    if (interactionPolicies && typeof interactionPolicies === 'object' && !Array.isArray(interactionPolicies)) {
-      this._applyInteractionPolicies(/** @type {Record<string, unknown>} */ (interactionPolicies))
+    if (
+      interactionPolicies &&
+      typeof interactionPolicies === 'object' &&
+      !Array.isArray(interactionPolicies)
+    ) {
+      this._applyInteractionPolicies(
+        /** @type {Record<string, unknown>} */ (interactionPolicies)
+      )
     }
   }
 
@@ -1124,14 +1323,21 @@ class ProjectGraph {
     if (dotKey.startsWith(performPrefix)) {
       const intentGuid = dotKey.slice(performPrefix.length)
       if (!intentGuid) return
-      const current = this._data.controller.intentConfig.get(intentGuid) ?? Object.create(null)
-      this._data.controller.intentConfig.set(intentGuid, { ...current, performEnabled: Boolean(value) })
+      const current =
+        this._data.controller.intentConfig.get(intentGuid) ??
+        Object.create(null)
+      this._data.controller.intentConfig.set(intentGuid, {
+        ...current,
+        performEnabled: Boolean(value)
+      })
       return
     }
     if (dotKey.startsWith(quickPrefix)) {
       const intentGuid = dotKey.slice(quickPrefix.length)
       if (!intentGuid) return
-      const current = this._data.controller.intentConfig.get(intentGuid) ?? Object.create(null)
+      const current =
+        this._data.controller.intentConfig.get(intentGuid) ??
+        Object.create(null)
       this._data.controller.intentConfig.set(intentGuid, {
         ...current,
         quickPanelDotKeys: normalizeQuickPanelDotKeys(value)
@@ -1142,15 +1348,31 @@ class ProjectGraph {
   /** @param {Record<string, unknown>} policies */
   _applyInteractionPolicies (policies) {
     const performEnabled = policies.performEnabled
-    if (performEnabled && typeof performEnabled === 'object' && !Array.isArray(performEnabled)) {
-      for (const [guid, enabled] of Object.entries(/** @type {Record<string, unknown>} */ (performEnabled))) {
+    if (
+      performEnabled &&
+      typeof performEnabled === 'object' &&
+      !Array.isArray(performEnabled)
+    ) {
+      for (const [guid, enabled] of Object.entries(
+        /** @type {Record<string, unknown>} */ (performEnabled)
+      )) {
         this.setIntentConfig(guid, 'performEnabled', Boolean(enabled))
       }
     }
     const quickPanel = policies.quickPanel
-    if (quickPanel && typeof quickPanel === 'object' && !Array.isArray(quickPanel)) {
-      for (const [guid, keys] of Object.entries(/** @type {Record<string, unknown>} */ (quickPanel))) {
-        this.setIntentConfig(guid, 'quickPanelDotKeys', normalizeQuickPanelDotKeys(keys))
+    if (
+      quickPanel &&
+      typeof quickPanel === 'object' &&
+      !Array.isArray(quickPanel)
+    ) {
+      for (const [guid, keys] of Object.entries(
+        /** @type {Record<string, unknown>} */ (quickPanel)
+      )) {
+        this.setIntentConfig(
+          guid,
+          'quickPanelDotKeys',
+          normalizeQuickPanelDotKeys(keys)
+        )
       }
     }
   }
@@ -1161,11 +1383,19 @@ class ProjectGraph {
   _computeSpatial () {
     const matched = this._matchedZoneBoxes()
     if (matched.length === 0) return null
-    let x1 = Infinity, y1 = Infinity, z1 = Infinity
-    let x2 = -Infinity, y2 = -Infinity, z2 = -Infinity
+    let x1 = Infinity,
+      y1 = Infinity,
+      z1 = Infinity
+    let x2 = -Infinity,
+      y2 = -Infinity,
+      z2 = -Infinity
     for (const b of matched) {
-      x1 = Math.min(x1, b[0]); y1 = Math.min(y1, b[1]); z1 = Math.min(z1, b[2])
-      x2 = Math.max(x2, b[3]); y2 = Math.max(y2, b[4]); z2 = Math.max(z2, b[5])
+      x1 = Math.min(x1, b[0])
+      y1 = Math.min(y1, b[1])
+      z1 = Math.min(z1, b[2])
+      x2 = Math.max(x2, b[3])
+      y2 = Math.max(y2, b[4])
+      z2 = Math.max(z2, b[5])
     }
     return { x1, y1, z1, x2, y2, z2 }
   }
@@ -1207,9 +1437,11 @@ class ProjectGraph {
       if (!Array.isArray(assigned) || !assigned.includes(rendererGuid)) continue
       const bb = zone.boundingBox
       const zoneFixtures = zone.fixtures
-      if (!Array.isArray(bb) || bb.length < 6 || !Array.isArray(zoneFixtures)) continue
+      if (!Array.isArray(bb) || bb.length < 6 || !Array.isArray(zoneFixtures))
+        continue
       for (const raw of zoneFixtures) {
-        if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) continue
+        if (raw === null || typeof raw !== 'object' || Array.isArray(raw))
+          continue
         const fixture = /** @type {Record<string, unknown>} */ (raw)
         const fName = String(fixture.name ?? '')
         const guid = String(fixture.guid ?? fixtureId(zoneName, fName))
@@ -1222,8 +1454,8 @@ class ProjectGraph {
           position: /** @type {[number, number, number]} */ ([
             Number(bb[0]) + Number(local[0]),
             Number(bb[1]) + Number(local[1]),
-            Number(bb[2]) + Number(local[2]),
-          ]),
+            Number(bb[2]) + Number(local[2])
+          ])
         })
       }
     }
@@ -1270,13 +1502,17 @@ class ProjectGraph {
  */
 function normalizeSceneIntentRef (raw) {
   if (typeof raw === 'string') return { guid: raw }
-  const record = raw && typeof raw === 'object' && !Array.isArray(raw)
-    ? /** @type {Record<string, unknown>} */ (raw)
-    : {}
+  const record =
+    raw && typeof raw === 'object' && !Array.isArray(raw)
+      ? /** @type {Record<string, unknown>} */ (raw)
+      : {}
   const guid = String(record.guid ?? '')
-  const overlay = record.overlay && typeof record.overlay === 'object' && !Array.isArray(record.overlay)
-    ? cloneOverlay(/** @type {Record<string, unknown>} */ (record.overlay))
-    : undefined
+  const overlay =
+    record.overlay &&
+    typeof record.overlay === 'object' &&
+    !Array.isArray(record.overlay)
+      ? cloneOverlay(/** @type {Record<string, unknown>} */ (record.overlay))
+      : undefined
   return overlay ? { guid, overlay } : { guid }
 }
 
@@ -1285,7 +1521,9 @@ function normalizeSceneIntentRef (raw) {
  * @returns {SceneIntentRef}
  */
 function cloneSceneIntentRef (ref) {
-  return ref.overlay ? { guid: ref.guid, overlay: cloneOverlay(ref.overlay) } : { guid: ref.guid }
+  return ref.overlay
+    ? { guid: ref.guid, overlay: cloneOverlay(ref.overlay) }
+    : { guid: ref.guid }
 }
 
 /**
@@ -1293,7 +1531,9 @@ function cloneSceneIntentRef (ref) {
  * @returns {Record<string, unknown>}
  */
 function cloneOverlay (overlay) {
-  return Object.fromEntries(Object.entries(overlay).map(([key, value]) => [key, cloneSceneValue(value)]))
+  return Object.fromEntries(
+    Object.entries(overlay).map(([key, value]) => [key, cloneSceneValue(value)])
+  )
 }
 
 /**
@@ -1315,7 +1555,7 @@ function normalizeScene (scene) {
     name: String(scene.name ?? ''),
     intents: Array.isArray(scene.intents)
       ? scene.intents.map(normalizeSceneIntentRef).filter(ref => ref.guid)
-      : [],
+      : []
   }
 }
 

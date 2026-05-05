@@ -113,7 +113,7 @@ function sendRuntimeCommands (commands, ws, location) {
 }
 
 /**
- * Sends scene:activate directly on the WebSocket (bypasses the rate-limited queue).
+ * Sends graph:command project activeSceneName patch (bypasses the rate-limited queue).
  * @param {string} sceneName
  */
 export function sendSceneActivate (sceneName) {

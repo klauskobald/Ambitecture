@@ -1,83 +1,89 @@
 <!DOCTYPE html>
 <html lang="en">
 
-   <head>
-      <meta charset="UTF-8">
-      <meta name="viewport"
-            content="width=device-width, initial-scale=1">
-      <title>Ambitecture — Surface V1</title>
-      <link rel="stylesheet"
-            href="src/styles/theme.css">
-      <link rel="stylesheet"
-            href="src/styles/layout.css">
-      <link rel="stylesheet"
-            href="src/styles/controls.css">
-      <link rel="stylesheet"
-            href="src/styles/modal.css">
-      <link rel="stylesheet"
-            href="src/styles/editPanel.css">
-   </head>
+      <head>
+            <meta charset="UTF-8">
+            <meta name="viewport"
+                  content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no, overscroll-behavior: none; user-select: none;">
+            <meta name="theme-color"
+                  content="#0a0a0a">
+            <meta name="apple-mobile-web-app-capable"
+                  content="yes">
+            <meta name="apple-mobile-web-app-status-bar-style"
+                  content="black-translucent">
+            <title>Ambitecture — Surface V1</title>
+            <link rel="stylesheet"
+                  href="src/styles/theme.css">
+            <link rel="stylesheet"
+                  href="src/styles/layout.css">
+            <link rel="stylesheet"
+                  href="src/styles/controls.css">
+            <link rel="stylesheet"
+                  href="src/styles/modal.css">
+            <link rel="stylesheet"
+                  href="src/styles/editPanel.css">
+      </head>
 
-   <body>
-      <div id="app-root"
-           class="app">
-        <nav class="app-nav"
-              id="app-nav"
-              aria-label="Pane navigation">
-           <button class="nav-toggle"
-                   id="nav-toggle"
-                   aria-label="Toggle navigation"
-                   aria-expanded="false">☰</button>
-           <h1 class="app-title">Surface V1</h1>
-            <a class="nav-link"
-               data-pane="perform"
-               href="#perform">Perform</a>
-            <a class="nav-link"
-               data-pane="edit"
-               href="#edit">Edit</a>
-            <a class="nav-link"
-               data-pane="scenes"
-               href="#scenes">Scenes</a>
-         </nav>
-         <main class="app-main">
-            <div class="sim-area"
-                 id="sim-area">
-               <div class="sim-stack"
-                    id="sim-stack">
-                  <iframe id="sim-frame"
-                          title="Simulator 2D (hub-driven)"></iframe>
-                  <canvas id="touch-overlay"
-                          aria-hidden="true"></canvas>
-                  <div id="perform-hud-layer"
-                       class="perform-hud-layer"
-                       aria-hidden="true"></div>
-                  <div id="runtime-overlay-reset-wrap"
-                       class="runtime-overlay-reset-wrap"
-                       hidden>
-                     <button type="button"
-                             id="runtime-overlay-reset-btn"
-                             class="runtime-overlay-reset-btn">
-                        Reset scene
-                     </button>
-                  </div>
-               </div>
+      <body>
+            <div id="app-root"
+                 class="app">
+                  <nav class="app-nav"
+                       id="app-nav"
+                       aria-label="Pane navigation">
+                        <button class="nav-toggle"
+                                id="nav-toggle"
+                                aria-label="Toggle navigation"
+                                aria-expanded="false">☰</button>
+                        <h1 class="app-title">Surface V1</h1>
+                        <a class="nav-link"
+                           data-pane="perform"
+                           href="#perform">Perform</a>
+                        <a class="nav-link"
+                           data-pane="edit"
+                           href="#edit">Edit</a>
+                        <a class="nav-link"
+                           data-pane="scenes"
+                           href="#scenes">Scenes</a>
+                  </nav>
+                  <main class="app-main">
+                        <div class="sim-area"
+                             id="sim-area">
+                              <div class="sim-stack"
+                                   id="sim-stack">
+                                    <iframe id="sim-frame"
+                                            title="Simulator 2D (hub-driven)"></iframe>
+                                    <canvas id="touch-overlay"
+                                            aria-hidden="true"></canvas>
+                                    <div id="perform-hud-layer"
+                                         class="perform-hud-layer"
+                                         aria-hidden="true"></div>
+                                    <div id="runtime-overlay-reset-wrap"
+                                         class="runtime-overlay-reset-wrap"
+                                         hidden>
+                                          <button type="button"
+                                                  id="runtime-overlay-reset-btn"
+                                                  class="runtime-overlay-reset-btn">
+                                                Reset scene
+                                          </button>
+                                    </div>
+                              </div>
+                        </div>
+                        <div class="pane-host"
+                             id="pane-host">
+                              <div class="pane-host-topbar">
+                                    <span class="pane-host-topbar-fill"></span>
+                                    <button type="button"
+                                            id="pane-host-resize-grip"
+                                            class="pane-host-resize-grip"
+                                            aria-label="Resize pane height"></button>
+                              </div>
+                              <div class="pane-host-body"
+                                   id="pane-host-body"></div>
+                        </div>
+                  </main>
             </div>
-            <div class="pane-host"
-                 id="pane-host">
-               <div class="pane-host-topbar">
-                  <span class="pane-host-topbar-fill"></span>
-                  <button type="button"
-                          id="pane-host-resize-grip"
-                          class="pane-host-resize-grip"
-                          aria-label="Resize pane height"></button>
-               </div>
-               <div class="pane-host-body"
-                    id="pane-host-body"></div>
-            </div>
-         </main>
-      </div>
-      <script type="module"
-              src="src/app/main.js"></script>
-   </body>
+            <script type="module"
+                    src="src/app/main.js"></script>
+      </body>
 
 </html>

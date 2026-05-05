@@ -87,10 +87,17 @@ function sendRuntimeCommands (commands, ws, location) {
 
 /**
  * @param {string} sceneName
+ * @param {{ clearRuntimeIntentMerge?: boolean }} [opts]
  */
-export function sendSceneActivate (sceneName) {
+export function sendSceneActivate (sceneName, opts = {}) {
   if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation)
     return
+  const patch = /** @type {Record<string, unknown>} */ ({
+    activeSceneName: sceneName
+  })
+  if (opts.clearRuntimeIntentMerge) {
+    patch.clearRuntimeIntentMerge = true
+  }
   activeWs.send(
     JSON.stringify({
       message: {
@@ -100,7 +107,7 @@ export function sendSceneActivate (sceneName) {
           op: 'patch',
           entityType: 'project',
           guid: 'active',
-          patch: { activeSceneName: sceneName },
+          patch,
           persistence: 'runtimeAndDurable'
         }
       }

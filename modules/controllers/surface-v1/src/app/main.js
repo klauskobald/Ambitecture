@@ -1,7 +1,7 @@
 import { loadConfig, applyLayoutCssVars } from '../core/config.js'
 import { applySystemCapabilities } from '../core/systemCapabilities.js'
 import { projectGraph } from '../core/projectGraph.js'
-import { setSocket, setMinInterval } from '../core/outboundQueue.js'
+import { setSocket, setMinInterval, sendSceneActivate } from '../core/outboundQueue.js'
 import { connect } from '../core/socket.js'
 import { SimulatorViewport } from '../viewport/simulatorViewport.js'
 import { OverlayCanvas } from '../viewport/overlayCanvas.js'
@@ -60,6 +60,30 @@ async function main () {
   viewport.setSrc(new URL(cfg.SIMULATOR_IFRAME_URL, window.location.href).href)
 
   const overlay = new OverlayCanvas(canvas, stack, viewport, cfg.LAYOUT)
+
+  const overlayResetWrap = /** @type {HTMLElement | null} */ (
+    document.getElementById('runtime-overlay-reset-wrap')
+  )
+  const overlayResetBtn = /** @type {HTMLButtonElement | null} */ (
+    document.getElementById('runtime-overlay-reset-btn')
+  )
+
+  /** Sync hub runtime-overlay hint strip above sim bottom edge */
+  function syncRuntimeOverlayResetUi () {
+    if (!overlayResetWrap) return
+    const guids = projectGraph.getRuntimeOverlayGuidsInScene()
+    const active = projectGraph.getActiveSceneName()
+    overlayResetWrap.hidden =
+      !(guids.length > 0 && typeof active === 'string' && active.length > 0)
+  }
+
+  overlayResetBtn?.addEventListener('click', () => {
+    const name = projectGraph.getActiveSceneName()
+    if (typeof name !== 'string' || name.length === 0) return
+    sendSceneActivate(name, { clearRuntimeIntentMerge: true })
+  })
+  projectGraph.subscribe(syncRuntimeOverlayResetUi)
+  syncRuntimeOverlayResetUi()
 
   initRouter(overlay)
   initNav(paneName => navigateTo(paneName))

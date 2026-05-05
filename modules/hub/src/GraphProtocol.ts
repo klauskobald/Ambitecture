@@ -44,6 +44,8 @@ export interface GraphInitPayload {
   controllerState?: Record<string, unknown>;
   interactionPolicies?: Record<string, unknown>;
   entities: Record<string, Record<string, Record<string, unknown>>>;
+  /** GUIDs with runtime perform merge overlapping the active scene (hub hint for reset UX). */
+  runtimeOverlayGuidsInScene?: string[];
 }
 
 export interface GraphMutationResult {

@@ -39,6 +39,8 @@ class ProjectGraph {
       actions: /** @type {Map<string, Record<string, unknown>>} */ (new Map()),
       inputs: /** @type {Map<string, Record<string, unknown>>} */ (new Map()),
       activeSceneName: /** @type {string | null} */ (null),
+      /** Hub hint: perform merge overlaps these scene intent GUIDs — show reset when non-empty. */
+      runtimeOverlayGuidsInScene: /** @type {string[]} */ ([]),
       controller: {
         state: /** @type {Record<string, unknown>} */ ({}),
         intentConfig: /** @type {Map<string, Record<string, unknown>>} */ (
@@ -181,6 +183,11 @@ class ProjectGraph {
   /** @returns {string | null} */
   getActiveSceneName () {
     return this._data.activeSceneName
+  }
+
+  /** @returns {string[]} GUIDs with hub runtime merge on this scene's intents (reset affordance). */
+  getRuntimeOverlayGuidsInScene () {
+    return this._data.runtimeOverlayGuidsInScene
   }
 
   /** @param {string} guid @returns {Record<string, unknown>} */
@@ -751,6 +758,12 @@ class ProjectGraph {
         this._data.inputs = normalizeEntityMap(data)
         break
       }
+      case 'runtimeOverlayGuidsInScene': {
+        this._data.runtimeOverlayGuidsInScene = Array.isArray(data)
+          ? /** @type {unknown[]} */ (data).filter(d => typeof d === 'string')
+          : []
+        break
+      }
       default:
         break
     }
@@ -774,6 +787,15 @@ class ProjectGraph {
       : []
     this._setControllerIntentRefsFromIntentsList(intents)
     this.reconcileIntents(intents, null)
+
+    const rawOverlay = p?.runtimeOverlayGuidsInScene
+    if (Array.isArray(rawOverlay)) {
+      this._data.runtimeOverlayGuidsInScene = rawOverlay.filter(
+        x => typeof x === 'string'
+      )
+    } else {
+      this._data.runtimeOverlayGuidsInScene = []
+    }
   }
 
   /**
@@ -977,6 +999,7 @@ class ProjectGraph {
       actions: [...this._data.actions.values()],
       inputs: [...this._data.inputs.values()],
       activeSceneName: this._data.activeSceneName,
+      runtimeOverlayGuidsInScene: [...this._data.runtimeOverlayGuidsInScene],
       controller: {
         state: this._data.controller.state,
         intentConfig: Object.fromEntries(this._data.controller.intentConfig)
@@ -1215,6 +1238,12 @@ class ProjectGraph {
         : {}
     if (typeof patch.activeSceneName === 'string') {
       this._data.activeSceneName = patch.activeSceneName
+    }
+    const rawOverlay = patch.runtimeOverlayGuidsInScene
+    if (Array.isArray(rawOverlay)) {
+      this._data.runtimeOverlayGuidsInScene = rawOverlay.filter(
+        x => typeof x === 'string'
+      )
     }
   }
 

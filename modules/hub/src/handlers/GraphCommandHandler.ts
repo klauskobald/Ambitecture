@@ -23,7 +23,7 @@ export class GraphCommandHandler implements MessageHandler {
       return;
     }
     const command = message.payload;
-    const result = this.graphStore.applyGraphCommand(command);
+    const result = this.graphStore.applyGraphCommand(command, message.location);
     const sourceDeltas = result.controllerDeltas.filter(delta =>
       delta.entityType !== command.entityType
       || delta.guid !== command.guid

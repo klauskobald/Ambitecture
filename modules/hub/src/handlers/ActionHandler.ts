@@ -84,7 +84,7 @@ export class ActionHandler implements MessageHandler {
     }
     const commands = this.actionInputManager.buildCommands(message.payload, controllerGuid);
     for (const command of commands) {
-      const result = this.graphStore.applyGraphCommand(command);
+      const result = this.graphStore.applyGraphCommand(command, message.location);
       this.sendResultToSource(ws, result);
       this.publishMutation(ws, result, message.location);
     }

@@ -138,6 +138,36 @@ body.nav-open .app-nav .nav-link {
   overflow: visible;
 }
 
+.runtime-overlay-reset-wrap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  padding: 0.35rem;
+  pointer-events: none;
+  z-index: calc(var(--overlay-z-index) + 2);
+  box-sizing: border-box;
+}
+
+.runtime-overlay-reset-btn {
+  pointer-events: auto;
+  font: inherit;
+  font-size: 0.8125rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-raised);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.runtime-overlay-reset-btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
 /* ── Pane host ──────────────────────────────────────────────── */
 
 .pane-host {

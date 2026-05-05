@@ -179,6 +179,26 @@ const publishGraphMutation = (source: import('ws').WebSocket, result: GraphMutat
 
   if (sceneActivateResync) {
     const scenesWire = projectManager.getScenesWirePayload();
+    const activeDelta = result.controllerDeltas.find(d => {
+      if (d.entityType !== 'project' || d.guid !== 'active' || d.op !== 'patch') return false;
+      const p = d.patch;
+      return (
+        p !== undefined
+        && typeof p === 'object'
+        && !Array.isArray(p)
+        && typeof /** @type {Record<string, unknown>} */ (p).activeSceneName === 'string'
+      );
+    });
+    const rawOverlay = activeDelta?.patch?.['runtimeOverlayGuidsInScene'];
+    const runtimeOverlayGuidsInScene = Array.isArray(rawOverlay)
+      ? rawOverlay.filter((g): g is string => typeof g === 'string')
+      : [];
+    const overlayMsg = JSON.stringify({
+      message: {
+        type: 'projectPatch',
+        payload: { key: 'runtimeOverlayGuidsInScene', data: runtimeOverlayGuidsInScene },
+      },
+    });
     for (const ws of registry.getByRole('controller')) {
       if (ws.readyState !== WebSocket.OPEN) continue;
       const info = registry.get(ws);
@@ -200,6 +220,7 @@ const publishGraphMutation = (source: import('ws').WebSocket, result: GraphMutat
           },
         })
       );
+      ws.send(overlayMsg);
     }
 
   }

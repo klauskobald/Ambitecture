@@ -39,6 +39,20 @@ export class RuntimeIntentStore {
   }
 
   /**
+   * Intent GUIDs present in {@link mergeCache} that also belong to `sceneIntentGuids`
+   * (active scene baseline row set).
+   */
+  listRuntimeOverlayGuidsInActiveScene(sceneIntentGuids: Iterable<string>): string[] {
+    const list: string[] = [];
+    for (const guid of sceneIntentGuids) {
+      if (guid.length > 0 && this.mergeCache.has(guid)) {
+        list.push(guid);
+      }
+    }
+    return list;
+  }
+
+  /**
    * Effective intent for controller wire payloads and snapshots:
    * runtime merge (if any) wins, else active-scene intent (definition + scene overlay),
    * else bare definition for intents not in the active scene.

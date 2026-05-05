@@ -9,7 +9,7 @@ import {
   GraphPersistence,
   emptyMutationResult,
 } from './GraphProtocol';
-import { normalizeIntentColor, intentRemovalEvent, intentToEvent } from './handlers/intentHelpers';
+import { normalizeIntentColor, intentRemovalEvent, intentToEvent, effectivePerformResetScene } from './handlers/intentHelpers';
 import { Logger } from './Logger';
 import { applyDotPathPatch, cloneRecord } from './dotPath';
 import { ActionInputManager } from './ActionInputManager';
@@ -150,7 +150,10 @@ export class ProjectGraphStore {
       this.runtimeMerge?.clearRuntimeIntentMergeCache();
     } else if (mergeClear === 'scene') {
       const guids = this.projectManager.getSceneIntentGuidsByName(sceneName);
-      this.runtimeMerge?.evictRuntimeIntentMergeGuids(guids);
+      const toEvict = guids.filter((g) =>
+        effectivePerformResetScene(this.projectManager.getSceneMergedIntent(sceneName, g)),
+      );
+      this.runtimeMerge?.evictRuntimeIntentMergeGuids(toEvict);
     }
     const persistDurable = persistence === 'durable' || persistence === 'runtimeAndDurable';
     const newIntents = this.projectManager.setActiveScene(sceneName, persistDurable);

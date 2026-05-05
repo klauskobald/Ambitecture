@@ -75,6 +75,21 @@
   align-items: start;
 }
 
+.prop-panel-section--perform-reset {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.prop-row--group-heading .prop-row__label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
 /* ── Property row ────────────────────────────────────────────────────────── */
 
 .prop-row {

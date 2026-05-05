@@ -17,6 +17,17 @@ export interface FixtureProfile {
   };
 }
 
+/** Nested under intent `perform` in project YAML — forward-compatible buckets. */
+export interface IntentPerformReset {
+  scene?: boolean;
+  [key: string]: unknown;
+}
+
+export interface IntentPerformSettings {
+  reset?: IntentPerformReset;
+  [key: string]: unknown;
+}
+
 export interface ControllerIntent {
   guid?: string;
   name?: string;
@@ -27,6 +38,7 @@ export interface ControllerIntent {
   layer?: number;
   class: string;
   params: Record<string, unknown>;
+  perform?: IntentPerformSettings;
 }
 
 export interface Scene {
@@ -617,6 +629,18 @@ export class ProjectManager {
     return scene.intents
       .map(ref => ref.guid)
       .filter((g): g is string => typeof g === 'string' && g.length > 0);
+  }
+
+  /**
+   * Definition + scene ref overlay merged for named scene (does not depend on {@link activeSceneName}).
+   * Used before scene activation — e.g. `perform.reset.scene` for selective merge-cache eviction.
+   */
+  getSceneMergedIntent(sceneName: string, guid: string): ControllerIntent | undefined {
+    const scene = this.project?.scenes?.find(s => s.name === sceneName);
+    if (!scene) return undefined;
+    const ref = scene.intents.find(item => item.guid === guid);
+    if (!ref) return undefined;
+    return this.getEffectiveSceneIntent(ref);
   }
 
   getActiveSceneIntent(guid: string): ControllerIntent | undefined {

@@ -1,6 +1,7 @@
 import WebSocket from 'ws';
 import { Logger } from '../Logger';
 import { DmxUniverse } from '../DmxUniverse';
+import type { IFixtureClass } from '../fixtures/IFixtureClass';
 
 interface WsMessage {
     type: string;
@@ -30,7 +31,12 @@ export interface ConfiguredFixture {
     params: Record<string, unknown>;
     target?: [number, number, number];
     rotation?: [number, number, number];
+    /** Resolved synchronously from `fixtureProfile.class` when config is applied. */
+    fixtureClass: IFixtureClass;
 }
+
+/** Parsed YAML fixture row before `fixtureClass` is attached in {@link ConfigHandler.handle}. */
+export type ConfiguredFixtureDraft = Omit<ConfiguredFixture, 'fixtureClass'>;
 
 export interface ConfiguredZone {
     name: string;
@@ -64,7 +70,7 @@ function isTuple6(v: unknown): v is [number, number, number, number, number, num
     );
 }
 
-function parseConfiguredFixture(raw: unknown, zoneName: string): ConfiguredFixture | null {
+function parseConfiguredFixture(raw: unknown, zoneName: string): ConfiguredFixtureDraft | null {
     if (!raw || typeof raw !== 'object') {
         Logger.warn(`[config] invalid fixture entry in zone "${zoneName}"`);
         return null;
@@ -91,7 +97,7 @@ function parseConfiguredFixture(raw: unknown, zoneName: string): ConfiguredFixtu
     if (o['params'] && typeof o['params'] === 'object' && !Array.isArray(o['params'])) {
         params = { ...(o['params'] as Record<string, unknown>) };
     }
-    const out: ConfiguredFixture = {
+    const out: ConfiguredFixtureDraft = {
         name: o['name'],
         fixtureProfile: fp as FixtureProfile,
         location: o['location'],
@@ -107,7 +113,24 @@ function parseConfiguredFixture(raw: unknown, zoneName: string): ConfiguredFixtu
     return out;
 }
 
-function parseConfiguredZone(raw: unknown): ConfiguredZone | null {
+function loadFixtureClass(className: string): IFixtureClass | null {
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
+        const mod = require(`../fixtures/${className}`) as { default?: IFixtureClass };
+        return mod.default ?? null;
+    } catch {
+        return null;
+    }
+}
+
+interface ConfiguredZoneDraft {
+    name: string;
+    boundingBox: [number, number, number, number, number, number];
+    extend: number;
+    fixtures: ConfiguredFixtureDraft[];
+}
+
+function parseConfiguredZone(raw: unknown): ConfiguredZoneDraft | null {
     if (!raw || typeof raw !== 'object') {
         Logger.warn('[config] invalid zone entry');
         return null;
@@ -129,6 +152,28 @@ function parseConfiguredZone(raw: unknown): ConfiguredZone | null {
     return { name: o['name'], boundingBox: o['boundingBox'], extend, fixtures };
 }
 
+function resolveZoneDrafts(drafts: ConfiguredZoneDraft[]): ConfiguredZone[] {
+    const out: ConfiguredZone[] = [];
+    for (const z of drafts) {
+        const fixtures: ConfiguredFixture[] = [];
+        for (const f of z.fixtures) {
+            const fixtureClass = loadFixtureClass(f.fixtureProfile.class);
+            if (!fixtureClass) {
+                Logger.warn(`[config] unknown fixture class: ${f.fixtureProfile.class} ("${f.name}" in zone "${z.name}")`);
+                continue;
+            }
+            fixtures.push({ ...f, fixtureClass });
+        }
+        out.push({
+            name: z.name,
+            boundingBox: z.boundingBox,
+            extend: z.extend,
+            fixtures,
+        });
+    }
+    return out;
+}
+
 export class ConfigHandler {
     private zones: ConfiguredZone[] = [];
     private dmxUniverse: DmxUniverse;
@@ -148,9 +193,11 @@ export class ConfigHandler {
             return;
         }
 
-        this.zones = message.payload.zones
+        const zoneDrafts = message.payload.zones
             .map((z) => parseConfiguredZone(z))
-            .filter((z): z is ConfiguredZone => z !== null);
+            .filter((z): z is ConfiguredZoneDraft => z !== null);
+
+        this.zones = resolveZoneDrafts(zoneDrafts);
 
         const fixtureCount = this.zones.reduce((n, z) => n + z.fixtures.length, 0);
         Logger.info(`[config] ${fixtureCount} fixture(s) across ${this.zones.length} zone(s)`);

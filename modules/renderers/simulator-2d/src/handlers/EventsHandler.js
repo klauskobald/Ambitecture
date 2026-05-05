@@ -3,13 +3,13 @@ class EventsHandler {
         this.configHandler = configHandler;
         this._renderer = renderer;
         this._layerIntentEngine = new LayerIntentEngine();
-        this.queue = new EventQueue(event => this.processEvent(event));
+        this.queue = new EventQueue(events => this.processBatch(events));
     }
 
     handle(message) {
         const events = message.payload;
         if (!Array.isArray(events)) return;
-        for (const event of events) this.queue.enqueue(event);
+        this.queue.enqueue(events);
     }
 
     reapplyCurrentIntents(clearFirst = false) {
@@ -36,14 +36,21 @@ class EventsHandler {
         this._renderer.setIntentLayers(intentsByLayer);
     }
 
-    processEvent(event) {
+    processBatch(events) {
         const zones = this.configHandler.getZones();
-        const changed = this._layerIntentEngine.applyEvent(event, zones);
-        if (!changed && event.position) {
-            console.debug(`[events] position [${event.position.join(', ')}] matched no zones`);
+        if (!Array.isArray(zones) || zones.length === 0) {
             return;
         }
-
+        let anyChanged = false;
+        for (const event of events) {
+            const changed = this._layerIntentEngine.applyEvent(event, zones);
+            if (changed) {
+                anyChanged = true;
+            } else if (event.position) {
+                console.debug(`[events] position [${event.position.join(', ')}] matched no zones`);
+            }
+        }
+        if (!anyChanged) return;
         this.reapplyCurrentIntents();
     }
 }

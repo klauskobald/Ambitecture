@@ -38,7 +38,7 @@ export class DmxUniverse {
         this.tryInitializeUniverse();
 
         if (this.flushTimer === null) {
-            this.flushTimer = setInterval(() => this.flush(), Math.round(1000 / frameRate));
+            this.flushTimer = setInterval(() => this.flushNow(), Math.round(1000 / frameRate));
         }
     }
 
@@ -46,7 +46,8 @@ export class DmxUniverse {
         this.channels[channel] = Math.max(0, Math.min(255, Math.round(value)));
     }
 
-    private flush(): void {
+    /** Push current channel buffer to the DMX driver (also called on the periodic refresh interval). */
+    flushNow(): void {
         if (this.universe === null) {
             return;
         }

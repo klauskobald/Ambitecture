@@ -3,7 +3,7 @@ import { Logger } from '../Logger';
 import { DmxUniverse } from '../DmxUniverse';
 import { ConfigHandler, ConfiguredFixture, ConfiguredZone } from './ConfigHandler';
 import { EventQueue } from '../EventQueue';
-import { FixtureIntentSnapshot, IFixtureClass, RendererEvent } from '../fixtures/IFixtureClass';
+import { FixtureIntentSnapshot, RendererEvent } from '../fixtures/IFixtureClass';
 import { FixtureSampleContext, LayerIntentEngine } from '../layerIntent/LayerIntentEngine';
 
 interface WsMessage {
@@ -23,22 +23,19 @@ export class EventsHandler {
     private configHandler: ConfigHandler;
     private dmxUniverse: DmxUniverse;
     private queue: EventQueue<RendererEvent>;
-    private fixtureClassCache = new Map<string, IFixtureClass>();
     private layerIntentEngine = new LayerIntentEngine();
 
     constructor(configHandler: ConfigHandler, dmxUniverse: DmxUniverse) {
         this.configHandler = configHandler;
         this.dmxUniverse = dmxUniverse;
-        this.queue = new EventQueue<RendererEvent>((event) => this.processEvent(event));
+        this.queue = new EventQueue<RendererEvent>((events) => this.processBatch(events));
     }
 
     handle(_ws: WebSocket, message: WsMessage): void {
         const events = message.payload as RendererEvent[];
         if (!Array.isArray(events)) return;
 
-        for (const event of events) {
-            this.queue.enqueue(event);
-        }
+        this.queue.enqueue(events);
 
         Logger.debug(`[events] queued ${events.length} event(s)`);
     }
@@ -48,33 +45,34 @@ export class EventsHandler {
         if (zones.length === 0) {
             return;
         }
-        void this.applyAllFixtures(zones);
+        this.applyAllFixtures(zones);
     }
 
-    private async getFixtureClass(className: string): Promise<IFixtureClass> {
-        if (!this.fixtureClassCache.has(className)) {
-            const mod = await import(`../fixtures/${className}`);
-            this.fixtureClassCache.set(className, mod.default as IFixtureClass);
-        }
-        return this.fixtureClassCache.get(className)!;
-    }
-
-    private async processEvent(event: RendererEvent): Promise<void> {
+    private processBatch(events: RendererEvent[]): void {
         const zones = this.configHandler.getZones();
         if (zones.length === 0) {
-            Logger.warn('[events] no zones configured yet, dropping event');
+            Logger.warn('[events] no zones configured yet, dropping event batch');
             return;
         }
 
-        const changed = this.layerIntentEngine.applyEvent(event, zones);
-        if (!changed && event.position) {
-            Logger.debug(`[events] position [${event.position.join(', ')}] matched no zones`);
+        let anyChanged = false;
+        for (const event of events) {
+            const changed = this.layerIntentEngine.applyEvent(event, zones);
+            if (changed) {
+                anyChanged = true;
+            } else if (event.position) {
+                Logger.debug(`[events] position [${event.position.join(', ')}] matched no zones`);
+            }
+        }
+
+        if (!anyChanged) {
             return;
         }
-        await this.applyAllFixtures(zones);
+
+        this.applyAllFixtures(zones);
     }
 
-    private async applyAllFixtures(zones: ConfiguredZone[]): Promise<void> {
+    private applyAllFixtures(zones: ConfiguredZone[]): void {
         const intentsByLayer = this.layerIntentEngine.getActiveIntents();
         for (const zone of zones) {
             for (const fixture of zone.fixtures) {
@@ -88,9 +86,9 @@ export class EventsHandler {
                     intentsByLayer,
                     sample: <TValue>(capabilityKey: string, withSpatialFactor?: boolean) => this.layerIntentEngine.sample<TValue>(context, capabilityKey, withSpatialFactor),
                 };
-                const handler = await this.getFixtureClass(fixture.fixtureProfile.class);
-                handler.applyIntentSnapshot(fixture, context, snapshot, this.dmxUniverse);
+                fixture.fixtureClass.applyIntentSnapshot(fixture, context, snapshot, this.dmxUniverse);
             }
         }
+        this.dmxUniverse.flushNow();
     }
 }

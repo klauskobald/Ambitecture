@@ -6,14 +6,28 @@ class EventQueue {
         this.insertCounter = 0;
     }
 
-    enqueue(event) {
+    enqueue(events) {
+        if (!Array.isArray(events) || events.length === 0) return;
         const now = Date.now();
-        const scheduled = event.scheduled ?? 0;
-        const scheduledAt = scheduled > now ? scheduled : now;
-
-        const entry = { event, scheduledAt, insertOrder: this.insertCounter++ };
-        this._insertSorted(entry);
+        for (const event of events) {
+            const scheduled = event.scheduled ?? 0;
+            const scheduledAt = scheduled > now ? scheduled : now;
+            const entry = { event, scheduledAt, insertOrder: this.insertCounter++ };
+            this._insertSorted(entry);
+        }
+        this._drainDue();
         this._reschedule();
+    }
+
+    _drainDue() {
+        const now = Date.now();
+        const batch = [];
+        while (this.queue.length > 0 && this.queue[0].scheduledAt <= now) {
+            batch.push(this.queue.shift().event);
+        }
+        if (batch.length > 0) {
+            this.callback(batch);
+        }
     }
 
     _insertSorted(entry) {
@@ -39,10 +53,7 @@ class EventQueue {
 
     _fire() {
         this.timer = null;
-        const now = Date.now();
-        while (this.queue.length > 0 && this.queue[0].scheduledAt <= now) {
-            this.callback(this.queue.shift().event);
-        }
+        this._drainDue();
         this._reschedule();
     }
 }

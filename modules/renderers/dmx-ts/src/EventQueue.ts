@@ -8,25 +8,37 @@ export class EventQueue<T extends { scheduled?: number }> {
     private queue: QueueEntry<T>[] = [];
     private timer: ReturnType<typeof setTimeout> | null = null;
     private insertCounter = 0;
-    private readonly callback: (event: T) => void;
+    private readonly callback: (events: T[]) => void;
 
-    constructor(callback: (event: T) => void) {
+    constructor(callback: (events: T[]) => void) {
         this.callback = callback;
     }
 
-    enqueue(event: T): void {
+    enqueue(events: T[]): void {
+        if (events.length === 0) return;
         const now = Date.now();
-        const scheduled = event.scheduled ?? 0;
-        const scheduledAt = scheduled > now ? scheduled : now;
-
-        const entry: QueueEntry<T> = {
-            event,
-            scheduledAt,
-            insertOrder: this.insertCounter++,
-        };
-
-        this.insertSorted(entry);
+        for (const event of events) {
+            const scheduled = event.scheduled ?? 0;
+            const scheduledAt = scheduled > now ? scheduled : now;
+            this.insertSorted({
+                event,
+                scheduledAt,
+                insertOrder: this.insertCounter++,
+            });
+        }
+        this.drainDue();
         this.reschedule();
+    }
+
+    private drainDue(): void {
+        const now = Date.now();
+        const batch: T[] = [];
+        while (this.queue.length > 0 && this.queue[0]!.scheduledAt <= now) {
+            batch.push(this.queue.shift()!.event);
+        }
+        if (batch.length > 0) {
+            this.callback(batch);
+        }
     }
 
     private insertSorted(entry: QueueEntry<T>): void {
@@ -60,11 +72,7 @@ export class EventQueue<T extends { scheduled?: number }> {
 
     private fire(): void {
         this.timer = null;
-        const now = Date.now();
-        while (this.queue.length > 0 && this.queue[0]!.scheduledAt <= now) {
-            const entry = this.queue.shift()!;
-            this.callback(entry.event);
-        }
+        this.drainDue();
         this.reschedule();
     }
 }

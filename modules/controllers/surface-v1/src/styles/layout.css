@@ -55,7 +55,7 @@ body.nav-open .app-nav .nav-link {
   background: none;
   border: none;
   color: var(--color-text);
-  font-size: 1.2rem;
+  font-size: var(--nav-toggle-font-size);
   cursor: pointer;
   padding: 0.25rem 0.4rem;
   line-height: 1;
@@ -75,6 +75,47 @@ body.nav-open .app-nav .nav-link {
   }
 
   .app-nav .nav-link {
+    display: block;
+    width: auto;
+  }
+}
+
+/* Perform pane: sub-navigation (matches .app-nav; open state on .perform-subnav only) */
+.perform-subnav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  padding: var(--page-padding);
+  background: var(--color-bg-raised);
+  border-bottom: 1px solid var(--color-border);
+  flex: 0 0 auto;
+}
+
+.perform-subnav .nav-link {
+  display: none;
+  width: 100%;
+}
+
+.perform-subnav.perform-subnav--open .nav-link {
+  display: block;
+}
+
+.perform-subnav-fill {
+  flex: 1 1 auto;
+  min-width: 0;
+  pointer-events: none;
+}
+
+@media (min-width: 400px) {
+  .perform-subnav {
+    flex-wrap: nowrap;
+    flex-direction: row;
+    gap: 0;
+    padding: 0;
+  }
+
+  .perform-subnav .nav-link {
     display: block;
     width: auto;
   }
@@ -181,6 +222,7 @@ body.nav-open .app-nav .nav-link {
 /* ── Pane host ──────────────────────────────────────────────── */
 
 .pane-host {
+  position: relative;
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
@@ -190,17 +232,24 @@ body.nav-open .app-nav .nav-link {
 
 /* ── Pane-host resize chrome ───────────────────────────────── */
 
+/* Out of flow: sits on the seam above #pane-host so it does not consume vertical space inside the host */
 .pane-host-topbar {
-  flex: 0 0 auto;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: flex-end;
   gap: 0.35rem;
-  padding: 0.15rem 0 0.25rem;
+  padding: 0;
   margin: 0;
   box-sizing: border-box;
-  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  pointer-events: none;
+  z-index: 2;
+  height: 0;
 }
 
 .pane-host-topbar-fill {
@@ -213,13 +262,14 @@ body.nav-open .app-nav .nav-link {
   flex: 0 0 auto;
   width: 1.75rem;
   height: 0.7rem;
-  padding: 0;
+  padding: 8px;
   margin: 0;
   border: 1px solid var(--color-border);
   border-radius: 3px;
   cursor: ns-resize;
   touch-action: none;
   align-self: center;
+  pointer-events: auto;
   background-color: var(--color-bg-raised);
   background-image: repeating-linear-gradient(to bottom,
       var(--color-text-muted) 0,
@@ -262,6 +312,19 @@ body.nav-open .app-nav .nav-link {
 .pane {
   height: 100%;
   box-sizing: border-box;
+}
+
+.perform-pane-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.perform-subpanes {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
 }
 
 /* ── Scenes pane layout ─────────────────────────────────────── */

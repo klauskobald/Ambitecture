@@ -18,6 +18,10 @@
   --control-strip-min-height: 80px;
   --iframe-z-index: 1;
   --overlay-z-index: 2;
+
+  /* app nav + perform subnav (shared .nav-link / .nav-toggle) */
+  --nav-link-font-size: 0.8rem;
+  --nav-toggle-font-size: 1.2rem;
 }
 
 html,

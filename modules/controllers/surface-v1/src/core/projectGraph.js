@@ -27,6 +27,11 @@ class ProjectGraph {
     this._rendererGuid = ''
     /** @type {Set<() => void>} */
     this._listeners = new Set()
+    /**
+     * Guids whose row in `_data.intents` last matched hub snapshot (`projectPatch` / graph intent / runtime echo).
+     * For these, `getEffectiveIntent` must not re-apply `scenes[].overlay` — that YAML is stale vs merged hub rows.
+     */
+    this._trustHubReconciledIntentRow = new Set()
 
     this._data = {
       projectName: '',
@@ -217,10 +222,13 @@ class ProjectGraph {
       this._data.intents.get(guid)
     )
     if (!intent) return null
+    if (this._trustHubReconciledIntentRow.has(guid)) {
+      return intent
+    }
     const active = this._data.activeSceneName
     const ref = active ? this._findSceneIntentRef(active, guid) : null
     const overlay = ref?.overlay ?? {}
-    return applyDotPathPatch(intent, overlay)
+    return applyDotPathPatch({ ...intent }, overlay)
   }
 
   /**
@@ -268,7 +276,8 @@ class ProjectGraph {
 
   /**
    * When the hub applies a runtime patch, mirror that on the replica row and strip scene
-   * overlay keys the hub has superseded so getEffectiveIntent does not double-apply stale overlay.
+   * overlay keys the hub has superseded so they are not double-applied alongside the merged row.
+   * (When the map row is hub-reconciled, {@link _trustHubReconciledIntentRow} skips re-merging YAML overlay in {@link _getSceneEffectiveIntent}.)
    * @param {string} sceneName
    * @param {string} guid
    * @param {Record<string, unknown>} patch
@@ -344,6 +353,7 @@ class ProjectGraph {
   putIntentRecord (record) {
     const guid = String(record.guid ?? '')
     if (!guid) return
+    this._trustHubReconciledIntentRow.delete(guid)
     this._data.intents.set(guid, record)
     this._notify()
   }
@@ -410,6 +420,7 @@ class ProjectGraph {
   purgeIntentFromProject (guid) {
     if (!guid) return
     this._data.intents.delete(guid)
+    this._trustHubReconciledIntentRow.delete(guid)
     this._data.controller.intentConfig.delete(guid)
     for (const scene of this._data.scenes) {
       scene.intents = scene.intents.filter(ref => ref.guid !== guid)
@@ -443,6 +454,7 @@ class ProjectGraph {
   setSceneIntentOverlay (sceneName, guid, dotKey, value) {
     const ref = this._ensureSceneIntentRef(sceneName, guid)
     if (!ref) return false
+    this._trustHubReconciledIntentRow.delete(guid)
     ref.overlay = { ...(ref.overlay ?? {}), [dotKey]: cloneSceneValue(value) }
     this._notify()
     return true
@@ -461,6 +473,7 @@ class ProjectGraph {
       !Object.prototype.hasOwnProperty.call(ref.overlay, dotKey)
     )
       return false
+    this._trustHubReconciledIntentRow.delete(guid)
     const nextOverlay = { ...ref.overlay }
     delete nextOverlay[dotKey]
     if (Object.keys(nextOverlay).length > 0) {
@@ -520,6 +533,7 @@ class ProjectGraph {
   updateIntentProperty (guid, dotKey, value) {
     const intent = this._data.intents.get(guid)
     if (!intent) return null
+    this._trustHubReconciledIntentRow.delete(guid)
     const updated = cloneAndSetAtDotPath(
       /** @type {Record<string, unknown>} */ (intent),
       dotKey,
@@ -575,6 +589,7 @@ class ProjectGraph {
   removeIntentProperty (guid, dotKey) {
     const intent = this._data.intents.get(guid)
     if (!intent) return null
+    this._trustHubReconciledIntentRow.delete(guid)
     const updated = cloneAndDeleteAtDotPath(
       /** @type {Record<string, unknown>} */ (intent),
       dotKey
@@ -612,6 +627,7 @@ class ProjectGraph {
   updateIntentPosition (guid, wx, wz) {
     const intent = this._data.intents.get(guid)
     if (!intent) return null
+    this._trustHubReconciledIntentRow.delete(guid)
     const i = /** @type {Record<string, unknown>} */ (intent)
     const pos = /** @type {number[] | undefined} */ (i.position)
     const updated = { ...i, position: [wx, pos?.[1] ?? 0, wz] }
@@ -683,9 +699,15 @@ class ProjectGraph {
       }
     }
     if (pruneMissing) {
-      for (const guid of this._data.intents.keys()) {
-        if (!incoming.has(guid)) this._data.intents.delete(guid)
+      for (const guid of [...this._data.intents.keys()]) {
+        if (!incoming.has(guid)) {
+          this._data.intents.delete(guid)
+          this._trustHubReconciledIntentRow.delete(guid)
+        }
       }
+    }
+    for (const guid of incoming.keys()) {
+      this._trustHubReconciledIntentRow.add(guid)
     }
     this._notify()
   }
@@ -1015,6 +1037,7 @@ class ProjectGraph {
   _applyIntentDelta (guid, op, delta) {
     if (op === 'remove') {
       this._data.intents.delete(guid)
+      this._trustHubReconciledIntentRow.delete(guid)
       return
     }
     const current = /** @type {Record<string, unknown>} */ (
@@ -1041,6 +1064,7 @@ class ProjectGraph {
       next = cloneAndDeleteAtDotPath(next, key)
     }
     this._data.intents.set(guid, next)
+    this._trustHubReconciledIntentRow.add(guid)
   }
 
   /**
@@ -1071,6 +1095,7 @@ class ProjectGraph {
         : current
     const next = applyDotPathPatch({ ...value, guid }, patch, remove)
     this._data.intents.set(guid, next)
+    this._trustHubReconciledIntentRow.add(guid)
   }
 
   /**

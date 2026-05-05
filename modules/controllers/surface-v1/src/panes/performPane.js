@@ -79,6 +79,16 @@ export class PerformPane {
     const activeInputs = this._activeDisplayInputs()
     const activeGuids = new Set()
 
+    const activeSceneName = projectGraph.getActiveSceneName()
+    const activeSceneGuid = activeSceneName
+      ? projectGraph.getSceneGuid(activeSceneName)
+      : null
+    const scenePerformInput =
+      activeSceneGuid && projectGraph.getSceneButtonInput(activeSceneGuid)
+    const highlightedInputGuid = scenePerformInput
+      ? String(scenePerformInput.guid ?? '')
+      : ''
+
     for (const input of activeInputs) {
       const guid = String(input.guid ?? '')
       if (!guid) continue
@@ -90,6 +100,10 @@ export class PerformPane {
       button.dataset.inputGuid = guid
       button.dataset.behavior =
         typeof input.type === 'string' ? input.type : 'button'
+      button.classList.toggle(
+        'btn--active',
+        highlightedInputGuid !== '' && guid === highlightedInputGuid
+      )
       this._controls.appendChild(button)
     }
 

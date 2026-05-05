@@ -27,8 +27,6 @@ class ProjectGraph {
     this._rendererGuid = ''
     /** @type {Set<() => void>} */
     this._listeners = new Set()
-    /** @type {Set<() => void>} */
-    this._runtimeListeners = new Set()
 
     this._data = {
       projectName: '',
@@ -36,9 +34,6 @@ class ProjectGraph {
       zoneToRenderer: /** @type {Record<string, string[]>} */ ({}),
       zones: /** @type {unknown[]} */ ([]),
       intents: /** @type {Map<string, unknown>} */ (new Map()),
-      runtimeIntents: /** @type {Map<string, Record<string, unknown>>} */ (
-        new Map()
-      ),
       scenes:
         /** @type {Array<{ guid?: string, name: string, intents: SceneIntentRef[] }>} */ ([]),
       actions: /** @type {Map<string, Record<string, unknown>>} */ (new Map()),
@@ -70,18 +65,13 @@ class ProjectGraph {
     return () => this._listeners.delete(fn)
   }
 
-  /** @param {() => void} fn @returns {() => void} unsubscribe */
+  /** @deprecated Use {@link subscribe}; runtime deltas merge into `intents` and use the same notify path. */
   subscribeRuntime (fn) {
-    this._runtimeListeners.add(fn)
-    return () => this._runtimeListeners.delete(fn)
+    return this.subscribe(fn)
   }
 
   _notify () {
     for (const fn of this._listeners) fn()
-  }
-
-  _notifyRuntime () {
-    for (const fn of this._runtimeListeners) fn()
   }
 
   /**
@@ -208,8 +198,6 @@ class ProjectGraph {
    * @returns {Record<string, unknown> | null}
    */
   getEffectiveIntent (guid) {
-    const runtimeIntent = this._data.runtimeIntents.get(guid)
-    if (runtimeIntent) return runtimeIntent
     return this._getSceneEffectiveIntent(guid)
   }
 
@@ -271,13 +259,40 @@ class ProjectGraph {
     )
   }
 
+  /**
+   * When the hub applies a runtime patch, mirror that on the replica row and strip scene
+   * overlay keys the hub has superseded so getEffectiveIntent does not double-apply stale overlay.
+   * @param {string} sceneName
+   * @param {string} guid
+   * @param {Record<string, unknown>} patch
+   */
+  _stripSceneOverlayKeysOverlappedByPatch (sceneName, guid, patch) {
+    const ref = this._findSceneIntentRef(sceneName, guid)
+    if (!ref?.overlay || typeof patch !== 'object' || Array.isArray(patch)) return
+    const nextOverlay = { ...ref.overlay }
+    let changed = false
+    for (const k of Object.keys(patch)) {
+      if (Object.prototype.hasOwnProperty.call(nextOverlay, k)) {
+        delete nextOverlay[k]
+        changed = true
+      }
+      const dotPrefix = `${k}.`
+      for (const ok of [...Object.keys(nextOverlay)]) {
+        if (ok.startsWith(dotPrefix)) {
+          delete nextOverlay[ok]
+          changed = true
+        }
+      }
+    }
+    if (!changed) return
+    if (Object.keys(nextOverlay).length > 0) ref.overlay = nextOverlay
+    else delete ref.overlay
+  }
+
   // ─── Mutations ────────────────────────────────────────────────────────────────
 
   /** @param {string} name */
   setActiveScene (name) {
-    // Always clear: re-tapping the same scene must drop perform/runtime overlays so
-    // getEffectiveIntent() follows hub definitions + scene refs after projectPatch.
-    this._data.runtimeIntents.clear()
     this._data.activeSceneName = name
     this._notify()
   }
@@ -295,9 +310,6 @@ class ProjectGraph {
       if (source) intents = source.intents.map(ref => cloneSceneIntentRef(ref))
     }
     this._data.scenes.push({ guid: this._newGuid('scene'), name, intents })
-    if (this._data.activeSceneName !== name) {
-      this._data.runtimeIntents.clear()
-    }
     this._data.activeSceneName = name
     this._notify()
     return true
@@ -309,7 +321,6 @@ class ProjectGraph {
     if (idx === -1) return
     this._data.scenes.splice(idx, 1)
     if (this._data.activeSceneName === name) {
-      this._data.runtimeIntents.clear()
       this._data.activeSceneName = this._data.scenes[0]?.name ?? null
     }
     this._notify()
@@ -386,13 +397,12 @@ class ProjectGraph {
   }
 
   /**
-   * Remove intent definition, all scene refs, controller ref, runtime copy, config, and perform-enable state (local graph only).
+   * Remove intent definition, all scene refs, controller ref, config, and perform-enable state (local graph only).
    * @param {string} guid
    */
   purgeIntentFromProject (guid) {
     if (!guid) return
     this._data.intents.delete(guid)
-    this._data.runtimeIntents.delete(guid)
     this._data.controller.intentConfig.delete(guid)
     for (const scene of this._data.scenes) {
       scene.intents = scene.intents.filter(ref => ref.guid !== guid)
@@ -509,20 +519,13 @@ class ProjectGraph {
       value
     )
     this._data.intents.set(guid, updated)
-    const runtime = this._data.runtimeIntents.get(guid)
-    if (runtime) {
-      this._data.runtimeIntents.set(
-        guid,
-        cloneAndSetAtDotPath(runtime, dotKey, value)
-      )
-    }
     this._notify()
     return { guid, patch: { [dotKey]: value } }
   }
 
   /**
-   * Live Perform / quick-panel updates: respects scene overlay like edit controls,
-   * and mirrors overlay position behavior by merging into runtime intents for realtime output.
+   * Live Perform / quick-panel updates: respects scene overlay like edit controls;
+   * deltas are sent via `queueIntentUpdate`; hub fans out `runtime:update` into `intents`.
    * @param {string} guid
    * @param {string} dotKey
    * @param {unknown} value
@@ -538,26 +541,6 @@ class ProjectGraph {
     )
     if (useOverlay && activeScene) {
       this.setSceneIntentOverlay(activeScene, guid, dotKey, value)
-      const merged = this._getSceneEffectiveIntent(guid)
-      if (merged) {
-        /** @type {Record<string, unknown>} */
-        const next = /** @type {Record<string, unknown>} */ (
-          JSON.parse(JSON.stringify(merged))
-        )
-        // Perform drag with position overlay only mutates runtime; base/scene
-        // position stays stale until edit saves. Rebuilding runtime from merged
-        // alone would snap the intent back — keep live position from runtime.
-        const prevRuntime = this._data.runtimeIntents.get(guid)
-        const prevPos = prevRuntime?.position
-        if (Array.isArray(prevPos) && prevPos.length >= 3) {
-          next.position = [
-            Number(prevPos[0]),
-            Number(prevPos[1] ?? 0),
-            Number(prevPos[2])
-          ]
-        }
-        this._data.runtimeIntents.set(guid, next)
-      }
       this._notify()
       return { guid, patch: { [dotKey]: value } }
     }
@@ -590,13 +573,6 @@ class ProjectGraph {
       dotKey
     )
     this._data.intents.set(guid, updated)
-    const runtime = this._data.runtimeIntents.get(guid)
-    if (runtime) {
-      this._data.runtimeIntents.set(
-        guid,
-        cloneAndDeleteAtDotPath(runtime, dotKey)
-      )
-    }
     this._notify()
     return { guid, remove: [dotKey] }
   }
@@ -637,6 +613,8 @@ class ProjectGraph {
   }
 
   /**
+   * Build a position patch from the current effective intent; does not mutate locally
+   * (hub echoes runtime:update which updates `intents`).
    * @param {string} guid
    * @param {number} wx
    * @param {number} wz
@@ -651,17 +629,11 @@ class ProjectGraph {
       pos?.[1] ?? 0,
       wz
     ])
-    this._data.runtimeIntents.set(
-      guid,
-      cloneAndSetAtDotPath(intent, 'position', position)
-    )
     return { guid, patch: { position } }
   }
 
-  /** @param {string} guid */
-  clearRuntimeIntent (guid) {
-    this._data.runtimeIntents.delete(guid)
-  }
+  /** @deprecated No-op: replica has no separate runtime layer. */
+  clearRuntimeIntent (_guid) {}
 
   /**
    * @param {string} id
@@ -721,7 +693,6 @@ class ProjectGraph {
   applyPatch (key, data) {
     switch (key) {
       case 'intents': {
-        this._data.runtimeIntents.clear()
         const list = Array.isArray(data) ? data : []
         this._setControllerIntentRefsFromIntentsList(list)
         this.reconcileIntents(list, null, { pruneMissing: true })
@@ -748,7 +719,6 @@ class ProjectGraph {
         break
       }
       case 'activeSceneName': {
-        this._data.runtimeIntents.clear()
         if (data === null) {
           this._data.activeSceneName = null
         } else if (typeof data === 'string' && data.length > 0) {
@@ -793,7 +763,6 @@ class ProjectGraph {
    * @param {string} rendererGuid
    */
   applyGraphInit (payload, rendererGuid) {
-    this._data.runtimeIntents.clear()
     this.applyConfig(payload, rendererGuid)
     const p = /** @type {Record<string, unknown> | null} */ (
       payload && typeof payload === 'object' && !Array.isArray(payload)
@@ -882,8 +851,7 @@ class ProjectGraph {
   }
 
   /**
-   * Applies transient runtime updates from the hub. These updates intentionally
-   * do not represent authoritative project graph state.
+   * Applies hub `runtime:update` deltas into the intents replica (same merge as hub; no parallel map).
    * @param {unknown} payload
    */
   applyRuntimeUpdate (payload) {
@@ -905,7 +873,7 @@ class ProjectGraph {
           break
       }
     }
-    this._notifyRuntime()
+    this._notify()
   }
 
   // ─── Config application ───────────────────────────────────────────────────────
@@ -949,8 +917,6 @@ class ProjectGraph {
         ? p.activeSceneName
         : null
     if (hubActive && this._data.scenes.some(s => s.name === hubActive)) {
-      if (this._data.activeSceneName !== hubActive)
-        this._data.runtimeIntents.clear()
       this._data.activeSceneName = hubActive
     } else if (!this._data.activeSceneName && this._data.scenes.length > 0) {
       this._data.activeSceneName = this._data.scenes[0].name
@@ -1059,13 +1025,6 @@ class ProjectGraph {
    * @param {Record<string, unknown>} update
    */
   _applyRuntimeIntentDelta (guid, update) {
-    const current = this.getEffectiveIntent(guid) ?? { guid }
-    const value =
-      update.value &&
-      typeof update.value === 'object' &&
-      !Array.isArray(update.value)
-        ? /** @type {Record<string, unknown>} */ (update.value)
-        : current
     const patch =
       update.patch &&
       typeof update.patch === 'object' &&
@@ -1073,8 +1032,22 @@ class ProjectGraph {
         ? /** @type {Record<string, unknown>} */ (update.patch)
         : {}
     const remove = Array.isArray(update.remove) ? update.remove.map(String) : []
+    const activeScene = this._data.activeSceneName
+    if (activeScene && Object.keys(patch).length > 0) {
+      this._stripSceneOverlayKeysOverlappedByPatch(activeScene, guid, patch)
+    }
+    const current =
+      this._getSceneEffectiveIntent(guid) ??
+      /** @type {Record<string, unknown>} */ (this._data.intents.get(guid)) ??
+      { guid }
+    const value =
+      update.value &&
+      typeof update.value === 'object' &&
+      !Array.isArray(update.value)
+        ? /** @type {Record<string, unknown>} */ (update.value)
+        : current
     const next = applyDotPathPatch({ ...value, guid }, patch, remove)
-    this._data.runtimeIntents.set(guid, next)
+    this._data.intents.set(guid, next)
   }
 
   /**
@@ -1241,8 +1214,6 @@ class ProjectGraph {
         ? /** @type {Record<string, unknown>} */ (delta.patch)
         : {}
     if (typeof patch.activeSceneName === 'string') {
-      if (this._data.activeSceneName !== patch.activeSceneName)
-        this._data.runtimeIntents.clear()
       this._data.activeSceneName = patch.activeSceneName
     }
   }

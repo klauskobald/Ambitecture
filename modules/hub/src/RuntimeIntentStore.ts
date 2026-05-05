@@ -32,7 +32,7 @@ function applyRuntimePatch(base: Record<string, unknown>, update: RuntimeUpdate)
 export class RuntimeIntentStore {
   private mergeCache = new Map<string, Record<string, unknown>>();
 
-  constructor(private projectManager: ProjectManager) {}
+  constructor(private projectManager: ProjectManager) { }
 
   clear(): void {
     this.mergeCache.clear();

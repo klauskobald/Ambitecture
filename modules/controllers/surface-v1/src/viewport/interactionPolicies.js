@@ -61,7 +61,6 @@ function savePositionOverlayIfActive (guid) {
   const position = projectGraph.getEffectiveIntentProperty(guid, 'position')
   if (position !== undefined)
     projectGraph.setSceneIntentOverlay(activeScene, guid, 'position', position)
-  projectGraph.clearRuntimeIntent(guid)
   sendSaveProject('scenes', projectGraph.getScenesData())
   sendSceneActivate(activeScene)
   return true

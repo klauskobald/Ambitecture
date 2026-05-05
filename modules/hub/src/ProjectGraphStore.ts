@@ -22,7 +22,7 @@ export class ProjectGraphStore {
     private actionInputManager?: ActionInputManager,
     private runtimeMerge?: RuntimeUpdateDispatcher,
     private runtimeIntentStore?: RuntimeIntentStore,
-  ) {}
+  ) { }
 
   useProject(name: string, callback: () => void): void {
     this.projectManager.useProject(name, () => {
@@ -71,16 +71,22 @@ export class ProjectGraphStore {
       .map(raw => {
         const intent = normalizeIntentColor(raw);
         const guid = intent.guid;
-        const effective =
-          guid && this.runtimeIntentStore
-            ? this.runtimeIntentStore.getEffectiveIntent(guid) ?? intent
-            : intent;
+        const effective = guid ? this.rendererIntentSnapshot(guid) ?? intent : intent;
         return intentToEvent(normalizeIntentColor(effective), now);
       });
   }
 
   getActiveSceneName(): string | null {
     return this.projectManager.getActiveSceneName();
+  }
+
+  /**
+   * Same effective row as controllers / RuntimeIntentStore: active-scene intents only use `guid`
+   * from `newIntents` / `isIntentInActiveScene` callers.
+   */
+  private rendererIntentSnapshot(guid: string | undefined): ControllerIntent | undefined {
+    if (!guid || !this.projectManager.isIntentInActiveScene(guid)) return undefined;
+    return this.runtimeIntentStore?.getEffectiveIntent(guid) ?? this.projectManager.getActiveSceneIntent(guid);
   }
 
   applyGraphCommand(command: GraphCommand): GraphMutationResult {
@@ -128,8 +134,13 @@ export class ProjectGraphStore {
       .map(normalizeIntentColor)
       .map(intent => intentRemovalEvent(intent, now));
     const activeEvents = newIntents
-      .map(normalizeIntentColor)
-      .map(intent => intentToEvent(intent, now + (intent.scheduled ?? 0)));
+      .map(intent => {
+        const eff = intent.guid ? this.rendererIntentSnapshot(intent.guid) ?? intent : intent;
+        return intentToEvent(
+          normalizeIntentColor(eff),
+          now + (eff.scheduled ?? 0),
+        );
+      });
     const delta = this.makeDelta({
       op: 'patch',
       entityType: 'project',
@@ -187,9 +198,9 @@ export class ProjectGraphStore {
 
     const now = Date.now();
     const delta = this.makeDelta({ ...command, persistence });
-    const effectiveIntent = this.projectManager.getActiveSceneIntent(command.guid);
-    const rendererEvents = effectiveIntent
-      ? [intentToEvent(normalizeIntentColor(effectiveIntent), now + (effectiveIntent.scheduled ?? 0))]
+    const eff = this.rendererIntentSnapshot(command.guid);
+    const rendererEvents = eff
+      ? [intentToEvent(normalizeIntentColor(eff), now + (eff.scheduled ?? 0))]
       : [];
     this.runtimeMerge?.clearRuntimeIntentMergeCache();
     return {

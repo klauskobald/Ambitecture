@@ -151,6 +151,11 @@ body.nav-open .app-nav .nav-link {
   box-sizing: border-box;
 }
 
+/* `display:flex` beats the UA `[hidden]` rule (same specificity) — force hide when toggled in JS */
+.runtime-overlay-reset-wrap[hidden] {
+  display: none !important;
+}
+
 .runtime-overlay-reset-btn {
   pointer-events: auto;
   font: inherit;

@@ -90,6 +90,10 @@
   color: var(--color-text-muted);
 }
 
+.prop-pill--perform-reset-toggle {
+  min-width: 3.25rem;
+}
+
 /* ── Property row ────────────────────────────────────────────────────────── */
 
 .prop-row {

@@ -15,7 +15,7 @@
 import { ProjectManager, ControllerIntent } from './ProjectManager';
 import { RuntimeUpdate } from './RuntimeProtocol';
 import { cloneRecord, removeAtDotPath, setAtDotPath } from './dotPath';
-import { intentToEvent, normalizeIntentColor } from './handlers/intentHelpers';
+import { effectivePerformResetScene, intentToEvent, normalizeIntentColor } from './handlers/intentHelpers';
 
 function applyRuntimePatch(base: Record<string, unknown>, update: RuntimeUpdate): Record<string, unknown> {
   const next = cloneRecord(update.value ?? base);
@@ -49,14 +49,20 @@ export class RuntimeIntentStore {
 
   /**
    * Intent GUIDs present in {@link mergeCache} that also belong to `sceneIntentGuids`
-   * (active scene baseline row set).
+   * (active scene baseline row set), and whose `perform.reset.scene` policy implies the UI
+   * should offer clearing that merge overlay on scene transitions (effective default `true`).
    */
   listRuntimeOverlayGuidsInActiveScene(sceneIntentGuids: Iterable<string>): string[] {
     const list: string[] = [];
     for (const guid of sceneIntentGuids) {
-      if (guid.length > 0 && this.mergeCache.has(guid)) {
-        list.push(guid);
+      if (guid.length === 0 || !this.mergeCache.has(guid)) {
+        continue;
       }
+      const row = this.projectManager.getActiveSceneIntent(guid);
+      if (!effectivePerformResetScene(row)) {
+        continue;
+      }
+      list.push(guid);
     }
     return list;
   }

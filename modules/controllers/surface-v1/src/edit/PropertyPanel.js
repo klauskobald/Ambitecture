@@ -28,8 +28,8 @@ export class PropertyPanel {
     this._controls = []
     /** @type {InputAssignManager | null} */
     this._inputAssignManager = null
-    /** @type {Map<string, { onBtn: HTMLButtonElement, offBtn: HTMLButtonElement }> | null} */
-    this._performResetPillsByKey = null
+    /** @type {Map<string, HTMLButtonElement> | null} */
+    this._performResetToggleByKey = null
   }
 
   /**
@@ -83,7 +83,7 @@ export class PropertyPanel {
     }
     this._controls = []
     this._inputAssignManager = null
-    this._performResetPillsByKey = null
+    this._performResetToggleByKey = null
   }
 
   /** @returns {HTMLElement | null} */
@@ -114,7 +114,7 @@ export class PropertyPanel {
    * @returns {HTMLElement | null}
    */
   _buildPerformResetSection () {
-    this._performResetPillsByKey = null
+    this._performResetToggleByKey = null
     if (this._selectionSize !== 1) return null
     const [guid] = [...this._selectedGuids]
     if (!guid || !projectGraph.getIntents().has(guid)) return null
@@ -138,9 +138,9 @@ export class PropertyPanel {
       orderedKeys.add(k)
     }
 
-    /** @type {Map<string, { onBtn: HTMLButtonElement, offBtn: HTMLButtonElement }>} */
-    const pills = new Map()
-    this._performResetPillsByKey = pills
+    /** @type {Map<string, HTMLButtonElement>} */
+    const toggles = new Map()
+    this._performResetToggleByKey = toggles
 
     const wrap = document.createElement('section')
     wrap.className = 'prop-panel-section prop-panel-section--perform-reset'
@@ -171,11 +171,6 @@ export class PropertyPanel {
       const group = document.createElement('div')
       group.className = 'prop-pills'
 
-      /** @type {HTMLButtonElement} */
-      let onBtn
-      /** @type {HTMLButtonElement} */
-      let offBtn
-
       /**
        * @param {boolean} value
        */
@@ -185,25 +180,18 @@ export class PropertyPanel {
         sendSaveProject('intents', [...projectGraph.getIntents().values()])
       }
 
-      for (const [labelText, boolVal] of [['On', true], ['Off', false]]) {
-        const btn = document.createElement('button')
-        btn.type = 'button'
-        btn.className = 'prop-pill intent-toggle'
-        btn.textContent = labelText
-        btn.dataset.value = String(boolVal)
-        btn.addEventListener('click', () => {
-          persist(boolVal)
-          this._refreshPerformResetPills()
-        })
-        if (boolVal === true) onBtn = btn
-        else offBtn = btn
-        group.appendChild(btn)
-      }
-
-      pills.set(key, /** @type {{ onBtn: HTMLButtonElement, offBtn: HTMLButtonElement }} */ ({
-        onBtn: /** @type {HTMLButtonElement} */ (onBtn),
-        offBtn: /** @type {HTMLButtonElement} */ (offBtn),
-      }))
+      const btn = document.createElement('button')
+      btn.type = 'button'
+      btn.className = 'prop-pill intent-toggle prop-pill--perform-reset-toggle'
+      btn.title = 'Click to toggle'
+      btn.addEventListener('click', () => {
+        const intentRow = projectGraph.getIntents().get(guid)
+        const eff = effectivePerformResetForKey(intentRow, key)
+        persist(!eff)
+        this._refreshPerformResetPills()
+      })
+      group.appendChild(btn)
+      toggles.set(key, btn)
       controlArea.appendChild(group)
       row.appendChild(controlArea)
       wrap.appendChild(row)
@@ -221,19 +209,15 @@ export class PropertyPanel {
   }
 
   _refreshPerformResetPills () {
-    if (!this._performResetPillsByKey || this._selectionSize !== 1) return
+    if (!this._performResetToggleByKey || this._selectionSize !== 1) return
     const [guid] = [...this._selectedGuids]
     if (!guid) return
     const intent = projectGraph.getIntents().get(guid)
-    for (const [
-      key,
-      { onBtn, offBtn }
-    ] of this._performResetPillsByKey) {
+    for (const [key, btn] of this._performResetToggleByKey) {
       const eff = effectivePerformResetForKey(intent, key)
-      onBtn.classList.toggle('prop-pill--active', eff === true)
-      onBtn.classList.toggle('intent-toggle--enabled', eff === true)
-      offBtn.classList.toggle('prop-pill--active', eff === false)
-      offBtn.classList.toggle('intent-toggle--enabled', eff === false)
+      btn.textContent = eff ? 'On' : 'Off'
+      btn.classList.toggle('prop-pill--active', eff === true)
+      btn.classList.toggle('intent-toggle--enabled', eff === true)
     }
   }
 

@@ -101,6 +101,11 @@ body.nav-open .app-nav .nav-link {
   position: relative;
 }
 
+/* User-defined pane height (resize grip): allow sim strip to shrink so the pane can use nearly all of `.app-main`. */
+.app-main.app-main--pane-host-sized .sim-area {
+  min-height: 100px;
+}
+
 .sim-stack {
   position: absolute;
   inset: 0;
@@ -216,13 +221,11 @@ body.nav-open .app-nav .nav-link {
   touch-action: none;
   align-self: center;
   background-color: var(--color-bg-raised);
-  background-image: repeating-linear-gradient(
-    to bottom,
-    var(--color-text-muted) 0,
-    var(--color-text-muted) 2px,
-    transparent 2px,
-    transparent 4px
-  );
+  background-image: repeating-linear-gradient(to bottom,
+      var(--color-text-muted) 0,
+      var(--color-text-muted) 2px,
+      transparent 2px,
+      transparent 4px);
   background-size: 1.05rem 0.45rem;
   background-position: center;
   background-repeat: no-repeat;

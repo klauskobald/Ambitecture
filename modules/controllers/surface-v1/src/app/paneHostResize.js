@@ -5,29 +5,8 @@ const STORAGE_KEY = 'ambitecture.surface-v1.paneHostHeightPx'
 /** Minimum pane-host height while resizing (px). */
 const MIN_PANE_PX = 100
 
-/** Minimum vertical space left for the simulator when clamping max pane height (px). */
-const MIN_SIM_RESERVE_FALLBACK_PX = 48
-
-/**
- * @param {HTMLElement} el
- * @returns {number}
- */
-function parseCssLengthToPx (el) {
-  const raw = getComputedStyle(el).minHeight.trim()
-  if (!raw || raw === 'none') return MIN_SIM_RESERVE_FALLBACK_PX
-  const pxMatch = /^([\d.]+)px$/.exec(raw)
-  if (pxMatch) return parseFloat(pxMatch[1])
-  const vhMatch = /^([\d.]+)vh$/.exec(raw)
-  if (vhMatch)
-    return (parseFloat(vhMatch[1]) / 100) * window.innerHeight
-  const remMatch = /^([\d.]+)rem$/.exec(raw)
-  if (remMatch) {
-    const fs = parseFloat(getComputedStyle(document.documentElement).fontSize)
-    return parseFloat(remMatch[1]) * (Number.isFinite(fs) ? fs : 16)
-  }
-  const parsed = parseFloat(raw)
-  return Number.isFinite(parsed) ? parsed : MIN_SIM_RESERVE_FALLBACK_PX
-}
+/** Class on `.app-main` while a user-defined pane height is active — lets `#sim-area` shrink below `--sim-stack-min-height`. */
+const MAIN_PANE_SPLIT_CLASS = 'app-main--pane-host-sized'
 
 export function initPaneHostResize () {
   const paneHost = document.getElementById('pane-host')
@@ -58,11 +37,9 @@ export function initPaneHostResize () {
     const styles = getComputedStyle(appMain)
     const gapRaw = styles.rowGap || styles.gap || '0'
     const gap = parseFloat(gapRaw) || 0
-    const simFloor = parseCssLengthToPx(simArea)
-    let avail = Math.floor(mainRect.height - gap - simFloor)
+    // All of `.app-main` minus the flex gap between sim and pane (sim may shrink to ~0 via CSS override).
+    let avail = Math.floor(mainRect.height - gap)
     if (!Number.isFinite(avail)) avail = MIN_PANE_PX
-    if (avail < MIN_PANE_PX)
-      avail = Math.floor(mainRect.height - gap - MIN_SIM_RESERVE_FALLBACK_PX)
     return Math.max(MIN_PANE_PX, avail)
   }
 
@@ -79,6 +56,7 @@ export function initPaneHostResize () {
    * @param {number} h
    */
   function applyHeightPx (h) {
+    appMain.classList.add(MAIN_PANE_SPLIT_CLASS)
     paneHost.style.flexGrow = '0'
     paneHost.style.flexShrink = '0'
     paneHost.style.flexBasis = 'auto'

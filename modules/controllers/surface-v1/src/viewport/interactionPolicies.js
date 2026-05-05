@@ -37,8 +37,8 @@ export function getEditFixturesUnlocked () {
   return editFixturesUnlocked
 }
 
-/** @param {string} guid @param {number} wx @param {number} wz @returns {boolean} */
-function updatePositionOverlayIfActive (guid, wx, wz) {
+/** Perform pane: overlayed position streams via hub runtime merge (perform semantics). */
+function updatePerformPositionOverlayIfActive (guid, wx, wz) {
   const activeScene = projectGraph.getActiveSceneName()
   if (
     !activeScene ||
@@ -50,6 +50,26 @@ function updatePositionOverlayIfActive (guid, wx, wz) {
   return true
 }
 
+/**
+ * Edit pane: overlayed position is durable scene YAML only — mutate local overlay, no runtime:command.
+ * @param {string} guid
+ * @param {number} wx
+ * @param {number} wz
+ * @returns {boolean}
+ */
+function updateEditPositionOverlayIfActive (guid, wx, wz) {
+  const activeScene = projectGraph.getActiveSceneName()
+  if (
+    !activeScene ||
+    !projectGraph.isSceneIntentOverlayed(activeScene, guid, 'position')
+  )
+    return false
+  const cur = projectGraph.getEffectiveIntentProperty(guid, 'position')
+  const y = Array.isArray(cur) ? Number(cur[1] ?? 0) : 0
+  projectGraph.setSceneIntentOverlay(activeScene, guid, 'position', [wx, y, wz])
+  return true
+}
+
 /** @param {string} guid @returns {boolean} */
 function savePositionOverlayIfActive (guid) {
   const activeScene = projectGraph.getActiveSceneName()
@@ -58,9 +78,6 @@ function savePositionOverlayIfActive (guid) {
     !projectGraph.isSceneIntentOverlayed(activeScene, guid, 'position')
   )
     return false
-  const position = projectGraph.getEffectiveIntentProperty(guid, 'position')
-  if (position !== undefined)
-    projectGraph.setSceneIntentOverlay(activeScene, guid, 'position', position)
   sendSaveProject('scenes', projectGraph.getScenesData())
   sendSceneActivate(activeScene)
   return true
@@ -82,7 +99,7 @@ export const performPolicy = {
     return false
   },
   onIntentMove (guid, wx, wz) {
-    if (updatePositionOverlayIfActive(guid, wx, wz)) return
+    if (updatePerformPositionOverlayIfActive(guid, wx, wz)) return
     const intent = projectGraph.getIntents().get(guid)
     if (!intent) return
     const i = /** @type {Record<string, unknown>} */ (intent)
@@ -110,7 +127,7 @@ export const editPolicy = {
     return editFixturesUnlocked
   },
   onIntentMove (guid, wx, wz) {
-    if (updatePositionOverlayIfActive(guid, wx, wz)) return
+    if (updateEditPositionOverlayIfActive(guid, wx, wz)) return
     const updated = projectGraph.updateIntentPosition(guid, wx, wz)
     if (updated) queueIntentUpdate(updated)
   },

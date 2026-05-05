@@ -1,5 +1,6 @@
 import { ProjectManager, ControllerIntent, FixtureMoveUpdate } from './ProjectManager';
 import type { RuntimeUpdateDispatcher } from './RuntimeUpdateDispatcher';
+import type { RuntimeIntentStore } from './RuntimeIntentStore';
 import {
   GraphCommand,
   GraphDelta,
@@ -20,6 +21,7 @@ export class ProjectGraphStore {
     private projectManager: ProjectManager,
     private actionInputManager?: ActionInputManager,
     private runtimeMerge?: RuntimeUpdateDispatcher,
+    private runtimeIntentStore?: RuntimeIntentStore,
   ) {}
 
   useProject(name: string, callback: () => void): void {
@@ -66,8 +68,15 @@ export class ProjectGraphStore {
 
   getActiveSceneEvents(now = Date.now()): object[] {
     return this.projectManager.getActiveSceneIntents()
-      .map(normalizeIntentColor)
-      .map(intent => intentToEvent(intent, now));
+      .map(raw => {
+        const intent = normalizeIntentColor(raw);
+        const guid = intent.guid;
+        const effective =
+          guid && this.runtimeIntentStore
+            ? this.runtimeIntentStore.getEffectiveIntent(guid) ?? intent
+            : intent;
+        return intentToEvent(normalizeIntentColor(effective), now);
+      });
   }
 
   getActiveSceneName(): string | null {

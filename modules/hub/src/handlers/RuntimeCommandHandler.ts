@@ -23,8 +23,6 @@ function mergeRuntimeUpdate(existing: RuntimeUpdate | undefined, next: RuntimeUp
 
 export class RuntimeCommandHandler implements MessageHandler {
   private pending = new Map<string, RuntimeUpdate>();
-  /** WebSockets that contributed to the current pending batch (same controller GUID can appear on multiple tabs). */
-  private pendingContributorSockets = new Set<WebSocket>();
   private flushPending = false;
   private lastFlushAt = 0;
   private readonly minIntervalMs: number;
@@ -50,7 +48,6 @@ export class RuntimeCommandHandler implements MessageHandler {
 
     const update = this.toRuntimeUpdate(message.payload, info.guid);
     const key = `${update.entityType}:${update.guid}`;
-    this.pendingContributorSockets.add(ws);
     this.pending.set(key, mergeRuntimeUpdate(this.pending.get(key), update));
     this.scheduleFlush(message.location);
   }
@@ -79,11 +76,10 @@ export class RuntimeCommandHandler implements MessageHandler {
   private flush(location?: [number, number]): void {
     const updates = [...this.pending.values()];
     if (updates.length === 0) return;
-    const excludeSockets = new Set(this.pendingContributorSockets);
-    this.pendingContributorSockets.clear();
     this.pending.clear();
     this.lastFlushAt = Date.now();
 
-    this.runtimeUpdateDispatcher.dispatch(updates, location, this.lastFlushAt, excludeSockets);
+    /** Hub is source of truth — echo `runtime:update` to the sender so dumb controllers need no local merge. */
+    this.runtimeUpdateDispatcher.dispatch(updates, location, this.lastFlushAt, undefined);
   }
 }

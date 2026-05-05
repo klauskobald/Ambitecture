@@ -145,6 +145,8 @@ export class ProjectManager {
   private runtimeZones: Zone[] = [];
   private _projectConfig: Config | null = null;
   private _saveTimer: ReturnType<typeof setTimeout> | null = null;
+  /** When set, `getControllerIntents` / `buildControllerConfig` use hub runtime merge (perform). */
+  private effectiveIntentResolver: ((guid: string) => ControllerIntent | undefined) | undefined;
 
   constructor(projectsPath: string, fixturesPath: string) {
     this.projectsPath = projectsPath;
@@ -347,11 +349,27 @@ export class ProjectManager {
     }
   }
 
+  /**
+   * Enables merged perform/runtime intent state for controller wire payloads (`graph:init`, `projectPatch`).
+   * Pass `undefined` to clear (e.g. in tests).
+   */
+  configureEffectiveIntentResolver(
+    resolver: ((guid: string) => ControllerIntent | undefined) | undefined,
+  ): void {
+    this.effectiveIntentResolver = resolver;
+  }
+
   getControllerIntents(controllerGuid: string): ControllerIntent[] {
     const match = (this.project?.controller ?? []).find(c => c.guid === controllerGuid);
     if (!match) return [];
     return (match.intents ?? [])
-      .map(ref => this.intentDefinitions.get(ref.guid))
+      .map(ref => {
+        const resolved = this.effectiveIntentResolver?.(ref.guid);
+        if (resolved !== undefined) {
+          return resolved;
+        }
+        return this.intentDefinitions.get(ref.guid);
+      })
       .filter((i): i is ControllerIntent => i !== undefined);
   }
 

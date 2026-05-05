@@ -84,8 +84,16 @@ export const performPolicy = {
   },
   onIntentMove (guid, wx, wz) {
     if (updatePositionOverlayIfActive(guid, wx, wz)) return
-    const updated = projectGraph.updateIntentPosition(guid, wx, wz)
-    if (updated) queueIntentUpdate(updated)
+    const intent = projectGraph.getIntents().get(guid)
+    if (!intent) return
+    const i = /** @type {Record<string, unknown>} */ (intent)
+    const pos = /** @type {number[] | undefined} */ (i.position)
+    const position = /** @type {[number, number, number]} */ ([
+      wx,
+      pos?.[1] ?? 0,
+      wz
+    ])
+    queueIntentUpdate({ guid, patch: { position } })
   },
   onIntentMoveEnd (_guid) {},
   onFixtureMove (_id, _wx, _wz) {}

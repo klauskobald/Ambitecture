@@ -400,3 +400,8 @@ testParams:
     expectedParams:
       strobe: 0
       alpha: 0
+
+  # Hub echoes runtime:update to the sending controller (dumb replica). Requires running hub + loaded project.
+  003-runtime-echo.ts:
+    location: [0, 0]
+    controllerGuid: controller-web-test-001

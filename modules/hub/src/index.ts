@@ -13,6 +13,7 @@ import { RuntimeCommandHandler } from './handlers/RuntimeCommandHandler';
 import { ActionHandler } from './handlers/ActionHandler';
 import { EventQueue } from './EventQueue';
 import { RuntimeUpdateDispatcher } from './RuntimeUpdateDispatcher';
+import { RuntimeIntentStore } from './RuntimeIntentStore';
 import { ProjectManager } from './ProjectManager';
 import { ProjectGraphStore } from './ProjectGraphStore';
 import { ActionInputManager } from './ActionInputManager';
@@ -37,8 +38,10 @@ const registry = new ConnectionRegistry();
 const router = new MessageRouter(registry);
 const rateLimitEventsPerSecond = serverConfig.get<number>('rateLimitEventsPerSecond');
 const eventQueue = new EventQueue(registry);
-const runtimeUpdateDispatcher = new RuntimeUpdateDispatcher(registry, projectManager, eventQueue);
-const graphStore = new ProjectGraphStore(projectManager, actionInputManager, runtimeUpdateDispatcher);
+const runtimeIntentStore = new RuntimeIntentStore(projectManager);
+projectManager.configureEffectiveIntentResolver(guid => runtimeIntentStore.getEffectiveIntent(guid));
+const runtimeUpdateDispatcher = new RuntimeUpdateDispatcher(registry, eventQueue, runtimeIntentStore);
+const graphStore = new ProjectGraphStore(projectManager, actionInputManager, runtimeUpdateDispatcher, runtimeIntentStore);
 
 const buildActiveSceneEventsMsg = (): string | null => {
   const events = graphStore.getActiveSceneEvents();
@@ -47,10 +50,9 @@ const buildActiveSceneEventsMsg = (): string | null => {
 };
 
 /**
- * Controllers receive incremental `projectPatch` messages. When the trigger is fixture-only
- * (zones/runtime layout changed), omit the `intents` patch: `getControllerIntents` merges YAML
- * definitions with per-controller cache, so a full intents snapshot would stomp client-local
- * intent positions that have not been flushed to the hub yet.
+ * Controllers receive incremental `projectPatch` messages. For fixture-only triggers we omit the
+ * intents patch so client zone/fixture layout edits are not overwritten by a full intent list.
+ * Intent payloads are hub-effective (YAML + active-scene overlay + runtime perform merge).
  */
 const pushControllerProjectPatches = (includeIntentsPatch: boolean): void => {
   const zones = projectManager.getSerializedRuntimeZones();
@@ -162,9 +164,8 @@ const publishGraphMutation = (source: import('ws').WebSocket, result: GraphMutat
     }
   }
 
-  // Controllers mutate local intent definitions during perform drag; the activating
-  // client does not receive its own graph:delta echo. After scene change, push hub
-  // authoritative intent list so overlay/HUD match simulator (graph:init parity).
+  // Controllers follow hub intent snapshots; after scene change, push effective intents + scenes
+  // so overlays match sim (graph:init parity).
   const sceneActivateResync = result.controllerDeltas.some(d => {
     if (d.entityType !== 'project' || d.guid !== 'active' || d.op !== 'patch') return false;
     const p = d.patch;
@@ -175,6 +176,7 @@ const publishGraphMutation = (source: import('ws').WebSocket, result: GraphMutat
       && typeof /** @type {Record<string, unknown>} */ (p).activeSceneName === 'string'
     );
   });
+
   if (sceneActivateResync) {
     const scenesWire = projectManager.getScenesWirePayload();
     for (const ws of registry.getByRole('controller')) {
@@ -199,6 +201,7 @@ const publishGraphMutation = (source: import('ws').WebSocket, result: GraphMutat
         })
       );
     }
+
   }
 };
 

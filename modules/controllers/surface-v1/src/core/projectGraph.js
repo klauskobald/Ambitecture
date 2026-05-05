@@ -561,7 +561,7 @@ class ProjectGraph {
       this._notify()
       return { guid, patch: { [dotKey]: value } }
     }
-    return this.updateIntentProperty(guid, dotKey, value)
+    return { guid, patch: { [dotKey]: value } }
   }
 
   /**

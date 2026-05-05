@@ -7,6 +7,7 @@ import {
   DEFAULT_PERFORM_INPUT_SORT_KEY
 } from '../core/arraySorter.js'
 import { collectPerformButtonInputs } from '../core/performButtonInputs.js'
+import { PerformSubnavShell } from './performSubnavShell.js'
 
 /**
  * @param {unknown} value
@@ -31,82 +32,9 @@ export class PerformPane {
     this._el = document.createElement('div')
     this._el.className = 'pane perform-pane'
     this._el.hidden = true
+    this._subnavShell = new PerformSubnavShell()
+    this._el.appendChild(this._subnavShell.element)
 
-    this._shell = document.createElement('div')
-    this._shell.className = 'perform-pane-shell'
-
-    this._subnav = document.createElement('nav')
-    this._subnav.className = 'perform-subnav'
-    this._subnav.setAttribute('aria-label', 'Perform tools')
-
-    this._subnavToggle = document.createElement('button')
-    this._subnavToggle.type = 'button'
-    this._subnavToggle.className = 'nav-toggle'
-    this._subnavToggle.id = 'perform-subnav-toggle'
-    this._subnavToggle.setAttribute('aria-label', 'Toggle section navigation')
-    this._subnavToggle.setAttribute('aria-expanded', 'false')
-    this._subnavToggle.textContent = '☰'
-
-    const subnavFill = document.createElement('span')
-    subnavFill.className = 'perform-subnav-fill'
-    subnavFill.setAttribute('aria-hidden', 'true')
-
-    this._linkControl = document.createElement('a')
-    this._linkControl.className = 'nav-link nav-link--active'
-    this._linkControl.href = '#perform-control'
-    this._linkControl.dataset.subpane = 'control'
-    this._linkControl.textContent = 'Control'
-
-    this._linkAnimate = document.createElement('a')
-    this._linkAnimate.className = 'nav-link'
-    this._linkAnimate.href = '#perform-animate'
-    this._linkAnimate.dataset.subpane = 'animate'
-    this._linkAnimate.textContent = 'Animate'
-
-    this._subnav.appendChild(this._subnavToggle)
-    this._subnav.appendChild(subnavFill)
-    this._subnav.appendChild(this._linkControl)
-    this._subnav.appendChild(this._linkAnimate)
-
-    this._subpanes = document.createElement('div')
-    this._subpanes.className = 'perform-subpanes'
-
-    this._controlPanel = document.createElement('div')
-    this._controlPanel.className = 'perform-subpane perform-subpane--control'
-    this._controls = document.createElement('div')
-    this._controls.className = 'perform-controls'
-    this._controlPanel.appendChild(this._controls)
-
-    this._animatePanel = document.createElement('div')
-    this._animatePanel.className = 'perform-subpane perform-subpane--animate'
-    this._animatePanel.hidden = true
-
-    this._subpanes.appendChild(this._controlPanel)
-    this._subpanes.appendChild(this._animatePanel)
-
-    this._shell.appendChild(this._subnav)
-    this._shell.appendChild(this._subpanes)
-    this._el.appendChild(this._shell)
-
-    /** @type {'control' | 'animate'} */
-    this._activeSubpane = 'control'
-
-    this._subnavToggle.addEventListener('click', () => {
-      const isOpen = this._subnav.classList.toggle('perform-subnav--open')
-      this._subnavToggle.setAttribute('aria-expanded', String(isOpen))
-    })
-
-    for (const link of [this._linkControl, this._linkAnimate]) {
-      link.addEventListener('click', ev => {
-        ev.preventDefault()
-        this._subnav.classList.remove('perform-subnav--open')
-        this._subnavToggle.setAttribute('aria-expanded', 'false')
-        const id = /** @type {'control' | 'animate'} */ (
-          link.dataset.subpane === 'animate' ? 'animate' : 'control'
-        )
-        this._setSubpane(id)
-      })
-    }
     /** @type {Map<string, HTMLButtonElement>} */
     this._buttonByGuid = new Map()
     /** @type {Map<number, { guid: string, actionGuid: string, behavior: string }>} */
@@ -117,17 +45,6 @@ export class PerformPane {
     this._unsubscribe = null
     /** @type {PerformQuickPanelHud | null} */
     this._quickHud = null
-  }
-
-  /**
-   * @param {'control' | 'animate'} id
-   */
-  _setSubpane (id) {
-    this._activeSubpane = id
-    this._linkControl.classList.toggle('nav-link--active', id === 'control')
-    this._linkAnimate.classList.toggle('nav-link--active', id === 'animate')
-    this._controlPanel.hidden = id !== 'control'
-    this._animatePanel.hidden = id !== 'animate'
   }
 
   /** @param {HTMLElement} container */
@@ -145,15 +62,14 @@ export class PerformPane {
       this._quickHud = null
     }
     this._render()
-    this._setSubpane(this._activeSubpane)
+    this._subnavShell.syncSubpaneFromState()
     this._el.hidden = false
     this._unsubscribe = projectGraph.subscribe(() => this._render())
   }
 
   deactivate () {
     this._el.hidden = true
-    this._subnav.classList.remove('perform-subnav--open')
-    this._subnavToggle.setAttribute('aria-expanded', 'false')
+    this._subnavShell.closeMobileNav()
     this._unsubscribe?.()
     this._unsubscribe = null
     if (this._quickHud) {
@@ -191,7 +107,7 @@ export class PerformPane {
         'btn--active',
         highlightedInputGuid !== '' && guid === highlightedInputGuid
       )
-      this._controls.appendChild(button)
+      this._subnavShell.controlsMount.appendChild(button)
     }
 
     for (const [guid, button] of this._buttonByGuid) {

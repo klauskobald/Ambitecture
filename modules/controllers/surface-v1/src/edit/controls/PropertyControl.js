@@ -1,7 +1,15 @@
 import { projectGraph } from '../../core/projectGraph.js'
-import { queueIntentUpdate, sendGraphCommand, sendSaveProject, sendSceneActivate } from '../../core/outboundQueue.js'
+import {
+  queueIntentUpdate,
+  sendGraphCommand,
+  sendSaveProject,
+  sendSceneActivate
+} from '../../core/outboundQueue.js'
 import { warn as modalWarn } from '../../core/Modal.js'
-import { resolveMultiSelectState, resolveEnableState } from './controlHelpers.js'
+import {
+  resolveMultiSelectState,
+  resolveEnableState
+} from './controlHelpers.js'
 
 /** @param {unknown} value @returns {unknown} */
 function cloneDefaultValue (value) {
@@ -43,11 +51,14 @@ export class PropertyControl {
 
     const label = document.createElement('span')
     label.className = 'prop-row__label'
-    label.textContent = /** @type {string} */ (this._descriptor.name ?? this._descriptor.dotKey)
+    label.textContent = /** @type {string} */ (
+      this._descriptor.name ?? this._descriptor.dotKey
+    )
 
     header.appendChild(label)
 
-    const showQuickPanel = this._descriptor.type === 'scalar' && !!this._descriptor.quickPanel
+    const showQuickPanel =
+      this._descriptor.type === 'scalar' && !!this._descriptor.quickPanel
     if (!this._isMandatory) {
       this._toggleBtn = document.createElement('button')
       this._toggleBtn.className = 'prop-row__toggle intent-toggle'
@@ -66,7 +77,9 @@ export class PropertyControl {
       this._quickPanelBtn.setAttribute('aria-label', 'Quick panel')
       this._quickPanelBtn.setAttribute('aria-checked', 'false')
       this._quickPanelBtn.title = 'Quick panel — show knobs in Perform'
-      this._quickPanelBtn.addEventListener('click', () => this._onQuickPanelClick())
+      this._quickPanelBtn.addEventListener('click', () =>
+        this._onQuickPanelClick()
+      )
       header.appendChild(this._quickPanelBtn)
     }
 
@@ -99,7 +112,11 @@ export class PropertyControl {
       if (this._controlArea) this._controlArea.hidden = false
       this._applyOverlayState(this._resolveOverlayState(guids, dotKey))
       const multiState = resolveMultiSelectState(guids, dotKey)
-      this._applyState({ ...multiState, enableState: 'on', selectionSize: guids.size })
+      this._applyState({
+        ...multiState,
+        enableState: 'on',
+        selectionSize: guids.size
+      })
       this._refreshQuickPanel(guids)
       return
     }
@@ -110,7 +127,11 @@ export class PropertyControl {
     this._applyEnableState(enableState)
     this._applyOverlayState(this._resolveOverlayState(guids, dotKey))
     if (enableState !== 'off') {
-      this._applyState({ ...multiState, enableState, selectionSize: guids.size })
+      this._applyState({
+        ...multiState,
+        enableState,
+        selectionSize: guids.size
+      })
     }
     this._refreshQuickPanel(guids)
   }
@@ -121,7 +142,9 @@ export class PropertyControl {
 
   /** @param {HTMLElement} _controlArea */
   _buildControlWidget (_controlArea) {
-    throw new Error(`${this.constructor.name} must implement _buildControlWidget()`)
+    throw new Error(
+      `${this.constructor.name} must implement _buildControlWidget()`
+    )
   }
 
   /**
@@ -134,11 +157,15 @@ export class PropertyControl {
   _saveProject () {
     const dotKey = /** @type {string} */ (this._descriptor.dotKey)
     const activeScene = projectGraph.getActiveSceneName()
-    const hasOverlayTargets = activeScene && [...this._currentGuids].some(guid =>
-      projectGraph.isSceneIntentOverlayed(activeScene, guid, dotKey)
-    )
-    const hasSharedTargets = [...this._currentGuids].some(guid =>
-      !activeScene || !projectGraph.isSceneIntentOverlayed(activeScene, guid, dotKey)
+    const hasOverlayTargets =
+      activeScene &&
+      [...this._currentGuids].some(guid =>
+        projectGraph.isSceneIntentOverlayed(activeScene, guid, dotKey)
+      )
+    const hasSharedTargets = [...this._currentGuids].some(
+      guid =>
+        !activeScene ||
+        !projectGraph.isSceneIntentOverlayed(activeScene, guid, dotKey)
     )
     if (hasSharedTargets) {
       sendSaveProject('intents', [...projectGraph.getIntents().values()])
@@ -157,7 +184,11 @@ export class PropertyControl {
    */
   _updateProperty (guid, dotKey, value) {
     const activeScene = projectGraph.getActiveSceneName()
-    if (this._allowOverlay && activeScene && projectGraph.isSceneIntentOverlayed(activeScene, guid, dotKey)) {
+    if (
+      this._allowOverlay &&
+      activeScene &&
+      projectGraph.isSceneIntentOverlayed(activeScene, guid, dotKey)
+    ) {
       projectGraph.setSceneIntentOverlay(activeScene, guid, dotKey, value)
       this._sceneDirty = true
       return
@@ -172,7 +203,11 @@ export class PropertyControl {
    */
   _removeProperty (guid, dotKey) {
     const activeScene = projectGraph.getActiveSceneName()
-    if (this._allowOverlay && activeScene && projectGraph.isSceneIntentOverlayed(activeScene, guid, dotKey)) {
+    if (
+      this._allowOverlay &&
+      activeScene &&
+      projectGraph.isSceneIntentOverlayed(activeScene, guid, dotKey)
+    ) {
       projectGraph.removeSceneIntentOverlay(activeScene, guid, dotKey)
       this._sceneDirty = true
       return
@@ -197,7 +232,10 @@ export class PropertyControl {
       case 'off':
         this._toggleBtn.textContent = 'OFF'
         this._toggleBtn.setAttribute('aria-checked', 'false')
-        this._toggleBtn.classList.remove('intent-toggle--enabled', 'prop-row__toggle--mixed')
+        this._toggleBtn.classList.remove(
+          'intent-toggle--enabled',
+          'prop-row__toggle--mixed'
+        )
         this._controlArea.hidden = true
         break
       case 'mixed':
@@ -225,7 +263,10 @@ export class PropertyControl {
         this._overlayBtn.textContent = 'Shared'
         this._overlayBtn.setAttribute('aria-checked', 'false')
         this._overlayBtn.setAttribute('aria-disabled', 'false')
-        this._overlayBtn.classList.remove('intent-toggle--enabled', 'prop-row__toggle--mixed')
+        this._overlayBtn.classList.remove(
+          'intent-toggle--enabled',
+          'prop-row__toggle--mixed'
+        )
         break
       case 'mixed':
         this._overlayBtn.textContent = 'Mixed'
@@ -249,7 +290,11 @@ export class PropertyControl {
     for (const guid of guids) {
       if (!projectGraph.getIntents().has(guid)) continue
       total++
-      if (activeScene && projectGraph.isSceneIntentOverlayed(activeScene, guid, dotKey)) overlayCount++
+      if (
+        activeScene &&
+        projectGraph.isSceneIntentOverlayed(activeScene, guid, dotKey)
+      )
+        overlayCount++
     }
     if (total === 0 || overlayCount === 0) return 'shared'
     if (overlayCount === total) return 'overlay'
@@ -306,7 +351,9 @@ export class PropertyControl {
 
     const overlayState = this._resolveOverlayState(this._currentGuids, dotKey)
     if (overlayState === 'mixed') {
-      modalWarn('Selected intents have mixed overlay state. Select only Overlay or only Shared intents before toggling this property.')
+      modalWarn(
+        'Selected intents have mixed overlay state. Select only Overlay or only Shared intents before toggling this property.'
+      )
       return
     }
 
@@ -336,13 +383,17 @@ export class PropertyControl {
     const dotKey = /** @type {string} */ (this._descriptor.dotKey)
     const qpState = this._resolveQuickPanelState(guids, dotKey)
     this._applyQuickPanelVisual(qpState)
-    const enableState = this._isMandatory ? 'on' : resolveEnableState(guids, dotKey)
+    const enableState = this._isMandatory
+      ? 'on'
+      : resolveEnableState(guids, dotKey)
     const blockQuickPanel = enableState === 'off'
     this._quickPanelBtn.disabled = blockQuickPanel
-    this._quickPanelBtn.setAttribute('aria-disabled', blockQuickPanel ? 'true' : 'false')
+    this._quickPanelBtn.setAttribute(
+      'aria-disabled',
+      blockQuickPanel ? 'true' : 'false'
+    )
     if (blockQuickPanel) {
-      this._quickPanelBtn.title =
-        'Turn property ON to use quick panel'
+      this._quickPanelBtn.title = 'Turn property ON to use quick panel'
     } else {
       this._quickPanelBtn.title = 'Quick panel — show knobs in Perform'
     }

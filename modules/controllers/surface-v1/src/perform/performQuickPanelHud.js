@@ -100,7 +100,9 @@ export class PerformQuickPanelHud {
           if (dk) byDot.set(dk, d)
         }
         for (const dotKey of qKeys) {
-          if (projectGraph.getEffectiveIntentProperty(guid, dotKey) === undefined) {
+          if (
+            projectGraph.getEffectiveIntentProperty(guid, dotKey) === undefined
+          ) {
             continue
           }
           const d = byDot.get(dotKey)
@@ -121,8 +123,9 @@ export class PerformQuickPanelHud {
 
       nextGuids.add(guid)
 
-      const sig =
-        `${cls}:${wantedDescriptors.map(d => /** @type {Record<string, unknown>} */(d).dotKey).join(',')}`
+      const sig = `${cls}:${wantedDescriptors
+        .map(d => /** @type {Record<string, unknown>} */ (d).dotKey)
+        .join(',')}`
       let pane = this._panels.get(guid)
       if (
         pane &&
@@ -169,7 +172,7 @@ export class PerformQuickPanelHud {
               !!desc.allowOverlay
             )
             if (updated) queueIntentUpdate(updated)
-          },
+          }
         })
         knob.mount(row)
         knobs.push(knob)
@@ -212,7 +215,13 @@ export class PerformQuickPanelHud {
         pane.root.style.visibility = 'hidden'
         continue
       }
-      const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, overlayRect)
+      const { px, py } = worldToCanvas(
+        pos[0],
+        pos[2],
+        spatial,
+        simRect,
+        overlayRect
+      )
       const spanM = Math.max(1e-9, spatial.x2 - spatial.x1)
       const mPerPx = spanM / Math.max(1, simRect.width)
       const iconPx = PERFORM_HUD_ICON_WORLD_METERS / mPerPx

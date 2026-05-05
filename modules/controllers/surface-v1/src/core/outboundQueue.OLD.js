@@ -1,5 +1,12 @@
 import { intentGuid, fixtureId } from './stores.js'
 
+/** @type {Map<string, unknown>} */
+const outboundRuntimeMap = new Map()
+/** @type {Map<string, unknown>} */
+const outboundFixtureMap = new Map()
+let lastSentAt = 0
+let sendPending = false
+let minIntervalMs = 40
 /** @type {WebSocket | null} */
 let activeWs = null
 /** @type {number[] | null} */
@@ -14,51 +21,71 @@ export function setSocket (ws, location) {
   activeLocation = location
 }
 
-/**
- * Optional client-side spacing between batched runtime sends (legacy API).
- * Unused — every outbound message is sent immediately.
- * @param {number} _ms
- */
-export function setMinInterval (_ms) {}
+/** @param {number} ms */
+export function setMinInterval (ms) {
+  minIntervalMs = ms
+}
 
 /** @param {unknown} intent */
 export function queueIntentUpdate (intent) {
-  if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation) return
   const record = /** @type {Record<string, unknown>} */ (intent)
   const guid = String(record.guid ?? intentGuid(intent))
   if (!guid) return
-  const command = mergeGraphCommand(undefined, {
+  const existing = /** @type {Record<string, unknown> | undefined} */ (outboundRuntimeMap.get(guid))
+  outboundRuntimeMap.set(guid, mergeGraphCommand(existing, {
     entityType: 'intent',
     guid,
     patch: /** @type {Record<string, unknown> | undefined} */ (record.patch),
     remove: /** @type {string[] | undefined} */ (record.remove),
     value: record.patch || record.remove ? undefined : record
-  })
-  sendRuntimeCommands([command], activeWs, activeLocation)
+  }))
+  scheduleFlush()
 }
 
 /** @param {unknown} fixtureUpdate */
 export function queueFixtureUpdate (fixtureUpdate) {
-  if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation) return
   const f = /** @type {Record<string, unknown>} */ (fixtureUpdate)
   const guid = String(f.guid ?? '')
   const id = guid || fixtureId(String(f.zoneName ?? ''), String(f.fixtureName ?? ''))
   if (!id || !guid) return
-  sendGraphCommands(
-    [{
-      op: 'patch',
-      entityType: 'fixture',
-      guid,
-      patch: { position: f.position },
-      persistence: 'runtimeAndDurable'
-    }],
-    activeWs,
-    activeLocation
-  )
+  outboundFixtureMap.set(id, {
+    op: 'patch',
+    entityType: 'fixture',
+    guid,
+    patch: { position: f.position },
+    persistence: 'runtimeAndDurable'
+  })
+  scheduleFlush()
+}
+
+function scheduleFlush () {
+  if (sendPending) return
+  const elapsed = Date.now() - lastSentAt
+  if (elapsed >= minIntervalMs) {
+    flushOutbound()
+  } else {
+    sendPending = true
+    setTimeout(() => {
+      sendPending = false
+      flushOutbound()
+    }, minIntervalMs - elapsed)
+  }
+}
+
+function flushOutbound () {
+  if (!activeWs || !activeLocation) return
+  const runtime = [...outboundRuntimeMap.values()]
+  const fixtures = [...outboundFixtureMap.values()]
+  if (runtime.length === 0 && fixtures.length === 0) return
+  outboundRuntimeMap.clear()
+  outboundFixtureMap.clear()
+  lastSentAt = Date.now()
+  sendRuntimeCommands(runtime, activeWs, activeLocation)
+  sendGraphCommands(fixtures, activeWs, activeLocation)
 }
 
 /**
- * @param {unknown[]} commands
+ * @param {unknown[]} intents
  * @param {WebSocket} ws
  * @param {number[]} location
  */
@@ -86,6 +113,7 @@ function sendRuntimeCommands (commands, ws, location) {
 }
 
 /**
+ * Sends scene:activate directly on the WebSocket (bypasses the rate-limited queue).
  * @param {string} sceneName
  */
 export function sendSceneActivate (sceneName) {

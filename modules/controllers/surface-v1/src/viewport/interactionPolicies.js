@@ -1,6 +1,11 @@
 import { intentGuid } from '../core/stores.js'
 import { projectGraph } from '../core/projectGraph.js'
-import { queueIntentUpdate, queueFixtureUpdate, sendSaveProject, sendSceneActivate } from '../core/outboundQueue.js'
+import {
+  queueIntentUpdate,
+  queueFixtureUpdate,
+  sendSaveProject,
+  sendSceneActivate
+} from '../core/outboundQueue.js'
 
 /**
  * @typedef {object} InteractionPolicy
@@ -35,7 +40,11 @@ export function getEditFixturesUnlocked () {
 /** @param {string} guid @param {number} wx @param {number} wz @returns {boolean} */
 function updatePositionOverlayIfActive (guid, wx, wz) {
   const activeScene = projectGraph.getActiveSceneName()
-  if (!activeScene || !projectGraph.isSceneIntentOverlayed(activeScene, guid, 'position')) return false
+  if (
+    !activeScene ||
+    !projectGraph.isSceneIntentOverlayed(activeScene, guid, 'position')
+  )
+    return false
   const updated = projectGraph.updateRuntimeIntentPosition(guid, wx, wz)
   if (updated) queueIntentUpdate(updated)
   return true
@@ -44,9 +53,14 @@ function updatePositionOverlayIfActive (guid, wx, wz) {
 /** @param {string} guid @returns {boolean} */
 function savePositionOverlayIfActive (guid) {
   const activeScene = projectGraph.getActiveSceneName()
-  if (!activeScene || !projectGraph.isSceneIntentOverlayed(activeScene, guid, 'position')) return false
+  if (
+    !activeScene ||
+    !projectGraph.isSceneIntentOverlayed(activeScene, guid, 'position')
+  )
+    return false
   const position = projectGraph.getEffectiveIntentProperty(guid, 'position')
-  if (position !== undefined) projectGraph.setSceneIntentOverlay(activeScene, guid, 'position', position)
+  if (position !== undefined)
+    projectGraph.setSceneIntentOverlay(activeScene, guid, 'position', position)
   projectGraph.clearRuntimeIntent(guid)
   sendSaveProject('scenes', projectGraph.getScenesData())
   sendSceneActivate(activeScene)
@@ -60,7 +74,10 @@ export const performPolicy = {
   },
   canDragIntent (intent) {
     const guid = intentGuid(intent)
-    return isInActiveScene(intent) && !!(projectGraph.getIntentConfig(guid).performEnabled)
+    return (
+      isInActiveScene(intent) &&
+      !!projectGraph.getIntentConfig(guid).performEnabled
+    )
   },
   canDragFixture (_fixture) {
     return false
@@ -108,9 +125,15 @@ export const editPolicy = {
 
 /** @type {InteractionPolicy} */
 export const noopPolicy = {
-  isIntentVisible (_intent) { return false },
-  canDragIntent (_intent) { return false },
-  canDragFixture (_fixture) { return false },
+  isIntentVisible (_intent) {
+    return false
+  },
+  canDragIntent (_intent) {
+    return false
+  },
+  canDragFixture (_fixture) {
+    return false
+  },
   onIntentMove (_guid, _wx, _wz) {},
   onIntentMoveEnd (_guid) {},
   onFixtureMove (_id, _wx, _wz) {}

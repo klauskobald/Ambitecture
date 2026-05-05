@@ -2,7 +2,10 @@ import { performPolicy } from '../viewport/interactionPolicies.js'
 import { projectGraph } from '../core/projectGraph.js'
 import { sendActionTrigger } from '../core/outboundQueue.js'
 import { PerformQuickPanelHud } from '../perform/performQuickPanelHud.js'
-import { ArraySorter, DEFAULT_PERFORM_INPUT_SORT_KEY } from '../core/arraySorter.js'
+import {
+  ArraySorter,
+  DEFAULT_PERFORM_INPUT_SORT_KEY
+} from '../core/arraySorter.js'
 import { collectPerformButtonInputs } from '../core/performButtonInputs.js'
 
 /**
@@ -10,7 +13,8 @@ import { collectPerformButtonInputs } from '../core/performButtonInputs.js'
  * @returns {Record<string, unknown> | undefined}
  */
 function recordOrUndefined (value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    return undefined
   return /** @type {Record<string, unknown>} */ (value)
 }
 
@@ -81,9 +85,11 @@ export class PerformPane {
       activeGuids.add(guid)
       const button = this._buttonForInput(guid)
       button.textContent = String(input.name ?? 'Button')
-      button.dataset.actionGuid = typeof input.action === 'string' ? input.action : ''
+      button.dataset.actionGuid =
+        typeof input.action === 'string' ? input.action : ''
       button.dataset.inputGuid = guid
-      button.dataset.behavior = typeof input.type === 'string' ? input.type : 'button'
+      button.dataset.behavior =
+        typeof input.type === 'string' ? input.type : 'button'
       this._controls.appendChild(button)
     }
 
@@ -104,10 +110,18 @@ export class PerformPane {
     if (existing) return existing
     const button = document.createElement('button')
     button.className = 'btn perform-input perform-input--button'
-    button.addEventListener('pointerdown', event => this._handlePointerDown(button, event))
-    button.addEventListener('pointerup', event => this._handlePointerRelease(button, event))
-    button.addEventListener('pointercancel', event => this._handlePointerRelease(button, event))
-    button.addEventListener('lostpointercapture', event => this._handlePointerRelease(button, event))
+    button.addEventListener('pointerdown', event =>
+      this._handlePointerDown(button, event)
+    )
+    button.addEventListener('pointerup', event =>
+      this._handlePointerRelease(button, event)
+    )
+    button.addEventListener('pointercancel', event =>
+      this._handlePointerRelease(button, event)
+    )
+    button.addEventListener('lostpointercapture', event =>
+      this._handlePointerRelease(button, event)
+    )
     this._buttonByGuid.set(guid, button)
     return button
   }
@@ -119,7 +133,8 @@ export class PerformPane {
   _handlePointerDown (button, event) {
     const input = this._inputForButton(button)
     const actionGuid = typeof input?.action === 'string' ? input.action : ''
-    if (!input || !actionGuid || this._activePointers.has(event.pointerId)) return
+    if (!input || !actionGuid || this._activePointers.has(event.pointerId))
+      return
 
     const behavior = typeof input.type === 'string' ? input.type : 'button'
     this._activePointers.set(event.pointerId, {
@@ -156,7 +171,8 @@ export class PerformPane {
     const active = this._activePointers.get(pointerId)
     if (!active) return
     this._activePointers.delete(pointerId)
-    if (button.hasPointerCapture?.(pointerId)) button.releasePointerCapture(pointerId)
+    if (button.hasPointerCapture?.(pointerId))
+      button.releasePointerCapture(pointerId)
 
     switch (active.behavior) {
       case 'momentarySwitch':
@@ -179,7 +195,8 @@ export class PerformPane {
     const wasInactive = pointers.size === 0
     pointers.add(pointerId)
     this._momentaryPointersByGuid.set(guid, pointers)
-    if (wasInactive) sendActionTrigger(actionGuid, this._inputArgs(input, 'argsOn'))
+    if (wasInactive)
+      sendActionTrigger(actionGuid, this._inputArgs(input, 'argsOn'))
   }
 
   /**

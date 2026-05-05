@@ -92,7 +92,7 @@ export class ConfigManager {
 
   /**
    * Syncs the visual selection to `activeName` without firing `onActivate`.
-   * Use when the active item changed externally (e.g. remote scene:state).
+   * Use when the active item changed externally (e.g. `graph:delta` / `projectPatch`).
    * @param {string | null} activeName
    */
   syncActive (activeName) {

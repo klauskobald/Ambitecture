@@ -129,8 +129,6 @@ Renderer data authority model:
 - **ScalarRadialKnob** (`src/perform/ScalarRadialKnob.js`): Canvas radial knob for continuous scalar values in the Perform HUD. Supports normal drag and zoomed precision mode (long-press expands the touch target). Driven by `requestAnimationFrame` layout from `PerformQuickPanelHud`.
 - **PerformQuickPanelHud** (`src/perform/performQuickPanelHud.js`): Per-intent floating HUD panel in the Perform pane. Reconciles panels against the live intent list via `projectGraph.subscribe()`. Creates `ScalarRadialKnob` instances for each descriptor with `quickPanel: true` in `systemCapabilities.intentProperties[class]`. Positioned by a `requestAnimationFrame` loop using world-to-canvas conversion. Activated/deactivated with the Perform pane via `start()`/`stop()`.
 
-**`controllers/web-test/`** — Legacy static controller shell (being replaced by surface-v1).
-
 **`controllers/starter/`** — Minimal TypeScript reference controller demonstrating the full connection lifecycle. Key classes:
 
 - **`HubSocket`** — WebSocket client with auto-reconnect, register-on-open, and typed `sendRuntimeCommand()` / `sendActionTrigger(guid, args?)` helpers.
@@ -612,10 +610,6 @@ Hub resolves execute items: scene → activates scene; intent → dispatches as 
 - `class` (inside an event object) is stored as layer intent type and consumed by renderer capability resolvers.
 - Renderer dynamically imports fixture class modules and runs `applyIntentSnapshot(...)` for configured fixtures.
 - `scheduled` is an absolute execution timestamp used by the renderer queue/scheduler (past timestamps execute immediately).
-
-### Refresh message
-
-`refresh` is a legacy hub -> controller signal. New graph-aware controllers should rely on `graph:init` after reconnect and `graph:delta` during normal operation.
 
 ---
 

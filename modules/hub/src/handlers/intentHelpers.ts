@@ -29,11 +29,3 @@ export function intentRemovalEvent(intent: ControllerIntent, scheduledAt: number
     removed: true,
   };
 }
-
-/** @deprecated Prefer intentRemovalEvent when the intent must disappear from engine state. */
-export function zeroAlphaEvent(intent: ControllerIntent, scheduledAt: number): object {
-  return {
-    ...intentToEvent(intent, scheduledAt),
-    params: { ...intent.params, alpha: 0 },
-  };
-}

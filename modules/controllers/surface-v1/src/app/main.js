@@ -1,12 +1,7 @@
 import { loadConfig, applyLayoutCssVars } from '../core/config.js'
 import { applySystemCapabilities } from '../core/systemCapabilities.js'
 import { projectGraph } from '../core/projectGraph.js'
-import {
-  setSocket,
-  queueIntentUpdate,
-  setMinInterval,
-  sendSceneActivate
-} from '../core/outboundQueue.js'
+import { setSocket, setMinInterval } from '../core/outboundQueue.js'
 import { connect } from '../core/socket.js'
 import { SimulatorViewport } from '../viewport/simulatorViewport.js'
 import { OverlayCanvas } from '../viewport/overlayCanvas.js'
@@ -144,11 +139,6 @@ async function main () {
           queueRuntimeUpdate(message.payload)
           break
         }
-        case 'refresh': {
-          const activeName = projectGraph.getActiveSceneName()
-          if (activeName) sendSceneActivate(activeName)
-          break
-        }
         case 'intents': {
           const incoming = Array.isArray(message.payload)
             ? /** @type {unknown[]} */ (message.payload)
@@ -160,15 +150,6 @@ async function main () {
           const pp = /** @type {Record<string, unknown>} */ (message.payload ?? {})
           if (typeof pp.key === 'string') {
             projectGraph.applyPatch(pp.key, pp.data)
-          }
-          break
-        }
-        case 'scene:state': {
-          const sp = /** @type {Record<string, unknown> | null} */ (
-            message.payload
-          )
-          if (sp && typeof sp.sceneName === 'string') {
-            projectGraph.setActiveScene(sp.sceneName)
           }
           break
         }

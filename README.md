@@ -17,7 +17,6 @@ modules/
   renderers/simulator-2d/ Browser renderer (2D simulator)
   controllers/surface-v1/ Primary operator controller (touch SPA, perform/edit/setup panes)
   controllers/starter/    Minimal TypeScript reference controller for building headless clients
-  controllers/web-test/   Legacy browser controller test surface
 var/
   projects/               Project and zone definitions (YAML)
   fixtures/               Fixture profiles (YAML)

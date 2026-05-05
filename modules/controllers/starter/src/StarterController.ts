@@ -95,9 +95,6 @@ export class StarterController {
         break;
       case 'runtime:update':
         break;
-      case 'refresh':
-        this.logger.info('received refresh request');
-        break;
       case 'systemCapabilities':
         this.logger.info('received system capabilities');
         break;

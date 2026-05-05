@@ -1,5 +1,4 @@
 import { ControllerIntent } from '../ProjectManager';
-import { Color } from '../color';
 
 /**
  * Effective `perform.reset.scene` — whether `runtimeMergeClear: scene` evicts merge cache for this intent.
@@ -15,11 +14,6 @@ export function effectivePerformResetScene(intent: ControllerIntent | undefined)
     return false;
   }
   return true;
-}
-
-export function normalizeIntentColor(intent: ControllerIntent): ControllerIntent {
-  if (!intent.params || intent.params['color'] === undefined) return intent;
-  return { ...intent, params: { ...intent.params, color: Color.createFromObject(intent.params['color']).toXYY(4) } };
 }
 
 export function intentToEvent(intent: ControllerIntent, scheduledAt: number): object {

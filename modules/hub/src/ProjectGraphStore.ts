@@ -9,7 +9,8 @@ import {
   GraphPersistence,
   emptyMutationResult,
 } from './GraphProtocol';
-import { normalizeIntentColor, intentRemovalEvent, intentToEvent, effectivePerformResetScene } from './handlers/intentHelpers';
+import { intentRemovalEvent, intentToEvent, effectivePerformResetScene } from './handlers/intentHelpers';
+import { transformIntentToNormalized } from './intents';
 import { Logger } from './Logger';
 import { applyDotPathPatch, cloneRecord } from './dotPath';
 import { ActionInputManager } from './ActionInputManager';
@@ -74,13 +75,18 @@ export class ProjectGraphStore {
     return this.projectManager.buildRendererConfig(rendererGuid);
   }
 
+  /**
+   * Class-specific hub shaping (color, future audio, etc.) lives under `src/intents/`:
+   * use `transformIntentToNormalized` and extend via new modules + registry — not ad hoc
+   * switches here.
+   */
   getActiveSceneEvents(now = Date.now()): object[] {
     return this.projectManager.getActiveSceneIntents()
       .map(raw => {
-        const intent = normalizeIntentColor(raw);
+        const intent = transformIntentToNormalized(raw);
         const guid = intent.guid;
         const effective = guid ? this.rendererIntentSnapshot(guid) ?? intent : intent;
-        return intentToEvent(normalizeIntentColor(effective), now);
+        return intentToEvent(transformIntentToNormalized(effective), now);
       });
   }
 
@@ -163,13 +169,13 @@ export class ProjectGraphStore {
       .filter(guid => !newGuids.has(guid))
       .map(guid => this.projectManager.getIntentDefinition(guid))
       .filter((intent): intent is ControllerIntent => intent !== undefined)
-      .map(normalizeIntentColor)
+      .map(transformIntentToNormalized)
       .map(intent => intentRemovalEvent(intent, now));
     const activeEvents = newIntents
       .map(intent => {
         const eff = intent.guid ? this.rendererIntentSnapshot(intent.guid) ?? intent : intent;
         return intentToEvent(
-          normalizeIntentColor(eff),
+          transformIntentToNormalized(eff),
           now + (eff.scheduled ?? 0),
         );
       });
@@ -236,7 +242,7 @@ export class ProjectGraphStore {
     const delta = this.makeDelta({ ...command, persistence });
     const eff = this.rendererIntentSnapshot(command.guid);
     const rendererEvents = eff
-      ? [intentToEvent(normalizeIntentColor(eff), now + (eff.scheduled ?? 0))]
+      ? [intentToEvent(transformIntentToNormalized(eff), now + (eff.scheduled ?? 0))]
       : [];
     this.runtimeMerge?.clearRuntimeIntentMergeCache();
     return {

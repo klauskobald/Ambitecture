@@ -5,7 +5,8 @@ import { MessageHandler, WsMessage } from '../MessageRouter';
 import { ProjectManager, ControllerIntent } from '../ProjectManager';
 import { EventQueue } from '../EventQueue';
 import { RuntimeUpdateDispatcher } from '../RuntimeUpdateDispatcher';
-import { normalizeIntentColor, intentToEvent } from './intentHelpers';
+import { intentToEvent } from './intentHelpers';
+import { transformIntentToNormalized } from '../intents';
 
 function isIntentArray(payload: unknown): payload is ControllerIntent[] {
   return Array.isArray(payload) && payload.every(
@@ -37,7 +38,7 @@ export class IntentsHandler implements MessageHandler {
     this.runtimeUpdateDispatcher?.clearRuntimeIntentMergeCache();
 
     const now = Date.now();
-    const entries = intents.map(normalizeIntentColor).map(intent => ({
+    const entries = intents.map(transformIntentToNormalized).map(intent => ({
       event: intentToEvent(intent, now + (intent.scheduled ?? 0)),
       scheduledAt: now + (intent.scheduled ?? 0),
     }));

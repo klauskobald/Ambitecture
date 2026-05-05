@@ -15,7 +15,8 @@
 import { ProjectManager, ControllerIntent } from './ProjectManager';
 import { RuntimeUpdate } from './RuntimeProtocol';
 import { cloneRecord, removeAtDotPath, setAtDotPath } from './dotPath';
-import { effectivePerformResetScene, intentToEvent, normalizeIntentColor } from './handlers/intentHelpers';
+import { effectivePerformResetScene, intentToEvent } from './handlers/intentHelpers';
+import { transformIntentToNormalized } from './intents';
 
 function applyRuntimePatch(base: Record<string, unknown>, update: RuntimeUpdate): Record<string, unknown> {
   const next = cloneRecord(update.value ?? base);
@@ -113,6 +114,6 @@ export class RuntimeIntentStore {
     const baseline = previous ?? cloneRecord(fromProject as unknown as Record<string, unknown>);
     const intent = applyRuntimePatch(baseline, update) as unknown as ControllerIntent;
     this.mergeCache.set(update.guid, cloneRecord(intent as unknown as Record<string, unknown>));
-    return intentToEvent(normalizeIntentColor(intent), now + (intent.scheduled ?? 0));
+    return intentToEvent(transformIntentToNormalized(intent), now + (intent.scheduled ?? 0));
   }
 }

@@ -1,7 +1,7 @@
 /**
  * Lazy-loading pane router with persistent pane instances.
  *
- * Panes are imported once on first navigation, mounted once in the pane-host,
+ * Panes are imported once on first navigation, mounted once in #pane-host-body,
  * and then shown/hidden via their activate()/deactivate() lifecycle methods.
  * Switching panes never tears down a mounted instance.
  *
@@ -33,7 +33,7 @@ let routerOverlay = null
  * @returns {Promise<void>}
  */
 export async function navigateTo (paneName) {
-  const host = document.getElementById('pane-host')
+  const host = document.getElementById('pane-host-body')
   if (!host || !paneCache.has(paneName)) return
 
   // Deactivate current pane

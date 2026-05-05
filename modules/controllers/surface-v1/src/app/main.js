@@ -6,6 +6,7 @@ import { connect } from '../core/socket.js'
 import { SimulatorViewport } from '../viewport/simulatorViewport.js'
 import { OverlayCanvas } from '../viewport/overlayCanvas.js'
 import { initNav, activateDefaultNav } from './nav.js'
+import { initPaneHostResize } from './paneHostResize.js'
 import { initRouter, navigateTo } from './router.js'
 import * as statusDisplay from './statusDisplay.js'
 
@@ -39,6 +40,8 @@ async function main () {
   if (!cfg) return
 
   applyLayoutCssVars(cfg.LAYOUT)
+
+  initPaneHostResize()
 
   const iframe = /** @type {HTMLIFrameElement | null} */ (
     document.getElementById('sim-frame')

@@ -409,7 +409,7 @@ testParams:
   004-animation.ts:
     location: [0, 0]
     sceneName: "5"
-    repeat: 50
+    repeat: 10
     length: 300
     intentGuid: color-3
     animationGuid: animation-test-1

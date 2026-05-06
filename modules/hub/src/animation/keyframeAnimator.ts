@@ -34,7 +34,7 @@ export class KeyframeAnimator {
     _animationGuid: string,
     private rawDef: Record<string, unknown>,
     private callbacks: KeyframeAnimatorCallbacks,
-  ) {}
+  ) { }
 
   /** Clears timeouts without emitting status (used when replacing runner on scene re-enter). */
   stripTimers(): void {
@@ -199,7 +199,7 @@ export class KeyframeAnimator {
         this.callbacks.onStatus({
           status: 'stopped',
           message: { text: 'Animation finished' },
-          data: { cycles: cIdx },
+          data: { cycles: cIdx, completed: true },
         });
         return;
       }
@@ -237,10 +237,10 @@ export class KeyframeAnimator {
           const patched =
             step.args && Object.keys(step.args).length > 0
               ? (applyDotPathPatch(
-                  cloneRecord(baseIntent as unknown as Record<string, unknown>),
-                  step.args,
-                  [],
-                ) as unknown as ControllerIntent)
+                cloneRecord(baseIntent as unknown as Record<string, unknown>),
+                step.args,
+                [],
+              ) as unknown as ControllerIntent)
               : baseIntent;
 
           const normalized = transformIntentToNormalized(patched);

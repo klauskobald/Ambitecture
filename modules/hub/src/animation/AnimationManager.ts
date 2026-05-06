@@ -37,7 +37,7 @@ export class AnimationManager {
     private runtimeIntentStore: RuntimeIntentStore,
     private eventQueue: EventQueue,
     private hubStatus: HubStatusDispatcher,
-  ) {}
+  ) { }
 
   setInternalStatusListener(cb: (guid: string, payload: AnimationStatusPayload) => void): void {
     this.onInternalStatus = cb;
@@ -63,6 +63,28 @@ export class AnimationManager {
     };
     this.hubStatus.broadcastAnimationStatus(out, location);
     this.onInternalStatus?.(animationGuid, payload);
+  }
+
+  /**
+   * Finite run completed all cycles; plugin is idle — drop registration so scene re-entry does not restart it.
+   */
+  private unregisterNaturallyFinishedRunner(animationGuid: string): void {
+    if (!this.runners.has(animationGuid)) return;
+    this.runners.delete(animationGuid);
+  }
+
+  private emitAnimatorStatus(
+    animationGuid: string,
+    payload: AnimationStatusPayload,
+    location?: [number, number],
+  ): void {
+    this.pushAnimationStatus(animationGuid, payload, location);
+    if (
+      payload.status === 'stopped' &&
+      payload.data['completed'] === true
+    ) {
+      this.unregisterNaturallyFinishedRunner(animationGuid);
+    }
   }
 
   /**
@@ -96,7 +118,7 @@ export class AnimationManager {
     const inScene = this.projectManager.isIntentInActiveScene(target);
     const plugin = new KeyframeAnimator(animationGuid, record, {
       onStatus: p => {
-        this.pushAnimationStatus(animationGuid, p, opts.location);
+        this.emitAnimatorStatus(animationGuid, p, opts.location);
       },
     });
 
@@ -157,11 +179,11 @@ export class AnimationManager {
         continue;
       }
 
-      // Re-enter active scene: restart from cycle 0 (v1)
+      // Re-enter active scene: restart from cycle 0 for runners still registered (paused mid-run or infinite).
       runner.plugin.stripTimers();
       const record = runner.definitionRecord;
       const fresh = new KeyframeAnimator(guid, record, {
-        onStatus: p => this.pushAnimationStatus(guid, p, location),
+        onStatus: p => this.emitAnimatorStatus(guid, p, location),
       });
       this.runners.set(guid, {
         plugin: fresh,

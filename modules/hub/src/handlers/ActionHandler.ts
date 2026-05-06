@@ -8,6 +8,7 @@ import { ProjectGraphStore } from '../ProjectGraphStore';
 import { RuntimeUpdate } from '../RuntimeProtocol';
 import { RuntimeUpdateDispatcher } from '../RuntimeUpdateDispatcher';
 import { ActionExecuteItem } from '../ProjectManager';
+import type { AnimationManager } from '../animation/AnimationManager';
 
 type ActionTriggerPayload = {
   actionGuid: string;
@@ -55,6 +56,7 @@ export class ActionHandler implements MessageHandler {
     private actionInputManager: ActionInputManager,
     private publishMutation: (source: WebSocket, result: GraphMutationResult, location?: [number, number]) => void,
     private runtimeUpdateDispatcher: RuntimeUpdateDispatcher,
+    private animationManager?: AnimationManager,
   ) {}
 
   handle(ws: WebSocket, message: WsMessage, _registry: ConnectionRegistry): void {
@@ -115,6 +117,9 @@ export class ActionHandler implements MessageHandler {
         case 'intent':
           handled += this.executeIntentItem(ws, item, sourceGuid, message.payload.args, message.location);
           break;
+        case 'animation':
+          handled += this.executeAnimationItem(item, message.location);
+          break;
         default:
           Logger.warn(`[action] unsupported execute type "${item.type}" on ${action.guid ?? message.payload.actionGuid}`);
           break;
@@ -136,6 +141,19 @@ export class ActionHandler implements MessageHandler {
     const result = this.graphStore.activateScene(scene.name, message.location, 'runtime');
     this.sendResultToSource(ws, result);
     this.publishMutation(ws, result, message.location);
+    return 1;
+  }
+
+  private executeAnimationItem(item: ActionExecuteItem, location?: [number, number]): number {
+    if (item.type !== 'animation' || typeof item.guid !== 'string' || item.guid.length === 0) {
+      Logger.warn('[action] invalid animation execute item');
+      return 0;
+    }
+    if (!this.animationManager) {
+      Logger.warn('[action] animationManager not configured');
+      return 0;
+    }
+    this.animationManager.trigger(item.guid, location === undefined ? {} : { location });
     return 1;
   }
 

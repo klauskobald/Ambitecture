@@ -19,6 +19,8 @@ import { ProjectGraphStore } from './ProjectGraphStore';
 import { ActionInputManager } from './ActionInputManager';
 import { Logger } from './Logger';
 import { GraphMutationResult } from './GraphProtocol';
+import { HubStatusDispatcher } from './hubStatusTypes';
+import { AnimationManager } from './animation/AnimationManager';
 
 const serverConfig = new Config('server');
 const systemConfig = new Config('system', true);
@@ -41,7 +43,20 @@ const eventQueue = new EventQueue(registry);
 const runtimeIntentStore = new RuntimeIntentStore(projectManager);
 projectManager.configureEffectiveIntentResolver(guid => runtimeIntentStore.getEffectiveIntent(guid));
 const runtimeUpdateDispatcher = new RuntimeUpdateDispatcher(registry, eventQueue, runtimeIntentStore);
-const graphStore = new ProjectGraphStore(projectManager, actionInputManager, runtimeUpdateDispatcher, runtimeIntentStore);
+const hubStatusDispatcher = new HubStatusDispatcher(registry);
+const animationManager = new AnimationManager(
+  projectManager,
+  runtimeIntentStore,
+  eventQueue,
+  hubStatusDispatcher,
+);
+const graphStore = new ProjectGraphStore(
+  projectManager,
+  actionInputManager,
+  runtimeUpdateDispatcher,
+  runtimeIntentStore,
+  animationManager,
+);
 
 const buildActiveSceneEventsMsg = (): string | null => {
   const events = graphStore.getActiveSceneEvents();
@@ -229,7 +244,14 @@ const publishGraphMutation = (source: import('ws').WebSocket, result: GraphMutat
 router.register('register', new RegisterHandler(registry, graphStore, rateLimitEventsPerSecond, systemConfig));
 router.register('graph:command', new GraphCommandHandler(registry, graphStore, publishGraphMutation));
 router.register('runtime:command', new RuntimeCommandHandler(registry, runtimeUpdateDispatcher, rateLimitEventsPerSecond));
-const actionHandler = new ActionHandler(registry, graphStore, actionInputManager, publishGraphMutation, runtimeUpdateDispatcher);
+const actionHandler = new ActionHandler(
+  registry,
+  graphStore,
+  actionInputManager,
+  publishGraphMutation,
+  runtimeUpdateDispatcher,
+  animationManager,
+);
 router.register('action:input', actionHandler);
 router.register('action:trigger', actionHandler);
 router.register('events', new EventsHandler(registry));

@@ -73,15 +73,46 @@ export interface ActionUnknownExecuteItem {
   [key: string]: unknown;
 }
 
+export interface ActionAnimationExecuteItem {
+  type: 'animation';
+  /** Animation definition guid (`animations[].guid`). */
+  guid: string;
+}
+
 export type ActionExecuteItem =
   | ActionSceneExecuteItem
   | ActionIntentExecuteItem
+  | ActionAnimationExecuteItem
   | ActionUnknownExecuteItem;
 
 export interface ActionDefinition {
   guid?: string;
   name: string;
   execute: ActionExecuteItem[];
+}
+
+export interface AnimationStep {
+  time: number;
+  args?: Record<string, unknown>;
+}
+
+/** Stored under `animations` in project YAML; paired with an auto-managed runner `action`. */
+export interface AnimationDefinition {
+  guid?: string;
+  name?: string;
+  class: string;
+  /** Intent GUID to drive (preferred). */
+  targetIntent?: string;
+  /** Legacy / alias for `targetIntent` (hub accepts either). */
+  intent?: string;
+  /** Full cycles: `0` means infinite. */
+  repeat?: number;
+  /**
+   * One loop duration in milliseconds. Steps at `time >= length` are ignored until `length`
+   * is raised. Omit for legacy behaviour: cycle length defaults to max step `time`.
+   */
+  length?: number;
+  steps: AnimationStep[];
 }
 
 export interface InputDefinition {
@@ -141,6 +172,7 @@ interface Project {
   intents?: ControllerIntent[];
   scenes?: Scene[];
   actions?: ActionDefinition[];
+  animations?: AnimationDefinition[];
   activeScene?: string;
   zones: Zone[];
   controller?: ControllerDef[];
@@ -232,6 +264,9 @@ export class ProjectManager {
     for (const action of this.project.actions ?? []) {
       ensureGuid(action as unknown as Record<string, unknown>, 'action');
     }
+    for (const anim of this.project.animations ?? []) {
+      ensureGuid(anim as unknown as Record<string, unknown>, 'animation');
+    }
     for (const zone of this.project.zones) {
       ensureGuid(zone as unknown as Record<string, unknown>, 'zone');
       for (const fixture of zone.fixtures) {
@@ -244,7 +279,17 @@ export class ProjectManager {
         ensureGuid(input as unknown as Record<string, unknown>, 'input');
       }
     }
-    const knownTopLevel = new Set(['name', 'zone-to-renderer', 'intents', 'scenes', 'actions', 'activeScene', 'zones', 'controller']);
+    const knownTopLevel = new Set([
+      'name',
+      'zone-to-renderer',
+      'intents',
+      'scenes',
+      'actions',
+      'animations',
+      'activeScene',
+      'zones',
+      'controller',
+    ]);
     for (const [key, value] of Object.entries(this.project as unknown as Record<string, unknown>)) {
       if (knownTopLevel.has(key) || !Array.isArray(value)) continue;
       const prefix = key.endsWith('s') ? key.slice(0, -1) : key;
@@ -468,6 +513,9 @@ export class ProjectManager {
     for (const action of this.project?.actions ?? []) {
       add('action', action.guid, { ...action });
     }
+    for (const anim of this.project?.animations ?? []) {
+      add('animation', anim.guid, { ...(anim as unknown as Record<string, unknown>) });
+    }
     for (const controller of this.project?.controller ?? []) {
       add('controller', controller.guid, { ...controller });
       for (const input of controller.inputs ?? []) {
@@ -484,7 +532,17 @@ export class ProjectManager {
         });
       }
     }
-    const knownTopLevel = new Set(['name', 'zone-to-renderer', 'intents', 'scenes', 'actions', 'activeScene', 'zones', 'controller']);
+    const knownTopLevel = new Set([
+      'name',
+      'zone-to-renderer',
+      'intents',
+      'scenes',
+      'actions',
+      'animations',
+      'activeScene',
+      'zones',
+      'controller',
+    ]);
     for (const [key, value] of Object.entries(this.project as unknown as Record<string, unknown>)) {
       if (knownTopLevel.has(key) || !Array.isArray(value)) continue;
       const entityType = key.endsWith('s') ? key.slice(0, -1) : key;
@@ -734,6 +792,14 @@ export class ProjectManager {
 
   getActionsWirePayload(): ActionDefinition[] {
     return this.project?.actions ?? [];
+  }
+
+  getAnimationsWirePayload(): AnimationDefinition[] {
+    return this.project?.animations ?? [];
+  }
+
+  getAnimationByGuid(guid: string): AnimationDefinition | undefined {
+    return (this.project?.animations ?? []).find(a => a.guid === guid);
   }
 
   getSceneByGuid(guid: string): Scene | undefined {

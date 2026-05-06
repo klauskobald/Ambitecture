@@ -405,3 +405,19 @@ testParams:
   003-runtime-echo.ts:
     location: [0, 0]
     controllerGuid: controller-web-test-001
+
+  004-animation.ts:
+    location: [0, 0]
+    sceneName: "5"
+    repeat: 50
+    length: 300
+    intentGuid: color-3
+    animationGuid: animation-test-1
+    runnerActionGuid: animation-runner-animation-test-1
+    steps:
+      - time: 0
+        args:
+          "params.alpha": 1
+      - time: 150
+        args:
+          "params.alpha": 0.1

@@ -1,6 +1,8 @@
-import { ProjectManager, ControllerIntent, FixtureMoveUpdate } from './ProjectManager';
+import { ProjectManager, ControllerIntent, FixtureMoveUpdate, ActionDefinition, AnimationDefinition } from './ProjectManager';
 import type { RuntimeUpdateDispatcher } from './RuntimeUpdateDispatcher';
 import type { RuntimeIntentStore } from './RuntimeIntentStore';
+import type { AnimationManager } from './animation/AnimationManager';
+import { companionActionGuid } from './animation/AnimationManager';
 import {
   GraphCommand,
   GraphDelta,
@@ -23,12 +25,14 @@ export class ProjectGraphStore {
     private actionInputManager?: ActionInputManager,
     private runtimeMerge?: RuntimeUpdateDispatcher,
     private runtimeIntentStore?: RuntimeIntentStore,
+    private animationManager?: AnimationManager,
   ) { }
 
   useProject(name: string, callback: () => void): void {
     this.projectManager.useProject(name, () => {
       this.revision += 1;
       this.runtimeMerge?.clearRuntimeIntentMergeCache();
+      this.animationManager?.stopAll('project reloaded');
       callback();
     });
   }
@@ -106,7 +110,7 @@ export class ProjectGraphStore {
   applyGraphCommand(command: GraphCommand, location?: [number, number]): GraphMutationResult {
     switch (command.entityType) {
       case 'intent':
-        return this.applyIntentCommand(command);
+        return this.applyIntentCommand(command, location);
       case 'fixture':
         return this.applyFixtureCommand(command);
       case 'scene':
@@ -140,6 +144,8 @@ export class ProjectGraphStore {
       }
       case 'controller':
         return this.applyControllerCommand(command);
+      case 'animation':
+        return this.applyAnimationCommand(command);
       default:
         return this.applyOpaqueCommand(command);
     }
@@ -193,6 +199,7 @@ export class ProjectGraphStore {
     Logger.info(
       `[graph] activated scene "${sceneName}" at ${location?.join(', ') ?? 'unknown location'} (${persistence}${clearNote})`,
     );
+    this.animationManager?.notifyActiveSceneIntentMembershipChanged(location);
     return {
       revision: this.revision,
       controllerDeltas: [delta],
@@ -202,7 +209,7 @@ export class ProjectGraphStore {
     };
   }
 
-  private applyIntentCommand(command: GraphCommand): GraphMutationResult {
+  private applyIntentCommand(command: GraphCommand, _location?: [number, number]): GraphMutationResult {
     const existing = this.projectManager.getIntentDefinition(command.guid);
     if (command.op === 'remove') {
       if (!existing) return emptyMutationResult(this.revision);
@@ -210,6 +217,7 @@ export class ProjectGraphStore {
         .filter(intent => intent.guid !== command.guid);
       this.projectManager.setProjectData('intents', remaining);
       this.runtimeMerge?.clearRuntimeIntentMergeCache();
+      this.animationManager?.onIntentRemovedFromProject(command.guid);
       const now = Date.now();
       const delta = this.makeDelta({ ...command, persistence: 'runtimeAndDurable' });
       return {
@@ -315,6 +323,7 @@ export class ProjectGraphStore {
     this.runtimeMerge?.clearRuntimeIntentMergeCache();
     const delta = this.makeDelta({ ...command, persistence: command.persistence ?? 'runtimeAndDurable' });
     const cleanupResults = cleanupCommands.map(cleanupCommand => this.applyGraphCommand(cleanupCommand));
+    this.animationManager?.notifyActiveSceneIntentMembershipChanged(undefined);
     return {
       revision: this.revision,
       controllerDeltas: [delta, ...cleanupResults.flatMap(result => result.controllerDeltas)],
@@ -349,6 +358,80 @@ export class ProjectGraphStore {
       rendererEvents: [],
       rendererConfigChangedFor: [],
       durableChanged: true,
+    };
+  }
+
+  private applyAnimationCommand(command: GraphCommand): GraphMutationResult {
+    const animations = this.projectManager.getAnimationsWirePayload();
+    const nextAnimations = command.op === 'remove'
+      ? animations.filter(a => a.guid !== command.guid)
+      : animations.map(a => {
+        if (a.guid !== command.guid) return a;
+        const base = cloneRecord(a as unknown as Record<string, unknown>);
+        const next = command.patch || command.remove
+          ? applyDotPathPatch(base, command.patch ?? {}, command.remove)
+          : cloneRecord(command.value ?? base);
+        next['guid'] = command.guid;
+        return next as unknown as AnimationDefinition;
+      });
+    const existing = animations.some(a => a.guid === command.guid);
+    if (!existing && command.op !== 'remove') {
+      const value = cloneRecord(command.value ?? { guid: command.guid });
+      value['guid'] = command.guid;
+      nextAnimations.push(value as unknown as AnimationDefinition);
+    }
+    this.projectManager.setProjectData('animations', nextAnimations);
+
+    const persistence = command.persistence ?? 'runtimeAndDurable';
+    const durableChanged = persistence === 'durable' || persistence === 'runtimeAndDurable';
+    const runnerGuid = companionActionGuid(command.guid);
+
+    const animationDelta = this.makeDelta({ ...command, persistence });
+
+    if (command.op === 'remove') {
+      this.animationManager?.onAnimationRemoved(command.guid);
+      const actions = this.projectManager.getActionsWirePayload().filter(a => a.guid !== runnerGuid);
+      this.projectManager.setProjectData('actions', actions);
+      const actionDelta = this.makeDelta({
+        op: 'remove',
+        entityType: 'action',
+        guid: runnerGuid,
+        persistence,
+      });
+      return {
+        revision: this.revision,
+        controllerDeltas: [animationDelta, actionDelta],
+        rendererEvents: [],
+        rendererConfigChangedFor: [],
+        durableChanged,
+      };
+    }
+
+    const animRow = nextAnimations.find(a => a.guid === command.guid);
+    const animName = typeof animRow?.name === 'string' && animRow.name.length > 0 ? animRow.name : command.guid;
+    const companionAction: ActionDefinition = {
+      guid: runnerGuid,
+      name: `Run ${animName}`,
+      execute: [{ type: 'animation', guid: command.guid }],
+    };
+    const actions = this.projectManager.getActionsWirePayload().filter(a => a.guid !== runnerGuid);
+    actions.push(companionAction);
+    this.projectManager.setProjectData('actions', actions);
+
+    const actionDelta = this.makeDelta({
+      op: 'upsert',
+      entityType: 'action',
+      guid: runnerGuid,
+      value: companionAction as unknown as Record<string, unknown>,
+      persistence,
+    });
+
+    return {
+      revision: this.revision,
+      controllerDeltas: [animationDelta, actionDelta],
+      rendererEvents: [],
+      rendererConfigChangedFor: [],
+      durableChanged,
     };
   }
 

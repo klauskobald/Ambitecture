@@ -418,6 +418,7 @@ testParams:
       length: 12000
       lerp:
         quantization: 0.01
+        minMs: 50 
         time: 3000
         curve: linear
       steps:

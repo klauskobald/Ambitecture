@@ -76,7 +76,7 @@ export function diffNumericLeaves(fromRoot: DotPathRecord, toRoot: DotPathRecord
 export interface PlannedLerpKeyframesSegment {
   /**
    * Substep cardinality for this segment; `n <= 1` means no interpolated fires (anchors only).
-   * May be capped to {@link MAX_LERP_SUBSTEPS_PER_SEGMENT}.
+   * May cap to {@link MAX_LERP_SUBSTEPS_PER_SEGMENT} or tighter via {@link capNFromMinSpacing}.
    */
   n: number;
 
@@ -84,13 +84,45 @@ export interface PlannedLerpKeyframesSegment {
   intermediateDotPatches: Record<string, number>[];
 }
 
-/** `n = max(1, max over changing leaves of ceil(|Δ| / quantizationEff))`; may cap and invoke `onCappedOriginalN`. */
+/**
+ * Clamp segment step count `n` so uniform spacing along [segmentStart … segmentEnd]
+ * satisfies `wallSpan/(n-1) >= minGapWallMs` (intermediate fires only; same grid as planner).
+ *
+ * (`n`: eased samples cardinality; intermediates fire at fractions `k/(n-1)` for `k = 0 … n-2`).
+ */
+export function capNFromMinSpacing(
+  n: number,
+  wallSpanMs: number,
+  minGapWallMs: number,
+): number {
+  if (!(minGapWallMs > 0 && Number.isFinite(minGapWallMs))) {
+    return n;
+  }
+  if (!(wallSpanMs > 0 && Number.isFinite(wallSpanMs))) {
+    return Math.min(n, 1);
+  }
+  /** `span/(nCap-1) >= gap` ⇒ `nCap - 1 <= span/gap` ⇒ `nCap <= floor(span/gap)+1`. */
+  const nCapGap = Math.max(1, Math.floor(wallSpanMs / minGapWallMs) + 1);
+  return Math.min(n, nCapGap);
+}
+
+export interface PlanIntermediateLerpOptions {
+  /**
+   * When both set with {@link minGapWallMs}, `n` is capped so consecutive planned lerp
+   * times are ≥ `minGapWallMs` apart (wall-ms; pass `nominalMinMs × timescale` from animator).
+   */
+  segmentWallSpanMs?: number;
+  minGapWallMs?: number;
+  onQuantizationCappedOriginalN?: (originalN: number) => void;
+}
+
+/** `n = max(1, max over changing leaves of ceil(|Δ| / quantizationEff))`; may cap and invoke callbacks. */
 export function planIntermediateLerpPatches(
   fromIntent: DotPathRecord,
   toIntent: DotPathRecord,
   quantizationEffective: number,
   curveName: unknown,
-  onCappedOriginalN?: (originalN: number) => void,
+  opts?: PlanIntermediateLerpOptions,
 ): PlannedLerpKeyframesSegment {
   const leaves = diffNumericLeaves(fromIntent, toIntent);
   let nRaw = 1;
@@ -103,8 +135,14 @@ export function planIntermediateLerpPatches(
 
   let n = Math.max(1, nRaw);
   if (n > MAX_LERP_SUBSTEPS_PER_SEGMENT) {
-    onCappedOriginalN?.(n);
+    opts?.onQuantizationCappedOriginalN?.(n);
     n = MAX_LERP_SUBSTEPS_PER_SEGMENT;
+  }
+
+  const gapSpan = opts?.segmentWallSpanMs;
+  const minGapWall = opts?.minGapWallMs;
+  if (gapSpan !== undefined && minGapWall !== undefined) {
+    n = capNFromMinSpacing(n, gapSpan, minGapWall);
   }
 
   const intermediateDotPatches: Record<string, number>[] = [];

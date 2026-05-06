@@ -9,6 +9,7 @@ import {
   MAX_LERP_SUBSTEPS_PER_SEGMENT,
   effectiveLerpQuantization,
   planIntermediateLerpPatches,
+  type PlanIntermediateLerpOptions,
 } from './paramLerpSchedule';
 
 export type IntentAccessFn = (guid: string) => ControllerIntent | undefined;
@@ -117,12 +118,13 @@ export class KeyframeAnimator {
     return raw;
   }
 
-  /** Optional `content.lerp`: quantized eased substitution toward the next anchor; omit or disable when `time` ≤ 0. */
+  /** Optional `content.lerp`: `minMs` (nominal) lower-bounds spacing between successive lerp `events` (`× timescale` on hub wall clock). Omit or omit `lerp.minMs` → quantization-only cardinality. */
   private parseContentLerp():
     | {
       timeMs: number;
       quantizationEff: number;
       curveName: unknown;
+      minNominalMs?: number;
     }
     | null {
     const cfg = this.keyframeConfigBag();
@@ -135,11 +137,19 @@ export class KeyframeAnimator {
     if (typeof timeRaw !== 'number' || !Number.isFinite(timeRaw) || timeRaw <= 0) {
       return null;
     }
-    return {
+    let minNominalMs: number | undefined;
+    const minRaw = lr['minMs'];
+    if (typeof minRaw === 'number' && Number.isFinite(minRaw) && minRaw > 0) {
+      minNominalMs = minRaw;
+    }
+
+    const out = {
       timeMs: timeRaw,
       quantizationEff: effectiveLerpQuantization(lr['quantization']),
       curveName: lr['curve'],
+      ...(minNominalMs !== undefined ? { minNominalMs } : {}),
     };
+    return out;
   }
 
   private parseSteps(): {
@@ -368,7 +378,12 @@ export class KeyframeAnimator {
       this.timers.push(nextT);
     };
 
-    const scheduleCycleWithLerp = (lerp: { timeMs: number; quantizationEff: number; curveName: unknown }): ((cIdx: number) => void) => {
+    const scheduleCycleWithLerp = (lerp: {
+      timeMs: number;
+      quantizationEff: number;
+      curveName: unknown;
+      minNominalMs?: number;
+    }): ((cIdx: number) => void) => {
       return (cIdx: number): void => {
         /**
          * When this segment's lerp window starts, plan **only** this segment's substeps and call
@@ -396,6 +411,8 @@ export class KeyframeAnimator {
             prevAnchorWallAbs,
             nextAnchorWallAbs - lerp.timeMs * this.timescale,
           );
+          /** Wall span for this eased segment; spacing cap uses nominal `lerp.minMs` × hub timescale. */
+          const span = nextAnchorWallAbs - segmentStartMs;
 
           this.pushTimeoutAtFireWall(segmentStartMs, () => {
             if (this.cancelled || !this.inScene) return;
@@ -428,23 +445,30 @@ export class KeyframeAnimator {
                 )
                 : (baseIntent as unknown as Record<string, unknown>);
 
+            const planOpts: PlanIntermediateLerpOptions = {
+                onQuantizationCappedOriginalN: originalN =>
+                  Logger.warn(
+                    '[keyframeAnimator] lerp substep cap:',
+                    `${String(originalN)} → ${String(MAX_LERP_SUBSTEPS_PER_SEGMENT)}`,
+                  ),
+              };
+            if (typeof lerp.minNominalMs === 'number' && Number.isFinite(lerp.minNominalMs)) {
+              planOpts.segmentWallSpanMs = span;
+              planOpts.minGapWallMs = lerp.minNominalMs * this.timescale;
+            }
+
             const planned = planIntermediateLerpPatches(
               fromResolvedRaw,
               toResolvedRaw,
               lerp.quantizationEff,
               lerp.curveName,
-              originalN =>
-                Logger.warn(
-                  '[keyframeAnimator] lerp substep cap:',
-                  `${String(originalN)} → ${String(MAX_LERP_SUBSTEPS_PER_SEGMENT)}`,
-                ),
+              planOpts,
             );
 
             if (planned.intermediateDotPatches.length === 0) {
               return;
             }
 
-            const span = nextAnchorWallAbs - segmentStartMs;
             const denom = planned.n - 1;
             const fromBaseline = cloneRecord(fromResolvedRaw);
 

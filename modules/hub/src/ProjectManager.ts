@@ -107,7 +107,7 @@ export interface AnimationDefinition {
   intent?: string;
   /**
    * Class-specific payload. For `keyframeAnimator`: `repeat`, `length`, `steps` belong here.
-   * Optional `lerp`: `{ quantization, time, curve }` enables quantized eased ramps between anchors (`time <= 0` disables).
+   * Optional `lerp`: `{ quantization, time, curve, minMs? }` enables quantized eased ramps between anchors (`time <= 0` disables). `minMs` (nominal) lowers substep count so consecutive lerp `scheduled` gaps are at least `minMs × playback timescale` on the hub wall clock.
    * @see KeyframeAnimator — still accepts legacy root-level repeat/length/steps if `content` is absent.
    */
   content?: Record<string, unknown>;

@@ -6,6 +6,7 @@ import { projectGraph } from '../core/projectGraph.js'
 import { sendActionTrigger } from '../core/outboundQueue.js'
 import {
   isAnimationPlaying,
+  getAnimationStatusMessage,
   subscribeAnimationPlayState
 } from '../core/animationPlayRegistry.js'
 import { getAnimatorViewer } from './animators/animatorViewerRegistry.js'
@@ -63,6 +64,11 @@ export function createPerformAnimatePanel () {
       hint.textContent = ` (${viewer ? viewer.getName() : row.class})`
       label.appendChild(hint)
     }
+
+    const statusEl = document.createElement('span')
+    statusEl.className = 'perform-animate-row__status'
+    statusEl.textContent = getAnimationStatusMessage(row.guid)
+    label.appendChild(statusEl)
 
     const toggle = document.createElement('button')
     toggle.type = 'button'

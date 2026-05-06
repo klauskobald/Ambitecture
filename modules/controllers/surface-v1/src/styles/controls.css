@@ -457,6 +457,15 @@
   white-space: nowrap;
 }
 
+.perform-animate-row__status {
+  width: 100%;
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .perform-animate-toggle {
   flex: 0 0 auto;
   width: 2.25rem;

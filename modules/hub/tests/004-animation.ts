@@ -15,6 +15,8 @@ interface AnimationKeyframeContentRead {
   repeat: number;
   length: number;
   steps: AnimationKeyframeStep[];
+  /** Full `content` object for hub upsert (`lerp`, etc. preserved alongside normalized steps). */
+  contentForUpsert: Record<string, unknown>;
 }
 
 interface AnimationTestConfig {
@@ -26,6 +28,7 @@ interface AnimationTestConfig {
   length: number;
   steps: AnimationKeyframeStep[];
   animationGuid: string;
+  contentForUpsert: Record<string, unknown>;
 }
 
 function parseKeyframeStepsStrict(raw: unknown): AnimationKeyframeStep[] {
@@ -81,7 +84,12 @@ function readKeyframeContentFromParams(testconfig: Record<string, unknown>): Ani
 
   const steps = parseKeyframeStepsStrict(content['steps']);
 
-  return { repeat: repeatRaw, length: lengthRaw, steps };
+  const contentForUpsert: Record<string, unknown> = { ...content };
+  contentForUpsert['repeat'] = repeatRaw;
+  contentForUpsert['length'] = lengthRaw;
+  contentForUpsert['steps'] = steps;
+
+  return { repeat: repeatRaw, length: lengthRaw, steps, contentForUpsert };
 }
 
 function buildEnvelope(type: string, location: [number, number], payload: unknown): string {
@@ -110,6 +118,7 @@ function readConfig(testconfig: Record<string, unknown>): AnimationTestConfig {
     length: keyframe.length,
     steps: keyframe.steps,
     animationGuid: String(testconfig['animationGuid'] ?? ''),
+    contentForUpsert: keyframe.contentForUpsert,
   };
 }
 
@@ -148,11 +157,7 @@ function upsertTestAnimation(ws: WebSocket, location: [number, number], config: 
       name: 'Integration animation',
       class: config.class,
       targetIntent: config.intentGuid,
-      content: {
-        repeat: config.repeat,
-        length: config.length,
-        steps: config.steps,
-      },
+      content: config.contentForUpsert,
     },
     persistence: 'runtimeAndDurable',
   }));
@@ -334,20 +339,21 @@ export async function main(
         const snapshot = firstMatchingIntentEvent(raw, config.intentGuid);
         if (snapshot === undefined) return;
         seenSnapshots.push(snapshot);
-        if (!firstKeyframeSamplesValidated && seenSnapshots.length >= effectiveStepsForHub.length) {
-          const slice = seenSnapshots.slice(0, effectiveStepsForHub.length);
+
+        const anchorsFoundInOrder = (): boolean => {
+          let searchFrom = 0;
           for (let i = 0; i < effectiveStepsForHub.length; i++) {
-            const snap = slice[i];
             const step = effectiveStepsForHub[i]!;
-            if (snap === undefined || !snapshotMatchesKeyframeArgs(snap, step.args)) {
-              failTest(
-                new Error(
-                  `keyframe snapshot ${i} (time=${step.time}) does not match step args (${JSON.stringify(step.args)}) within length=${config.length}; got ${snap === undefined ? 'missing' : JSON.stringify(snap)}`,
-                ),
-              );
-              return;
-            }
+            const rel = seenSnapshots.slice(searchFrom).findIndex(s =>
+              snapshotMatchesKeyframeArgs(s, step.args),
+            );
+            if (rel < 0) return false;
+            searchFrom += rel + 1;
           }
+          return true;
+        };
+
+        if (!firstKeyframeSamplesValidated && anchorsFoundInOrder()) {
           if (hubStatusLog.length === 0) {
             failTest(new Error('expected at least one hub:status animation line on controller'));
             return;

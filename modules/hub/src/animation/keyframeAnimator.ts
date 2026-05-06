@@ -1,8 +1,15 @@
 import type { ControllerIntent } from '../ProjectManager';
 import type { AnimationRunStatus } from '../hubStatusTypes';
+import { Logger } from '../Logger';
 import { applyDotPathPatch, cloneRecord } from '../dotPath';
 import { intentToEvent } from '../handlers/intentHelpers';
 import { transformIntentToNormalized } from '../intents';
+
+import {
+  MAX_LERP_SUBSTEPS_PER_SEGMENT,
+  effectiveLerpQuantization,
+  planIntermediateLerpPatches,
+} from './paramLerpSchedule';
 
 export type IntentAccessFn = (guid: string) => ControllerIntent | undefined;
 
@@ -20,9 +27,9 @@ export interface KeyframeAnimatorCallbacks {
 }
 
 /**
- * Minimal keyframe runner: one renderer event per step, no interpolation.
- * Keyframe knobs (`repeat`, `length`, `steps`) live in `definition.content`, or legacy root-level
- * if `content` is omitted.
+ * Keyframe runner: one renderer event per step by default; optional `content.lerp` adds quantized
+ * eased ramps between successive keyframes. Keyframe knobs (`repeat`, `length`, `steps`, `lerp`) live in
+ * `definition.content`, or legacy root-level if `content` is omitted.
  *
  * Optional `length` (ms): one loop spans `[0, length)` — steps at `time >= length` stay dormant until length is raised.
  * If `length` is omitted, cycle length equals the largest step `time` (legacy).
@@ -90,6 +97,31 @@ export class KeyframeAnimator {
       return content as Record<string, unknown>;
     }
     return raw;
+  }
+
+  /** Optional `content.lerp`: quantized eased substitution toward the next anchor; omit or disable when `time` ≤ 0. */
+  private parseContentLerp():
+    | {
+      timeMs: number;
+      quantizationEff: number;
+      curveName: unknown;
+    }
+    | null {
+    const cfg = this.keyframeConfigBag();
+    const lerp = cfg['lerp'];
+    if (!lerp || typeof lerp !== 'object' || Array.isArray(lerp)) {
+      return null;
+    }
+    const lr = lerp as Record<string, unknown>;
+    const timeRaw = lr['time'];
+    if (typeof timeRaw !== 'number' || !Number.isFinite(timeRaw) || timeRaw <= 0) {
+      return null;
+    }
+    return {
+      timeMs: timeRaw,
+      quantizationEff: effectiveLerpQuantization(lr['quantization']),
+      curveName: lr['curve'],
+    };
   }
 
   private parseSteps(): {
@@ -161,6 +193,55 @@ export class KeyframeAnimator {
     return undefined;
   }
 
+  private pushTimeoutAtFireWall(
+    fireWallAbs: number,
+    run: (fireAt: number) => void,
+  ): void {
+    const delay = Math.max(0, fireWallAbs - Date.now());
+    const t = setTimeout(() => {
+      run(fireWallAbs);
+    }, delay);
+    this.timers.push(t);
+  }
+
+  private emitOneKeyframe(
+    fireWallAbs: number,
+    targetGuid: string,
+    intentAccess: IntentAccessFn,
+    schedule: (entries: KeyframeScheduleEntry[]) => void,
+    stepArgs: Record<string, unknown> | undefined,
+    statusLine: string,
+    statusData: Record<string, unknown>,
+  ): void {
+    if (this.cancelled || !this.inScene) return;
+
+    const baseIntent = intentAccess(targetGuid);
+    if (!baseIntent) {
+      this.cancel('Target intent unavailable');
+      return;
+    }
+
+    const patched =
+      stepArgs && Object.keys(stepArgs).length > 0
+        ? (applyDotPathPatch(
+          cloneRecord(baseIntent as unknown as Record<string, unknown>),
+          stepArgs,
+          [],
+        ) as unknown as ControllerIntent)
+        : baseIntent;
+
+    const normalized = transformIntentToNormalized(patched);
+    const ev = intentToEvent(normalized, fireWallAbs);
+
+    schedule([{ event: ev, scheduledAt: fireWallAbs }]);
+
+    this.callbacks.onStatus({
+      status: 'started',
+      message: { text: statusLine },
+      data: statusData,
+    });
+  }
+
   start(intentAccess: IntentAccessFn, schedule: (entries: KeyframeScheduleEntry[]) => void): void {
     this.cancelled = false;
     const { steps, repeatLoops, cycleLengthMs, lengthClampActive, clippedByLength } =
@@ -191,11 +272,17 @@ export class KeyframeAnimator {
       return;
     }
 
+    const lerpSpec = this.parseContentLerp();
     const period = cycleLengthMs;
     const infinite = repeatLoops === 0;
     const totalCycles = infinite ? Number.POSITIVE_INFINITY : repeatLoops;
 
     const startWall = Date.now();
+
+    const baseStatusParts = (): Record<string, unknown> =>
+      lengthClampActive
+        ? { lengthMs: period, clippedSteps: clippedByLength }
+        : {};
 
     this.callbacks.onStatus({
       status: 'started',
@@ -209,7 +296,7 @@ export class KeyframeAnimator {
       },
     });
 
-    const scheduleCycle = (cIdx: number): void => {
+    const scheduleCyclePlain = (cIdx: number): void => {
       if (this.cancelled || !this.inScene) return;
       if (!infinite && cIdx >= totalCycles) {
         this.callbacks.onStatus({
@@ -229,65 +316,207 @@ export class KeyframeAnimator {
             phase: 'loop',
             cycle: loopNum,
             totalStepsThisLoop: steps.length,
-            ...(lengthClampActive ? { lengthMs: period, clippedSteps: clippedByLength } : {}),
+            ...baseStatusParts(),
           },
         });
       }
 
-      for (let i = 0; i < steps.length; i++) {
+      const L = steps.length;
+
+      for (let i = 0; i < L; i++) {
         const step = steps[i];
         if (!step) continue;
-        const fireAt = startWall + cIdx * period + step.time;
-        const delay = Math.max(0, fireAt - Date.now());
+        const fireWallAbs = startWall + cIdx * period + step.time;
         const stepIndex = i + 1;
 
         const t = setTimeout(() => {
-          if (this.cancelled || !this.inScene) return;
-
-          const baseIntent = intentAccess(targetGuid);
-          if (!baseIntent) {
-            this.cancel('Target intent unavailable');
-            return;
-          }
-
-          const patched =
-            step.args && Object.keys(step.args).length > 0
-              ? (applyDotPathPatch(
-                cloneRecord(baseIntent as unknown as Record<string, unknown>),
-                step.args,
-                [],
-              ) as unknown as ControllerIntent)
-              : baseIntent;
-
-          const normalized = transformIntentToNormalized(patched);
-          const ev = intentToEvent(normalized, fireAt);
-
-          schedule([{ event: ev, scheduledAt: fireAt }]);
-
-          this.callbacks.onStatus({
-            status: 'started',
-            message: {
-              text: `${totalCycles === Number.POSITIVE_INFINITY ? `${cIdx + 1}: ` : ''}step ${stepIndex} of ${steps.length}`,
-            },
-            data: {
-              step: stepIndex,
-              total: steps.length,
-              cycle: cIdx + 1,
-              ...(lengthClampActive ? { lengthMs: period, clippedSteps: clippedByLength } : {}),
-            },
+          const statusLine =
+            `${totalCycles === Number.POSITIVE_INFINITY ? `${cIdx + 1}: ` : ''}step ${stepIndex} of ${L}`;
+          this.emitOneKeyframe(fireWallAbs, targetGuid, intentAccess, schedule, step.args, statusLine, {
+            step: stepIndex,
+            total: L,
+            cycle: cIdx + 1,
+            ...baseStatusParts(),
           });
-        }, delay);
+        }, Math.max(0, fireWallAbs - Date.now()));
         this.timers.push(t);
       }
 
       const nextCycleAt = startWall + (cIdx + 1) * period;
       const nextDelay = Math.max(0, nextCycleAt - Date.now());
       const nextT = setTimeout(() => {
-        scheduleCycle(cIdx + 1);
+        scheduleCyclePlain(cIdx + 1);
       }, nextDelay);
       this.timers.push(nextT);
     };
 
-    scheduleCycle(0);
+    const scheduleCycleWithLerp = (lerp: { timeMs: number; quantizationEff: number; curveName: unknown }): ((cIdx: number) => void) => {
+      return (cIdx: number): void => {
+        const scheduleKeyedSegment = (
+          fromIdx: number,
+          toIdx: number,
+          wrapToNextCycle: boolean,
+        ): void => {
+        const prevStep = steps[fromIdx];
+        const nextStep = steps[toIdx];
+        if (!prevStep || !nextStep) return;
+
+        const prevMsOffset = cIdx * period + prevStep.time;
+        const nextMsOffset = wrapToNextCycle
+          ? (cIdx + 1) * period + nextStep.time
+          : cIdx * period + nextStep.time;
+
+        const prevAnchorWallAbs = startWall + prevMsOffset;
+        const nextAnchorWallAbs = startWall + nextMsOffset;
+
+        /** Overlap clamp: substeps in `[next - lerp.time, next]` vs cycle wall; start `max(prev anchor, next - lerp.time)`. */
+        const segmentStartMs = Math.max(prevAnchorWallAbs, nextAnchorWallAbs - lerp.timeMs);
+
+        const baseIntent = intentAccess(targetGuid);
+        if (!baseIntent) return;
+
+        const fromResolvedRaw =
+          prevStep.args !== undefined &&
+            typeof prevStep.args === 'object' &&
+            Array.isArray(prevStep.args) === false &&
+            Object.keys(prevStep.args).length > 0
+            ? applyDotPathPatch(
+              cloneRecord(baseIntent as unknown as Record<string, unknown>),
+              prevStep.args,
+              [],
+            )
+            : (baseIntent as unknown as Record<string, unknown>);
+
+        const nextArgs = nextStep.args;
+        const toResolvedRaw =
+          nextArgs !== undefined && Object.keys(nextArgs).length > 0
+            ? applyDotPathPatch(
+              cloneRecord(baseIntent as unknown as Record<string, unknown>),
+              nextArgs,
+              [],
+            )
+            : (baseIntent as unknown as Record<string, unknown>);
+
+        const planned = planIntermediateLerpPatches(
+          fromResolvedRaw,
+          toResolvedRaw,
+          lerp.quantizationEff,
+          lerp.curveName,
+          originalN =>
+            Logger.warn(
+              '[keyframeAnimator] lerp substep cap:',
+              `${String(originalN)} → ${String(MAX_LERP_SUBSTEPS_PER_SEGMENT)}`,
+            ),
+        );
+
+        if (planned.intermediateDotPatches.length === 0) {
+          return;
+        }
+
+        const span = nextAnchorWallAbs - segmentStartMs;
+        const denom = planned.n - 1;
+
+        planned.intermediateDotPatches.forEach((dotPatch, k) => {
+          const fireWallAbs = segmentStartMs + (k / denom) * span;
+
+          this.pushTimeoutAtFireWall(fireWallAbs, fireAt => {
+            if (this.cancelled || !this.inScene) return;
+            const baseIntentNow = intentAccess(targetGuid);
+            if (!baseIntentNow) {
+              this.cancel('Target intent unavailable');
+              return;
+            }
+
+            const fromArgs = prevStep.args;
+            const fromResolved =
+              fromArgs !== undefined && Object.keys(fromArgs).length > 0
+                ? (applyDotPathPatch(
+                  cloneRecord(baseIntentNow as unknown as Record<string, unknown>),
+                  fromArgs,
+                  [],
+                ) as unknown as ControllerIntent)
+                : baseIntentNow;
+
+            const patchRecord = dotPatch as Record<string, unknown>;
+
+            const patched = (
+              Object.keys(patchRecord).length > 0
+                ? applyDotPathPatch(cloneRecord(fromResolved as unknown as Record<string, unknown>), patchRecord, [])
+                : cloneRecord(fromResolved as unknown as Record<string, unknown>)
+            ) as unknown as ControllerIntent;
+
+            const normalized = transformIntentToNormalized(patched);
+            const ev = intentToEvent(normalized, fireAt);
+            schedule([{ event: ev, scheduledAt: fireAt }]);
+          });
+        });
+      };
+
+        if (this.cancelled || !this.inScene) return;
+        if (!infinite && cIdx >= totalCycles) {
+          this.callbacks.onStatus({
+            status: 'stopped',
+            message: { text: 'Animation finished' },
+            data: { cycles: cIdx, completed: true },
+          });
+          return;
+        }
+
+        if (cIdx >= 1) {
+          const loopNum = cIdx + 1;
+          this.callbacks.onStatus({
+            status: 'started',
+            message: { text: `loop ${loopNum}` },
+            data: {
+              phase: 'loop',
+              cycle: loopNum,
+              totalStepsThisLoop: steps.length,
+              ...baseStatusParts(),
+            },
+          });
+        }
+
+        const L = steps.length;
+
+        for (let i = 0; i < L; i++) {
+          const step = steps[i];
+          if (!step) continue;
+          const fireWallAbs = startWall + cIdx * period + step.time;
+          const stepIndex = i + 1;
+
+          this.pushTimeoutAtFireWall(fireWallAbs, () => {
+            const statusLine =
+              `${totalCycles === Number.POSITIVE_INFINITY ? `${cIdx + 1}: ` : ''}step ${stepIndex} of ${L}`;
+            this.emitOneKeyframe(fireWallAbs, targetGuid, intentAccess, schedule, step.args, statusLine, {
+              step: stepIndex,
+              total: L,
+              cycle: cIdx + 1,
+              ...baseStatusParts(),
+            });
+          });
+        }
+
+        for (let i = 0; i < L - 1; i++) {
+          scheduleKeyedSegment(i, i + 1, false);
+        }
+        if (L >= 2) {
+          scheduleKeyedSegment(L - 1, 0, true);
+        }
+
+        const nextCycleAt = startWall + (cIdx + 1) * period;
+        const nextDelay = Math.max(0, nextCycleAt - Date.now());
+        const nextT = setTimeout(() => {
+          scheduleCycleWithLerp(lerp)(cIdx + 1);
+        }, nextDelay);
+        this.timers.push(nextT);
+      };
+    };
+
+    if (lerpSpec === null) {
+      scheduleCyclePlain(0);
+    } else {
+      const runner = scheduleCycleWithLerp(lerpSpec);
+      runner(0);
+    }
   }
 }

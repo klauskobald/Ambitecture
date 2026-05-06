@@ -414,11 +414,15 @@ testParams:
     class: keyframeAnimator
     content:
       repeat: 10
-      length: 2000
+      length: 6000
+      lerp:
+        quantization: 0.005
+        time: 1000
+        curve: linear
       steps:
         - time: 0
           args:
             "params.alpha": 0.5
-        - time: 1000
+        - time: 3000
           args:
             "params.alpha": 0.1

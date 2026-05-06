@@ -11,6 +11,10 @@ export class EventQueue {
   constructor(private registry: ConnectionRegistry) { }
 
   schedule(entries: ScheduledEvent[], location?: [number, number]): void {
+    if (entries.length > 0) {
+      Logger.info(`[queue] ${entries.length} incoming event(s)`);
+    }
+
     const groups = new Map<number, object[]>();
     for (const { event, scheduledAt } of entries) {
       const bucket = groups.get(scheduledAt) ?? [];
@@ -29,19 +33,18 @@ export class EventQueue {
         },
       });
       if (delay === 0) {
-        this.dispatch(outbound, group.length);
+        this.dispatch(outbound);
       } else {
-        setTimeout(() => this.dispatch(outbound, group.length), delay);
+        setTimeout(() => this.dispatch(outbound), delay);
       }
     }
   }
 
-  private dispatch(outbound: string, eventCount: number): void {
+  private dispatch(outbound: string): void {
     const renderers = this.registry.getByRole('renderer');
     const openRenderers = renderers.filter(r => r.readyState === WebSocket.OPEN);
     for (const rendererWs of openRenderers) {
       rendererWs.send(outbound);
     }
-    Logger.info(`[queue] ${eventCount} event(s) → ${openRenderers.length} renderer(s)`);
   }
 }

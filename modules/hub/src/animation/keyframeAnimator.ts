@@ -14,6 +14,19 @@ import {
 
 export type IntentAccessFn = (guid: string) => ControllerIntent | undefined;
 
+export type AnimatorFieldDescriptor = {
+  name: string;
+  hint?: string;
+  /** Data type of the field value. Widget type is declared in systemCapabilities.animations[].display. */
+  type: 'number' | 'string';
+  step?: number;
+  range?: [number, number];
+  /** Key into top-level systemCapabilities for a string[] options list (e.g. 'functionCurves'). */
+  optionsRef?: string;
+  /** Named curve function applied to the slider t value (e.g. 'quadratic'). Passed to fnCurve on the controller. */
+  stepFunction?: string;
+};
+
 export interface KeyframeScheduleEntry {
   event: object;
   scheduledAt: number;
@@ -40,6 +53,15 @@ export interface KeyframeAnimatorCallbacks {
  * Timescale: wall time = `startWall + nominalMs * timescale` ({@link setTimescale}).
  */
 export class KeyframeAnimator {
+  static readonly uiDescriptor: Record<string, AnimatorFieldDescriptor> = {
+    'repeat': { name: 'Repeat', hint: '0 = loop forever', type: 'number', step: 1, range: [0, 1000], stepFunction: 'quadratic' },
+    'length': { name: 'Length (ms)', hint: 'Total cycle length', type: 'number', step: 100, range: [100, 600000] },
+    'lerp.quantization': { name: 'Quantization', hint: 'Transmit values only when they change', type: 'number', step: 0.01, range: [0.01, 0.5] },
+    'lerp.minMs': { name: 'Min interval (ms)', type: 'number', step: 10, range: [10, 1000] },
+    'lerp.time': { name: 'Lerp time (ms)', type: 'number', step: 100, range: [100, 60000] },
+    'lerp.curve': { name: 'Lerp curve', type: 'string', optionsRef: 'functionCurves' },
+  };
+
   private timers: ReturnType<typeof setTimeout>[] = [];
   private cancelled = false;
   private inScene = true;

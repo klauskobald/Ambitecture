@@ -10,6 +10,7 @@ import {
   subscribeAnimationPlayState
 } from '../core/animationPlayRegistry.js'
 import { getAnimatorViewer } from './animators/animatorViewerRegistry.js'
+import { createAnimationEditPane } from './performAnimateEditPane.js'
 
 /**
  * @returns {{ panel: HTMLDivElement }}
@@ -19,11 +20,29 @@ export function createPerformAnimatePanel () {
   panel.className = 'perform-subpane perform-subpane--animate'
   panel.hidden = true
 
+  // ── list view ────────────────────────────────────────────────────────────
+
+  const listView = document.createElement('div')
+  listView.className = 'perform-animate-list-view'
+
   const list = document.createElement('div')
   list.className = 'perform-animate-list'
   list.setAttribute('role', 'list')
 
-  panel.appendChild(list)
+  listView.appendChild(list)
+  panel.appendChild(listView)
+
+  // ── edit pane ─────────────────────────────────────────────────────────────
+
+  const { el: editPaneEl, open: openEditPane } = createAnimationEditPane({
+    onClose: () => {
+      editPaneEl.hidden = true
+      listView.hidden = false
+    }
+  })
+  panel.appendChild(editPaneEl)
+
+  // ── rendering ─────────────────────────────────────────────────────────────
 
   function render () {
     const anims = projectGraph.getPlayableAnimationsList()
@@ -48,6 +67,20 @@ export function createPerformAnimatePanel () {
     el.className = 'perform-animate-row'
     el.setAttribute('role', 'listitem')
     el.dataset.animationGuid = row.guid
+
+    const editBtn = document.createElement('button')
+    editBtn.type = 'button'
+    editBtn.className = 'perform-animate-edit-btn'
+    editBtn.setAttribute('aria-label', `Edit animation ${row.name}`)
+    editBtn.textContent = '✎'
+    editBtn.addEventListener('click', () => {
+      const record = /** @type {Record<string, unknown> | undefined} */ (
+        projectGraph.getAnimations().get(row.guid)
+      )
+      if (!record) return
+      listView.hidden = true
+      openEditPane(record)
+    })
 
     const label = document.createElement('div')
     label.className = 'perform-animate-row__label'
@@ -95,6 +128,7 @@ export function createPerformAnimatePanel () {
       }
     })
 
+    el.appendChild(editBtn)
     el.appendChild(label)
     el.appendChild(toggle)
     return el

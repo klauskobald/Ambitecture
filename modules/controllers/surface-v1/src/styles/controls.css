@@ -406,6 +406,16 @@
 
 .perform-subpane--animate {
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.perform-animate-list-view {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  flex: 1 1 auto;
 }
 
 .perform-animate-list {
@@ -495,6 +505,154 @@
 
 .perform-animate-toggle--stop {
   font-size: 0.75rem;
+}
+
+.perform-animate-edit-btn {
+  flex: 0 0 auto;
+  width: 1.8rem;
+  height: 1.8rem;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.perform-animate-edit-btn:hover,
+.perform-animate-edit-btn:focus-visible {
+  color: var(--color-text);
+  background: var(--color-bg-raised);
+  outline: none;
+}
+
+/* ── Animation edit pane ──────────────────────────────────────────────────── */
+
+.perform-animate-edit {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.perform-animate-edit__header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.perform-animate-edit__back {
+  flex: 0 0 auto;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.85rem;
+}
+
+.perform-animate-edit__title {
+  flex: 1 1 auto;
+  font-size: 0.85rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.perform-animate-edit__body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.perform-animate-edit__section {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.perform-animate-edit__section-title {
+  margin: 0 0 0.1rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+.perform-animate-field {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.3rem 0.4rem;
+  border-radius: 6px;
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+}
+
+.perform-animate-field__label {
+  flex: 0 0 auto;
+  width: 9rem;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.perform-animate-field__hint {
+  font-size: 0.65rem;
+  color: var(--color-text-muted);
+  opacity: 0.7;
+}
+
+.perform-animate-field__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-text);
+  font-size: 0.8rem;
+  padding: 0.2rem 0.4rem;
+  font-family: inherit;
+}
+
+.perform-animate-field__input--number {
+  max-width: 8rem;
+}
+
+.perform-animate-field__select {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-text);
+  font-size: 0.8rem;
+  padding: 0.2rem 0.4rem;
+  font-family: inherit;
+}
+
+.perform-animate-field__readonly {
+  flex: 1 1 auto;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.perform-animate-field__slider {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .perform-input--button {

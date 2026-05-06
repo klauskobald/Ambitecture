@@ -4,6 +4,7 @@ import { Config } from '../Config';
 import { ConnectionRegistry } from '../ConnectionRegistry';
 import { MessageHandler, WsMessage } from '../MessageRouter';
 import { ProjectGraphStore } from '../ProjectGraphStore';
+import { KeyframeAnimator } from '../animation/keyframeAnimator';
 
 interface RegisterPayload {
   role: 'renderer' | 'controller';
@@ -82,9 +83,36 @@ export class RegisterHandler implements MessageHandler {
 
       const capabilities = this.systemConfig.getOrDefault<unknown>('systemCapabilities', null);
       if (capabilities !== null) {
-        ws.send(JSON.stringify({ message: { type: 'systemCapabilities', payload: capabilities } }));
+        ws.send(JSON.stringify({ message: { type: 'systemCapabilities', payload: mergeAnimatorDescriptors(capabilities) } }));
         Logger.info(`[register] pushed systemCapabilities to controller ${guid}`);
       }
     }
   }
+}
+
+/** Class name → static uiDescriptor. Add new animator classes here as they are introduced. */
+const animatorDescriptors: Record<string, Record<string, unknown>> = {
+  keyframeAnimator: KeyframeAnimator.uiDescriptor,
+};
+
+/**
+ * Merges each registered animator's `uiDescriptor` into the matching
+ * `systemCapabilities.animations[]` entry as a `descriptor` map.
+ * The descriptor keys use the content-relative form (no `content.` prefix).
+ */
+function mergeAnimatorDescriptors(caps: unknown): unknown {
+  if (!caps || typeof caps !== 'object' || Array.isArray(caps)) return caps;
+  const c = caps as Record<string, unknown>;
+  const animations = c['animations'];
+  if (!Array.isArray(animations)) return caps;
+  return {
+    ...c,
+    animations: animations.map(entry => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return entry;
+      const e = entry as Record<string, unknown>;
+      const cls = typeof e['class'] === 'string' ? e['class'] : '';
+      const descriptor = cls ? animatorDescriptors[cls] : undefined;
+      return descriptor ? { ...e, descriptor } : entry;
+    }),
+  };
 }

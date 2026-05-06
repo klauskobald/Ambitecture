@@ -7,6 +7,7 @@ import {
   overlayClientToBboxMeters
 } from './spatialMath.js'
 import { noopPolicy } from './interactionPolicies.js'
+import { isIntentLocked } from '../core/intentLockRegistry.js'
 
 /**
  * @typedef {import('../core/projectGraph.js').HubSpatialState} HubSpatialState
@@ -120,6 +121,7 @@ export class OverlayCanvas {
       // dragged intent highlights
       if (this._draggedIntents.size > 0) {
         for (const guid of this._draggedIntents.values()) {
+          if (isIntentLocked(guid)) continue
           const intent =
             projectGraph.getEffectiveIntent(guid) ??
             projectGraph.getIntents().get(guid)
@@ -171,6 +173,7 @@ export class OverlayCanvas {
 
       // intent radius circles
       for (const [guid, sharedIntent] of projectGraph.getIntents()) {
+        if (isIntentLocked(guid)) continue
         const intent = projectGraph.getEffectiveIntent(guid) ?? sharedIntent
         if (!this._policy.isIntentVisible(intent)) continue
         const i = /** @type {Record<string, unknown>} */ (intent)
@@ -201,6 +204,7 @@ export class OverlayCanvas {
       // out-of-zone intent markers
       const zoneBoxes = projectGraph.getZoneBoxes()
       for (const [guid, sharedIntent] of projectGraph.getIntents()) {
+        if (isIntentLocked(guid)) continue
         const intent = projectGraph.getEffectiveIntent(guid) ?? sharedIntent
         if (!this._policy.isIntentVisible(intent)) continue
         const i = /** @type {Record<string, unknown>} */ (intent)
@@ -348,7 +352,7 @@ export class OverlayCanvas {
         if (this._lastTap.intentGuid && this._doubleTapIntentCallback) {
           const guid = this._lastTap.intentGuid
           this._lastTap = null
-          this._doubleTapIntentCallback(guid)
+          if (!isIntentLocked(guid)) this._doubleTapIntentCallback(guid)
           return
         }
         const secondOnIntent = spatial

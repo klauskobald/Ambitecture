@@ -4,7 +4,6 @@ import type { EventQueue } from '../EventQueue';
 import { HubStatusDispatcher, type HubStatusAnimationPayload } from '../hubStatusTypes';
 import { KeyframeAnimator } from './keyframeAnimator';
 import { Logger } from '../Logger';
-
 /**
  * Companion runner actions share the animation row's guid (`action:trigger` passes that guid).
  */
@@ -18,6 +17,8 @@ type ActiveRunner = {
   definitionRecord: Record<string, unknown>;
   lastInScene: boolean;
   timescale: number;
+  intentLockHeld: boolean;
+  lastLocation?: [number, number];
 };
 
 export type AnimationStatusPayload = {
@@ -28,7 +29,7 @@ export type AnimationStatusPayload = {
 
 /**
  * Hub-side orchestration: one runner per animation guid, events via {@link EventQueue},
- * status via {@link HubStatusDispatcher}.
+ * status via {@link HubStatusDispatcher}, controller lock via {@link HubStatusDispatcher.broadcastIntentLock}.
  */
 export class AnimationManager {
   private runners = new Map<string, ActiveRunner>();
@@ -68,7 +69,7 @@ export class AnimationManager {
   }
 
   /**
-   * Finite run completed all cycles; plugin is idle — drop registration so scene re-entry does not restart it.
+   * Finite run completed all cycles; plugin is idle — drop registration so scene re-enter does not restart it.
    */
   private unregisterNaturallyFinishedRunner(animationGuid: string): void {
     if (!this.runners.has(animationGuid)) return;
@@ -85,7 +86,23 @@ export class AnimationManager {
       payload.status === 'stopped' &&
       payload.data['completed'] === true
     ) {
+      const runner = this.runners.get(animationGuid);
+      if (runner !== undefined) {
+        this.finalizeAnimatedIntent(runner, location ?? runner.lastLocation);
+      }
       this.unregisterNaturallyFinishedRunner(animationGuid);
+    }
+  }
+
+  /** Controllers only: `lock:intent` `animation-stopped` when the run had acquired a lock. */
+  private finalizeAnimatedIntent(runner: ActiveRunner, location?: [number, number]): void {
+    const loc = location ?? runner.lastLocation;
+    if (runner.intentLockHeld) {
+      this.hubStatus.broadcastIntentLock(
+        { guid: runner.targetIntentGuid, reason: 'animation-stopped' },
+        loc,
+      );
+      runner.intentLockHeld = false;
     }
   }
 
@@ -129,30 +146,30 @@ export class AnimationManager {
 
     const plugin = new KeyframeAnimator(animationGuid, record, {
       onStatus: p => {
-        this.emitAnimatorStatus(animationGuid, p, opts.location);
+        this.emitAnimatorStatus(animationGuid, p, opts.location ?? this.runners.get(animationGuid)?.lastLocation);
       },
     });
     plugin.setTimescale(effectiveTimescale);
 
-    if (!inScene) {
-      plugin.onSceneMembershipChanged(false);
-      this.runners.set(animationGuid, {
-        plugin,
-        targetIntentGuid: target,
-        definitionRecord: record,
-        lastInScene: false,
-        timescale: effectiveTimescale,
-      });
-      return;
-    }
-
-    this.runners.set(animationGuid, {
+    const runnerBase: ActiveRunner = {
       plugin,
       targetIntentGuid: target,
       definitionRecord: record,
-      lastInScene: true,
+      lastInScene: inScene,
       timescale: effectiveTimescale,
-    });
+      intentLockHeld: false,
+      ...(opts.location !== undefined ? { lastLocation: opts.location } : {}),
+    };
+
+    if (!inScene) {
+      plugin.onSceneMembershipChanged(false);
+      this.runners.set(animationGuid, runnerBase);
+      return;
+    }
+
+    this.runners.set(animationGuid, runnerBase);
+    this.hubStatus.broadcastIntentLock({ guid: target, reason: 'animation-started' }, opts.location);
+    runnerBase.intentLockHeld = true;
 
     const schedule = (entries: { event: object; scheduledAt: number }[]): void => {
       this.eventQueue.schedule(entries, opts.location);
@@ -178,10 +195,12 @@ export class AnimationManager {
 
   private stopRunner(animationGuid: string, reason: string): void {
     const existing = this.runners.get(animationGuid);
-    if (existing) {
-      existing.plugin.cancel(reason);
-      this.runners.delete(animationGuid);
+    if (!existing) {
+      return;
     }
+    this.finalizeAnimatedIntent(existing, existing.lastLocation);
+    existing.plugin.cancel(reason);
+    this.runners.delete(animationGuid);
   }
 
   /** Call when project unloads or hub shuts down. */
@@ -204,27 +223,41 @@ export class AnimationManager {
       runner.lastInScene = now;
 
       if (!now) {
+        // Pause: unlock controllers (overlay chrome) while timers are cleared.
+        if (runner.lastLocation === undefined && location !== undefined) {
+          runner.lastLocation = location;
+        }
+        this.finalizeAnimatedIntent(runner, runner.lastLocation ?? location);
         runner.plugin.onSceneMembershipChanged(false);
         continue;
       }
 
-      // Re-enter active scene: restart from cycle 0 for runners still registered (paused mid-run or infinite).
       runner.plugin.stripTimers();
       const record = runner.definitionRecord;
       const fresh = new KeyframeAnimator(guid, record, {
-        onStatus: p => this.emitAnimatorStatus(guid, p, location),
+        onStatus: p =>
+          this.emitAnimatorStatus(guid, p, location ?? this.runners.get(guid)?.lastLocation),
       });
       fresh.setTimescale(runner.timescale);
-      this.runners.set(guid, {
+
+      const nextLocation = location ?? runner.lastLocation;
+      const next: ActiveRunner = {
         plugin: fresh,
         targetIntentGuid: runner.targetIntentGuid,
         definitionRecord: record,
         lastInScene: true,
         timescale: runner.timescale,
-      });
+        intentLockHeld: false,
+        ...(nextLocation !== undefined ? { lastLocation: nextLocation } : {}),
+      };
+      this.runners.set(guid, next);
+
+      this.hubStatus.broadcastIntentLock({ guid: next.targetIntentGuid, reason: 'animation-started' }, next.lastLocation);
+      next.intentLockHeld = true;
+
       fresh.start(
         g => this.intentAccessFn(g),
-        entries => this.eventQueue.schedule(entries, location),
+        entries => this.eventQueue.schedule(entries, next.lastLocation ?? location),
       );
     }
   }

@@ -3,6 +3,7 @@ import { applySystemCapabilities } from '../core/systemCapabilities.js'
 import { projectGraph } from '../core/projectGraph.js'
 import { setSocket, setMinInterval, sendSceneActivate } from '../core/outboundQueue.js'
 import { connect } from '../core/socket.js'
+import { applyIntentLockFromHub } from '../core/intentLockRegistry.js'
 import { SimulatorViewport } from '../viewport/simulatorViewport.js'
 import { OverlayCanvas } from '../viewport/overlayCanvas.js'
 import { initNav, activateDefaultNav } from './nav.js'
@@ -43,6 +44,15 @@ async function main () {
   const pendingRuntimeUpdates = new Map()
   let runtimeFlushScheduled = false
 
+  /** Apply coalesced `runtime:update` entries now (see `case 'lock:intent'` ordering). */
+  function flushPendingRuntimeUpdatesImmediate () {
+    if (pendingRuntimeUpdates.size === 0) return
+    const updatesToApply = [...pendingRuntimeUpdates.values()]
+    pendingRuntimeUpdates.clear()
+    projectGraph.applyRuntimeUpdate(updatesToApply)
+    overlay.markRenderActivity()
+  }
+
   /** @param {unknown} payload */
   function queueRuntimeUpdate (payload) {
     const updates = Array.isArray(payload) ? payload : [payload]
@@ -58,12 +68,11 @@ async function main () {
     runtimeFlushScheduled = true
     requestAnimationFrame(() => {
       runtimeFlushScheduled = false
+      if (pendingRuntimeUpdates.size === 0) return
       const updatesToApply = [...pendingRuntimeUpdates.values()]
       pendingRuntimeUpdates.clear()
-      if (updatesToApply.length > 0) {
-        projectGraph.applyRuntimeUpdate(updatesToApply)
-        overlay.markRenderActivity()
-      }
+      projectGraph.applyRuntimeUpdate(updatesToApply)
+      overlay.markRenderActivity()
     })
   }
 
@@ -73,7 +82,10 @@ async function main () {
     'graph:delta',
     'intents',
     'projectPatch',
-    'systemCapabilities'
+    'systemCapabilities',
+    'lock:intent',
+    // runtime:update is coalesced via rAF — still need overlay/HUD pass after graph applies
+    'runtime:update'
   ])
 
   const overlayResetWrap = /** @type {HTMLElement | null} */ (
@@ -203,6 +215,17 @@ async function main () {
         case 'systemCapabilities': {
           applySystemCapabilities(message.payload)
           projectGraph.notifyListeners()
+          break
+        }
+        case 'lock:intent': {
+          const p = /** @type {Record<string, unknown>} */ (message.payload ?? {})
+          const guid = typeof p.guid === 'string' ? p.guid : ''
+          const reason = typeof p.reason === 'string' ? p.reason : ''
+          // Hub sends final `runtime:update` before unlock; flush coalesced batch so overlays match snapshot.
+          if (reason === 'animation-stopped') {
+            flushPendingRuntimeUpdatesImmediate()
+          }
+          applyIntentLockFromHub(guid, reason)
           break
         }
       }

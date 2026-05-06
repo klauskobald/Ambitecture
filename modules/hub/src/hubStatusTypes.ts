@@ -36,4 +36,22 @@ export class HubStatusDispatcher {
       ws.send(outbound);
     }
   }
+
+  /** Fan-out `lock:intent` — controllers only (`animation-started` / `animation-stopped`, etc.). */
+  broadcastIntentLock(
+    payload: { guid: string; reason: string },
+    location?: [number, number],
+  ): void {
+    const outbound = JSON.stringify({
+      message: {
+        type: 'lock:intent',
+        ...(location !== undefined ? { location } : {}),
+        payload,
+      },
+    });
+    for (const ws of this.registry.getByRole('controller')) {
+      if (ws.readyState !== ws.OPEN) continue;
+      ws.send(outbound);
+    }
+  }
 }

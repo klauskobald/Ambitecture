@@ -1,5 +1,6 @@
 import { intentGuid } from '../core/stores.js'
 import { projectGraph } from '../core/projectGraph.js'
+import { isIntentLocked } from '../core/intentLockRegistry.js'
 import {
   queueIntentUpdate,
   queueFixtureUpdate,
@@ -90,6 +91,7 @@ export const performPolicy = {
   },
   canDragIntent (intent) {
     const guid = intentGuid(intent)
+    if (!guid || isIntentLocked(guid)) return false
     return (
       isInActiveScene(intent) &&
       !!projectGraph.getIntentConfig(guid).performEnabled
@@ -121,6 +123,8 @@ export const editPolicy = {
     return isInActiveScene(intent)
   },
   canDragIntent (intent) {
+    const guid = intentGuid(intent)
+    if (!guid || isIntentLocked(guid)) return false
     return isInActiveScene(intent)
   },
   canDragFixture (_fixture) {

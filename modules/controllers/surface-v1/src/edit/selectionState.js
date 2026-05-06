@@ -22,6 +22,12 @@ class SelectionState {
     this._notify()
   }
 
+  /** @param {string} guid */
+  removeGuid (guid) {
+    if (!this._guids.delete(guid)) return
+    this._notify()
+  }
+
   /** @param {string} guid @returns {boolean} */
   hasGuid (guid) { return this._guids.has(guid) }
 

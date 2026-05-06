@@ -446,12 +446,12 @@ export class KeyframeAnimator {
                 : (baseIntent as unknown as Record<string, unknown>);
 
             const planOpts: PlanIntermediateLerpOptions = {
-                onQuantizationCappedOriginalN: originalN =>
-                  Logger.warn(
-                    '[keyframeAnimator] lerp substep cap:',
-                    `${String(originalN)} → ${String(MAX_LERP_SUBSTEPS_PER_SEGMENT)}`,
-                  ),
-              };
+              onQuantizationCappedOriginalN: originalN =>
+                Logger.warn(
+                  '[keyframeAnimator] lerp substep cap:',
+                  `${String(originalN)} → ${String(MAX_LERP_SUBSTEPS_PER_SEGMENT)}`,
+                ),
+            };
             if (typeof lerp.minNominalMs === 'number' && Number.isFinite(lerp.minNominalMs)) {
               planOpts.segmentWallSpanMs = span;
               planOpts.minGapWallMs = lerp.minNominalMs * this.timescale;

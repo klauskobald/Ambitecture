@@ -1,4 +1,5 @@
 import { projectGraph } from '../core/projectGraph.js'
+import { isIntentLocked } from '../core/intentLockRegistry.js'
 import { performPolicy } from '../viewport/interactionPolicies.js'
 import { worldToCanvas } from '../viewport/spatialMath.js'
 import { resolveDescriptorsForClass } from '../core/systemCapabilities.js'
@@ -95,6 +96,15 @@ export class PerformQuickPanelHud {
     const nextGuids = new Set()
 
     for (const [guid, raw] of projectGraph.getIntents()) {
+      if (isIntentLocked(guid)) {
+        const stale = this._panels.get(guid)
+        if (stale) {
+          for (const k of stale.knobs) k.destroy()
+          stale.root.remove()
+          this._panels.delete(guid)
+        }
+        continue
+      }
       const intent = projectGraph.getEffectiveIntent(guid) ?? raw
       if (!intent) continue
       if (!performPolicy.isIntentVisible(intent)) continue

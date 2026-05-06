@@ -33,6 +33,7 @@ export interface KeyframeAnimatorCallbacks {
  *
  * Optional `length` (ms): one loop spans `[0, length)` — steps at `time >= length` stay dormant until length is raised.
  * If `length` is omitted, cycle length equals the largest step `time` (legacy).
+ * With `content.lerp`, each segment’s substeps are planned and sent (one `schedule` call per segment) only when that segment’s lerp window starts, not as a single batch for the whole loop.
  * On target intent leaving active scene: pause (clear timers). Re-enter: restart from cycle 0 (v1).
  */
 export class KeyframeAnimator {
@@ -352,8 +353,11 @@ export class KeyframeAnimator {
 
     const scheduleCycleWithLerp = (lerp: { timeMs: number; quantizationEff: number; curveName: unknown }): ((cIdx: number) => void) => {
       return (cIdx: number): void => {
-        const appendLerpSegmentEntries = (
-          batch: KeyframeScheduleEntry[],
+        /**
+         * When this segment's lerp window starts, plan **only** this segment's substeps and call
+         * `schedule` once with that list (not the whole cycle).
+         */
+        const scheduleLerpSegmentWhenWindowStarts = (
           fromIdx: number,
           toIdx: number,
           wrapToNextCycle: boolean,
@@ -373,67 +377,79 @@ export class KeyframeAnimator {
           /** Overlap clamp: substeps in `[next - lerp.time, next]` vs cycle wall; start `max(prev anchor, next - lerp.time)`. */
           const segmentStartMs = Math.max(prevAnchorWallAbs, nextAnchorWallAbs - lerp.timeMs);
 
-          const baseIntent = intentAccess(targetGuid);
-          if (!baseIntent) return;
+          this.pushTimeoutAtFireWall(segmentStartMs, () => {
+            if (this.cancelled || !this.inScene) return;
 
-          const fromResolvedRaw =
-            prevStep.args !== undefined &&
-              typeof prevStep.args === 'object' &&
-              Array.isArray(prevStep.args) === false &&
-              Object.keys(prevStep.args).length > 0
-              ? applyDotPathPatch(
-                cloneRecord(baseIntent as unknown as Record<string, unknown>),
-                prevStep.args,
-                [],
-              )
-              : (baseIntent as unknown as Record<string, unknown>);
+            const baseIntent = intentAccess(targetGuid);
+            if (!baseIntent) {
+              this.cancel('Target intent unavailable');
+              return;
+            }
 
-          const nextArgs = nextStep.args;
-          const toResolvedRaw =
-            nextArgs !== undefined && Object.keys(nextArgs).length > 0
-              ? applyDotPathPatch(
-                cloneRecord(baseIntent as unknown as Record<string, unknown>),
-                nextArgs,
-                [],
-              )
-              : (baseIntent as unknown as Record<string, unknown>);
+            const fromResolvedRaw =
+              prevStep.args !== undefined &&
+                typeof prevStep.args === 'object' &&
+                Array.isArray(prevStep.args) === false &&
+                Object.keys(prevStep.args).length > 0
+                ? applyDotPathPatch(
+                  cloneRecord(baseIntent as unknown as Record<string, unknown>),
+                  prevStep.args,
+                  [],
+                )
+                : (baseIntent as unknown as Record<string, unknown>);
 
-          const planned = planIntermediateLerpPatches(
-            fromResolvedRaw,
-            toResolvedRaw,
-            lerp.quantizationEff,
-            lerp.curveName,
-            originalN =>
-              Logger.warn(
-                '[keyframeAnimator] lerp substep cap:',
-                `${String(originalN)} → ${String(MAX_LERP_SUBSTEPS_PER_SEGMENT)}`,
-              ),
-          );
+            const nextArgs = nextStep.args;
+            const toResolvedRaw =
+              nextArgs !== undefined && Object.keys(nextArgs).length > 0
+                ? applyDotPathPatch(
+                  cloneRecord(baseIntent as unknown as Record<string, unknown>),
+                  nextArgs,
+                  [],
+                )
+                : (baseIntent as unknown as Record<string, unknown>);
 
-          if (planned.intermediateDotPatches.length === 0) {
-            return;
-          }
+            const planned = planIntermediateLerpPatches(
+              fromResolvedRaw,
+              toResolvedRaw,
+              lerp.quantizationEff,
+              lerp.curveName,
+              originalN =>
+                Logger.warn(
+                  '[keyframeAnimator] lerp substep cap:',
+                  `${String(originalN)} → ${String(MAX_LERP_SUBSTEPS_PER_SEGMENT)}`,
+                ),
+            );
 
-          const span = nextAnchorWallAbs - segmentStartMs;
-          const denom = planned.n - 1;
-          const fromBaseline = cloneRecord(fromResolvedRaw);
+            if (planned.intermediateDotPatches.length === 0) {
+              return;
+            }
 
-          for (let k = 0; k < planned.intermediateDotPatches.length; k++) {
-            const dotPatch = planned.intermediateDotPatches[k];
-            if (dotPatch === undefined) continue;
-            const fireWallAbs = segmentStartMs + (k / denom) * span;
-            const patchRecord = dotPatch as Record<string, unknown>;
+            const span = nextAnchorWallAbs - segmentStartMs;
+            const denom = planned.n - 1;
+            const fromBaseline = cloneRecord(fromResolvedRaw);
 
-            const patchedRecord =
-              Object.keys(patchRecord).length > 0
-                ? applyDotPathPatch(cloneRecord(fromBaseline), patchRecord, [])
-                : cloneRecord(fromBaseline);
+            const entries: KeyframeScheduleEntry[] = [];
+            for (let k = 0; k < planned.intermediateDotPatches.length; k++) {
+              const dotPatch = planned.intermediateDotPatches[k];
+              if (dotPatch === undefined) continue;
+              const fireWallAbs = segmentStartMs + (k / denom) * span;
+              const patchRecord = dotPatch as Record<string, unknown>;
 
-            const patched = patchedRecord as unknown as ControllerIntent;
-            const normalized = transformIntentToNormalized(patched);
-            const ev = intentToEvent(normalized, fireWallAbs);
-            batch.push({ event: ev, scheduledAt: fireWallAbs });
-          }
+              const patchedRecord =
+                Object.keys(patchRecord).length > 0
+                  ? applyDotPathPatch(cloneRecord(fromBaseline), patchRecord, [])
+                  : cloneRecord(fromBaseline);
+
+              const patched = patchedRecord as unknown as ControllerIntent;
+              const normalized = transformIntentToNormalized(patched);
+              const ev = intentToEvent(normalized, fireWallAbs);
+              entries.push({ event: ev, scheduledAt: fireWallAbs });
+            }
+
+            if (entries.length > 0) {
+              schedule(entries);
+            }
+          });
         };
 
         if (this.cancelled || !this.inScene) return;
@@ -462,15 +478,11 @@ export class KeyframeAnimator {
 
         const L = steps.length;
 
-        const lerpEntriesThisCycle: KeyframeScheduleEntry[] = [];
         for (let i = 0; i < L - 1; i++) {
-          appendLerpSegmentEntries(lerpEntriesThisCycle, i, i + 1, false);
+          scheduleLerpSegmentWhenWindowStarts(i, i + 1, false);
         }
         if (L >= 2) {
-          appendLerpSegmentEntries(lerpEntriesThisCycle, L - 1, 0, true);
-        }
-        if (lerpEntriesThisCycle.length > 0) {
-          schedule(lerpEntriesThisCycle);
+          scheduleLerpSegmentWhenWindowStarts(L - 1, 0, true);
         }
 
         for (let i = 0; i < L; i++) {

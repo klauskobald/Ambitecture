@@ -532,34 +532,74 @@
   outline: none;
 }
 
-/* ── Animation edit pane ──────────────────────────────────────────────────── */
+/* ── Animation edit pane — overlays full pane-host including subnav ───────── */
 
 .perform-animate-edit {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background: var(--color-bg);
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  flex: 1 1 auto;
 }
 
-.perform-animate-edit__header {
+.perform-animate-edit[hidden] {
+  display: none;
+}
+
+.perform-animate-edit__top {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0.5rem;
-  border-bottom: 1px solid var(--color-border);
+  gap: 4px;
+  padding: 4px;
   flex-shrink: 0;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .perform-animate-edit__back {
   flex: 0 0 auto;
-  padding: 0.25rem 0.6rem;
+  width: 1.8rem;
+  height: 1.8rem;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-muted);
   font-size: 0.85rem;
+  cursor: pointer;
+  touch-action: manipulation;
 }
 
-.perform-animate-edit__title {
-  flex: 1 1 auto;
-  font-size: 0.85rem;
+.perform-animate-edit__back:hover,
+.perform-animate-edit__back:focus-visible {
+  color: var(--color-text);
+  outline: none;
+}
+
+.perform-animate-edit__name {
+  flex: 1 1 0;
+  min-width: 0;
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-text);
+  font-size: 0.8rem;
+  font-family: inherit;
   font-weight: 600;
+  padding: 0.2rem 0.4rem;
+  height: 1.8rem;
+  box-sizing: border-box;
+}
+
+.perform-animate-edit__intent {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 8rem;
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -568,86 +608,80 @@
 .perform-animate-edit__body {
   flex: 1 1 auto;
   overflow-y: auto;
-  padding: 0.5rem;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 4px;
+  padding: 4px;
 }
 
-.perform-animate-edit__section {
-  margin-top: 0.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.perform-animate-edit__section-title {
-  margin: 0 0 0.1rem;
-  font-size: 0.7rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--color-text-muted);
-}
+/* field rows — no border/background/radius, height driven by slider */
 
 .perform-animate-field {
   display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  padding: 0.3rem 0.4rem;
-  border-radius: 6px;
-  background: var(--color-bg-raised);
-  border: 1px solid var(--color-border);
+  align-items: stretch;
+  gap: 4px;
 }
 
 .perform-animate-field__label {
   flex: 0 0 auto;
-  width: 9rem;
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
+  width: 6.5rem;
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  justify-content: space-between;
+  padding: 1px 0;
+  min-height: 0;
+}
+
+.perform-animate-field__label-name {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .perform-animate-field__hint {
-  font-size: 0.65rem;
+  font-size: 0.62rem;
   color: var(--color-text-muted);
-  opacity: 0.7;
+  opacity: 0.6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .perform-animate-field__input {
   flex: 1 1 auto;
   min-width: 0;
-  background: var(--color-bg);
+  background: var(--color-bg-raised);
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: 3px;
   color: var(--color-text);
-  font-size: 0.8rem;
-  padding: 0.2rem 0.4rem;
+  font-size: 0.78rem;
+  padding: 0.15rem 0.35rem;
   font-family: inherit;
 }
 
 .perform-animate-field__input--number {
-  max-width: 8rem;
+  max-width: 7rem;
 }
 
 .perform-animate-field__select {
   flex: 1 1 auto;
   min-width: 0;
-  background: var(--color-bg);
+  background: var(--color-bg-raised);
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: 3px;
   color: var(--color-text);
-  font-size: 0.8rem;
-  padding: 0.2rem 0.4rem;
+  font-size: 0.78rem;
+  padding: 0.15rem 0.35rem;
   font-family: inherit;
 }
 
 .perform-animate-field__readonly {
   flex: 1 1 auto;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: var(--color-text-muted);
+  align-self: center;
 }
 
 .perform-animate-field__slider {

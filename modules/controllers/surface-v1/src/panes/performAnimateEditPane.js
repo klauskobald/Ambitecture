@@ -8,8 +8,9 @@ import { evaluate as fnEvaluate, inverse as fnInverse } from '../edit/controls/f
 
 /**
  * Edit pane for a single animation record.
- * Outer framework owns: name, targetIntent label, class switcher.
- * Viewer plugin owns: field descriptors + optional custom widgets for content.* dotkeys.
+ * Positioned absolute over the full pane-host (covers subnav).
+ * Top row: back button | name input | target intent.
+ * Body: class switcher (if > 1 class) + content fields from systemCapabilities display.
  *
  * @param {{ onClose: () => void }} opts
  * @returns {{ el: HTMLElement, open: (record: Record<string, unknown>) => void }}
@@ -19,40 +20,53 @@ export function createAnimationEditPane ({ onClose }) {
   el.className = 'perform-animate-edit'
   el.hidden = true
 
-  const header = document.createElement('div')
-  header.className = 'perform-animate-edit__header'
+  // ── top row: back | name | intent ──────────────────────────────────────────
+
+  const topRow = document.createElement('div')
+  topRow.className = 'perform-animate-edit__top'
 
   const backBtn = document.createElement('button')
   backBtn.type = 'button'
-  backBtn.className = 'perform-animate-edit__back btn'
+  backBtn.className = 'perform-animate-edit__back'
   backBtn.textContent = '←'
   backBtn.addEventListener('click', () => {
     el.hidden = true
     onClose()
   })
 
-  const titleEl = document.createElement('span')
-  titleEl.className = 'perform-animate-edit__title'
+  const nameInput = document.createElement('input')
+  nameInput.type = 'text'
+  nameInput.className = 'perform-animate-edit__name'
+  nameInput.placeholder = 'Name'
 
-  header.appendChild(backBtn)
-  header.appendChild(titleEl)
+  const intentSpan = document.createElement('span')
+  intentSpan.className = 'perform-animate-edit__intent'
+
+  topRow.appendChild(backBtn)
+  topRow.appendChild(nameInput)
+  topRow.appendChild(intentSpan)
+
+  // ── body: class switcher + content fields ──────────────────────────────────
 
   const body = document.createElement('div')
   body.className = 'perform-animate-edit__body'
 
-  el.appendChild(header)
+  el.appendChild(topRow)
   el.appendChild(body)
 
   /** @type {string} */
   let currentGuid = ''
 
-  /**
-   * @param {Record<string, unknown>} record
-   */
+  /** @param {Record<string, unknown>} record */
   function open (record) {
     currentGuid = String(record.guid ?? '')
-    const name = String(record.name ?? currentGuid)
-    titleEl.textContent = name
+
+    nameInput.value = String(record.name ?? '')
+    nameInput.onchange = () => sendAnimationPatch(currentGuid, { name: nameInput.value })
+
+    const intentGuid = String(record.targetIntent ?? record.intent ?? '')
+    intentSpan.textContent = resolveIntentName(intentGuid)
+
     el.hidden = false
     renderBody(record)
   }
@@ -65,21 +79,7 @@ export function createAnimationEditPane ({ onClose }) {
     const viewer = getAnimatorViewer(cls)
     const caps = getCapabilities()
 
-    // name
-    body.appendChild(makeFieldRow('Name', null,
-      makeTextInput(String(record.name ?? ''), value => {
-        titleEl.textContent = value
-        sendAnimationPatch(guid, { name: value })
-      })
-    ))
-
-    // targetIntent (read-only — intent guid resolves to name)
-    const intentGuid = String(record.targetIntent ?? record.intent ?? '')
-    body.appendChild(makeFieldRow('Target intent', null,
-      makeReadOnly(resolveIntentName(intentGuid))
-    ))
-
-    // class switcher (only shown when hub advertises ≥ 2 classes)
+    // class switcher — only when hub advertises ≥ 2 classes
     const animClasses = getAnimationClasses(caps)
     if (animClasses.length >= 2) {
       body.appendChild(makeFieldRow('Class', null,
@@ -93,15 +93,7 @@ export function createAnimationEditPane ({ onClose }) {
 
     // content fields from systemCapabilities.animations[class].display
     const display = getClassDisplayMap(caps, cls)
-    if (display && Object.keys(display).length > 0) {
-      const section = document.createElement('div')
-      section.className = 'perform-animate-edit__section'
-
-      const sectionHeading = document.createElement('p')
-      sectionHeading.className = 'perform-animate-edit__section-title'
-      sectionHeading.textContent = 'Content'
-      section.appendChild(sectionHeading)
-
+    if (display) {
       for (const [dotKey, displayConfig] of Object.entries(display)) {
         const value = readAtDotPath(/** @type {Record<string, unknown>} */ (record), dotKey)
         const descriptor = viewer?.getFieldDescriptor(dotKey) ?? null
@@ -113,21 +105,19 @@ export function createAnimationEditPane ({ onClose }) {
         }) ?? null
 
         if (customEl) {
-          section.appendChild(makeFieldRow(label, hint, customEl))
+          body.appendChild(makeFieldRow(label, hint, customEl))
           continue
         }
 
         const widgetType = displayConfig && typeof displayConfig === 'object'
           ? String(/** @type {Record<string, unknown>} */ (displayConfig).type ?? '')
           : ''
-        section.appendChild(makeFieldRow(label, hint,
+        body.appendChild(makeFieldRow(label, hint,
           makeGenericWidget(widgetType, value, descriptor, newValue => {
             sendAnimationPatch(guid, { [dotKey]: newValue })
           })
         ))
       }
-
-      body.appendChild(section)
     }
   }
 
@@ -136,25 +126,15 @@ export function createAnimationEditPane ({ onClose }) {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-/**
- * @param {string} guid
- * @param {Record<string, unknown>} patch
- */
+/** @param {string} guid @param {Record<string, unknown>} patch */
 function sendAnimationPatch (guid, patch) {
-  sendGraphCommand({
-    op: 'upsert',
-    entityType: 'animation',
-    guid,
-    patch,
-    persistence: 'runtimeAndDurable'
-  })
+  sendGraphCommand({ op: 'upsert', entityType: 'animation', guid, patch, persistence: 'runtimeAndDurable' })
 }
 
 /**
  * @param {string} label
  * @param {string | null} hint
  * @param {HTMLElement} widget
- * @returns {HTMLDivElement}
  */
 function makeFieldRow (label, hint, widget) {
   const row = document.createElement('div')
@@ -162,13 +142,17 @@ function makeFieldRow (label, hint, widget) {
 
   const labelEl = document.createElement('div')
   labelEl.className = 'perform-animate-field__label'
-  labelEl.textContent = label
+
+  const nameSpan = document.createElement('span')
+  nameSpan.className = 'perform-animate-field__label-name'
+  nameSpan.textContent = label
+  labelEl.appendChild(nameSpan)
 
   if (hint) {
-    const hintEl = document.createElement('span')
-    hintEl.className = 'perform-animate-field__hint'
-    hintEl.textContent = hint
-    labelEl.appendChild(hintEl)
+    const hintSpan = document.createElement('span')
+    hintSpan.className = 'perform-animate-field__hint'
+    hintSpan.textContent = hint
+    labelEl.appendChild(hintSpan)
   }
 
   row.appendChild(labelEl)
@@ -176,11 +160,7 @@ function makeFieldRow (label, hint, widget) {
   return row
 }
 
-/**
- * @param {unknown} initialValue
- * @param {(value: string) => void} onCommit
- * @returns {HTMLInputElement}
- */
+/** @param {unknown} initialValue @param {(v: string) => void} onCommit */
 function makeTextInput (initialValue, onCommit) {
   const input = document.createElement('input')
   input.type = 'text'
@@ -190,10 +170,7 @@ function makeTextInput (initialValue, onCommit) {
   return input
 }
 
-/**
- * @param {string} text
- * @returns {HTMLSpanElement}
- */
+/** @param {string} text */
 function makeReadOnly (text) {
   const span = document.createElement('span')
   span.className = 'perform-animate-field__readonly'
@@ -205,7 +182,6 @@ function makeReadOnly (text) {
  * @param {string} current
  * @param {Array<{ cls: string, name: string }>} classes
  * @param {(cls: string) => void} onChange
- * @returns {HTMLSelectElement}
  */
 function makeClassSelect (current, classes, onChange) {
   const select = document.createElement('select')
@@ -222,11 +198,10 @@ function makeClassSelect (current, classes, onChange) {
 }
 
 /**
- * @param {string} type widget type from systemCapabilities display config
- * @param {unknown} value current value from animation record
- * @param {{ name?: string, range?: [number, number], step?: number, options?: string[], optionsRef?: string } | null} descriptor
+ * @param {string} type
+ * @param {unknown} value
+ * @param {{ name?: string, range?: [number, number], step?: number, default?: number | string, options?: string[], optionsRef?: string, stepFunction?: string } | null} descriptor
  * @param {(value: unknown) => void} onChange
- * @returns {HTMLElement}
  */
 function makeGenericWidget (type, value, descriptor, onChange) {
   if (type === 'slider') {
@@ -258,9 +233,8 @@ function makeGenericWidget (type, value, descriptor, onChange) {
 
 /**
  * @param {unknown} value
- * @param {{ range?: [number, number], step?: number } | null} descriptor
+ * @param {{ range?: [number, number], step?: number, default?: number | string, stepFunction?: string } | null} descriptor
  * @param {(value: number) => void} onChange
- * @returns {HTMLElement}
  */
 function makeSliderWidget (value, descriptor, onChange) {
   const min = descriptor?.range?.[0] ?? 0
@@ -270,17 +244,15 @@ function makeSliderWidget (value, descriptor, onChange) {
   const fallback = typeof descriptor?.default === 'number' ? descriptor.default : min
   const initial = typeof value === 'number' && Number.isFinite(value) ? value : fallback
   const stepFnName = typeof descriptor?.stepFunction === 'string' && descriptor.stepFunction.length > 0
-    ? descriptor.stepFunction
-    : null
+    ? descriptor.stepFunction : null
 
   const container = document.createElement('div')
   container.className = 'perform-animate-field__slider'
 
-  /** @param {number} v @returns {number} */
-  const snap = (v) => {
-    if (!step) return Math.max(min, Math.min(max, v))
-    return Math.max(min, Math.min(max, Math.round((v - min) / step) * step + min))
-  }
+  /** @param {number} v */
+  const snap = v => step
+    ? Math.max(min, Math.min(max, Math.round((v - min) / step) * step + min))
+    : Math.max(min, Math.min(max, v))
 
   const sliderOpts = stepFnName == null
     ? { min, max, step, value: initial, onInput: () => {}, onCommit: v => onChange(v) }
@@ -288,8 +260,8 @@ function makeSliderWidget (value, descriptor, onChange) {
         min, max, step, value: initial,
         onInput: () => {},
         onCommit: v => onChange(v),
-        valueAtT: (t) => snap(min + span * fnEvaluate(stepFnName, t)),
-        tAtValue: (v) => {
+        valueAtT: t => snap(min + span * fnEvaluate(stepFnName, t)),
+        tAtValue: v => {
           if (span <= 0) return 0
           const u = (snap(v) - min) / span
           return Math.max(0, Math.min(1, fnInverse(stepFnName, u)))
@@ -298,17 +270,14 @@ function makeSliderWidget (value, descriptor, onChange) {
 
   const slider = new ScalarDragSlider(sliderOpts)
   slider.mount(container)
-  // Re-sync visual position once the element has real layout in the DOM.
-  // mount() calls getBoundingClientRect() while the container is still detached → width=0 → handle at left:0.
   requestAnimationFrame(() => slider.configure({ value: initial }))
   return container
 }
 
 /**
  * @param {unknown} value
- * @param {{ range?: [number, number], step?: number } | null} descriptor
+ * @param {{ range?: [number, number], step?: number, default?: number | string } | null} descriptor
  * @param {(value: number) => void} onChange
- * @returns {HTMLInputElement}
  */
 function makeNumberInput (value, descriptor, onChange) {
   const input = document.createElement('input')
@@ -317,62 +286,39 @@ function makeNumberInput (value, descriptor, onChange) {
   const numDefault = typeof descriptor?.default === 'number' ? descriptor.default : undefined
   const numInitial = typeof value === 'number' ? value : numDefault
   input.value = numInitial !== undefined ? String(numInitial) : ''
-  if (descriptor?.range) {
-    input.min = String(descriptor.range[0])
-    input.max = String(descriptor.range[1])
-  }
-  if (descriptor?.step !== undefined) {
-    input.step = String(descriptor.step)
-  }
-  input.addEventListener('change', () => {
-    const n = parseFloat(input.value)
-    if (Number.isFinite(n)) onChange(n)
-  })
+  if (descriptor?.range) { input.min = String(descriptor.range[0]); input.max = String(descriptor.range[1]) }
+  if (descriptor?.step !== undefined) input.step = String(descriptor.step)
+  input.addEventListener('change', () => { const n = parseFloat(input.value); if (Number.isFinite(n)) onChange(n) })
   return input
 }
 
-/** @param {string} guid @returns {string} */
+/** @param {string} guid */
 function resolveIntentName (guid) {
-  if (!guid) return '—'
-  const intent = /** @type {Record<string, unknown> | undefined} */ (
-    projectGraph.getIntents().get(guid)
-  )
+  if (!guid) return ''
+  const intent = /** @type {Record<string, unknown> | undefined} */ (projectGraph.getIntents().get(guid))
   const name = intent?.name
   return typeof name === 'string' && name ? name : guid
 }
 
-/**
- * @param {Record<string, unknown> | null} caps
- * @returns {Array<{ cls: string, name: string }>}
- */
+/** @param {Record<string, unknown> | null} caps */
 function getAnimationClasses (caps) {
   const list = caps?.animations
   if (!Array.isArray(list)) return []
   return list
-    .map(entry => ({
-      cls: String(entry.class ?? ''),
-      name: String(entry.name ?? entry.class ?? '')
-    }))
+    .map(entry => ({ cls: String(entry.class ?? ''), name: String(entry.name ?? entry.class ?? '') }))
     .filter(e => e.cls.length > 0)
 }
 
-/**
- * @param {Record<string, unknown> | null} caps
- * @param {string} cls
- * @returns {Record<string, unknown> | null}
- */
+/** @param {Record<string, unknown> | null} caps @param {string} cls */
 function getClassDisplayMap (caps, cls) {
   const list = caps?.animations
   if (!Array.isArray(list) || !cls) return null
-  const entry = /** @type {Record<string, unknown> | undefined} */ (
-    list.find(e => e.class === cls)
-  )
+  const entry = /** @type {Record<string, unknown> | undefined} */ (list.find(e => e.class === cls))
   const display = entry?.display
   if (!display || typeof display !== 'object' || Array.isArray(display)) return null
   return /** @type {Record<string, unknown>} */ (display)
 }
 
-/** Converts a dotKey tail segment to a display label. */
 function dotKeyToLabel (dotKey) {
   const last = dotKey.split('.').pop() ?? dotKey
   return last.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())

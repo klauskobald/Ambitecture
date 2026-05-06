@@ -232,7 +232,7 @@ function makeGenericWidget (type, value, descriptor, onChange) {
   if (type === 'slider') {
     return makeSliderWidget(value, descriptor, onChange)
   }
-  if (type === 'select') {
+  if (type === 'select' || type === 'dropdown') {
     let options = descriptor?.options ?? null
     if (!options && descriptor?.optionsRef) {
       const caps = getCapabilities()
@@ -242,11 +242,12 @@ function makeGenericWidget (type, value, descriptor, onChange) {
     const list = options ?? []
     const select = document.createElement('select')
     select.className = 'perform-animate-field__select'
+    const effectiveValue = value ?? descriptor?.default ?? null
     for (const opt of list) {
       const o = document.createElement('option')
       o.value = String(opt)
       o.textContent = String(opt)
-      if (opt === value) o.selected = true
+      if (opt === effectiveValue) o.selected = true
       select.appendChild(o)
     }
     select.addEventListener('change', () => onChange(select.value))
@@ -266,7 +267,8 @@ function makeSliderWidget (value, descriptor, onChange) {
   const max = descriptor?.range?.[1] ?? 100
   const span = max - min
   const step = descriptor?.step
-  const initial = typeof value === 'number' && Number.isFinite(value) ? value : min
+  const fallback = typeof descriptor?.default === 'number' ? descriptor.default : min
+  const initial = typeof value === 'number' && Number.isFinite(value) ? value : fallback
   const stepFnName = typeof descriptor?.stepFunction === 'string' && descriptor.stepFunction.length > 0
     ? descriptor.stepFunction
     : null
@@ -309,7 +311,9 @@ function makeNumberInput (value, descriptor, onChange) {
   const input = document.createElement('input')
   input.type = 'number'
   input.className = 'perform-animate-field__input perform-animate-field__input--number'
-  input.value = typeof value === 'number' ? String(value) : ''
+  const numDefault = typeof descriptor?.default === 'number' ? descriptor.default : undefined
+  const numInitial = typeof value === 'number' ? value : numDefault
+  input.value = numInitial !== undefined ? String(numInitial) : ''
   if (descriptor?.range) {
     input.min = String(descriptor.range[0])
     input.max = String(descriptor.range[1])

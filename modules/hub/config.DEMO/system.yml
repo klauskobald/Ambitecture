@@ -3,12 +3,21 @@ systemCapabilities:
   animations:
     - class: keyframeAnimator
       name: Keyframe
+      uiDescription:
+
       display:
-        content.lerp.quantization:
+        content.length:
           type: slider
         content.repeat:
           type: slider
-      
+        content.lerp.quantization:
+          type: slider
+        content.lerp.minMs:
+          type: slider
+        content.lerp.time:
+          type: slider
+        content.lerp.curve:
+          type: dropdown
 
   inputTypes:
     - class: button

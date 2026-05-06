@@ -415,7 +415,7 @@ testParams:
     class: keyframeAnimator
     content:
       repeat: 0
-      length: 12000
+      length: 12
       lerp:
         quantization: 0.01
         minMs: 50 

@@ -13,7 +13,7 @@ export class AnimatorViewer {
    * dotKey uses the full `content.*` form; the `content.` prefix is stripped before lookup.
    * Subclasses may override to augment or replace specific entries.
    * @param {string} dotKey
-   * @returns {{ name: string, hint?: string, type?: string, range?: [number, number], step?: number, options?: string[], optionsRef?: string, stepFunction?: string } | null}
+   * @returns {{ name: string, hint?: string, type?: string, range?: [number, number], step?: number, default?: number | string, options?: string[], optionsRef?: string, stepFunction?: string } | null}
    */
   getFieldDescriptor (dotKey) {
     const caps = getCapabilities()

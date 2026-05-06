@@ -20,6 +20,7 @@ export type AnimatorFieldDescriptor = {
   /** Data type of the field value. Widget type is declared in systemCapabilities.animations[].display. */
   type: 'number' | 'string';
   step?: number;
+  default?: number | string;
   range?: [number, number];
   /** Key into top-level systemCapabilities for a string[] options list (e.g. 'functionCurves'). */
   optionsRef?: string;
@@ -45,7 +46,7 @@ export interface KeyframeAnimatorCallbacks {
  * eased ramps between successive keyframes. Keyframe knobs (`repeat`, `length`, `steps`, `lerp`) live in
  * `definition.content`, or legacy root-level if `content` is omitted.
  *
- * Optional `length` (ms): one loop spans `[0, length)` — steps at `time >= length` stay dormant until length is raised.
+ * Optional `length` (seconds, stored in config): converted to ms internally; one loop spans `[0, length×1000)` — steps at `time >= length×1000` stay dormant until length is raised.
  * If `length` is omitted, cycle length equals the largest step `time` (legacy).
  * With `content.lerp`, each segment’s substeps are planned and sent (one `schedule` call per segment) only when that segment’s lerp window starts, not as a single batch for the whole loop.
  * On target intent leaving active scene: pause (clear timers). Re-enter: restart from cycle 0 (v1).
@@ -54,12 +55,12 @@ export interface KeyframeAnimatorCallbacks {
  */
 export class KeyframeAnimator {
   static readonly uiDescriptor: Record<string, AnimatorFieldDescriptor> = {
-    'repeat': { name: 'Repeat', hint: '0 = loop forever', type: 'number', step: 1, range: [0, 1000], stepFunction: 'quadratic' },
-    'length': { name: 'Length (ms)', hint: 'Total cycle length', type: 'number', step: 100, range: [100, 600000] },
-    'lerp.quantization': { name: 'Quantization', hint: 'Transmit values only when they change', type: 'number', step: 0.01, range: [0.01, 0.5] },
-    'lerp.minMs': { name: 'Min interval (ms)', type: 'number', step: 10, range: [10, 1000] },
-    'lerp.time': { name: 'Lerp time (ms)', type: 'number', step: 100, range: [100, 60000] },
-    'lerp.curve': { name: 'Lerp curve', type: 'string', optionsRef: 'functionCurves' },
+    'repeat': { name: 'Repeat', hint: '0 = loop forever', type: 'number', step: 1, range: [0, 1000], stepFunction: 'quadratic', default: 0 },
+    'length': { name: 'Length (s)', hint: 'Total cycle length', type: 'number', step: 0.1, range: [0.1, 600], default: 10 },
+    'lerp.quantization': { name: 'Quantization', hint: 'Transmit values only when they change', type: 'number', step: 0.01, range: [0.01, 0.5], default: 0.02 },
+    'lerp.minMs': { name: 'Min interval (ms)', type: 'number', step: 10, range: [10, 1000], default: 50 },
+    'lerp.time': { name: 'Lerp time (ms)', type: 'number', step: 100, range: [100, 60000], default: 0 },
+    'lerp.curve': { name: 'Lerp curve', type: 'string', optionsRef: 'functionCurves', default: 'linear' },
   };
 
   private timers: ReturnType<typeof setTimeout>[] = [];
@@ -210,7 +211,7 @@ export class KeyframeAnimator {
 
     const lenRaw = cfg['length'];
     const lengthMs =
-      typeof lenRaw === 'number' && Number.isFinite(lenRaw) && lenRaw > 0 ? lenRaw : undefined;
+      typeof lenRaw === 'number' && Number.isFinite(lenRaw) && lenRaw > 0 ? lenRaw * 1000 : undefined;
 
     if (lengthMs === undefined) {
       const fallbackPeriod = sorted.length === 0 ? 1 : Math.max(...sorted.map(s => s.time), 1);

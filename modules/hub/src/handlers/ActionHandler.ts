@@ -49,6 +49,16 @@ function isActionTriggerPayload(payload: unknown): payload is ActionTriggerPaylo
   return typeof p['actionGuid'] === 'string' && hasValidArgs;
 }
 
+/** `action:trigger` → animation execute {@code payload.args.command} — default {@code start}. */
+function normalizedAnimationTriggerCommand(triggerArgs?: Record<string, unknown>): string {
+  const raw = triggerArgs?.['command'];
+  if (typeof raw !== 'string') {
+    return 'start';
+  }
+  const t = raw.trim().toLowerCase();
+  return t.length > 0 ? t : 'start';
+}
+
 export class ActionHandler implements MessageHandler {
   constructor(
     private registry: ConnectionRegistry,
@@ -158,17 +168,42 @@ export class ActionHandler implements MessageHandler {
       return 0;
     }
 
-    const opts: { location?: [number, number]; timescale?: number } = {};
-    if (location !== undefined) {
-      opts.location = location;
-    }
-    const ts = triggerArgs?.['timescale'];
-    if (typeof ts === 'number' && Number.isFinite(ts) && ts > 0) {
-      opts.timescale = ts;
-    }
+    const cmd = normalizedAnimationTriggerCommand(triggerArgs);
+    const stopLikeOpts = location !== undefined ? { location } : undefined;
 
-    this.animationManager.trigger(item.guid, opts);
-    return 1;
+    switch (cmd) {
+      case 'stop':
+        this.animationManager.stop(item.guid, stopLikeOpts);
+        return 1;
+      case 'pause':
+        this.animationManager.pause(item.guid, stopLikeOpts);
+        return 1;
+      case 'settimescale': {
+        const ts = triggerArgs?.['timescale'];
+        if (typeof ts !== 'number' || !Number.isFinite(ts) || ts <= 0) {
+          Logger.warn('[action] animation setTimescale requires args.timescale (finite number > 0)');
+          return 0;
+        }
+        this.animationManager.setTimescale(item.guid, ts);
+        return 1;
+      }
+      case 'start':
+      default: {
+        if (cmd !== 'start') {
+          Logger.warn(`[action] unknown animation args.command "${cmd}" — treating as start`);
+        }
+        const opts: { location?: [number, number]; timescale?: number } = {};
+        if (location !== undefined) {
+          opts.location = location;
+        }
+        const ts = triggerArgs?.['timescale'];
+        if (typeof ts === 'number' && Number.isFinite(ts) && ts > 0) {
+          opts.timescale = ts;
+        }
+        this.animationManager.trigger(item.guid, opts);
+        return 1;
+      }
+    }
   }
 
   private executeIntentItem(

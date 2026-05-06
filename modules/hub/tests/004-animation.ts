@@ -22,7 +22,9 @@ interface AnimationKeyframeContentRead {
 interface AnimationTestConfig {
   location: [number, number];
   sceneName: string;
-  /** Passed to hub as `action:trigger` payload `args.timescale` (default 1). */
+  /** `action:trigger` payload `args.command` (default START). start | stop | pause | setTimescale */
+  triggerCommand: string;
+  /** Passed as `args.timescale` — used by start (initial factor) and setTimescale. */
   timescale: number;
   intentGuid: string;
   class: string;
@@ -120,9 +122,16 @@ function readConfig(testconfig: Record<string, unknown>): AnimationTestConfig {
     timescale = tsRaw;
   }
 
+  const cmdRaw = testconfig['command'];
+  let triggerCommand = 'start';
+  if (typeof cmdRaw === 'string' && cmdRaw.trim().length > 0) {
+    triggerCommand = cmdRaw.trim();
+  }
+
   return {
     location: testconfig['location'] as [number, number],
     sceneName: String(testconfig['sceneName'] ?? ''),
+    triggerCommand,
     timescale,
     intentGuid: String(testconfig['intentGuid'] ?? ''),
     class: animClass,
@@ -186,15 +195,24 @@ function activateScene(ws: WebSocket, location: [number, number], sceneName: str
   }));
 }
 
-function triggerAction(
+function triggerAction (
   ws: WebSocket,
   location: [number, number],
   actionGuid: string,
-  timescale: number,
+  opts: { command: string; timescale?: number }
 ): void {
+  const trimmed = opts.command.trim();
+  /** @type {Record<string, unknown>} */
+  const args: Record<string, unknown> = {
+    command: trimmed.length > 0 ? trimmed : 'start',
+  };
+  const ts = opts.timescale;
+  if (typeof ts === 'number' && Number.isFinite(ts) && ts > 0) {
+    args.timescale = ts;
+  }
   ws.send(buildEnvelope('action:trigger', location, {
     actionGuid,
-    args: { timescale },
+    args,
   }));
 }
 
@@ -299,7 +317,10 @@ export async function main(
         activateScene(controller, config.location, config.sceneName);
         setTimeout(() => {
           actionTriggered = true;
-          triggerAction(controller, config.location, config.animationGuid, config.timescale);
+          triggerAction(controller, config.location, config.animationGuid, {
+            command: config.triggerCommand,
+            timescale: config.timescale,
+          });
         }, 150);
       }, 150);
     };

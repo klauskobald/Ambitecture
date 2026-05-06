@@ -226,6 +226,32 @@ export class AnimationManager {
     runner.plugin.setTimescale(factor);
   }
 
+  /** Stop playback (`action:trigger` {@code args.command: "stop"}). */
+  stop(animationGuid: string, opts?: { location?: [number, number] }): void {
+    const existing = this.runners.get(animationGuid);
+    if (!existing) {
+      Logger.warn(`[animation] stop ignored — no runner for ${animationGuid}`);
+      return;
+    }
+    if (opts?.location !== undefined) {
+      existing.lastLocation = opts.location;
+    }
+    this.stopRunner(animationGuid, 'action: stop');
+  }
+
+  /** Pause playback (`action:trigger` {@code args.command: "pause"}). V1 clears timers same as {@link stop}. */
+  pause(animationGuid: string, opts?: { location?: [number, number] }): void {
+    const existing = this.runners.get(animationGuid);
+    if (!existing) {
+      Logger.warn(`[animation] pause ignored — no runner for ${animationGuid}`);
+      return;
+    }
+    if (opts?.location !== undefined) {
+      existing.lastLocation = opts.location;
+    }
+    this.stopRunner(animationGuid, 'action: paused');
+  }
+
   private stopRunner(animationGuid: string, reason: string): void {
     const existing = this.runners.get(animationGuid);
     if (!existing) {

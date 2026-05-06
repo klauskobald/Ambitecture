@@ -1,6 +1,7 @@
 class HubConnection {
     constructor(config, renderer) {
         this.config = config;
+        this.renderer = renderer;
         this.ws = null;
 
         const configHandler = new ConfigHandler(renderer, config);

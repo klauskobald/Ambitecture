@@ -33,6 +33,10 @@ export class PerformQuickPanelHud {
     this._runner = false
     /** @type {number} */
     this._raf = 0
+    this._lastLayoutActivityMs = 0
+    this._inactivityStopMs = 1000
+    /** @type {(() => void) | null} */
+    this._tick = null
     /** @type {(() => void) | null} */
     this._unsub = null
   }
@@ -42,21 +46,35 @@ export class PerformQuickPanelHud {
     this._runner = true
     this._layer.style.display = ''
     this._layer.hidden = false
-    this._unsub = projectGraph.subscribe(() => this._reconcilePanels())
-    this._reconcilePanels()
-    /** @returns {void} */
-    const tick = () => {
+    this._tick = () => {
       if (!this._runner) return
       this._layoutPanels()
-      this._raf = requestAnimationFrame(tick)
+      const idleMs = performance.now() - this._lastLayoutActivityMs
+      if (idleMs < this._inactivityStopMs) {
+        this._raf = requestAnimationFrame(this._tick)
+      } else {
+        this._raf = 0
+      }
     }
-    this._raf = requestAnimationFrame(tick)
+    this._unsub = projectGraph.subscribe(() => this._reconcilePanels())
+    this._reconcilePanels()
+    this.markLayoutActivity()
+  }
+
+  /** Extends HUD layout rAF (see `_inactivityStopMs`). */
+  markLayoutActivity () {
+    this._lastLayoutActivityMs = performance.now()
+    if (!this._runner || !this._tick) return
+    if (!this._raf) {
+      this._raf = requestAnimationFrame(this._tick)
+    }
   }
 
   stop () {
     this._runner = false
     if (this._raf) cancelAnimationFrame(this._raf)
     this._raf = 0
+    this._tick = null
     this._unsub?.()
     this._unsub = null
 
@@ -190,6 +208,8 @@ export class PerformQuickPanelHud {
         this._panels.delete(guid)
       }
     }
+
+    this.markLayoutActivity()
   }
 
   /** @returns {void} */

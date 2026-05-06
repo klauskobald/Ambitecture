@@ -10,31 +10,6 @@ import { initPaneHostResize } from './paneHostResize.js'
 import { initRouter, navigateTo } from './router.js'
 import * as statusDisplay from './statusDisplay.js'
 
-/** @type {Map<string, unknown>} */
-const pendingRuntimeUpdates = new Map()
-let runtimeFlushScheduled = false
-
-/** @param {unknown} payload */
-function queueRuntimeUpdate (payload) {
-  const updates = Array.isArray(payload) ? payload : [payload]
-  for (const raw of updates) {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue
-    const update = /** @type {Record<string, unknown>} */ (raw)
-    const entityType = String(update.entityType ?? '')
-    const guid = String(update.guid ?? '')
-    if (!entityType || !guid) continue
-    pendingRuntimeUpdates.set(`${entityType}:${guid}`, update)
-  }
-  if (runtimeFlushScheduled) return
-  runtimeFlushScheduled = true
-  requestAnimationFrame(() => {
-    runtimeFlushScheduled = false
-    const updatesToApply = [...pendingRuntimeUpdates.values()]
-    pendingRuntimeUpdates.clear()
-    if (updatesToApply.length > 0) projectGraph.applyRuntimeUpdate(updatesToApply)
-  })
-}
-
 async function main () {
   const cfg = await loadConfig()
   if (!cfg) return
@@ -64,6 +39,43 @@ async function main () {
 
   const overlay = new OverlayCanvas(canvas, stack, viewport, cfg.LAYOUT)
 
+  /** @type {Map<string, unknown>} */
+  const pendingRuntimeUpdates = new Map()
+  let runtimeFlushScheduled = false
+
+  /** @param {unknown} payload */
+  function queueRuntimeUpdate (payload) {
+    const updates = Array.isArray(payload) ? payload : [payload]
+    for (const raw of updates) {
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue
+      const update = /** @type {Record<string, unknown>} */ (raw)
+      const entityType = String(update.entityType ?? '')
+      const guid = String(update.guid ?? '')
+      if (!entityType || !guid) continue
+      pendingRuntimeUpdates.set(`${entityType}:${guid}`, update)
+    }
+    if (runtimeFlushScheduled) return
+    runtimeFlushScheduled = true
+    requestAnimationFrame(() => {
+      runtimeFlushScheduled = false
+      const updatesToApply = [...pendingRuntimeUpdates.values()]
+      pendingRuntimeUpdates.clear()
+      if (updatesToApply.length > 0) {
+        projectGraph.applyRuntimeUpdate(updatesToApply)
+        overlay.markRenderActivity()
+      }
+    })
+  }
+
+  const hubOverlayRedrawTypes = new Set([
+    'config',
+    'graph:init',
+    'graph:delta',
+    'intents',
+    'projectPatch',
+    'systemCapabilities'
+  ])
+
   const overlayResetWrap = /** @type {HTMLElement | null} */ (
     document.getElementById('runtime-overlay-reset-wrap')
   )
@@ -90,6 +102,14 @@ async function main () {
 
   initRouter(overlay)
   initNav(paneName => navigateTo(paneName))
+
+  window.addEventListener(
+    'pointerdown',
+    () => {
+      overlay.markRenderActivity()
+    },
+    { capture: true, passive: true }
+  )
 
   const [geoLon, geoLat] = cfg.GEO_LOCATION.split(/\s+/).map(Number)
   const location = [geoLon, geoLat]
@@ -185,6 +205,9 @@ async function main () {
           projectGraph.notifyListeners()
           break
         }
+      }
+      if (hubOverlayRedrawTypes.has(message.type)) {
+        overlay.markRenderActivity()
       }
     },
 

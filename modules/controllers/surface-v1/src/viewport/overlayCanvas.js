@@ -54,11 +54,191 @@ export class OverlayCanvas {
     /** @type {{ x: number, y: number, t: number, clientX: number, clientY: number, intentGuid: string | null } | null} */
     this._lastTap = null
 
+    /** @type {number | null} */
+    this._rafId = null
+    this._lastRenderActivityMs = 0
+    this._inactivityStopMs = 10
+    /** @type {(() => void) | null} */
+    this._coactivity = null
+
     this._bindPointerEvents()
     this._ro = new ResizeObserver(() => this.resize())
     this._ro.observe(stack)
     this.resize()
-    requestAnimationFrame(now => this._frame(now))
+    this.markRenderActivity()
+  }
+
+  /**
+   * Optional hook invoked whenever overlay redraw is requested (hub, pointer, resize).
+   * @param {(() => void) | null} fn
+   */
+  setCoactivityCallback (fn) {
+    this._coactivity = fn
+  }
+
+  /** Extends the animated redraw window (see `_inactivityStopMs`) and ensures one rAF chain is scheduled. */
+  markRenderActivity () {
+    this._lastRenderActivityMs = performance.now()
+    if (this._rafId === null) {
+      this._rafId = requestAnimationFrame(() => this._runFrame())
+    }
+    this._coactivity?.()
+  }
+
+  /** @returns {void} */
+  _runFrame () {
+    this._rafId = null
+    const now = performance.now()
+    const L = this._L
+    const fadeMs = L.overlayTrailFadeMs
+    while (this._samples.length > 0 && now - this._samples[0].t > fadeMs)
+      this._samples.shift()
+
+    const rect = this._canvas.getBoundingClientRect()
+    const ctx = this._ctx
+    ctx.clearRect(0, 0, rect.width, rect.height)
+
+    // touch trail
+    const r = L.overlayFingerRadiusPx
+    ctx.lineWidth = L.overlayLineWidthPx
+    ctx.strokeStyle = L.overlayFingerStrokeRgba
+    ctx.fillStyle = L.overlayFingerFillRgba
+    for (const s of this._samples) {
+      const a = 1 - (now - s.t) / fadeMs
+      if (a <= 0) continue
+      ctx.globalAlpha = Math.min(1, Math.max(0, a))
+      ctx.beginPath()
+      ctx.arc(s.x, s.y, r, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.stroke()
+    }
+    ctx.globalAlpha = 1
+
+    const spatial = projectGraph.getSpatial()
+    const simRect = this._viewport.getSimCanvasRect()
+    if (spatial && simRect) {
+      // dragged intent highlights
+      if (this._draggedIntents.size > 0) {
+        for (const guid of this._draggedIntents.values()) {
+          const intent =
+            projectGraph.getEffectiveIntent(guid) ??
+            projectGraph.getIntents().get(guid)
+          if (!intent) continue
+          const i = /** @type {Record<string, unknown>} */ (intent)
+          const pos = /** @type {number[] | undefined} */ (i.position)
+          if (!pos) continue
+          const { px, py } = worldToCanvas(
+            pos[0],
+            pos[2],
+            spatial,
+            simRect,
+            rect
+          )
+          ctx.save()
+          ctx.beginPath()
+          ctx.arc(px, py, L.overlayFingerRadiusPx * 1.4, 0, Math.PI * 2)
+          ctx.strokeStyle = 'rgba(255, 220, 80, 0.9)'
+          ctx.lineWidth = 2
+          ctx.stroke()
+          ctx.fillStyle = 'rgba(255, 220, 80, 0.25)'
+          ctx.fill()
+          ctx.restore()
+        }
+      }
+
+      // dragged fixture highlights
+      if (this._draggedFixtures.size > 0) {
+        for (const id of this._draggedFixtures.values()) {
+          const fixture = projectGraph.getFixtures().get(id)
+          if (!fixture) continue
+          const f = /** @type {Record<string, unknown>} */ (fixture)
+          const pos = /** @type {number[] | undefined} */ (f.position)
+          if (!pos) continue
+          const { px, py } = worldToCanvas(
+            pos[0],
+            pos[2],
+            spatial,
+            simRect,
+            rect
+          )
+          ctx.save()
+          ctx.strokeStyle = 'rgba(80, 220, 255, 0.95)'
+          ctx.lineWidth = 2
+          ctx.strokeRect(px - 10, py - 10, 20, 20)
+          ctx.restore()
+        }
+      }
+
+      // intent radius circles
+      for (const [guid, sharedIntent] of projectGraph.getIntents()) {
+        const intent = projectGraph.getEffectiveIntent(guid) ?? sharedIntent
+        if (!this._policy.isIntentVisible(intent)) continue
+        const i = /** @type {Record<string, unknown>} */ (intent)
+        const pos = /** @type {number[] | undefined} */ (i.position)
+        const radius = intentRadius(intent)
+        if (!pos || pos.length < 3 || radius <= 0) continue
+        const center = worldToCanvas(pos[0], pos[2], spatial, simRect, rect)
+        const edge = worldToCanvas(
+          pos[0] + radius,
+          pos[2],
+          spatial,
+          simRect,
+          rect
+        )
+        const radiusPx = Math.abs(edge.px - center.px)
+        if (!Number.isFinite(radiusPx) || radiusPx <= 0) continue
+        ctx.save()
+        ctx.beginPath()
+        ctx.arc(center.px, center.py, radiusPx, 0, Math.PI * 2)
+        ctx.fillStyle = 'rgba(128, 128, 128, 0.02)'
+        ctx.fill()
+        ctx.strokeStyle = 'rgba(128, 128, 128, 0.1)'
+        ctx.lineWidth = 1
+        ctx.stroke()
+        ctx.restore()
+      }
+
+      // out-of-zone intent markers
+      const zoneBoxes = projectGraph.getZoneBoxes()
+      for (const [guid, sharedIntent] of projectGraph.getIntents()) {
+        const intent = projectGraph.getEffectiveIntent(guid) ?? sharedIntent
+        if (!this._policy.isIntentVisible(intent)) continue
+        const i = /** @type {Record<string, unknown>} */ (intent)
+        const pos = /** @type {number[] | undefined} */ (i.position)
+        if (!pos || pos.length < 3) continue
+        if (isPositionInsideAnyZone(pos, zoneBoxes)) continue
+        const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, rect)
+        const size = 12
+        ctx.save()
+        ctx.fillStyle = 'rgba(120, 120, 120, 0.5)'
+        ctx.strokeStyle = 'rgba(170, 170, 170, 0.8)'
+        ctx.lineWidth = 1
+        ctx.fillRect(px - size / 2, py - size / 2, size, size)
+        ctx.strokeRect(px - size / 2, py - size / 2, size, size)
+        const name = intentName(intent)
+        if (name) {
+          ctx.fillStyle = 'rgba(170, 170, 170, 0.95)'
+          ctx.font = '11px monospace'
+          ctx.textAlign = 'center'
+          ctx.fillText(name, px, py + size / 2 + 12)
+        }
+        ctx.restore()
+      }
+
+      // selection manager bubbles — drawn last so they appear on top
+      if (this._selectionManager) {
+        this._selectionManager.draw(ctx, spatial, simRect, rect)
+      }
+    }
+
+    const idleMs = performance.now() - this._lastRenderActivityMs
+    const dragOrTrail =
+      this._samples.length > 0 ||
+      this._draggedIntents.size > 0 ||
+      this._draggedFixtures.size > 0
+    if (idleMs < this._inactivityStopMs || dragOrTrail) {
+      this._rafId = requestAnimationFrame(() => this._runFrame())
+    }
   }
 
   /** @param {InteractionPolicy} policy */
@@ -119,6 +299,7 @@ export class OverlayCanvas {
     this._canvas.style.width = `${rect.width}px`
     this._canvas.style.height = `${rect.height}px`
     this._ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    this.markRenderActivity()
   }
 
   /**
@@ -140,6 +321,7 @@ export class OverlayCanvas {
   /** @param {PointerEvent} ev */
   _onPointerDown (ev) {
     if (ev.button !== undefined && ev.button !== 0) return
+    this.markRenderActivity()
     const { x, y } = this._canvasPoint(ev)
     const spatial = projectGraph.getSpatial()
 
@@ -222,6 +404,13 @@ export class OverlayCanvas {
 
   /** @param {PointerEvent} ev */
   _onPointerMove (ev) {
+    if (
+      this._draggedFixtures.has(ev.pointerId) ||
+      this._draggedIntents.has(ev.pointerId) ||
+      this._activePointers.has(ev.pointerId)
+    ) {
+      this.markRenderActivity()
+    }
     const fixtureId = this._draggedFixtures.get(ev.pointerId)
     if (fixtureId !== undefined) {
       const spatial = projectGraph.getSpatial()
@@ -259,6 +448,7 @@ export class OverlayCanvas {
 
   /** @param {PointerEvent} ev */
   _onPointerUp (ev) {
+    this.markRenderActivity()
     // Confirm tap if pointer didn't move far (enables double-tap on next down)
     if (this._tapTracker?.pointerId === ev.pointerId) {
       const { x, y } = this._canvasPoint(ev)
@@ -394,139 +584,5 @@ export class OverlayCanvas {
       }
     }
     return nearest
-  }
-
-  /** @param {number} now */
-  _frame (now) {
-    requestAnimationFrame(t => this._frame(t))
-    const L = this._L
-    const fadeMs = L.overlayTrailFadeMs
-    while (this._samples.length > 0 && now - this._samples[0].t > fadeMs)
-      this._samples.shift()
-
-    const rect = this._canvas.getBoundingClientRect()
-    const ctx = this._ctx
-    ctx.clearRect(0, 0, rect.width, rect.height)
-
-    // touch trail
-    const r = L.overlayFingerRadiusPx
-    ctx.lineWidth = L.overlayLineWidthPx
-    ctx.strokeStyle = L.overlayFingerStrokeRgba
-    ctx.fillStyle = L.overlayFingerFillRgba
-    for (const s of this._samples) {
-      const a = 1 - (now - s.t) / fadeMs
-      if (a <= 0) continue
-      ctx.globalAlpha = Math.min(1, Math.max(0, a))
-      ctx.beginPath()
-      ctx.arc(s.x, s.y, r, 0, Math.PI * 2)
-      ctx.fill()
-      ctx.stroke()
-    }
-    ctx.globalAlpha = 1
-
-    const spatial = projectGraph.getSpatial()
-    const simRect = this._viewport.getSimCanvasRect()
-    if (!spatial || !simRect) return
-
-    // dragged intent highlights
-    if (this._draggedIntents.size > 0) {
-      for (const guid of this._draggedIntents.values()) {
-        const intent =
-          projectGraph.getEffectiveIntent(guid) ??
-          projectGraph.getIntents().get(guid)
-        if (!intent) continue
-        const i = /** @type {Record<string, unknown>} */ (intent)
-        const pos = /** @type {number[] | undefined} */ (i.position)
-        if (!pos) continue
-        const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, rect)
-        ctx.save()
-        ctx.beginPath()
-        ctx.arc(px, py, L.overlayFingerRadiusPx * 1.4, 0, Math.PI * 2)
-        ctx.strokeStyle = 'rgba(255, 220, 80, 0.9)'
-        ctx.lineWidth = 2
-        ctx.stroke()
-        ctx.fillStyle = 'rgba(255, 220, 80, 0.25)'
-        ctx.fill()
-        ctx.restore()
-      }
-    }
-
-    // dragged fixture highlights
-    if (this._draggedFixtures.size > 0) {
-      for (const id of this._draggedFixtures.values()) {
-        const fixture = projectGraph.getFixtures().get(id)
-        if (!fixture) continue
-        const f = /** @type {Record<string, unknown>} */ (fixture)
-        const pos = /** @type {number[] | undefined} */ (f.position)
-        if (!pos) continue
-        const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, rect)
-        ctx.save()
-        ctx.strokeStyle = 'rgba(80, 220, 255, 0.95)'
-        ctx.lineWidth = 2
-        ctx.strokeRect(px - 10, py - 10, 20, 20)
-        ctx.restore()
-      }
-    }
-
-    // intent radius circles
-    for (const [guid, sharedIntent] of projectGraph.getIntents()) {
-      const intent = projectGraph.getEffectiveIntent(guid) ?? sharedIntent
-      if (!this._policy.isIntentVisible(intent)) continue
-      const i = /** @type {Record<string, unknown>} */ (intent)
-      const pos = /** @type {number[] | undefined} */ (i.position)
-      const radius = intentRadius(intent)
-      if (!pos || pos.length < 3 || radius <= 0) continue
-      const center = worldToCanvas(pos[0], pos[2], spatial, simRect, rect)
-      const edge = worldToCanvas(
-        pos[0] + radius,
-        pos[2],
-        spatial,
-        simRect,
-        rect
-      )
-      const radiusPx = Math.abs(edge.px - center.px)
-      if (!Number.isFinite(radiusPx) || radiusPx <= 0) continue
-      ctx.save()
-      ctx.beginPath()
-      ctx.arc(center.px, center.py, radiusPx, 0, Math.PI * 2)
-      ctx.fillStyle = 'rgba(128, 128, 128, 0.02)'
-      ctx.fill()
-      ctx.strokeStyle = 'rgba(128, 128, 128, 0.1)'
-      ctx.lineWidth = 1
-      ctx.stroke()
-      ctx.restore()
-    }
-
-    // out-of-zone intent markers
-    const zoneBoxes = projectGraph.getZoneBoxes()
-    for (const [guid, sharedIntent] of projectGraph.getIntents()) {
-      const intent = projectGraph.getEffectiveIntent(guid) ?? sharedIntent
-      if (!this._policy.isIntentVisible(intent)) continue
-      const i = /** @type {Record<string, unknown>} */ (intent)
-      const pos = /** @type {number[] | undefined} */ (i.position)
-      if (!pos || pos.length < 3) continue
-      if (isPositionInsideAnyZone(pos, zoneBoxes)) continue
-      const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, rect)
-      const size = 12
-      ctx.save()
-      ctx.fillStyle = 'rgba(120, 120, 120, 0.5)'
-      ctx.strokeStyle = 'rgba(170, 170, 170, 0.8)'
-      ctx.lineWidth = 1
-      ctx.fillRect(px - size / 2, py - size / 2, size, size)
-      ctx.strokeRect(px - size / 2, py - size / 2, size, size)
-      const name = intentName(intent)
-      if (name) {
-        ctx.fillStyle = 'rgba(170, 170, 170, 0.95)'
-        ctx.font = '11px monospace'
-        ctx.textAlign = 'center'
-        ctx.fillText(name, px, py + size / 2 + 12)
-      }
-      ctx.restore()
-    }
-
-    // selection manager bubbles — drawn last so they appear on top
-    if (this._selectionManager) {
-      this._selectionManager.draw(ctx, spatial, simRect, rect)
-    }
   }
 }

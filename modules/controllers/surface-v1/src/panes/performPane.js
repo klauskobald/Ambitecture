@@ -57,6 +57,9 @@ export class PerformPane {
     this._overlay.resize()
     try {
       this._quickHud = new PerformQuickPanelHud(this._overlay)
+      this._overlay.setCoactivityCallback(() => {
+        this._quickHud?.markLayoutActivity()
+      })
       this._quickHud.start()
     } catch {
       this._quickHud = null
@@ -72,6 +75,7 @@ export class PerformPane {
     this._subnavShell.closeMobileNav()
     this._unsubscribe?.()
     this._unsubscribe = null
+    this._overlay.setCoactivityCallback(null)
     if (this._quickHud) {
       this._quickHud.stop()
       this._quickHud = null

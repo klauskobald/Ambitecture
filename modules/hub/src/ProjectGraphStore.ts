@@ -2,7 +2,6 @@ import { ProjectManager, ControllerIntent, FixtureMoveUpdate, ActionDefinition, 
 import type { RuntimeUpdateDispatcher } from './RuntimeUpdateDispatcher';
 import type { RuntimeIntentStore } from './RuntimeIntentStore';
 import type { AnimationManager } from './animation/AnimationManager';
-import { companionActionGuid } from './animation/AnimationManager';
 import {
   GraphCommand,
   GraphDelta,
@@ -384,18 +383,19 @@ export class ProjectGraphStore {
 
     const persistence = command.persistence ?? 'runtimeAndDurable';
     const durableChanged = persistence === 'durable' || persistence === 'runtimeAndDurable';
-    const runnerGuid = companionActionGuid(command.guid);
+    /** Runner action row shares the animation's guid — `action:trigger` uses `command.guid`. */
+    const sharedAnimationAndActionGuid = command.guid;
 
     const animationDelta = this.makeDelta({ ...command, persistence });
 
     if (command.op === 'remove') {
       this.animationManager?.onAnimationRemoved(command.guid);
-      const actions = this.projectManager.getActionsWirePayload().filter(a => a.guid !== runnerGuid);
+      const actions = this.projectManager.getActionsWirePayload().filter(a => a.guid !== sharedAnimationAndActionGuid);
       this.projectManager.setProjectData('actions', actions);
       const actionDelta = this.makeDelta({
         op: 'remove',
         entityType: 'action',
-        guid: runnerGuid,
+        guid: sharedAnimationAndActionGuid,
         persistence,
       });
       return {
@@ -410,18 +410,18 @@ export class ProjectGraphStore {
     const animRow = nextAnimations.find(a => a.guid === command.guid);
     const animName = typeof animRow?.name === 'string' && animRow.name.length > 0 ? animRow.name : command.guid;
     const companionAction: ActionDefinition = {
-      guid: runnerGuid,
+      guid: sharedAnimationAndActionGuid,
       name: `Run ${animName}`,
       execute: [{ type: 'animation', guid: command.guid }],
     };
-    const actions = this.projectManager.getActionsWirePayload().filter(a => a.guid !== runnerGuid);
+    const actions = this.projectManager.getActionsWirePayload().filter(a => a.guid !== sharedAnimationAndActionGuid);
     actions.push(companionAction);
     this.projectManager.setProjectData('actions', actions);
 
     const actionDelta = this.makeDelta({
       op: 'upsert',
       entityType: 'action',
-      guid: runnerGuid,
+      guid: sharedAnimationAndActionGuid,
       value: companionAction as unknown as Record<string, unknown>,
       persistence,
     });

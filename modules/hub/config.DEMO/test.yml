@@ -410,14 +410,13 @@ testParams:
     location: [0, 0]
     sceneName: "5"
     repeat: 10
-    length: 300
+    length: 2000
     intentGuid: color-3
     animationGuid: animation-test-1
-    runnerActionGuid: animation-runner-animation-test-1
     steps:
       - time: 0
         args:
-          "params.alpha": 1
-      - time: 150
+          "params.alpha": 0.5
+      - time: 1000
         args:
           "params.alpha": 0.1

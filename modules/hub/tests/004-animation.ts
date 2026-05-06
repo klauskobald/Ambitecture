@@ -19,7 +19,6 @@ interface AnimationTestConfig {
   length: number;
   steps: AnimationKeyframeStep[];
   animationGuid: string;
-  runnerActionGuid: string;
 }
 
 const DEFAULT_ANIMATION_STEPS: AnimationKeyframeStep[] = [
@@ -79,7 +78,6 @@ function readConfig(testconfig: Record<string, unknown>): AnimationTestConfig {
     length,
     steps,
     animationGuid: String(testconfig['animationGuid'] ?? ''),
-    runnerActionGuid: String(testconfig['runnerActionGuid'] ?? ''),
   };
 }
 
@@ -241,7 +239,7 @@ export async function main(
         activateScene(controller, config.location, config.sceneName);
         setTimeout(() => {
           actionTriggered = true;
-          triggerAction(controller, config.location, config.runnerActionGuid);
+          triggerAction(controller, config.location, config.animationGuid);
         }, 150);
       }, 150);
     };

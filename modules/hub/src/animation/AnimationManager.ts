@@ -5,10 +5,11 @@ import { HubStatusDispatcher, type HubStatusAnimationPayload } from '../hubStatu
 import { KeyframeAnimator } from './keyframeAnimator';
 import { Logger } from '../Logger';
 
-export const RUNNER_ACTION_PREFIX = 'animation-runner-';
-
+/**
+ * Companion runner actions share the animation row's guid (`action:trigger` passes that guid).
+ */
 export function companionActionGuid(animationGuid: string): string {
-  return `${RUNNER_ACTION_PREFIX}${animationGuid}`;
+  return animationGuid;
 }
 
 type ActiveRunner = {

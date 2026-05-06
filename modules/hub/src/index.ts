@@ -49,6 +49,7 @@ const animationManager = new AnimationManager(
   runtimeIntentStore,
   eventQueue,
   hubStatusDispatcher,
+  runtimeUpdateDispatcher,
 );
 const graphStore = new ProjectGraphStore(
   projectManager,

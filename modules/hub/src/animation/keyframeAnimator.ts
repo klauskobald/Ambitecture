@@ -35,17 +35,34 @@ export interface KeyframeAnimatorCallbacks {
  * If `length` is omitted, cycle length equals the largest step `time` (legacy).
  * With `content.lerp`, each segment’s substeps are planned and sent (one `schedule` call per segment) only when that segment’s lerp window starts, not as a single batch for the whole loop.
  * On target intent leaving active scene: pause (clear timers). Re-enter: restart from cycle 0 (v1).
+ *
+ * Timescale: wall time = `startWall + nominalMs * timescale` ({@link setTimescale}).
  */
 export class KeyframeAnimator {
   private timers: ReturnType<typeof setTimeout>[] = [];
   private cancelled = false;
   private inScene = true;
+  /** Wall ms per nominal definition ms (>1 ⇒ slower). */
+  private timescale = 1;
 
   constructor(
     _animationGuid: string,
     private rawDef: Record<string, unknown>,
     private callbacks: KeyframeAnimatorCallbacks,
   ) { }
+
+  /** New timers use this factor; existing hub timeouts keep prior delays until they fire (V1). */
+  setTimescale(factor: number): void {
+    if (typeof factor !== 'number' || !Number.isFinite(factor) || factor <= 0) {
+      Logger.warn('[keyframeAnimator] setTimescale ignored — need finite factor > 0:', factor);
+      return;
+    }
+    this.timescale = factor;
+  }
+
+  private wallFromAnimStart(animStartWall: number, logicalMsFromAnimStart: number): number {
+    return animStartWall + logicalMsFromAnimStart * this.timescale;
+  }
 
   /** Clears timeouts without emitting status (used when replacing runner on scene re-enter). */
   stripTimers(): void {
@@ -327,7 +344,7 @@ export class KeyframeAnimator {
       for (let i = 0; i < L; i++) {
         const step = steps[i];
         if (!step) continue;
-        const fireWallAbs = startWall + cIdx * period + step.time;
+        const fireWallAbs = this.wallFromAnimStart(startWall, cIdx * period + step.time);
         const stepIndex = i + 1;
 
         const t = setTimeout(() => {
@@ -343,7 +360,7 @@ export class KeyframeAnimator {
         this.timers.push(t);
       }
 
-      const nextCycleAt = startWall + (cIdx + 1) * period;
+      const nextCycleAt = this.wallFromAnimStart(startWall, (cIdx + 1) * period);
       const nextDelay = Math.max(0, nextCycleAt - Date.now());
       const nextT = setTimeout(() => {
         scheduleCyclePlain(cIdx + 1);
@@ -371,11 +388,14 @@ export class KeyframeAnimator {
             ? (cIdx + 1) * period + nextStep.time
             : cIdx * period + nextStep.time;
 
-          const prevAnchorWallAbs = startWall + prevMsOffset;
-          const nextAnchorWallAbs = startWall + nextMsOffset;
+          const prevAnchorWallAbs = this.wallFromAnimStart(startWall, prevMsOffset);
+          const nextAnchorWallAbs = this.wallFromAnimStart(startWall, nextMsOffset);
 
-          /** Overlap clamp: substeps in `[next - lerp.time, next]` vs cycle wall; start `max(prev anchor, next - lerp.time)`. */
-          const segmentStartMs = Math.max(prevAnchorWallAbs, nextAnchorWallAbs - lerp.timeMs);
+          /** Overlap clamp: segment uses `lerp.time` scaled by timescale vs wall anchors. */
+          const segmentStartMs = Math.max(
+            prevAnchorWallAbs,
+            nextAnchorWallAbs - lerp.timeMs * this.timescale,
+          );
 
           this.pushTimeoutAtFireWall(segmentStartMs, () => {
             if (this.cancelled || !this.inScene) return;
@@ -488,7 +508,7 @@ export class KeyframeAnimator {
         for (let i = 0; i < L; i++) {
           const step = steps[i];
           if (!step) continue;
-          const fireWallAbs = startWall + cIdx * period + step.time;
+          const fireWallAbs = this.wallFromAnimStart(startWall, cIdx * period + step.time);
           const stepIndex = i + 1;
 
           this.pushTimeoutAtFireWall(fireWallAbs, () => {
@@ -503,7 +523,7 @@ export class KeyframeAnimator {
           });
         }
 
-        const nextCycleAt = startWall + (cIdx + 1) * period;
+        const nextCycleAt = this.wallFromAnimStart(startWall, (cIdx + 1) * period);
         const nextDelay = Math.max(0, nextCycleAt - Date.now());
         const nextT = setTimeout(() => {
           scheduleCycleWithLerp(lerp)(cIdx + 1);

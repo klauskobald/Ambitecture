@@ -17,6 +17,7 @@ type ActiveRunner = {
   targetIntentGuid: string;
   definitionRecord: Record<string, unknown>;
   lastInScene: boolean;
+  timescale: number;
 };
 
 export type AnimationStatusPayload = {
@@ -91,7 +92,7 @@ export class AnimationManager {
   /**
    * Start or restart animation. Kills any existing runner for the same guid.
    */
-  trigger(animationGuid: string, opts: { location?: [number, number] } = {}): void {
+  trigger(animationGuid: string, opts: { location?: [number, number]; timescale?: number } = {}): void {
     const def = this.projectManager.getAnimationByGuid(animationGuid);
     if (!def) {
       Logger.warn(`[animation] unknown animation ${animationGuid}`);
@@ -117,11 +118,21 @@ export class AnimationManager {
     this.stopRunner(animationGuid, 'replaced');
 
     const inScene = this.projectManager.isIntentInActiveScene(target);
+    let effectiveTimescale = 1;
+    if (opts.timescale !== undefined) {
+      if (typeof opts.timescale !== 'number' || !Number.isFinite(opts.timescale) || opts.timescale <= 0) {
+        Logger.warn('[animation] trigger ignored opts.timescale — need finite factor > 0:', opts.timescale);
+      } else {
+        effectiveTimescale = opts.timescale;
+      }
+    }
+
     const plugin = new KeyframeAnimator(animationGuid, record, {
       onStatus: p => {
         this.emitAnimatorStatus(animationGuid, p, opts.location);
       },
     });
+    plugin.setTimescale(effectiveTimescale);
 
     if (!inScene) {
       plugin.onSceneMembershipChanged(false);
@@ -130,6 +141,7 @@ export class AnimationManager {
         targetIntentGuid: target,
         definitionRecord: record,
         lastInScene: false,
+        timescale: effectiveTimescale,
       });
       return;
     }
@@ -139,6 +151,7 @@ export class AnimationManager {
       targetIntentGuid: target,
       definitionRecord: record,
       lastInScene: true,
+      timescale: effectiveTimescale,
     });
 
     const schedule = (entries: { event: object; scheduledAt: number }[]): void => {
@@ -146,6 +159,21 @@ export class AnimationManager {
     };
 
     plugin.start(g => this.intentAccessFn(g), schedule);
+  }
+
+  /** Mid-run playback factor; timeouts already queued keep old delays until they fire (V1). */
+  setTimescale(animationGuid: string, factor: number): void {
+    if (typeof factor !== 'number' || !Number.isFinite(factor) || factor <= 0) {
+      Logger.warn('[animation] setTimescale ignored — need finite factor > 0:', factor);
+      return;
+    }
+    const runner = this.runners.get(animationGuid);
+    if (!runner) {
+      Logger.warn(`[animation] setTimescale ignored — no runner for ${animationGuid}`);
+      return;
+    }
+    runner.timescale = factor;
+    runner.plugin.setTimescale(factor);
   }
 
   private stopRunner(animationGuid: string, reason: string): void {
@@ -186,11 +214,13 @@ export class AnimationManager {
       const fresh = new KeyframeAnimator(guid, record, {
         onStatus: p => this.emitAnimatorStatus(guid, p, location),
       });
+      fresh.setTimescale(runner.timescale);
       this.runners.set(guid, {
         plugin: fresh,
         targetIntentGuid: runner.targetIntentGuid,
         definitionRecord: record,
         lastInScene: true,
+        timescale: runner.timescale,
       });
       fresh.start(
         g => this.intentAccessFn(g),

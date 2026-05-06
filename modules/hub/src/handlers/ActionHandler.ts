@@ -118,7 +118,7 @@ export class ActionHandler implements MessageHandler {
           handled += this.executeIntentItem(ws, item, sourceGuid, message.payload.args, message.location);
           break;
         case 'animation':
-          handled += this.executeAnimationItem(item, message.location);
+          handled += this.executeAnimationItem(item, message.location, message.payload.args);
           break;
         default:
           Logger.warn(`[action] unsupported execute type "${item.type}" on ${action.guid ?? message.payload.actionGuid}`);
@@ -144,7 +144,11 @@ export class ActionHandler implements MessageHandler {
     return 1;
   }
 
-  private executeAnimationItem(item: ActionExecuteItem, location?: [number, number]): number {
+  private executeAnimationItem(
+    item: ActionExecuteItem,
+    location?: [number, number],
+    triggerArgs?: Record<string, unknown>,
+  ): number {
     if (item.type !== 'animation' || typeof item.guid !== 'string' || item.guid.length === 0) {
       Logger.warn('[action] invalid animation execute item');
       return 0;
@@ -153,7 +157,17 @@ export class ActionHandler implements MessageHandler {
       Logger.warn('[action] animationManager not configured');
       return 0;
     }
-    this.animationManager.trigger(item.guid, location === undefined ? {} : { location });
+
+    const opts: { location?: [number, number]; timescale?: number } = {};
+    if (location !== undefined) {
+      opts.location = location;
+    }
+    const ts = triggerArgs?.['timescale'];
+    if (typeof ts === 'number' && Number.isFinite(ts) && ts > 0) {
+      opts.timescale = ts;
+    }
+
+    this.animationManager.trigger(item.guid, opts);
     return 1;
   }
 

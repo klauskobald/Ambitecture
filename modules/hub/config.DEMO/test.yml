@@ -409,7 +409,7 @@ testParams:
   004-animation.ts:
     location: [0, 0]
     sceneName: ""
-    timescale: 1
+    timescale: 2
     intentGuid: color-3
     animationGuid: animation-test-1
     class: keyframeAnimator

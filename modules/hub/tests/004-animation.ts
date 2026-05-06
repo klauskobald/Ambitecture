@@ -22,6 +22,8 @@ interface AnimationKeyframeContentRead {
 interface AnimationTestConfig {
   location: [number, number];
   sceneName: string;
+  /** Passed to hub as `action:trigger` payload `args.timescale` (default 1). */
+  timescale: number;
   intentGuid: string;
   class: string;
   repeat: number;
@@ -109,9 +111,19 @@ function readConfig(testconfig: Record<string, unknown>): AnimationTestConfig {
 
   const keyframe = readKeyframeContentFromParams(testconfig);
 
+  const tsRaw = testconfig['timescale'];
+  let timescale = 1;
+  if (tsRaw !== undefined) {
+    if (typeof tsRaw !== 'number' || !Number.isFinite(tsRaw) || tsRaw <= 0) {
+      throw new Error('004-animation test.yml: timescale must be a finite number > 0 when set');
+    }
+    timescale = tsRaw;
+  }
+
   return {
     location: testconfig['location'] as [number, number],
     sceneName: String(testconfig['sceneName'] ?? ''),
+    timescale,
     intentGuid: String(testconfig['intentGuid'] ?? ''),
     class: animClass,
     repeat: keyframe.repeat,
@@ -174,8 +186,16 @@ function activateScene(ws: WebSocket, location: [number, number], sceneName: str
   }));
 }
 
-function triggerAction(ws: WebSocket, location: [number, number], actionGuid: string): void {
-  ws.send(buildEnvelope('action:trigger', location, { actionGuid }));
+function triggerAction(
+  ws: WebSocket,
+  location: [number, number],
+  actionGuid: string,
+  timescale: number,
+): void {
+  ws.send(buildEnvelope('action:trigger', location, {
+    actionGuid,
+    args: { timescale },
+  }));
 }
 
 const numericTolerance = 0.02;
@@ -279,7 +299,7 @@ export async function main(
         activateScene(controller, config.location, config.sceneName);
         setTimeout(() => {
           actionTriggered = true;
-          triggerAction(controller, config.location, config.animationGuid);
+          triggerAction(controller, config.location, config.animationGuid, config.timescale);
         }, 150);
       }, 150);
     };

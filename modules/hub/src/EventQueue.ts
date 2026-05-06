@@ -8,7 +8,7 @@ export interface ScheduledEvent {
 }
 
 export class EventQueue {
-  constructor(private registry: ConnectionRegistry) {}
+  constructor(private registry: ConnectionRegistry) { }
 
   schedule(entries: ScheduledEvent[], location?: [number, number]): void {
     const groups = new Map<number, object[]>();

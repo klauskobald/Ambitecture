@@ -4,6 +4,10 @@ import { projectGraph } from '../core/projectGraph.js'
 import { setSocket, setMinInterval, sendSceneActivate } from '../core/outboundQueue.js'
 import { connect } from '../core/socket.js'
 import { applyIntentLockFromHub } from '../core/intentLockRegistry.js'
+import {
+  applyHubAnimationStatus,
+  resetAnimationPlayState
+} from '../core/animationPlayRegistry.js'
 import { SimulatorViewport } from '../viewport/simulatorViewport.js'
 import { OverlayCanvas } from '../viewport/overlayCanvas.js'
 import { initNav, activateDefaultNav } from './nav.js'
@@ -84,6 +88,7 @@ async function main () {
     'projectPatch',
     'systemCapabilities',
     'lock:intent',
+    'hub:status',
     // runtime:update is coalesced via rAF — still need overlay/HUD pass after graph applies
     'runtime:update'
   ])
@@ -176,6 +181,7 @@ async function main () {
         }
         case 'graph:init': {
           const payload = message.payload
+          resetAnimationPlayState()
           projectGraph.applyGraphInit(payload, cfg.SIMULATOR_RENDERER_GUID)
           const rateLimit = /** @type {Record<string,unknown>} */ (
             payload ?? {}
@@ -226,6 +232,10 @@ async function main () {
             flushPendingRuntimeUpdatesImmediate()
           }
           applyIntentLockFromHub(guid, reason)
+          break
+        }
+        case 'hub:status': {
+          applyHubAnimationStatus(message.payload)
           break
         }
       }

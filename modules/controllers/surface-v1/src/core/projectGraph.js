@@ -43,6 +43,8 @@ class ProjectGraph {
         /** @type {Array<{ guid?: string, name: string, intents: SceneIntentRef[] }>} */ ([]),
       actions: /** @type {Map<string, Record<string, unknown>>} */ (new Map()),
       inputs: /** @type {Map<string, Record<string, unknown>>} */ (new Map()),
+      /** Hub `entities.animation` from `graph:init` + `graph:delta` entityType `animation`. */
+      animations: /** @type {Map<string, Record<string, unknown>>} */ (new Map()),
       activeSceneName: /** @type {string | null} */ (null),
       /** Hub hint: perform merge overlaps these scene intent GUIDs — show reset when non-empty. */
       runtimeOverlayGuidsInScene: /** @type {string[]} */ ([]),
@@ -141,6 +143,50 @@ class ProjectGraph {
   /** @returns {Map<string, Record<string, unknown>>} */
   getInputs () {
     return this._data.inputs
+  }
+
+  /** @returns {Map<string, Record<string, unknown>>} */
+  getAnimations () {
+    return this._data.animations
+  }
+
+  /**
+   * Animations that share a runner `action` guid (companion row from hub) — safe to `action:trigger`.
+   * @returns {Array<{ guid: string, name: string, class: string, targetIntent: string }>}
+   */
+  getPlayableAnimationsList () {
+    /** @type {Array<{ guid: string, name: string, class: string, targetIntent: string }>} */
+    const out = []
+    for (const [guid, row] of this._data.animations) {
+      const action = this._data.actions.get(guid)
+      if (!action || !companionAnimationRunnerAction(action, guid)) continue
+      const name =
+        typeof row.name === 'string' && row.name.length > 0 ? row.name : guid
+      const cls = typeof row.class === 'string' ? row.class : ''
+      const targetIntent =
+        typeof row.targetIntent === 'string'
+          ? row.targetIntent
+          : typeof row.intent === 'string'
+            ? row.intent
+            : ''
+      out.push({ guid, name, class: cls, targetIntent })
+    }
+    out.sort((a, b) => a.name.localeCompare(b.name))
+    return out
+  }
+
+  /**
+   * @param {Record<string, Record<string, unknown>>} entityMap
+   *    `entities.animation` from hub — keyed by animation guid.
+   */
+  _mergeAnimationsFromEntityMap (entityMap) {
+    for (const [key, raw] of Object.entries(entityMap)) {
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue
+      const record = /** @type {Record<string, unknown>} */ (raw)
+      const guid = String(record.guid ?? key ?? '')
+      if (!guid) continue
+      this._data.animations.set(guid, { ...record, guid })
+    }
   }
 
   /**
@@ -818,6 +864,23 @@ class ProjectGraph {
     } else {
       this._data.runtimeOverlayGuidsInScene = []
     }
+
+    const entitiesRaw = p?.entities
+    if (entitiesRaw && typeof entitiesRaw === 'object' && !Array.isArray(entitiesRaw)) {
+      this._data.animations.clear()
+      const animationMap = /** @type {Record<string, unknown>} */ (entitiesRaw).animation
+      if (
+        animationMap &&
+        typeof animationMap === 'object' &&
+        !Array.isArray(animationMap)
+      ) {
+        this._mergeAnimationsFromEntityMap(
+          /** @type {Record<string, Record<string, unknown>>} */ (animationMap),
+        )
+      }
+    }
+
+    this._notify()
   }
 
   /**
@@ -880,6 +943,9 @@ class ProjectGraph {
           break
         case 'input':
           this._applyEntityDelta(this._data.inputs, guid, op, delta)
+          break
+        case 'animation':
+          this._applyEntityDelta(this._data.animations, guid, op, delta)
           break
         case 'project':
           this._applyProjectDelta(delta)
@@ -1020,6 +1086,7 @@ class ProjectGraph {
       scenes: this._data.scenes,
       actions: [...this._data.actions.values()],
       inputs: [...this._data.inputs.values()],
+      animations: [...this._data.animations.values()],
       activeSceneName: this._data.activeSceneName,
       runtimeOverlayGuidsInScene: [...this._data.runtimeOverlayGuidsInScene],
       controller: {
@@ -1615,6 +1682,23 @@ function actionTargets (action, targetType, targetGuid) {
     const record = /** @type {Record<string, unknown>} */ (item)
     return record.type === targetType && record.guid === targetGuid
   })
+}
+
+/**
+ * Runner `action` row shares the animation guid; single execute item runs that animation.
+ * @param {Record<string, unknown>} action
+ * @param {string} animationGuid
+ * @returns {boolean}
+ */
+function companionAnimationRunnerAction (action, animationGuid) {
+  const actionGuid = typeof action.guid === 'string' ? action.guid : ''
+  if (actionGuid !== animationGuid) return false
+  const execute = action.execute
+  if (!Array.isArray(execute) || execute.length !== 1) return false
+  const item = execute[0]
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return false
+  const record = /** @type {Record<string, unknown>} */ (item)
+  return record.type === 'animation' && record.guid === animationGuid
 }
 
 /**

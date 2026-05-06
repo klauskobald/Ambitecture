@@ -7,7 +7,9 @@ export function applySystemCapabilities (payload) {
 }
 
 /** @returns {Record<string, unknown> | null} */
-export function getCapabilities () { return _caps }
+export function getCapabilities () {
+  return _caps
+}
 
 /**
  * Returns resolved descriptors for the given intent class, with optionsRef
@@ -18,8 +20,12 @@ export function getCapabilities () { return _caps }
  */
 export function resolveDescriptorsForClass (intentClass) {
   if (!_caps) return null
-  const intentProperties = /** @type {Record<string, unknown>} */ (_caps.intentProperties ?? {})
-  const raw = /** @type {unknown[] | undefined} */ (intentProperties[intentClass])
+  const intentProperties = /** @type {Record<string, unknown>} */ (
+    _caps.intentProperties ?? {}
+  )
+  const raw = /** @type {unknown[] | undefined} */ (
+    intentProperties[intentClass]
+  )
   if (!raw) return null
   return raw.map(entry => {
     const d = /** @type {Record<string, unknown>} */ (entry)
@@ -50,7 +56,9 @@ function normalizeInputTypeEntry (raw) {
   /** @type {Record<string, string>} */
   const params = {}
   if (paramsRaw && typeof paramsRaw === 'object' && !Array.isArray(paramsRaw)) {
-    for (const [k, v] of Object.entries(/** @type {Record<string, unknown>} */ (paramsRaw))) {
+    for (const [k, v] of Object.entries(
+      /** @type {Record<string, unknown>} */ (paramsRaw)
+    )) {
       if (typeof v === 'string' && v.length > 0) params[k] = v
     }
   }
@@ -110,9 +118,18 @@ export function getDisplayTypes () {
 export function resolveDefaultPerformTypes () {
   const inputTypes = getInputTypes()
   const displayTypes = getDisplayTypes()
-  if (!inputTypes || !displayTypes || inputTypes.length === 0 || displayTypes.length === 0) return null
-  const type = inputTypes.find(t => t.class === 'button')?.class ?? inputTypes[0]?.class
-  const displayType = displayTypes.find(t => t.class === 'button')?.class ?? displayTypes[0]?.class
+  if (
+    !inputTypes ||
+    !displayTypes ||
+    inputTypes.length === 0 ||
+    displayTypes.length === 0
+  )
+    return null
+  const type =
+    inputTypes.find(t => t.class === 'button')?.class ?? inputTypes[0]?.class
+  const displayType =
+    displayTypes.find(t => t.class === 'button')?.class ??
+    displayTypes[0]?.class
   if (!type || !displayType) return null
   return { type, displayType }
 }

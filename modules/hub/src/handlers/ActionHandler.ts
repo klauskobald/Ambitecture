@@ -67,7 +67,7 @@ export class ActionHandler implements MessageHandler {
     private publishMutation: (source: WebSocket, result: GraphMutationResult, location?: [number, number]) => void,
     private runtimeUpdateDispatcher: RuntimeUpdateDispatcher,
     private animationManager?: AnimationManager,
-  ) {}
+  ) { }
 
   handle(ws: WebSocket, message: WsMessage, _registry: ConnectionRegistry): void {
     const info = this.registry.get(ws);

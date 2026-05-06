@@ -1,4 +1,15 @@
 systemCapabilities:
+  
+  animations:
+    - class: keyframeAnimator
+      name: Keyframe
+      display:
+        content.lerp.quantization:
+          type: slider
+        content.repeat:
+          type: slider
+      
+
   inputTypes:
     - class: button
       name: Button

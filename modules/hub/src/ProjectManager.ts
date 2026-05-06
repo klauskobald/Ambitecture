@@ -105,14 +105,23 @@ export interface AnimationDefinition {
   targetIntent?: string;
   /** Legacy / alias for `targetIntent` (hub accepts either). */
   intent?: string;
-  /** Full cycles: `0` means infinite. */
+  /**
+   * Class-specific payload. For `keyframeAnimator`: `repeat`, `length`, `steps` belong here.
+   * @see KeyframeAnimator — still accepts legacy root-level repeat/length/steps if `content` is absent.
+   */
+  content?: Record<string, unknown>;
+  /**
+   * @deprecated Prefer `content` for `keyframeAnimator`. Hub still reads these when `content` is omitted.
+   */
   repeat?: number;
   /**
-   * One loop duration in milliseconds. Steps at `time >= length` are ignored until `length`
-   * is raised. Omit for legacy behaviour: cycle length defaults to max step `time`.
+   * @deprecated Prefer `content` for `keyframeAnimator`.
    */
   length?: number;
-  steps: AnimationStep[];
+  /**
+   * @deprecated Prefer `content` for `keyframeAnimator`.
+   */
+  steps?: AnimationStep[];
 }
 
 export interface InputDefinition {

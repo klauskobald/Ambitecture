@@ -21,6 +21,9 @@ export interface KeyframeAnimatorCallbacks {
 
 /**
  * Minimal keyframe runner: one renderer event per step, no interpolation.
+ * Keyframe knobs (`repeat`, `length`, `steps`) live in `definition.content`, or legacy root-level
+ * if `content` is omitted.
+ *
  * Optional `length` (ms): one loop spans `[0, length)` — steps at `time >= length` stay dormant until length is raised.
  * If `length` is omitted, cycle length equals the largest step `time` (legacy).
  * On target intent leaving active scene: pause (clear timers). Re-enter: restart from cycle 0 (v1).
@@ -72,6 +75,23 @@ export class KeyframeAnimator {
     }
   }
 
+  /**
+   * Keyframe fields live in `content` when present; otherwise root-level repeat/length/steps (legacy).
+   */
+  private keyframeConfigBag(): Record<string, unknown> {
+    const raw = this.rawDef as Record<string, unknown>;
+    const content = raw['content'];
+    if (
+      content !== undefined &&
+      typeof content === 'object' &&
+      content !== null &&
+      !Array.isArray(content)
+    ) {
+      return content as Record<string, unknown>;
+    }
+    return raw;
+  }
+
   private parseSteps(): {
     steps: { time: number; args?: Record<string, unknown> }[];
     repeatLoops: number;
@@ -79,13 +99,9 @@ export class KeyframeAnimator {
     lengthClampActive: boolean;
     clippedByLength: boolean;
   } {
-    const stepsRaw = this.rawDef['steps'];
-    const content = this.rawDef['content'];
-    const nested =
-      content && typeof content === 'object' && !Array.isArray(content)
-        ? (content as Record<string, unknown>)['steps']
-        : undefined;
-    const arr = Array.isArray(stepsRaw) ? stepsRaw : Array.isArray(nested) ? nested : [];
+    const cfg = this.keyframeConfigBag();
+    const stepsRaw = cfg['steps'];
+    const arr = Array.isArray(stepsRaw) ? stepsRaw : [];
     const parsed: { time: number; args?: Record<string, unknown>; _index: number }[] = [];
     for (let index = 0; index < arr.length; index++) {
       const item = arr[index];
@@ -106,11 +122,11 @@ export class KeyframeAnimator {
       .sort((a, b) => (a.time === b.time ? a._index - b._index : a.time - b.time))
       .map(p => (p.args !== undefined ? { time: p.time, args: p.args } : { time: p.time }));
 
-    const repeatRaw = this.rawDef['repeat'];
+    const repeatRaw = cfg['repeat'];
     const repeatLoops =
       typeof repeatRaw === 'number' && Number.isFinite(repeatRaw) && repeatRaw >= 0 ? repeatRaw : 0;
 
-    const lenRaw = this.rawDef['length'];
+    const lenRaw = cfg['length'];
     const lengthMs =
       typeof lenRaw === 'number' && Number.isFinite(lenRaw) && lenRaw > 0 ? lenRaw : undefined;
 

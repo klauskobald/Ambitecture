@@ -11,24 +11,26 @@ interface AnimationKeyframeStep {
   args?: Record<string, unknown>;
 }
 
+interface AnimationKeyframeContentRead {
+  repeat: number;
+  length: number;
+  steps: AnimationKeyframeStep[];
+}
+
 interface AnimationTestConfig {
   location: [number, number];
   sceneName: string;
   intentGuid: string;
+  class: string;
   repeat: number;
   length: number;
   steps: AnimationKeyframeStep[];
   animationGuid: string;
 }
 
-const DEFAULT_ANIMATION_STEPS: AnimationKeyframeStep[] = [
-  { time: 0, args: { 'params.alpha': 1 } },
-  { time: 500, args: { 'params.alpha': 0.1 } },
-];
-
-function parseKeyframeSteps(raw: unknown): AnimationKeyframeStep[] {
-  if (!Array.isArray(raw) || raw.length === 0) {
-    return [...DEFAULT_ANIMATION_STEPS];
+function parseKeyframeStepsStrict(raw: unknown): AnimationKeyframeStep[] {
+  if (!Array.isArray(raw)) {
+    throw new Error('004-animation test.yml: content.steps must be an array');
   }
 
   const out: AnimationKeyframeStep[] = [];
@@ -52,7 +54,34 @@ function parseKeyframeSteps(raw: unknown): AnimationKeyframeStep[] {
     }
   }
 
-  return out.length > 0 ? out : [...DEFAULT_ANIMATION_STEPS];
+  if (out.length === 0) {
+    throw new Error('004-animation test.yml: content.steps must contain at least one valid step');
+  }
+  return out;
+}
+
+function readKeyframeContentFromParams(testconfig: Record<string, unknown>): AnimationKeyframeContentRead {
+  const rawContent = testconfig['content'];
+  if (rawContent === undefined || typeof rawContent !== 'object' || rawContent === null || Array.isArray(rawContent)) {
+    throw new Error(
+      '004-animation test.yml: required `content` object (keyframeAnimator: repeat, length, steps)',
+    );
+  }
+  const content = rawContent as Record<string, unknown>;
+
+  const repeatRaw = content['repeat'];
+  if (typeof repeatRaw !== 'number' || !Number.isFinite(repeatRaw) || repeatRaw < 0) {
+    throw new Error('004-animation test.yml: content.repeat must be a finite number ≥ 0');
+  }
+
+  const lengthRaw = content['length'];
+  if (typeof lengthRaw !== 'number' || !Number.isFinite(lengthRaw) || lengthRaw <= 0) {
+    throw new Error('004-animation test.yml: content.length must be a finite number > 0');
+  }
+
+  const steps = parseKeyframeStepsStrict(content['steps']);
+
+  return { repeat: repeatRaw, length: lengthRaw, steps };
 }
 
 function buildEnvelope(type: string, location: [number, number], payload: unknown): string {
@@ -60,23 +89,26 @@ function buildEnvelope(type: string, location: [number, number], payload: unknow
 }
 
 function readConfig(testconfig: Record<string, unknown>): AnimationTestConfig {
-  const repeatRaw = testconfig['repeat'];
-  const repeat =
-    typeof repeatRaw === 'number' && Number.isFinite(repeatRaw) && repeatRaw >= 0 ? repeatRaw : 2;
+  const animClass = String(testconfig['class'] ?? '').trim();
+  if (animClass.length === 0) {
+    throw new Error('004-animation test.yml: required non-empty string "class" (e.g. keyframeAnimator)');
+  }
+  if (animClass !== 'keyframeAnimator') {
+    throw new Error(
+      `004-animation: this integration test only supports class "keyframeAnimator" (got "${animClass}")`,
+    );
+  }
 
-  const lengthRaw = testconfig['length'];
-  const length =
-    typeof lengthRaw === 'number' && Number.isFinite(lengthRaw) && lengthRaw > 0 ? lengthRaw : 2000;
-
-  const steps = parseKeyframeSteps(testconfig['steps']);
+  const keyframe = readKeyframeContentFromParams(testconfig);
 
   return {
     location: testconfig['location'] as [number, number],
     sceneName: String(testconfig['sceneName'] ?? ''),
     intentGuid: String(testconfig['intentGuid'] ?? ''),
-    repeat,
-    length,
-    steps,
+    class: animClass,
+    repeat: keyframe.repeat,
+    length: keyframe.length,
+    steps: keyframe.steps,
     animationGuid: String(testconfig['animationGuid'] ?? ''),
   };
 }
@@ -114,11 +146,13 @@ function upsertTestAnimation(ws: WebSocket, location: [number, number], config: 
     value: {
       guid: config.animationGuid,
       name: 'Integration animation',
-      class: 'keyframeAnimator',
+      class: config.class,
       targetIntent: config.intentGuid,
-      repeat: config.repeat,
-      length: config.length,
-      steps: config.steps,
+      content: {
+        repeat: config.repeat,
+        length: config.length,
+        steps: config.steps,
+      },
     },
     persistence: 'runtimeAndDurable',
   }));

@@ -409,14 +409,16 @@ testParams:
   004-animation.ts:
     location: [0, 0]
     sceneName: "5"
-    repeat: 10
-    length: 2000
     intentGuid: color-3
     animationGuid: animation-test-1
-    steps:
-      - time: 0
-        args:
-          "params.alpha": 0.5
-      - time: 1000
-        args:
-          "params.alpha": 0.1
+    class: keyframeAnimator
+    content:
+      repeat: 10
+      length: 2000
+      steps:
+        - time: 0
+          args:
+            "params.alpha": 0.5
+        - time: 1000
+          args:
+            "params.alpha": 0.1

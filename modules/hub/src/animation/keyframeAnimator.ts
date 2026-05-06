@@ -59,7 +59,7 @@ export class KeyframeAnimator {
     'length': { name: 'Length (s)', hint: 'Total cycle length', type: 'number', step: 0.1, range: [0.1, 600], default: 10 },
     'lerp.quantization': { name: 'Quantization', hint: 'Transmit values only when they change', type: 'number', step: 0.01, range: [0.01, 0.5], default: 0.02 },
     'lerp.minMs': { name: 'Min interval (ms)', type: 'number', step: 10, range: [10, 1000], default: 50 },
-    'lerp.time': { name: 'Lerp time (ms)', type: 'number', step: 100, range: [100, 60000], default: 0 },
+    'lerp.time': { name: 'Lerp time (s)', hint: '0 = no interpolation', type: 'number', step: 0.1, range: [0, 60], default: 0 },
     'lerp.curve': { name: 'Lerp curve', type: 'string', optionsRef: 'functionCurves', default: 'linear' },
   };
 
@@ -167,7 +167,7 @@ export class KeyframeAnimator {
     }
 
     const out = {
-      timeMs: timeRaw,
+      timeMs: timeRaw * 1000,
       quantizationEff: effectiveLerpQuantization(lr['quantization']),
       curveName: lr['curve'],
       ...(minNominalMs !== undefined ? { minNominalMs } : {}),
@@ -190,7 +190,7 @@ export class KeyframeAnimator {
       const item = arr[index];
       if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
       const row = item as Record<string, unknown>;
-      const time = Number(row['time']);
+      const time = Number(row['time']) * 1000;
       if (!Number.isFinite(time)) continue;
       const args = row['args'];
       let entry: { time: number; args?: Record<string, unknown>; _index: number };

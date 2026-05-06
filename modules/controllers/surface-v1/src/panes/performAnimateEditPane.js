@@ -298,6 +298,9 @@ function makeSliderWidget (value, descriptor, onChange) {
 
   const slider = new ScalarDragSlider(sliderOpts)
   slider.mount(container)
+  // Re-sync visual position once the element has real layout in the DOM.
+  // mount() calls getBoundingClientRect() while the container is still detached → width=0 → handle at left:0.
+  requestAnimationFrame(() => slider.configure({ value: initial }))
   return container
 }
 

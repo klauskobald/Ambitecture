@@ -3,7 +3,9 @@ class EventsHandler {
         this.configHandler = configHandler;
         this._renderer = renderer;
         this._layerIntentEngine = new LayerIntentEngine();
-        this.queue = new EventQueue(events => this.processBatch(events));
+        this.queue = new EventQueue(events => this.processBatch(events), () => {
+            this._renderer.markRenderActivity();
+        });
     }
 
     handle(message) {

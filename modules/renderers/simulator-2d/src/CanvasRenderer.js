@@ -21,6 +21,28 @@ class CanvasRenderer {
 
         this._events = new Map();
         this._eventDrawConfig = bootConfig.EVENT_DRAW;
+
+        /** @type {number | null} */
+        this._rafId = null;
+        this._lastRenderActivityMs = 0;
+        this._inactivityStopMs = 1000;
+    }
+
+    /** Resets the idle timer and ensures the rAF loop is running. */
+    markRenderActivity() {
+        this._lastRenderActivityMs = performance.now();
+        if (this._rafId === null) {
+            this._rafId = requestAnimationFrame(() => this._runFrame());
+        }
+    }
+
+    _runFrame() {
+        this._rafId = null;
+        this.draw();
+        const idleMs = performance.now() - this._lastRenderActivityMs;
+        if (idleMs < this._inactivityStopMs) {
+            this._rafId = requestAnimationFrame(() => this._runFrame());
+        }
     }
 
     /**
@@ -89,11 +111,7 @@ class CanvasRenderer {
     }
 
     start() {
-        const loop = () => {
-            this.draw();
-            requestAnimationFrame(loop);
-        };
-        requestAnimationFrame(loop);
+        this.draw();
     }
 
     draw() {

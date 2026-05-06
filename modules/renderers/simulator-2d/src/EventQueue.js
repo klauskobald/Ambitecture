@@ -1,6 +1,11 @@
 class EventQueue {
-    constructor(callback) {
+    /**
+     * @param {(events: unknown[]) => void} callback
+     * @param {(() => void) | undefined} onAfterBatch
+     */
+    constructor(callback, onAfterBatch) {
         this.callback = callback;
+        this._onAfterBatch = onAfterBatch;
         this.queue = [];
         this.timer = null;
         this.insertCounter = 0;
@@ -27,6 +32,9 @@ class EventQueue {
         }
         if (batch.length > 0) {
             this.callback(batch);
+            if (this._onAfterBatch) {
+                this._onAfterBatch();
+            }
         }
     }
 

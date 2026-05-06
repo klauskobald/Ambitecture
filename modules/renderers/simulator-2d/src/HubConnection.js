@@ -43,7 +43,10 @@ class HubConnection {
         if (!message?.type) return;
 
         const handler = this.handlers[message.type];
-        if (handler) handler.handle(message);
+        if (handler) {
+            handler.handle(message);
+            this.renderer.markRenderActivity();
+        }
     }
 
     _sendRegister(ws) {

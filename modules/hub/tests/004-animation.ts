@@ -164,6 +164,7 @@ function upsertTestAnimation(ws: WebSocket, location: [number, number], config: 
 }
 
 function activateScene(ws: WebSocket, location: [number, number], sceneName: string): void {
+  if (sceneName.length === 0) return;
   ws.send(buildEnvelope('graph:command', location, {
     op: 'patch',
     entityType: 'project',

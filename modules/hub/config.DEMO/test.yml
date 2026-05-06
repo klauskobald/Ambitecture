@@ -408,12 +408,12 @@ testParams:
 
   004-animation.ts:
     location: [0, 0]
-    sceneName: "5"
+    sceneName: ""
     intentGuid: color-3
     animationGuid: animation-test-1
     class: keyframeAnimator
     content:
-      repeat: 10
+      repeat: 0
       length: 12000
       lerp:
         quantization: 0.01

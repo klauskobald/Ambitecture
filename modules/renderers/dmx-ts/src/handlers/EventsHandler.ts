@@ -37,7 +37,7 @@ export class EventsHandler {
 
         this.queue.enqueue(events);
 
-        Logger.debug(`[events] queued ${events.length} event(s)`);
+        // Logger.debug(`[events] queued ${events.length} event(s)`);
     }
 
     reapplyCurrentIntents(): void {

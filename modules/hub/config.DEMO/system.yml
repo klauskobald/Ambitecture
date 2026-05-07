@@ -3,7 +3,6 @@ systemCapabilities:
   animations:
     - class: keyframeAnimator
       name: Keyframe
-      uiDescription:
 
       display:
         content.length:

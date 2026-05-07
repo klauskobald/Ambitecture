@@ -167,8 +167,9 @@ export class AnimationManager {
       value => this.setTimescale(animationGuid, Number(value)),
     );
 
-    const mutateIntent: MutateIntentFn = (guid, value) => {
-      const update: RuntimeUpdate = { entityType: 'intent', guid, value, source: 'hub:animation' };
+    const mutateIntent: MutateIntentFn = (guid, patch) => {
+      if (Object.keys(patch).length === 0) return;
+      const update: RuntimeUpdate = { entityType: 'intent', guid, patch, source: 'hub:animation' };
       this.runtimeUpdateDispatcher.dispatch([update], opts.location, Date.now());
     };
 
@@ -274,8 +275,9 @@ export class AnimationManager {
       };
       this.runners.set(guid, next);
 
-      const reenterMutateIntent: MutateIntentFn = (intentGuid, value) => {
-        const update: RuntimeUpdate = { entityType: 'intent', guid: intentGuid, value, source: 'hub:animation' };
+      const reenterMutateIntent: MutateIntentFn = (intentGuid, patch) => {
+        if (Object.keys(patch).length === 0) return;
+        const update: RuntimeUpdate = { entityType: 'intent', guid: intentGuid, patch, source: 'hub:animation' };
         this.runtimeUpdateDispatcher.dispatch([update], next.lastLocation ?? location, Date.now());
       };
 

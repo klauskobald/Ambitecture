@@ -1,7 +1,7 @@
 import type { ControllerIntent } from '../ProjectManager';
 import type { AnimationRunStatus } from '../hubStatusTypes';
 import { Logger } from '../Logger';
-import { applyDotPathPatch, cloneRecord } from '../dotPath';
+import { applyDotPathPatch, cloneRecord, readAtDotPath, setAtDotPath } from '../dotPath';
 
 import {
   MAX_LERP_SUBSTEPS_PER_SEGMENT,
@@ -11,7 +11,8 @@ import {
 } from './paramLerpSchedule';
 
 export type IntentAccessFn = (guid: string) => ControllerIntent | undefined;
-export type MutateIntentFn = (guid: string, value: Record<string, unknown>) => void;
+/** Dot-path patch only — merged on hub merge cache (preserves unrelated fields e.g. live knob edits). */
+export type MutateIntentFn = (guid: string, patch: Record<string, unknown>) => void;
 
 export type AnimatorFieldDescriptor = {
   name: string;
@@ -33,6 +34,78 @@ export interface KeyframeAnimatorCallbacks {
     message: { text: string };
     data: Record<string, unknown>;
   }) => void;
+}
+
+/** Deep-clone one subtree read from the intent so lerp planning never mutates the live object. */
+function cloneSubtreeForLerp(value: unknown): unknown {
+  return JSON.parse(JSON.stringify(value)) as unknown;
+}
+
+/**
+ * Copies only dot paths listed in `argKeys` from the base intent.
+ * {@link planIntermediateLerpPatches} / {@link diffNumericLeaves} only need numeric leaves on paths
+ * touched by the adjacent keyframes — cloning the entire intent for every lerp segment was unnecessary work.
+ */
+function sliceIntentAtArgKeys(base: Record<string, unknown>, argKeys: readonly string[]): Record<string, unknown> {
+  const slice: Record<string, unknown> = {};
+  for (const dotKey of argKeys) {
+    const v = readAtDotPath(base, dotKey);
+    if (v === undefined) continue;
+    setAtDotPath(slice, dotKey, cloneSubtreeForLerp(v));
+  }
+  return slice;
+}
+
+/**
+ * Minimal “from” / “to” roots for {@link planIntermediateLerpPatches}: same numeric diffs as patching
+ * full `base` but only under the union of keys in prev/next step args.
+ */
+function lerpPlanEndpoints(
+  baseRecord: Record<string, unknown>,
+  prevArgs: Record<string, unknown> | undefined,
+  nextArgs: Record<string, unknown> | undefined,
+): { from: Record<string, unknown>; to: Record<string, unknown> } {
+  const keys = new Set<string>();
+  if (
+    prevArgs !== undefined &&
+    typeof prevArgs === 'object' &&
+    !Array.isArray(prevArgs)
+  ) {
+    for (const k of Object.keys(prevArgs)) keys.add(k);
+  }
+  if (
+    nextArgs !== undefined &&
+    typeof nextArgs === 'object' &&
+    !Array.isArray(nextArgs)
+  ) {
+    for (const k of Object.keys(nextArgs)) keys.add(k);
+  }
+
+  const argKeyList = [...keys];
+  if (argKeyList.length === 0) {
+    return { from: baseRecord, to: baseRecord };
+  }
+
+  const slice = sliceIntentAtArgKeys(baseRecord, argKeyList);
+  const fromPatch =
+    prevArgs !== undefined &&
+      typeof prevArgs === 'object' &&
+      !Array.isArray(prevArgs) &&
+      Object.keys(prevArgs).length > 0
+      ? prevArgs
+      : {};
+  const toPatch =
+    nextArgs !== undefined &&
+      typeof nextArgs === 'object' &&
+      !Array.isArray(nextArgs) &&
+      Object.keys(nextArgs).length > 0
+      ? nextArgs
+      : {};
+
+  return {
+    from: applyDotPathPatch(slice, fromPatch, []),
+    to: applyDotPathPatch(slice, toPatch, []),
+  };
 }
 
 /**
@@ -273,22 +346,22 @@ export class KeyframeAnimator {
   ): void {
     if (this.cancelled || !this.inScene) return;
 
+    if (
+      stepArgs === undefined ||
+      typeof stepArgs !== 'object' ||
+      Array.isArray(stepArgs) ||
+      Object.keys(stepArgs).length === 0
+    ) {
+      return;
+    }
+
     const baseIntent = intentAccess(targetGuid);
     if (!baseIntent) {
       this.cancel('Target intent unavailable');
       return;
     }
 
-    const patched =
-      stepArgs && Object.keys(stepArgs).length > 0
-        ? (applyDotPathPatch(
-          cloneRecord(baseIntent as unknown as Record<string, unknown>),
-          stepArgs,
-          [],
-        ) as unknown as ControllerIntent)
-        : baseIntent;
-
-    mutateIntent(targetGuid, patched as unknown as Record<string, unknown>);
+    mutateIntent(targetGuid, cloneRecord(stepArgs));
   }
 
   start(intentAccess: IntentAccessFn, mutateIntent: MutateIntentFn): void {
@@ -435,27 +508,12 @@ export class KeyframeAnimator {
               return;
             }
 
-            const fromResolvedRaw =
-              prevStep.args !== undefined &&
-                typeof prevStep.args === 'object' &&
-                Array.isArray(prevStep.args) === false &&
-                Object.keys(prevStep.args).length > 0
-                ? applyDotPathPatch(
-                  cloneRecord(baseIntent as unknown as Record<string, unknown>),
-                  prevStep.args,
-                  [],
-                )
-                : (baseIntent as unknown as Record<string, unknown>);
-
-            const nextArgs = nextStep.args;
-            const toResolvedRaw =
-              nextArgs !== undefined && Object.keys(nextArgs).length > 0
-                ? applyDotPathPatch(
-                  cloneRecord(baseIntent as unknown as Record<string, unknown>),
-                  nextArgs,
-                  [],
-                )
-                : (baseIntent as unknown as Record<string, unknown>);
+            const baseRecord = baseIntent as unknown as Record<string, unknown>;
+            const { from: fromResolvedRaw, to: toResolvedRaw } = lerpPlanEndpoints(
+              baseRecord,
+              prevStep.args,
+              nextStep.args,
+            );
 
             const planOpts: PlanIntermediateLerpOptions = {
               onQuantizationCappedOriginalN: originalN =>
@@ -482,7 +540,6 @@ export class KeyframeAnimator {
             }
 
             const denom = planned.n - 1;
-            const fromBaseline = cloneRecord(fromResolvedRaw);
 
             for (let k = 0; k < planned.intermediateDotPatches.length; k++) {
               const dotPatch = planned.intermediateDotPatches[k];
@@ -492,11 +549,8 @@ export class KeyframeAnimator {
 
               this.pushTimeoutAtFireWall(fireWallAbs, () => {
                 if (this.cancelled || !this.inScene) return;
-                const patchedRecord =
-                  Object.keys(patchRecord).length > 0
-                    ? applyDotPathPatch(cloneRecord(fromBaseline), patchRecord, [])
-                    : cloneRecord(fromBaseline);
-                mutateIntent(targetGuid, patchedRecord);
+                if (Object.keys(patchRecord).length === 0) return;
+                mutateIntent(targetGuid, cloneRecord(patchRecord));
               });
             }
           });

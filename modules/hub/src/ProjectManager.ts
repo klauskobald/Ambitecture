@@ -812,6 +812,15 @@ export class ProjectManager {
     return (this.project?.animations ?? []).find(a => a.guid === guid);
   }
 
+  /**
+   * Patch fields on an animation definition in-memory only — no graph event, no broadcast.
+   * Used for operational state (e.g. timescale) that should survive restarts but not be fanned out.
+   */
+  patchAnimationFields(guid: string, patch: Record<string, unknown>): void {
+    const anim = (this.project?.animations ?? []).find(a => a.guid === guid);
+    if (anim) Object.assign(anim, patch);
+  }
+
   getSceneByGuid(guid: string): Scene | undefined {
     return (this.project?.scenes ?? []).find(scene => scene.guid === guid);
   }

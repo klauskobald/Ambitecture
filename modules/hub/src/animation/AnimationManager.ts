@@ -129,6 +129,11 @@ export class AnimationManager {
       } else {
         effectiveTimescale = opts.timescale;
       }
+    } else {
+      const savedTs = typeof record['timescale'] === 'number' ? record['timescale'] : undefined;
+      if (savedTs !== undefined && Number.isFinite(savedTs) && savedTs > 0) {
+        effectiveTimescale = savedTs;
+      }
     }
 
     const plugin = new KeyframeAnimator(animationGuid, record, {
@@ -184,6 +189,7 @@ export class AnimationManager {
     runner.timescale = factor;
     runner.plugin.setTimescale(factor);
     this.bindingManager?.receiveFromMaster(`${animationGuid}-timescale`, runner.timescale);
+    this.projectManager.patchAnimationFields(animationGuid, { timescale: factor });
   }
 
   /** Stop playback (`action:trigger` {@code args.command: "stop"}). */

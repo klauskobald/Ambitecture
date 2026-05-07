@@ -110,6 +110,10 @@ export class ScalarRadialKnob {
 
     /** @type {boolean} */
     this._dialEngaged = false
+    /** @type {ParentNode | null} original DOM parent before portal */
+    this._portalParent = null
+    /** @type {ChildNode | null} sibling to reinsert before on disengage */
+    this._portalNextSib = null
     /** @type {() => void} */
     this._boundResizeRelayout = () => {
       if (this._dialEngaged) this._ensureEngagedDialOnScreen()
@@ -197,6 +201,10 @@ export class ScalarRadialKnob {
     this._setDialEngaged(false)
     this._abort?.abort()
     this._abort = null
+    // If still portalled (e.g. destroyed mid-drag), remove from body.
+    if (this._root && this._root.parentNode === document.body && !this._portalParent) {
+      this._root.remove()
+    }
     this._root = null
     this._dial = null
     this._needle = null
@@ -219,15 +227,40 @@ export class ScalarRadialKnob {
         vvOff.removeEventListener('scroll', this._boundResizeRelayout)
       }
       if (root) {
+        // Suppress transition so position restore + style clear is instant (no jump artefact).
+        root.style.transition = 'none'
         root.classList.remove('quick-panel-knob--engaged')
-        root.style.transform = ''
+        root.style.position = ''
+        root.style.top = ''
+        root.style.left = ''
+        root.style.transformOrigin = ''
         root.style.zIndex = ''
+        root.style.transform = ''
+        // Reattach to original DOM position before restoring transition.
+        if (this._portalParent) {
+          this._portalParent.insertBefore(root, this._portalNextSib)
+          this._portalParent = null
+          this._portalNextSib = null
+        }
+        requestAnimationFrame(() => { if (this._root) this._root.style.transition = '' })
       }
       return
     }
     if (!root || !this._dial) return
+    // Capture viewport-relative position before moving to portal.
+    const rect = root.getBoundingClientRect()
     this._dialEngaged = true
+    // Record DOM location so we can reattach on disengage.
+    this._portalParent = root.parentNode
+    this._portalNextSib = root.nextSibling
+    // Move to body — escapes any ancestor overflow:hidden or transform offset.
+    document.body.appendChild(root)
     root.classList.add('quick-panel-knob--engaged')
+    root.style.position = 'fixed'
+    root.style.top = `${rect.top}px`
+    root.style.left = `${rect.left}px`
+    root.style.transformOrigin = 'top left'
+    root.style.zIndex = '9999'
     window.addEventListener('resize', this._boundResizeRelayout)
     const vvOn = window.visualViewport
     if (vvOn) {
@@ -239,10 +272,14 @@ export class ScalarRadialKnob {
     })
   }
 
-  /** Fits scaled knob (caption + dial) inside the visual viewport; may reduce scale below {@link RADIAL_KNOB_ENGAGED_TARGET_SCALE}. */
+  /**
+   * Fits the fixed-positioned knob inside the visual viewport.
+   * With position:fixed + transform-origin:top left, top/left drive placement
+   * and scale(s) drives size — no iterative getBoundingClientRect loop needed.
+   */
   _ensureEngagedDialOnScreen () {
     if (!this._dialEngaged || !this._root) return
-    const box = this._root
+    const root = this._root
     const m = RADIAL_KNOB_VIEW_MARGIN_PX
     const vv = window.visualViewport
     const vw = vv?.width ?? window.innerWidth
@@ -254,43 +291,30 @@ export class ScalarRadialKnob {
     const rightBound = vx + vw - m
     const bottomBound = vy + vh - m
 
-    let s = RADIAL_KNOB_ENGAGED_TARGET_SCALE
-    let tx = 0
-    let ty = 0
-    const apply = () => {
-      box.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`
-    }
+    const naturalW = root.offsetWidth
+    const naturalH = root.offsetHeight
 
-    apply()
-    box.offsetWidth
-    let r = box.getBoundingClientRect()
+    let s = RADIAL_KNOB_ENGAGED_TARGET_SCALE
     while (
       s > 1.02 &&
-      (r.width > rightBound - leftBound ||
-        r.height > bottomBound - topBound)
+      (naturalW * s > rightBound - leftBound || naturalH * s > bottomBound - topBound)
     ) {
       s -= RADIAL_KNOB_SCALE_SHRINK_STEP
-      apply()
-      r = box.getBoundingClientRect()
     }
 
-    for (let pass = 0; pass < 6; pass++) {
-      r = box.getBoundingClientRect()
-      if (
-        r.left >= leftBound - 0.5 &&
-        r.top >= topBound - 0.5 &&
-        r.right <= rightBound + 0.5 &&
-        r.bottom <= bottomBound + 0.5
-      ) {
-        break
-      }
-      if (r.left < leftBound) tx += leftBound - r.left
-      if (r.right > rightBound) tx += rightBound - r.right
-      if (r.top < topBound) ty += topBound - r.top
-      if (r.bottom > bottomBound) ty += bottomBound - r.bottom
-      apply()
-      box.offsetWidth
-    }
+    const scaledW = naturalW * s
+    const scaledH = naturalH * s
+    let top = parseFloat(root.style.top) || 0
+    let left = parseFloat(root.style.left) || 0
+
+    if (left + scaledW > rightBound) left = rightBound - scaledW
+    if (top + scaledH > bottomBound) top = bottomBound - scaledH
+    if (left < leftBound) left = leftBound
+    if (top < topBound) top = topBound
+
+    root.style.top = `${top}px`
+    root.style.left = `${left}px`
+    root.style.transform = `scale(${s})`
 
     if (this._dragPointerId !== null) {
       this._dragStartClientX = this._lastPointerClientX

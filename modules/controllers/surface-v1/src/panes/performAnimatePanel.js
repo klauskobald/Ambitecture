@@ -10,18 +10,9 @@ import {
   subscribeAnimationPlayState
 } from '../core/animationPlayRegistry.js'
 import { subscribeBinding } from '../core/bindingRegistry.js'
+import { ScalarRadialKnob } from '../perform/ScalarRadialKnob.js'
 import { getAnimatorViewer } from './animators/animatorViewerRegistry.js'
 import { createAnimationEditPane } from './performAnimateEditPane.js'
-
-const SPEED_PRESETS = [0.25, 0.5, 1, 1.5, 2, 4]
-const DEFAULT_SPEED_IDX = SPEED_PRESETS.indexOf(1)
-
-/** @type {Map<string, number>} guid → index into SPEED_PRESETS */
-const speedIndexByGuid = new Map()
-
-function formatSpeed (v) {
-  return v === 1 ? '1×' : `${v}×`
-}
 
 /**
  * @returns {{ panel: HTMLDivElement }}
@@ -169,9 +160,7 @@ export function createPerformAnimatePanel () {
       if (isAnimationPlaying(row.guid)) {
         sendActionTrigger(row.guid, { command: 'stop' })
       } else {
-        const speedIdx = speedIndexByGuid.get(row.guid) ?? DEFAULT_SPEED_IDX
-        const timescale = SPEED_PRESETS[speedIdx] ?? 1
-        sendActionTrigger(row.guid, timescale !== 1 ? { command: 'start', timescale } : { command: 'start' })
+        sendActionTrigger(row.guid, { command: 'start' })
       }
     })
 
@@ -186,47 +175,34 @@ export function createPerformAnimatePanel () {
 
   /**
    * @param {string} guid
-   * @returns {HTMLButtonElement}
+   * @returns {HTMLDivElement}
    */
   function makeSpeedDial (guid) {
     const key = `${guid}-timescale`
-    const btn = document.createElement('button')
-    btn.type = 'button'
-    btn.className = 'perform-animate-speed'
+    let currentSpeed = 1
 
-    function syncDial () {
-      const idx = speedIndexByGuid.get(guid) ?? DEFAULT_SPEED_IDX
-      const speed = SPEED_PRESETS[idx] ?? 1
-      btn.textContent = formatSpeed(speed)
-      btn.classList.toggle('perform-animate-speed--active', speed !== 1)
-      btn.setAttribute('aria-label', `Playback speed: ${formatSpeed(speed)}`)
-    }
+    const wrap = document.createElement('div')
+    wrap.className = 'perform-animate-speed-wrap'
+
+    const knob = new ScalarRadialKnob({
+      descriptor: { name: 'Speed', range: [0.25, 4], step: 0.01, defaultValue: 1 },
+      intentGuid: guid,
+      readValue: () => currentSpeed,
+      onCommit: domain => sendBindingSet(key, domain),
+    })
+    knob.mount(wrap)
 
     subscribeBinding(key, (value) => {
       if (value === null || value === undefined) {
-        btn.disabled = true
+        wrap.classList.add('perform-animate-speed-wrap--offline')
         return
       }
-      btn.disabled = false
-      const speed = Number(value)
-      const closestIdx = SPEED_PRESETS.reduce(
-        (best, p, i) => Math.abs(p - speed) < Math.abs(SPEED_PRESETS[best] - speed) ? i : best,
-        DEFAULT_SPEED_IDX
-      )
-      speedIndexByGuid.set(guid, closestIdx)
-      syncDial()
+      wrap.classList.remove('perform-animate-speed-wrap--offline')
+      currentSpeed = Number(value)
+      knob.syncFromExternal()
     })
 
-    btn.addEventListener('click', () => {
-      const prev = speedIndexByGuid.get(guid) ?? DEFAULT_SPEED_IDX
-      const next = (prev + 1) % SPEED_PRESETS.length
-      speedIndexByGuid.set(guid, next)
-      syncDial()
-      sendBindingSet(key, SPEED_PRESETS[next])
-    })
-
-    syncDial()
-    return btn
+    return wrap
   }
 
   projectGraph.subscribe(render)

@@ -96,22 +96,29 @@ export class PerformPane {
       ? String(scenePerformInput.guid ?? '')
       : ''
 
+    const mount = this._subnavShell.controlsMount
+
     for (const input of activeInputs) {
       const guid = String(input.guid ?? '')
       if (!guid) continue
       activeGuids.add(guid)
       const button = this._buttonForInput(guid)
-      button.textContent = String(input.name ?? 'Button')
-      button.dataset.actionGuid =
-        typeof input.action === 'string' ? input.action : ''
-      button.dataset.inputGuid = guid
-      button.dataset.behavior =
-        typeof input.type === 'string' ? input.type : 'button'
-      button.classList.toggle(
-        'btn--active',
-        highlightedInputGuid !== '' && guid === highlightedInputGuid
-      )
-      this._subnavShell.controlsMount.appendChild(button)
+
+      const newText = String(input.name ?? 'Button')
+      if (button.textContent !== newText) button.textContent = newText
+
+      const newAction = typeof input.action === 'string' ? input.action : ''
+      if (button.dataset.actionGuid !== newAction) button.dataset.actionGuid = newAction
+
+      if (button.dataset.inputGuid !== guid) button.dataset.inputGuid = guid
+
+      const newBehavior = typeof input.type === 'string' ? input.type : 'button'
+      if (button.dataset.behavior !== newBehavior) button.dataset.behavior = newBehavior
+
+      const isActive = highlightedInputGuid !== '' && guid === highlightedInputGuid
+      button.classList.toggle('btn--active', isActive)
+
+      if (button.parentNode !== mount) mount.appendChild(button)
     }
 
     for (const [guid, button] of this._buttonByGuid) {

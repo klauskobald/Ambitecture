@@ -154,6 +154,21 @@ export function sendActionInputCommand (command) {
   }))
 }
 
+/** @param {string} key */
+export function sendBindingSubscribe (key) {
+  if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation) return
+  activeWs.send(JSON.stringify({ message: { type: 'binding:subscribe', location: activeLocation, payload: { key } } }))
+}
+
+/**
+ * @param {string} key
+ * @param {unknown} value
+ */
+export function sendBindingSet (key, value) {
+  if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation) return
+  activeWs.send(JSON.stringify({ message: { type: 'binding:set', location: activeLocation, payload: { key, value } } }))
+}
+
 /**
  * @param {string} actionGuid
  * @param {Record<string, unknown>=} args

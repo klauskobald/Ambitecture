@@ -21,6 +21,8 @@ import { Logger } from './Logger';
 import { GraphMutationResult } from './GraphProtocol';
 import { HubStatusDispatcher } from './hubStatusTypes';
 import { AnimationManager } from './animation/AnimationManager';
+import { BindingManager } from './BindingManager';
+import { BindingHandler } from './handlers/BindingHandler';
 
 const serverConfig = new Config('server');
 const systemConfig = new Config('system', true);
@@ -44,11 +46,13 @@ const runtimeIntentStore = new RuntimeIntentStore(projectManager);
 projectManager.configureEffectiveIntentResolver(guid => runtimeIntentStore.getEffectiveIntent(guid));
 const runtimeUpdateDispatcher = new RuntimeUpdateDispatcher(registry, eventQueue, runtimeIntentStore);
 const hubStatusDispatcher = new HubStatusDispatcher(registry);
+const bindingManager = new BindingManager();
 const animationManager = new AnimationManager(
   projectManager,
   runtimeIntentStore,
   hubStatusDispatcher,
   runtimeUpdateDispatcher,
+  bindingManager,
 );
 const graphStore = new ProjectGraphStore(
   projectManager,
@@ -261,12 +265,16 @@ router.register(
   new FixturesHandler(registry, projectManager, () => pushConfigsToModules(false)),
 );
 router.register('saveProject', new SaveProjectHandler(projectManager));
+const bindingHandler = new BindingHandler(registry, bindingManager);
+router.register('binding:subscribe', bindingHandler);
+router.register('binding:set', bindingHandler);
 
 graphStore.useProject(serverConfig.get<string>('defaultProject'), () => {
   pushConfigsToModules();
 });
 
 const server = new Server(registry, router);
+server.addDisconnectHook(ws => bindingManager.onSocketClosed(ws));
 server.listen(port, host);
 
 Logger.info(`Hub listening on ${host}:${port}`);

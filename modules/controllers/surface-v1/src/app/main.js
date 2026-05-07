@@ -8,6 +8,7 @@ import {
   applyHubAnimationStatus,
   resetAnimationPlayState
 } from '../core/animationPlayRegistry.js'
+import { applyBindingValue, resubscribeAll } from '../core/bindingRegistry.js'
 import { SimulatorViewport } from '../viewport/simulatorViewport.js'
 import { OverlayCanvas } from '../viewport/overlayCanvas.js'
 import { initNav, activateDefaultNav } from './nav.js'
@@ -147,6 +148,7 @@ async function main () {
           }
         })
       )
+      resubscribeAll()
       statusDisplay.info(
         'registered as controller - waiting for config...',
         'connection'
@@ -236,6 +238,10 @@ async function main () {
         }
         case 'hub:status': {
           applyHubAnimationStatus(message.payload)
+          break
+        }
+        case 'binding:value': {
+          applyBindingValue(message.payload)
           break
         }
       }

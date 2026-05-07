@@ -29,6 +29,7 @@ export class Server {
   private httpServer: http.Server;
   private wss: WebSocketServer;
   private lastPongTimes: Map<WebSocket, number> = new Map();
+  private disconnectHooks: ((ws: WebSocket) => void)[] = [];
 
   constructor(registry: ConnectionRegistry, router: MessageRouter) {
     this.registry = registry;
@@ -45,6 +46,10 @@ export class Server {
     this.httpServer.listen(port, host);
   }
 
+  addDisconnectHook(fn: (ws: WebSocket) => void): void {
+    this.disconnectHooks.push(fn);
+  }
+
   private onConnection(ws: WebSocket): void {
     this.registry.add(ws);
     this.lastPongTimes.set(ws, Date.now());
@@ -58,6 +63,7 @@ export class Server {
       clearInterval(heartbeatTimer);
       this.registry.remove(ws);
       this.lastPongTimes.delete(ws);
+      for (const h of this.disconnectHooks) h(ws);
     });
 
     ws.on('error', (err) => {
@@ -65,6 +71,7 @@ export class Server {
       clearInterval(heartbeatTimer);
       this.registry.remove(ws);
       this.lastPongTimes.delete(ws);
+      for (const h of this.disconnectHooks) h(ws);
     });
   }
 

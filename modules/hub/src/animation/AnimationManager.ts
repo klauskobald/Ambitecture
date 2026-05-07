@@ -5,6 +5,7 @@ import { HubStatusDispatcher, type HubStatusAnimationPayload } from '../hubStatu
 import { KeyframeAnimator, type MutateIntentFn } from './keyframeAnimator';
 import { Logger } from '../Logger';
 import type { RuntimeUpdate } from '../RuntimeProtocol';
+import type { BindingManager } from '../BindingManager';
 /**
  * Companion runner actions share the animation row's guid (`action:trigger` passes that guid).
  */
@@ -41,6 +42,7 @@ export class AnimationManager {
     private runtimeIntentStore: RuntimeIntentStore,
     private hubStatus: HubStatusDispatcher,
     private runtimeUpdateDispatcher: RuntimeUpdateDispatcher,
+    private bindingManager?: BindingManager,
   ) { }
 
   setInternalStatusListener(cb: (guid: string, payload: AnimationStatusPayload) => void): void {
@@ -153,6 +155,13 @@ export class AnimationManager {
 
     this.runners.set(animationGuid, runnerBase);
 
+    const runner = runnerBase;
+    this.bindingManager?.registerMaster(
+      `${animationGuid}-timescale`,
+      () => runner.timescale,
+      value => this.setTimescale(animationGuid, Number(value)),
+    );
+
     const mutateIntent: MutateIntentFn = (guid, value) => {
       const update: RuntimeUpdate = { entityType: 'intent', guid, value, source: 'hub:animation' };
       this.runtimeUpdateDispatcher.dispatch([update], opts.location, Date.now());
@@ -174,6 +183,7 @@ export class AnimationManager {
     }
     runner.timescale = factor;
     runner.plugin.setTimescale(factor);
+    this.bindingManager?.receiveFromMaster(`${animationGuid}-timescale`, runner.timescale);
   }
 
   /** Stop playback (`action:trigger` {@code args.command: "stop"}). */
@@ -207,6 +217,7 @@ export class AnimationManager {
     if (!existing) {
       return;
     }
+    this.bindingManager?.unregisterMaster(`${animationGuid}-timescale`);
     existing.plugin.cancel(reason);
     this.runners.delete(animationGuid);
   }

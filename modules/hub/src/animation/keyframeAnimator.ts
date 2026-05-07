@@ -63,23 +63,39 @@ export class KeyframeAnimator {
   /** Wall ms per nominal definition ms (>1 ⇒ slower). */
   private timescale = 1;
 
+  // ── restart state (set by start(), consumed by setTimescale) ──────────────
+  private _runStartWall = 0;
+  private _lastFiredCycleIdx = 0;
+  private _lastFiredStepIdx = -1;
+  /** Re-enters the cycle scheduler from a given cycle + step; set in start(). */
+  private _resumeFn?: (cIdx: number, startStepIdx: number) => void;
+
   constructor(
     _animationGuid: string,
     private rawDef: Record<string, unknown>,
     private callbacks: KeyframeAnimatorCallbacks,
   ) { }
 
-  /** New timers use this factor; existing hub timeouts keep prior delays until they fire (V1). */
   setTimescale(factor: number): void {
     if (typeof factor !== 'number' || !Number.isFinite(factor) || factor <= 0) {
       Logger.warn('[keyframeAnimator] setTimescale ignored — need finite factor > 0:', factor);
       return;
     }
+    if (!this._resumeFn || this.cancelled || !this.inScene) {
+      this.timescale = factor;
+      return;
+    }
+    const now = Date.now();
+    // Compute exact logical position right now, then rebase startWall at new speed.
+    const currentLogicalMs = (now - this._runStartWall) / this.timescale;
     this.timescale = factor;
+    this._runStartWall = now - currentLogicalMs * factor;
+    this.stripTimers();
+    this._resumeFn(this._lastFiredCycleIdx, this._lastFiredStepIdx + 1);
   }
 
-  private wallFromAnimStart(animStartWall: number, logicalMsFromAnimStart: number): number {
-    return animStartWall + logicalMsFromAnimStart * this.timescale;
+  private wallFromAnimStart(logicalMsFromAnimStart: number): number {
+    return this._runStartWall + logicalMsFromAnimStart * this.timescale;
   }
 
   /** Clears timeouts without emitting status (used when replacing runner on scene re-enter). */
@@ -310,7 +326,9 @@ export class KeyframeAnimator {
     const infinite = repeatLoops === 0;
     const totalCycles = infinite ? Number.POSITIVE_INFINITY : repeatLoops;
 
-    const startWall = Date.now();
+    this._runStartWall = Date.now();
+    this._lastFiredCycleIdx = 0;
+    this._lastFiredStepIdx = -1;
 
     const baseStatusParts = (): Record<string, unknown> =>
       lengthClampActive
@@ -329,7 +347,8 @@ export class KeyframeAnimator {
       },
     });
 
-    const scheduleCyclePlain = (cIdx: number): void => {
+    // startStepIdx: skip steps already fired before a timescale-driven restart.
+    const scheduleCyclePlain = (cIdx: number, startStepIdx = 0): void => {
       if (this.cancelled || !this.inScene) return;
       if (!infinite && cIdx >= totalCycles) {
         this.callbacks.onStatus({
@@ -356,20 +375,23 @@ export class KeyframeAnimator {
 
       const L = steps.length;
 
-      for (let i = 0; i < L; i++) {
+      for (let i = startStepIdx; i < L; i++) {
         const step = steps[i];
         if (!step) continue;
-        const fireWallAbs = this.wallFromAnimStart(startWall, cIdx * period + step.time);
+        const fireWallAbs = this.wallFromAnimStart(cIdx * period + step.time);
+        const stepIdx = i;
         const t = setTimeout(() => {
+          this._lastFiredCycleIdx = cIdx;
+          this._lastFiredStepIdx = stepIdx;
           this.emitOneKeyframe(targetGuid, intentAccess, mutateIntent, step.args);
         }, Math.max(0, fireWallAbs - Date.now()));
         this.timers.push(t);
       }
 
-      const nextCycleAt = this.wallFromAnimStart(startWall, (cIdx + 1) * period);
+      const nextCycleAt = this.wallFromAnimStart((cIdx + 1) * period);
       const nextDelay = Math.max(0, nextCycleAt - Date.now());
       const nextT = setTimeout(() => {
-        scheduleCyclePlain(cIdx + 1);
+        scheduleCyclePlain(cIdx + 1, 0);
       }, nextDelay);
       this.timers.push(nextT);
     };
@@ -379,8 +401,8 @@ export class KeyframeAnimator {
       quantizationEff: number;
       curveName: unknown;
       minNominalMs?: number;
-    }): ((cIdx: number) => void) => {
-      return (cIdx: number): void => {
+    }): ((cIdx: number, startStepIdx?: number) => void) => {
+      return (cIdx: number, startStepIdx = 0): void => {
         const scheduleLerpSegmentWhenWindowStarts = (
           fromIdx: number,
           toIdx: number,
@@ -395,15 +417,13 @@ export class KeyframeAnimator {
             ? (cIdx + 1) * period + nextStep.time
             : cIdx * period + nextStep.time;
 
-          const prevAnchorWallAbs = this.wallFromAnimStart(startWall, prevMsOffset);
-          const nextAnchorWallAbs = this.wallFromAnimStart(startWall, nextMsOffset);
+          const prevAnchorWallAbs = this.wallFromAnimStart(prevMsOffset);
+          const nextAnchorWallAbs = this.wallFromAnimStart(nextMsOffset);
 
-          /** Overlap clamp: segment uses `lerp.time` scaled by timescale vs wall anchors. */
           const segmentStartMs = Math.max(
             prevAnchorWallAbs,
             nextAnchorWallAbs - lerp.timeMs * this.timescale,
           );
-          /** Wall span for this eased segment; spacing cap uses nominal `lerp.minMs` × hub timescale. */
           const span = nextAnchorWallAbs - segmentStartMs;
 
           this.pushTimeoutAtFireWall(segmentStartMs, () => {
@@ -508,36 +528,42 @@ export class KeyframeAnimator {
 
         const L = steps.length;
 
-        for (let i = 0; i < L - 1; i++) {
+        // On restart, skip lerp segments before startStepIdx; always schedule wrap segment.
+        for (let i = startStepIdx; i < L - 1; i++) {
           scheduleLerpSegmentWhenWindowStarts(i, i + 1, false);
         }
         if (L >= 2) {
           scheduleLerpSegmentWhenWindowStarts(L - 1, 0, true);
         }
 
-        for (let i = 0; i < L; i++) {
+        for (let i = startStepIdx; i < L; i++) {
           const step = steps[i];
           if (!step) continue;
-          const fireWallAbs = this.wallFromAnimStart(startWall, cIdx * period + step.time);
+          const fireWallAbs = this.wallFromAnimStart(cIdx * period + step.time);
+          const stepIdx = i;
           this.pushTimeoutAtFireWall(fireWallAbs, () => {
+            this._lastFiredCycleIdx = cIdx;
+            this._lastFiredStepIdx = stepIdx;
             this.emitOneKeyframe(targetGuid, intentAccess, mutateIntent, step.args);
           });
         }
 
-        const nextCycleAt = this.wallFromAnimStart(startWall, (cIdx + 1) * period);
+        const nextCycleAt = this.wallFromAnimStart((cIdx + 1) * period);
         const nextDelay = Math.max(0, nextCycleAt - Date.now());
         const nextT = setTimeout(() => {
-          scheduleCycleWithLerp(lerp)(cIdx + 1);
+          scheduleCycleWithLerp(lerp)(cIdx + 1, 0);
         }, nextDelay);
         this.timers.push(nextT);
       };
     };
 
     if (lerpSpec === null) {
-      scheduleCyclePlain(0);
+      this._resumeFn = (cIdx, startStepIdx) => scheduleCyclePlain(cIdx, startStepIdx);
+      scheduleCyclePlain(0, 0);
     } else {
       const runner = scheduleCycleWithLerp(lerpSpec);
-      runner(0);
+      this._resumeFn = (cIdx, startStepIdx) => runner(cIdx, startStepIdx);
+      runner(0, 0);
     }
   }
 }

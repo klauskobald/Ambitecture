@@ -756,7 +756,6 @@
   min-width: 3.1rem;
   touch-action: none;
   transform-origin: center center;
-  transition: transform 0.16s ease-out;
 }
 
 .quick-panel-knob--engaged {

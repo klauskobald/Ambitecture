@@ -227,8 +227,6 @@ export class ScalarRadialKnob {
         vvOff.removeEventListener('scroll', this._boundResizeRelayout)
       }
       if (root) {
-        // Suppress transition so position restore + style clear is instant (no jump artefact).
-        root.style.transition = 'none'
         root.classList.remove('quick-panel-knob--engaged')
         root.style.position = ''
         root.style.top = ''
@@ -236,13 +234,11 @@ export class ScalarRadialKnob {
         root.style.transformOrigin = ''
         root.style.zIndex = ''
         root.style.transform = ''
-        // Reattach to original DOM position before restoring transition.
         if (this._portalParent) {
           this._portalParent.insertBefore(root, this._portalNextSib)
           this._portalParent = null
           this._portalNextSib = null
         }
-        requestAnimationFrame(() => { if (this._root) this._root.style.transition = '' })
       }
       return
     }
@@ -267,9 +263,7 @@ export class ScalarRadialKnob {
       vvOn.addEventListener('resize', this._boundResizeRelayout)
       vvOn.addEventListener('scroll', this._boundResizeRelayout)
     }
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => this._ensureEngagedDialOnScreen())
-    })
+    this._ensureEngagedDialOnScreen()
   }
 
   /**

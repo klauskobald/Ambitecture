@@ -87,6 +87,8 @@ export function createAnimationEditPane ({ onClose }) {
           const warn = viewer?.shouldWarnOnClassSwitch(record) ?? false
           if (warn && !confirm(`Switching to "${newClass}" will clear this animation's content. Continue?`)) return
           sendAnimationPatch(guid, { class: newClass, content: {} })
+          const fresh = projectGraph.getAnimations().get(guid)
+          if (fresh) renderBody(fresh)
         })
       ))
     }
@@ -129,6 +131,8 @@ export function createAnimationEditPane ({ onClose }) {
 /** @param {string} guid @param {Record<string, unknown>} patch */
 function sendAnimationPatch (guid, patch) {
   sendGraphCommand({ op: 'upsert', entityType: 'animation', guid, patch, persistence: 'runtimeAndDurable' })
+  // Hub filters the matching delta from its echo back to the source controller, so apply locally.
+  projectGraph.applyGraphDelta({ entityType: 'animation', op: 'upsert', guid, patch })
 }
 
 /**
@@ -254,12 +258,14 @@ function makeSliderWidget (value, descriptor, onChange) {
     ? Math.max(min, Math.min(max, Math.round((v - min) / step) * step + min))
     : Math.max(min, Math.min(max, v))
 
+  // onCommit() has no argument — track the live value via onInput, commit on release.
+  let pendingValue = initial
   const sliderOpts = stepFnName == null
-    ? { min, max, step, value: initial, onInput: () => {}, onCommit: v => onChange(v) }
+    ? { min, max, step, value: initial, onInput: v => { pendingValue = v }, onCommit: () => onChange(pendingValue) }
     : {
         min, max, step, value: initial,
-        onInput: () => {},
-        onCommit: v => onChange(v),
+        onInput: v => { pendingValue = v },
+        onCommit: () => onChange(pendingValue),
         valueAtT: t => snap(min + span * fnEvaluate(stepFnName, t)),
         tAtValue: v => {
           if (span <= 0) return 0

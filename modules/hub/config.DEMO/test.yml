@@ -420,7 +420,7 @@ testParams:
         quantization: 0.01
         minMs: 50 
         time: 3
-        curve: linear
+        curve: smoothstep
       steps:
         - time: 0
           args:

@@ -44,8 +44,42 @@ export function createPerformAnimatePanel () {
 
   // ── rendering ─────────────────────────────────────────────────────────────
 
+  let lastListKey = ''
+
+  function listKey (anims) {
+    return anims.map(a => `${a.guid}:${a.name}:${a.class}`).join('|')
+  }
+
+  function syncRowPlayState (rowEl) {
+    const guid = rowEl.dataset.animationGuid
+    if (!guid) return
+    const statusEl = rowEl.querySelector('.perform-animate-row__status')
+    if (statusEl) statusEl.textContent = getAnimationStatusMessage(guid)
+    const toggle = rowEl.querySelector('.perform-animate-toggle')
+    if (!toggle) return
+    const playing = isAnimationPlaying(guid)
+    const name = rowEl.querySelector('.perform-animate-row__name')?.textContent ?? guid
+    toggle.classList.toggle('perform-animate-toggle--stop', playing)
+    toggle.classList.toggle('perform-animate-toggle--play', !playing)
+    toggle.setAttribute('aria-label', playing ? `Stop animation ${name}` : `Play animation ${name}`)
+    toggle.setAttribute('aria-pressed', playing ? 'true' : 'false')
+    toggle.textContent = playing ? '■' : '▶'
+  }
+
+  function syncAllRowPlayStates () {
+    for (const rowEl of list.querySelectorAll('[data-animation-guid]')) {
+      syncRowPlayState(rowEl)
+    }
+  }
+
   function render () {
     const anims = projectGraph.getPlayableAnimationsList()
+    const key = listKey(anims)
+    if (key === lastListKey) {
+      syncAllRowPlayStates()
+      return
+    }
+    lastListKey = key
     list.replaceChildren()
     if (anims.length === 0) {
       const empty = document.createElement('p')
@@ -135,7 +169,7 @@ export function createPerformAnimatePanel () {
   }
 
   projectGraph.subscribe(render)
-  subscribeAnimationPlayState(render)
+  subscribeAnimationPlayState(syncAllRowPlayStates)
   render()
 
   return { panel }

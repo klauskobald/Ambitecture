@@ -254,8 +254,6 @@ export class KeyframeAnimator {
     intentAccess: IntentAccessFn,
     mutateIntent: MutateIntentFn,
     stepArgs: Record<string, unknown> | undefined,
-    statusLine: string,
-    statusData: Record<string, unknown>,
   ): void {
     if (this.cancelled || !this.inScene) return;
 
@@ -275,12 +273,6 @@ export class KeyframeAnimator {
         : baseIntent;
 
     mutateIntent(targetGuid, patched as unknown as Record<string, unknown>);
-
-    this.callbacks.onStatus({
-      status: 'started',
-      message: { text: statusLine },
-      data: statusData,
-    });
   }
 
   start(intentAccess: IntentAccessFn, mutateIntent: MutateIntentFn): void {
@@ -368,17 +360,8 @@ export class KeyframeAnimator {
         const step = steps[i];
         if (!step) continue;
         const fireWallAbs = this.wallFromAnimStart(startWall, cIdx * period + step.time);
-        const stepIndex = i + 1;
-
         const t = setTimeout(() => {
-          const statusLine =
-            `${totalCycles === Number.POSITIVE_INFINITY ? `${cIdx + 1}: ` : ''}step ${stepIndex} of ${L}`;
-          this.emitOneKeyframe(targetGuid, intentAccess, mutateIntent, step.args, statusLine, {
-            step: stepIndex,
-            total: L,
-            cycle: cIdx + 1,
-            ...baseStatusParts(),
-          });
+          this.emitOneKeyframe(targetGuid, intentAccess, mutateIntent, step.args);
         }, Math.max(0, fireWallAbs - Date.now()));
         this.timers.push(t);
       }
@@ -536,17 +519,8 @@ export class KeyframeAnimator {
           const step = steps[i];
           if (!step) continue;
           const fireWallAbs = this.wallFromAnimStart(startWall, cIdx * period + step.time);
-          const stepIndex = i + 1;
-
           this.pushTimeoutAtFireWall(fireWallAbs, () => {
-            const statusLine =
-              `${totalCycles === Number.POSITIVE_INFINITY ? `${cIdx + 1}: ` : ''}step ${stepIndex} of ${L}`;
-            this.emitOneKeyframe(targetGuid, intentAccess, mutateIntent, step.args, statusLine, {
-              step: stepIndex,
-              total: L,
-              cycle: cIdx + 1,
-              ...baseStatusParts(),
-            });
+            this.emitOneKeyframe(targetGuid, intentAccess, mutateIntent, step.args);
           });
         }
 

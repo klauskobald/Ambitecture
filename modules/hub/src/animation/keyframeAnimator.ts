@@ -2,8 +2,6 @@ import type { ControllerIntent } from '../ProjectManager';
 import type { AnimationRunStatus } from '../hubStatusTypes';
 import { Logger } from '../Logger';
 import { applyDotPathPatch, cloneRecord } from '../dotPath';
-import { intentToEvent } from '../handlers/intentHelpers';
-import { transformIntentToNormalized } from '../intents';
 
 import {
   MAX_LERP_SUBSTEPS_PER_SEGMENT,
@@ -13,6 +11,7 @@ import {
 } from './paramLerpSchedule';
 
 export type IntentAccessFn = (guid: string) => ControllerIntent | undefined;
+export type MutateIntentFn = (guid: string, value: Record<string, unknown>) => void;
 
 export type AnimatorFieldDescriptor = {
   name: string;
@@ -27,11 +26,6 @@ export type AnimatorFieldDescriptor = {
   /** Named curve function applied to the slider t value (e.g. 'quadratic'). Passed to fnCurve on the controller. */
   stepFunction?: string;
 };
-
-export interface KeyframeScheduleEntry {
-  event: object;
-  scheduledAt: number;
-}
 
 export interface KeyframeAnimatorCallbacks {
   onStatus: (payload: {
@@ -48,7 +42,7 @@ export interface KeyframeAnimatorCallbacks {
  *
  * Optional `length` (seconds, stored in config): converted to ms internally; one loop spans `[0, length×1000)` — steps at `time >= length×1000` stay dormant until length is raised.
  * If `length` is omitted, cycle length equals the largest step `time` (legacy).
- * With `content.lerp`, each segment’s substeps are planned and sent (one `schedule` call per segment) only when that segment’s lerp window starts, not as a single batch for the whole loop.
+ * With `content.lerp`, each segment’s substeps are scheduled individually via `pushTimeoutAtFireWall` when that segment’s lerp window starts, not as a single batch for the whole loop.
  * On target intent leaving active scene: pause (clear timers). Re-enter: restart from cycle 0 (v1).
  *
  * Timescale: wall time = `startWall + nominalMs * timescale` ({@link setTimescale}).
@@ -256,10 +250,9 @@ export class KeyframeAnimator {
   }
 
   private emitOneKeyframe(
-    fireWallAbs: number,
     targetGuid: string,
     intentAccess: IntentAccessFn,
-    schedule: (entries: KeyframeScheduleEntry[]) => void,
+    mutateIntent: MutateIntentFn,
     stepArgs: Record<string, unknown> | undefined,
     statusLine: string,
     statusData: Record<string, unknown>,
@@ -281,10 +274,7 @@ export class KeyframeAnimator {
         ) as unknown as ControllerIntent)
         : baseIntent;
 
-    const normalized = transformIntentToNormalized(patched);
-    const ev = intentToEvent(normalized, fireWallAbs);
-
-    schedule([{ event: ev, scheduledAt: fireWallAbs }]);
+    mutateIntent(targetGuid, patched as unknown as Record<string, unknown>);
 
     this.callbacks.onStatus({
       status: 'started',
@@ -293,7 +283,7 @@ export class KeyframeAnimator {
     });
   }
 
-  start(intentAccess: IntentAccessFn, schedule: (entries: KeyframeScheduleEntry[]) => void): void {
+  start(intentAccess: IntentAccessFn, mutateIntent: MutateIntentFn): void {
     this.cancelled = false;
     const { steps, repeatLoops, cycleLengthMs, lengthClampActive, clippedByLength } =
       this.parseSteps();
@@ -383,7 +373,7 @@ export class KeyframeAnimator {
         const t = setTimeout(() => {
           const statusLine =
             `${totalCycles === Number.POSITIVE_INFINITY ? `${cIdx + 1}: ` : ''}step ${stepIndex} of ${L}`;
-          this.emitOneKeyframe(fireWallAbs, targetGuid, intentAccess, schedule, step.args, statusLine, {
+          this.emitOneKeyframe(targetGuid, intentAccess, mutateIntent, step.args, statusLine, {
             step: stepIndex,
             total: L,
             cycle: cIdx + 1,
@@ -408,10 +398,6 @@ export class KeyframeAnimator {
       minNominalMs?: number;
     }): ((cIdx: number) => void) => {
       return (cIdx: number): void => {
-        /**
-         * When this segment's lerp window starts, plan **only** this segment's substeps and call
-         * `schedule` once with that list (not the whole cycle).
-         */
         const scheduleLerpSegmentWhenWindowStarts = (
           fromIdx: number,
           toIdx: number,
@@ -495,26 +481,20 @@ export class KeyframeAnimator {
             const denom = planned.n - 1;
             const fromBaseline = cloneRecord(fromResolvedRaw);
 
-            const entries: KeyframeScheduleEntry[] = [];
             for (let k = 0; k < planned.intermediateDotPatches.length; k++) {
               const dotPatch = planned.intermediateDotPatches[k];
               if (dotPatch === undefined) continue;
               const fireWallAbs = segmentStartMs + (k / denom) * span;
               const patchRecord = dotPatch as Record<string, unknown>;
 
-              const patchedRecord =
-                Object.keys(patchRecord).length > 0
-                  ? applyDotPathPatch(cloneRecord(fromBaseline), patchRecord, [])
-                  : cloneRecord(fromBaseline);
-
-              const patched = patchedRecord as unknown as ControllerIntent;
-              const normalized = transformIntentToNormalized(patched);
-              const ev = intentToEvent(normalized, fireWallAbs);
-              entries.push({ event: ev, scheduledAt: fireWallAbs });
-            }
-
-            if (entries.length > 0) {
-              schedule(entries);
+              this.pushTimeoutAtFireWall(fireWallAbs, () => {
+                if (this.cancelled || !this.inScene) return;
+                const patchedRecord =
+                  Object.keys(patchRecord).length > 0
+                    ? applyDotPathPatch(cloneRecord(fromBaseline), patchRecord, [])
+                    : cloneRecord(fromBaseline);
+                mutateIntent(targetGuid, patchedRecord);
+              });
             }
           });
         };
@@ -561,7 +541,7 @@ export class KeyframeAnimator {
           this.pushTimeoutAtFireWall(fireWallAbs, () => {
             const statusLine =
               `${totalCycles === Number.POSITIVE_INFINITY ? `${cIdx + 1}: ` : ''}step ${stepIndex} of ${L}`;
-            this.emitOneKeyframe(fireWallAbs, targetGuid, intentAccess, schedule, step.args, statusLine, {
+            this.emitOneKeyframe(targetGuid, intentAccess, mutateIntent, step.args, statusLine, {
               step: stepIndex,
               total: L,
               cycle: cIdx + 1,

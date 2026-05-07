@@ -47,7 +47,6 @@ const hubStatusDispatcher = new HubStatusDispatcher(registry);
 const animationManager = new AnimationManager(
   projectManager,
   runtimeIntentStore,
-  eventQueue,
   hubStatusDispatcher,
   runtimeUpdateDispatcher,
 );

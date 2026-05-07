@@ -1,12 +1,9 @@
 import type { ProjectManager, ControllerIntent } from '../ProjectManager';
 import type { RuntimeIntentStore } from '../RuntimeIntentStore';
-import type { EventQueue } from '../EventQueue';
 import type { RuntimeUpdateDispatcher } from '../RuntimeUpdateDispatcher';
 import { HubStatusDispatcher, type HubStatusAnimationPayload } from '../hubStatusTypes';
-import { KeyframeAnimator } from './keyframeAnimator';
+import { KeyframeAnimator, type MutateIntentFn } from './keyframeAnimator';
 import { Logger } from '../Logger';
-import { cloneRecord } from '../dotPath';
-import { transformIntentToNormalized } from '../intents';
 import type { RuntimeUpdate } from '../RuntimeProtocol';
 /**
  * Companion runner actions share the animation row's guid (`action:trigger` passes that guid).
@@ -21,10 +18,7 @@ type ActiveRunner = {
   definitionRecord: Record<string, unknown>;
   lastInScene: boolean;
   timescale: number;
-  intentLockHeld: boolean;
   lastLocation?: [number, number];
-  /** Normalized effective intent at lock/`start`; restored via `runtime:update` when the run ends. */
-  preAnimationIntentValue?: Record<string, unknown>;
 };
 
 export type AnimationStatusPayload = {
@@ -34,9 +28,9 @@ export type AnimationStatusPayload = {
 };
 
 /**
- * Hub-side orchestration: one runner per animation guid, events via {@link EventQueue},
- * status via {@link HubStatusDispatcher}, controller lock via {@link HubStatusDispatcher.broadcastIntentLock},
- * pre-run intent snapshot restored via {@link RuntimeUpdateDispatcher.dispatch} when the run ends.
+ * Hub-side orchestration: one runner per animation guid. Each step mutates the runtime intent
+ * via {@link RuntimeUpdateDispatcher.dispatch}, feeding the normal pipeline (renderers + controllers).
+ * Status is broadcast via {@link HubStatusDispatcher}.
  */
 export class AnimationManager {
   private runners = new Map<string, ActiveRunner>();
@@ -45,7 +39,6 @@ export class AnimationManager {
   constructor(
     private projectManager: ProjectManager,
     private runtimeIntentStore: RuntimeIntentStore,
-    private eventQueue: EventQueue,
     private hubStatus: HubStatusDispatcher,
     private runtimeUpdateDispatcher: RuntimeUpdateDispatcher,
   ) { }
@@ -58,15 +51,6 @@ export class AnimationManager {
     const eff = this.runtimeIntentStore.getEffectiveIntent(guid);
     if (eff) return eff;
     return this.projectManager.getIntentDefinition(guid);
-  }
-
-  /** Captured before `animation-started` / `plugin.start` (hub effective intent, normalized). */
-  private capturePreAnimationNormalizedSnapshot(targetIntentGuid: string): Record<string, unknown> | undefined {
-    const eff = this.intentAccessFn(targetIntentGuid);
-    if (eff === undefined) {
-      return undefined;
-    }
-    return cloneRecord(transformIntentToNormalized(eff) as unknown as Record<string, unknown>);
   }
 
   private pushAnimationStatus(
@@ -103,36 +87,7 @@ export class AnimationManager {
       payload.status === 'stopped' &&
       payload.data['completed'] === true
     ) {
-      const runner = this.runners.get(animationGuid);
-      if (runner !== undefined) {
-        this.finalizeAnimatedIntent(runner, location ?? runner.lastLocation);
-      }
       this.unregisterNaturallyFinishedRunner(animationGuid);
-    }
-  }
-
-  /**
-   * Restore pre-run intent via `runtime:update` (+ renderer `events`), then `lock:intent` `animation-stopped`.
-   */
-  private finalizeAnimatedIntent(runner: ActiveRunner, location?: [number, number]): void {
-    const loc = location ?? runner.lastLocation;
-    const baseline = runner.preAnimationIntentValue;
-    if (baseline !== undefined) {
-      const update: RuntimeUpdate = {
-        entityType: 'intent',
-        guid: runner.targetIntentGuid,
-        source: 'hub:animation',
-        value: cloneRecord(baseline),
-      };
-      this.runtimeUpdateDispatcher.dispatch([update], loc, Date.now());
-    }
-
-    if (runner.intentLockHeld) {
-      this.hubStatus.broadcastIntentLock(
-        { guid: runner.targetIntentGuid, reason: 'animation-stopped' },
-        loc,
-      );
-      runner.intentLockHeld = false;
     }
   }
 
@@ -181,17 +136,13 @@ export class AnimationManager {
     });
     plugin.setTimescale(effectiveTimescale);
 
-    const preSnap = inScene ? this.capturePreAnimationNormalizedSnapshot(target) : undefined;
-
     const runnerBase: ActiveRunner = {
       plugin,
       targetIntentGuid: target,
       definitionRecord: record,
       lastInScene: inScene,
       timescale: effectiveTimescale,
-      intentLockHeld: false,
       ...(opts.location !== undefined ? { lastLocation: opts.location } : {}),
-      ...(preSnap !== undefined ? { preAnimationIntentValue: preSnap } : {}),
     };
 
     if (!inScene) {
@@ -201,14 +152,13 @@ export class AnimationManager {
     }
 
     this.runners.set(animationGuid, runnerBase);
-    this.hubStatus.broadcastIntentLock({ guid: target, reason: 'animation-started' }, opts.location);
-    runnerBase.intentLockHeld = true;
 
-    const schedule = (entries: { event: object; scheduledAt: number }[]): void => {
-      this.eventQueue.schedule(entries, opts.location);
+    const mutateIntent: MutateIntentFn = (guid, value) => {
+      const update: RuntimeUpdate = { entityType: 'intent', guid, value, source: 'hub:animation' };
+      this.runtimeUpdateDispatcher.dispatch([update], opts.location, Date.now());
     };
 
-    plugin.start(g => this.intentAccessFn(g), schedule);
+    plugin.start(g => this.intentAccessFn(g), mutateIntent);
   }
 
   /** Mid-run playback factor; timeouts already queued keep old delays until they fire (V1). */
@@ -257,7 +207,6 @@ export class AnimationManager {
     if (!existing) {
       return;
     }
-    this.finalizeAnimatedIntent(existing, existing.lastLocation);
     existing.plugin.cancel(reason);
     this.runners.delete(animationGuid);
   }
@@ -282,11 +231,9 @@ export class AnimationManager {
       runner.lastInScene = now;
 
       if (!now) {
-        // Pause: restore pre-animation snapshot + unlock (overlay chrome).
         if (runner.lastLocation === undefined && location !== undefined) {
           runner.lastLocation = location;
         }
-        this.finalizeAnimatedIntent(runner, runner.lastLocation ?? location);
         runner.plugin.onSceneMembershipChanged(false);
         continue;
       }
@@ -300,26 +247,22 @@ export class AnimationManager {
       fresh.setTimescale(runner.timescale);
 
       const nextLocation = location ?? runner.lastLocation;
-      const preReenter = this.capturePreAnimationNormalizedSnapshot(runner.targetIntentGuid);
       const next: ActiveRunner = {
         plugin: fresh,
         targetIntentGuid: runner.targetIntentGuid,
         definitionRecord: record,
         lastInScene: true,
         timescale: runner.timescale,
-        intentLockHeld: false,
         ...(nextLocation !== undefined ? { lastLocation: nextLocation } : {}),
-        ...(preReenter !== undefined ? { preAnimationIntentValue: preReenter } : {}),
       };
       this.runners.set(guid, next);
 
-      this.hubStatus.broadcastIntentLock({ guid: next.targetIntentGuid, reason: 'animation-started' }, next.lastLocation);
-      next.intentLockHeld = true;
+      const reenterMutateIntent: MutateIntentFn = (intentGuid, value) => {
+        const update: RuntimeUpdate = { entityType: 'intent', guid: intentGuid, value, source: 'hub:animation' };
+        this.runtimeUpdateDispatcher.dispatch([update], next.lastLocation ?? location, Date.now());
+      };
 
-      fresh.start(
-        g => this.intentAccessFn(g),
-        entries => this.eventQueue.schedule(entries, next.lastLocation ?? location),
-      );
+      fresh.start(g => this.intentAccessFn(g), reenterMutateIntent);
     }
   }
 

@@ -1,10 +1,12 @@
 /**
- * Perform quick-panel scalar control: needle moves clockwise along the dial arc
- * t=0 at 7 o’clock, t=0.5 at 12, t=1 at 5 (CSS rotate from 12 = 0°). Drag is a 1D scrub
- * (↑/→ increase, ↓/← decrease), not angular finger position on the dial.
+ * Scalar knob: outer arc ring fills clockwise along the path (7 → 12 → 5)
+ * with title + value centered. Drag is 1D scrub (↑/→ increase), matching legacy knob behavior.
  */
 
-import { evaluate as fnEvaluate, inverse as fnInverse } from '../controls/fnCurve.js'
+import {
+  evaluate as fnEvaluate,
+  inverse as fnInverse
+} from '../controls/fnCurve.js'
 
 /** Pixels of combined (↑ + →) pointer travel for normalized t to sweep 0→1. */
 const SCRUB_PIXELS_PER_FULL_RANGE = 120
@@ -23,21 +25,28 @@ export const RADIAL_KNOB_VIEW_MARGIN_PX = 10
 /** Step when reducing scale so the enlarged dial fits on screen. */
 export const RADIAL_KNOB_SCALE_SHRINK_STEP = 0.04
 
-/** Clock positions as clockwise degrees from 12 o’clock (rotate(0) = needle at top). */
-const DEG_7_OCLOCK = 210
-const DEG_5_OCLOCK = 150
+const SVG_NS = 'http://www.w3.org/2000/svg'
 
 /**
- * @typedef {object} ScalarRadialKnobOpts
+ * Large arc along outer ring from ~7 o'clock through top to ~5 o'clock (same sweep as legacy needle).
+ * Center (50,50), r=38; coordinates rounded for stable dash lengths with pathLength.
+ */
+const ARC_RING_D = 'M 31 82.909 A 38 38 0 1 1 69 82.909'
+
+/** Normalized path length for stroke-dash math (any positive constant). */
+const PATH_LEN_NORM = 1000
+
+/**
+ * @typedef {object} ScalarRadialKnobSvgOpts
  * @property {Record<string, unknown>} descriptor
  * @property {string} intentGuid
  * @property {() => unknown} readValue effective domain scalar
  * @property {(domain: number) => void} onCommit
  */
 
-export class ScalarRadialKnob {
+export class ScalarRadialKnobSvg {
   /**
-   * @param {ScalarRadialKnobOpts} opts
+   * @param {ScalarRadialKnobSvgOpts} opts
    */
   constructor (opts) {
     this._descriptor = opts.descriptor
@@ -51,12 +60,12 @@ export class ScalarRadialKnob {
     this._root = null
     /** @type {HTMLElement | null} */
     this._dial = null
-    /** @type {HTMLElement | null} */
-    this._needle = null
-    /** @type {HTMLElement | null} */
-    this._label = null
-    /** @type {HTMLElement | null} */
-    this._valueEl = null
+    /** @type {SVGPathElement | null} */
+    this._progressPath = null
+    /** @type {SVGTextElement | null} */
+    this._labelText = null
+    /** @type {SVGTextElement | null} */
+    this._valueText = null
 
     /** @type {number} normalized t ∈ [0,1] mapped through stepFunction then range */
     this._t = 0
@@ -89,18 +98,19 @@ export class ScalarRadialKnob {
     this._span = this._domainMax - this._domainMin
 
     const rawFn = this._descriptor.stepFunction
-    this._stepFnName = typeof rawFn === 'string' && rawFn.length > 0 ? rawFn : null
+    this._stepFnName =
+      typeof rawFn === 'string' && rawFn.length > 0 ? rawFn : null
 
     /** @type {(t: number) => number} */
     this._valueAtT =
       this._stepFnName == null
-        ? (t) => this._linearDomainAtT(t)
-        : (t) => this._curveDomainAtT(t)
+        ? t => this._linearDomainAtT(t)
+        : t => this._curveDomainAtT(t)
     /** @type {(v: number) => number} */
     this._tAtValue =
       this._stepFnName == null
-        ? (v) => this._linearTFromDomain(v)
-        : (v) => this._curveTFromDomain(v)
+        ? v => this._linearTFromDomain(v)
+        : v => this._curveTFromDomain(v)
 
     this._step = this._resolveStep(
       this._descriptor.step,
@@ -130,45 +140,86 @@ export class ScalarRadialKnob {
     const signal = this._abort.signal
 
     const root = document.createElement('div')
-    root.className = 'quick-panel-knob'
+    root.className = 'quick-panel-knob quick-panel-knob--svg'
     root.dataset.intentGuid = this._intentGuid
-    root.dataset.dotKey = /** @type {string} */ (String(this._descriptor.dotKey ?? ''))
+    root.dataset.dotKey = /** @type {string} */ (
+      String(this._descriptor.dotKey ?? '')
+    )
 
-    const label = document.createElement('span')
-    label.className = 'quick-panel-knob__caption'
-    label.textContent = /** @type {string} */ (this._descriptor.name ?? this._descriptor.dotKey)
+    const caption = document.createElement('span')
+    caption.className = 'quick-panel-knob__caption'
+    caption.textContent = /** @type {string} */ (
+      this._descriptor.name ?? this._descriptor.dotKey
+    )
 
     const dial = document.createElement('div')
     dial.className = 'quick-panel-knob__dial'
     dial.setAttribute('role', 'slider')
-    dial.setAttribute(
-      'aria-valuemin',
-      String(this._domainMin)
-    )
-    dial.setAttribute(
-      'aria-valuemax',
-      String(this._domainMax)
-    )
+    dial.setAttribute('aria-valuemin', String(this._domainMin))
+    dial.setAttribute('aria-valuemax', String(this._domainMax))
     dial.tabIndex = 0
 
-    const needle = document.createElement('div')
-    needle.className = 'quick-panel-knob__needle'
-    needle.setAttribute('aria-hidden', 'true')
+    const svg = document.createElementNS(SVG_NS, 'svg')
+    svg.setAttribute('viewBox', '0 0 100 100')
+    svg.setAttribute('class', 'quick-panel-knob-svg')
+    svg.setAttribute('aria-hidden', 'true')
 
-    const bub = document.createElement('span')
-    bub.className = 'quick-panel-knob__value'
+    const face = document.createElementNS(SVG_NS, 'circle')
+    face.setAttribute('class', 'quick-panel-knob-svg__face')
+    face.setAttribute('cx', '50')
+    face.setAttribute('cy', '50')
+    face.setAttribute('r', '44')
 
-    dial.appendChild(needle)
-    dial.appendChild(bub)
+    const track = document.createElementNS(SVG_NS, 'path')
+    track.setAttribute('class', 'quick-panel-knob-svg__track')
+    track.setAttribute('d', ARC_RING_D)
+    track.setAttribute('fill', 'none')
+    track.setAttribute('pathLength', String(PATH_LEN_NORM))
 
-    root.appendChild(label)
+    const progress = document.createElementNS(SVG_NS, 'path')
+    progress.setAttribute('class', 'quick-panel-knob-svg__progress')
+    progress.setAttribute('d', ARC_RING_D)
+    progress.setAttribute('fill', 'none')
+    progress.setAttribute('pathLength', String(PATH_LEN_NORM))
+
+    const centerG = document.createElementNS(SVG_NS, 'g')
+    centerG.setAttribute('class', 'quick-panel-knob-svg__center')
+    centerG.setAttribute('transform', 'translate(50 51)')
+
+    const labelText = document.createElementNS(SVG_NS, 'text')
+    labelText.setAttribute('class', 'quick-panel-knob-svg__label')
+    labelText.setAttribute('x', '0')
+    labelText.setAttribute('y', '-10')
+    labelText.setAttribute('text-anchor', 'middle')
+    labelText.textContent = /** @type {string} */ (
+      this._descriptor.name ?? this._descriptor.dotKey ?? ''
+    )
+
+    const valueText = document.createElementNS(SVG_NS, 'text')
+    valueText.setAttribute('class', 'quick-panel-knob-svg__value')
+    valueText.setAttribute('x', '0')
+    valueText.setAttribute('y', '12')
+    valueText.setAttribute('text-anchor', 'middle')
+    valueText.textContent = '0'
+
+    centerG.appendChild(labelText)
+    centerG.appendChild(valueText)
+
+    svg.appendChild(face)
+    svg.appendChild(track)
+    svg.appendChild(progress)
+    svg.appendChild(centerG)
+
+    dial.appendChild(svg)
+
+    root.appendChild(caption)
     root.appendChild(dial)
 
     this._root = root
     this._dial = dial
-    this._needle = needle
-    this._label = label
-    this._valueEl = bub
+    this._progressPath = progress
+    this._labelText = labelText
+    this._valueText = valueText
 
     dial.addEventListener('pointerdown', e => this._onPointerDown(e), {
       signal
@@ -177,20 +228,26 @@ export class ScalarRadialKnob {
       signal
     })
     dial.addEventListener('pointerup', e => this._onPointerUp(e), { signal })
-    dial.addEventListener('pointercancel', e => this._onPointerCancel(e), { signal })
+    dial.addEventListener('pointercancel', e => this._onPointerCancel(e), {
+      signal
+    })
+
+    dial.addEventListener(
+      'lostpointercapture',
+      e => this._onLostPointerCapture(e),
+      { signal }
+    )
 
     this.syncFromExternal()
     parent.appendChild(root)
     return root
   }
 
-  /** Re-read authoritative value into rotation (e.g. after graph reconcile). */
+  /** Re-read authoritative value into visuals (e.g. after graph reconcile). */
   syncFromExternal () {
     if (this._dragPointerId !== null) return
     const v = Number(this._readValue())
-    const safe = Number.isFinite(v)
-      ? v
-      : this._domainMin
+    const safe = Number.isFinite(v) ? v : this._domainMin
     let t = this._tAtValue(safe)
     if (!Number.isFinite(t)) t = 0
     this._t = Math.max(0, Math.min(1, t))
@@ -202,14 +259,18 @@ export class ScalarRadialKnob {
     this._abort?.abort()
     this._abort = null
     // If still portalled (e.g. destroyed mid-drag), remove from body.
-    if (this._root && this._root.parentNode === document.body && !this._portalParent) {
+    if (
+      this._root &&
+      this._root.parentNode === document.body &&
+      !this._portalParent
+    ) {
       this._root.remove()
     }
     this._root = null
     this._dial = null
-    this._needle = null
-    this._label = null
-    this._valueEl = null
+    this._progressPath = null
+    this._labelText = null
+    this._valueText = null
   }
 
   /**
@@ -291,7 +352,8 @@ export class ScalarRadialKnob {
     let s = RADIAL_KNOB_ENGAGED_TARGET_SCALE
     while (
       s > 1.02 &&
-      (naturalW * s > rightBound - leftBound || naturalH * s > bottomBound - topBound)
+      (naturalW * s > rightBound - leftBound ||
+        naturalH * s > bottomBound - topBound)
     ) {
       s -= RADIAL_KNOB_SCALE_SHRINK_STEP
     }
@@ -368,7 +430,11 @@ export class ScalarRadialKnob {
    * @returns {number}
    */
   _resolveStep (explicit, rangeMin, rangeMax) {
-    if (explicit !== undefined && explicit !== null && Number.isFinite(Number(explicit))) {
+    if (
+      explicit !== undefined &&
+      explicit !== null &&
+      Number.isFinite(Number(explicit))
+    ) {
       const s = Number(explicit)
       return s > 0 ? s : (rangeMax - rangeMin) / 255
     }
@@ -390,40 +456,30 @@ export class ScalarRadialKnob {
   }
 
   /**
-   * Needle at rotate(0deg) points to 12 (top). Clockwise from 12: 7h = 210°, 5h = 150°.
-   * t=0 → 7 o’clock, t=0.5 → 12, t=1 → 5, linear in t along each half of the arc.
-   * @param {number} t normalized [0,1]
-   * @returns {number}
-   */
-  _needleRotateDegFromT (t) {
-    const u = Math.max(0, Math.min(1, t))
-    if (u <= 0.5) {
-      const s = u / 0.5
-      return DEG_7_OCLOCK + (360 - DEG_7_OCLOCK) * s
-    }
-    const s = (u - 0.5) / 0.5
-    return DEG_5_OCLOCK * s
-  }
-
-  /**
    * @param {number} domain
    */
   _syncVisualDomain (domain) {
     const v = this._snap(domain)
-    if (this._needle && this._dial) {
-      const deg = this._needleRotateDegFromT(this._t)
-      this._needle.style.transform = `translate(-50%, -100%) rotate(${deg}deg)`
+    const prog = this._progressPath
+    if (prog) {
+      const pl = PATH_LEN_NORM
+      const u = Math.max(0, Math.min(1, this._t))
+      const vis = pl * u
+      prog.style.strokeDasharray = `${vis} ${pl}`
+      prog.style.strokeDashoffset = '0'
     }
-    if (this._valueEl) {
+    if (this._valueText) {
       const dec = Math.min(8, Math.max(0, this._decimalsFromStep()))
-      this._valueEl.textContent =
+      this._valueText.textContent =
         dec <= 0 ? String(Math.round(v)) : v.toFixed(Math.min(dec, 4))
     }
     if (this._dial) {
       this._dial.setAttribute('aria-valuenow', String(v))
       this._dial.setAttribute(
         'aria-label',
-        /** @type {string} */ (this._descriptor.name ?? this._descriptor.dotKey ?? 'value')
+        /** @type {string} */ (
+          this._descriptor.name ?? this._descriptor.dotKey ?? 'value'
+        )
       )
     }
   }
@@ -457,7 +513,11 @@ export class ScalarRadialKnob {
         e.clientX - this._lastTap.clientX,
         e.clientY - this._lastTap.clientY
       )
-      if (elapsed < DOUBLE_TAP_MS && dist < DOUBLE_TAP_DIST_PX && this._applyDefaultDomain()) {
+      if (
+        elapsed < DOUBLE_TAP_MS &&
+        dist < DOUBLE_TAP_DIST_PX &&
+        this._applyDefaultDomain()
+      ) {
         this._lastTap = null
         e.preventDefault()
         return
@@ -542,7 +602,18 @@ export class ScalarRadialKnob {
   }
 
   /**
-   * Snap descriptor.defaultValue to domain, update t and needle, commit.
+   * iOS can drop pointerup while capture is held; disengage so the portalled HUD never sticks.
+   * @param {PointerEvent} e
+   */
+  _onLostPointerCapture (e) {
+    if (!this._dial || this._dragPointerId !== e.pointerId) return
+    this._dragPointerId = null
+    this._setDialEngaged(false)
+    this._lastTap = null
+  }
+
+  /**
+   * Snap descriptor.defaultValue to domain, update t and ring, commit.
    * @returns {boolean} true if a default was applied
    */
   _applyDefaultDomain () {

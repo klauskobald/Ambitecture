@@ -3,7 +3,7 @@ import { performPolicy } from '../viewport/interactionPolicies.js'
 import { worldToCanvas } from '../viewport/spatialMath.js'
 import { resolveDescriptorsForClass } from '../core/systemCapabilities.js'
 import { queueIntentUpdate } from '../core/outboundQueue.js'
-import { ScalarRadialKnob } from '../edit/components/ScalarRadialKnob.js'
+import { ScalarRadialKnobSvg } from '../edit/components/ScalarRadialKnobSvg.js'
 
 /** World height (meters, XZ) of the nominal pivot marker — not intent spread radius. Scales with map zoom. */
 export const PERFORM_HUD_ICON_WORLD_METERS = 0.28
@@ -26,7 +26,7 @@ export class PerformQuickPanelHud {
     const layer = document.getElementById('perform-hud-layer')
     if (!layer) throw new Error('#perform-hud-layer missing from DOM.')
     this._layer = layer
-    /** @type {Map<string, { root: HTMLElement, knobs: ScalarRadialKnob[], descriptorKeys: string }>} */
+    /** @type {Map<string, { root: HTMLElement, knobs: ScalarRadialKnobSvg[], descriptorKeys: string }>} */
     this._panels = new Map()
 
     /** @type {boolean} */
@@ -171,13 +171,13 @@ export class PerformQuickPanelHud {
       const row = document.createElement('div')
       row.className = 'quick-panel-hud__knobs'
 
-      /** @type {ScalarRadialKnob[]} */
+      /** @type {ScalarRadialKnobSvg[]} */
       const knobs = []
       for (const d of wantedDescriptors) {
         /** @type {Record<string, unknown>} */
         const desc = /** @type {Record<string, unknown>} */ (d)
         const dotKeyStr = /** @type {string} */ (desc.dotKey)
-        const knob = new ScalarRadialKnob({
+        const knob = new ScalarRadialKnobSvg({
           descriptor: desc,
           intentGuid: guid,
           readValue: () =>

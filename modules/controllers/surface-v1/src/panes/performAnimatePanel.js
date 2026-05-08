@@ -10,7 +10,7 @@ import {
   subscribeAnimationPlayState
 } from '../core/animationPlayRegistry.js'
 import { subscribeBinding } from '../core/bindingRegistry.js'
-import { ScalarRadialKnob } from '../edit/components/ScalarRadialKnob.js'
+import { ScalarRadialKnobSvg } from '../edit/components/ScalarRadialKnobSvg.js'
 import { getAnimatorViewer } from './animators/animatorViewerRegistry.js'
 import { createAnimationEditPane } from './performAnimateEditPane.js'
 
@@ -188,7 +188,7 @@ export function createPerformAnimatePanel () {
     const wrap = document.createElement('div')
     wrap.className = 'perform-animate-speed-wrap'
 
-    const knob = new ScalarRadialKnob({
+    const knob = new ScalarRadialKnobSvg({
       descriptor: {
         name: 'Speed',
         range: [0.25, 4],

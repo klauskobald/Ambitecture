@@ -3,7 +3,7 @@ import { getCapabilities } from '../core/systemCapabilities.js'
 import { sendGraphCommand } from '../core/outboundQueue.js'
 import { readAtDotPath } from '../core/dotPath.js'
 import { getAnimatorViewer } from './animators/animatorViewerRegistry.js'
-import { ScalarRadialKnob } from '../edit/components/ScalarRadialKnob.js'
+import { ScalarRadialKnobSvg } from '../edit/components/ScalarRadialKnobSvg.js'
 
 /**
  * Edit pane for a single animation record.
@@ -356,7 +356,7 @@ function makeRadialKnobWidget (
   }
   if (stepFnName) knobDescriptor.stepFunction = stepFnName
 
-  const knob = new ScalarRadialKnob({
+  const knob = new ScalarRadialKnobSvg({
     descriptor: knobDescriptor,
     intentGuid: animationGuid,
     readValue: () => currentValue,

@@ -132,6 +132,20 @@ export class KeyframeAnimator {
     'lerp.curve': { name: 'Lerp curve', type: 'string', optionsRef: 'functionCurves', default: 'linear' },
   };
 
+  static readonly defaultValues: Record<string, unknown> = {
+    repeat: 0,
+    length: 10,
+    lerp: {
+      quantization: 0.02,
+      minMs: 50,
+      time: 1,
+      curve: 'linear',
+    },
+    steps: [
+      { time: 0, args: {} },
+    ],
+  };
+
   private timers: ReturnType<typeof setTimeout>[] = [];
   private cancelled = false;
   private inScene = true;

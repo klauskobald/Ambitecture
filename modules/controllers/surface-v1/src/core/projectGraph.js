@@ -272,6 +272,22 @@ class ProjectGraph {
   }
 
   /**
+   * Full-graph scan for references to an action guid.
+   * Excludes the action row itself when `excludeActionGuid` matches.
+   * @param {string} actionGuid
+   * @param {{ excludeActionGuid?: string }} [opts]
+   * @returns {boolean}
+   */
+  isActionReferenced (actionGuid, opts = {}) {
+    if (!actionGuid) return false
+    const excludeActionGuid =
+      typeof opts.excludeActionGuid === 'string' ? opts.excludeActionGuid : ''
+    return graphContainsGuidValue(this._data, actionGuid, {
+      excludeActionGuid
+    })
+  }
+
+  /**
    * Animations that share a runner `action` guid (companion row from hub) — safe to `action:trigger`.
    * @returns {Array<{ guid: string, name: string, class: string, targetIntent: string }>}
    */
@@ -1918,6 +1934,72 @@ function addTopicsToSet (target, topic) {
       if (typeof t === 'string' && t.length > 0) target.add(t)
     }
   }
+}
+
+/**
+ * @param {unknown} value
+ * @param {string} guid
+ * @returns {boolean}
+ */
+function recordContainsGuidValue (value, guid) {
+  if (value === guid) return true
+  if (!value || typeof value !== 'object') return false
+  if (Array.isArray(value)) {
+    return value.some(item => recordContainsGuidValue(item, guid))
+  }
+  for (const entry of Object.values(/** @type {Record<string, unknown>} */ (value))) {
+    if (recordContainsGuidValue(entry, guid)) return true
+  }
+  return false
+}
+
+/**
+ * Recursively scans the whole graph object for a guid string.
+ * Supports plain objects, arrays, and maps; map/set wrappers themselves are ignored.
+ * @param {unknown} value
+ * @param {string} guid
+ * @param {{ excludeActionGuid?: string }} [opts]
+ * @param {string[]} [path]
+ * @returns {boolean}
+ */
+function graphContainsGuidValue (value, guid, opts = {}, path = []) {
+  if (value === guid) return true
+  if (!value || typeof value !== 'object') return false
+
+  const excludeActionGuid =
+    typeof opts.excludeActionGuid === 'string' ? opts.excludeActionGuid : ''
+
+  if (value instanceof Map) {
+    for (const [key, entry] of value.entries()) {
+      const nextPath = [...path, String(key)]
+      const inActionsMap = path[path.length - 1] === 'actions'
+      if (
+        inActionsMap &&
+        excludeActionGuid &&
+        entry &&
+        typeof entry === 'object' &&
+        !Array.isArray(entry)
+      ) {
+        const row = /** @type {Record<string, unknown>} */ (entry)
+        const rowGuid = typeof row.guid === 'string' ? row.guid : ''
+        if (rowGuid === excludeActionGuid) continue
+      }
+      if (graphContainsGuidValue(entry, guid, opts, nextPath)) return true
+    }
+    return false
+  }
+
+  if (Array.isArray(value)) {
+    for (let index = 0; index < value.length; index++) {
+      if (graphContainsGuidValue(value[index], guid, opts, [...path, String(index)])) return true
+    }
+    return false
+  }
+
+  for (const [k, v] of Object.entries(/** @type {Record<string, unknown>} */ (value))) {
+    if (graphContainsGuidValue(v, guid, opts, [...path, k])) return true
+  }
+  return false
 }
 
 export const projectGraph = new ProjectGraph()

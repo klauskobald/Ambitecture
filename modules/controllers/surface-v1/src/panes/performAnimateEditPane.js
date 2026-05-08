@@ -43,9 +43,15 @@ export function createAnimationEditPane ({ onClose }) {
   const intentSpan = document.createElement('span')
   intentSpan.className = 'perform-animate-edit__intent'
 
+  const deleteBtn = document.createElement('button')
+  deleteBtn.type = 'button'
+  deleteBtn.className = 'perform-animate-edit__delete btn--danger'
+  deleteBtn.textContent = '⌫'
+
   topRow.appendChild(backBtn)
   topRow.appendChild(nameLabel)
   topRow.appendChild(intentSpan)
+  topRow.appendChild(deleteBtn)
 
   // ── body: content fields ───────────────────────────────────────────────────
 
@@ -65,10 +71,9 @@ export function createAnimationEditPane ({ onClose }) {
     nameLabel.textContent = String(record.name ?? '')
     nameLabel.onclick = async () => {
       const current = String(record.name ?? '')
-      const result = await Modal.prompt(
-        'Edit animation name',
-        [{ label: 'Name', key: 'name', value: current }]
-      )
+      const result = await Modal.prompt('Edit animation name', [
+        { label: 'Name', key: 'name', value: current }
+      ])
       if (result === null) return
       const nextName = result.name ?? ''
       nameLabel.textContent = nextName
@@ -78,6 +83,49 @@ export function createAnimationEditPane ({ onClose }) {
 
     const intentGuid = String(record.targetIntent ?? record.intent ?? '')
     intentSpan.textContent = resolveIntentName(intentGuid)
+    deleteBtn.onclick = async () => {
+      const animationName = String(record.name ?? currentGuid)
+      const ok = await Modal.confirm(`Delete animation "${animationName}"?`, {
+        yes: 'Delete',
+        no: 'Cancel'
+      })
+      if (!ok) return
+      const guid = currentGuid
+      sendGraphCommand({
+        op: 'remove',
+        entityType: 'animation',
+        guid,
+        persistence: 'runtimeAndDurable'
+      })
+      projectGraph.applyGraphDelta({
+        entityType: 'animation',
+        op: 'remove',
+        guid
+      })
+
+      const companionAction = projectGraph.getActions().get(guid) ?? null
+      if (companionAction) {
+        const stillReferenced = projectGraph.isActionReferenced(guid, {
+          excludeActionGuid: guid
+        })
+        if (!stillReferenced) {
+          sendGraphCommand({
+            op: 'remove',
+            entityType: 'action',
+            guid,
+            persistence: 'runtimeAndDurable'
+          })
+          projectGraph.applyGraphDelta({
+            entityType: 'action',
+            op: 'remove',
+            guid
+          })
+        }
+      }
+
+      el.hidden = true
+      onClose()
+    }
 
     el.hidden = false
     renderBody(record)

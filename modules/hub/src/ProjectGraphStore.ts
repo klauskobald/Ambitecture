@@ -15,6 +15,11 @@ import { transformIntentToNormalized } from './intents';
 import { Logger } from './Logger';
 import { applyDotPathPatch, cloneRecord } from './dotPath';
 import { ActionInputManager } from './ActionInputManager';
+import { KeyframeAnimator } from './animation/keyframeAnimator';
+
+const ANIMATION_CLASS_DEFAULTS: Record<string, Record<string, unknown>> = {
+  keyframeAnimator: KeyframeAnimator.defaultValues,
+};
 
 export class ProjectGraphStore {
   private revision = 0;
@@ -375,9 +380,9 @@ export class ProjectGraphStore {
       });
     const existing = animations.some(a => a.guid === command.guid);
     if (!existing && command.op !== 'remove') {
-      const value = cloneRecord(command.value ?? { guid: command.guid });
-      value['guid'] = command.guid;
-      nextAnimations.push(value as unknown as AnimationDefinition);
+      const incoming = cloneRecord(command.value ?? { guid: command.guid });
+      const withDefaults = this.applyAnimationClassDefaults(incoming, command.guid);
+      nextAnimations.push(withDefaults as unknown as AnimationDefinition);
     }
     this.projectManager.setProjectData('animations', nextAnimations);
 
@@ -433,6 +438,53 @@ export class ProjectGraphStore {
       rendererConfigChangedFor: [],
       durableChanged,
     };
+  }
+
+  private applyAnimationClassDefaults(value: Record<string, unknown>, guid: string): Record<string, unknown> {
+    const out = cloneRecord(value);
+    out['guid'] = guid;
+    const cls = typeof out['class'] === 'string' ? out['class'] : '';
+    const defaults = cls ? ANIMATION_CLASS_DEFAULTS[cls] : undefined;
+    if (!defaults) return out;
+
+    // Keyframe animator config lives in `content`; keep storage shape canonical.
+    if (cls === 'keyframeAnimator') {
+      const keyframeDefaults = cloneRecord(defaults);
+      const existingContent =
+        out['content'] && typeof out['content'] === 'object' && !Array.isArray(out['content'])
+          ? cloneRecord(out['content'] as Record<string, unknown>)
+          : {};
+
+      const rootPatch: Record<string, unknown> = {};
+      const rootKeys = ['repeat', 'length', 'lerp', 'steps'];
+      for (const k of rootKeys) {
+        if (Object.prototype.hasOwnProperty.call(out, k)) {
+          rootPatch[k] = out[k];
+          delete out[k];
+        }
+      }
+
+      const mergedContent = applyDotPathPatch(keyframeDefaults, existingContent, []);
+      out['content'] = applyDotPathPatch(mergedContent, rootPatch, []);
+    }
+
+    const merged = applyDotPathPatch(cloneRecord(defaults), out, []);
+    merged['guid'] = guid;
+    if (typeof merged['class'] !== 'string' || merged['class'].length === 0) {
+      merged['class'] = cls;
+    }
+    if (cls === 'keyframeAnimator') {
+      const content =
+        merged['content'] && typeof merged['content'] === 'object' && !Array.isArray(merged['content'])
+          ? (merged['content'] as Record<string, unknown>)
+          : {};
+      merged['content'] = content;
+      delete merged['repeat'];
+      delete merged['length'];
+      delete merged['lerp'];
+      delete merged['steps'];
+    }
+    return merged;
   }
 
   private applyInputCommand(command: GraphCommand): GraphMutationResult {

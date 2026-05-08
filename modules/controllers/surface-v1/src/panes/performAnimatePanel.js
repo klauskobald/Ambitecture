@@ -13,6 +13,9 @@ import { subscribeBinding } from '../core/bindingRegistry.js'
 import { ScalarRadialKnobSvg } from '../edit/components/ScalarRadialKnobSvg.js'
 import { getAnimatorViewer } from './animators/animatorViewerRegistry.js'
 import { createAnimationEditPane } from './performAnimateEditPane.js'
+import { getCapabilities } from '../core/systemCapabilities.js'
+import { pickChoice, warn as modalWarn } from '../core/Modal.js'
+import { sendGraphCommand } from '../core/outboundQueue.js'
 
 /**
  * @returns {{
@@ -128,6 +131,16 @@ export function createPerformAnimatePanel () {
         ? `No animations targeting ${resolveIntentName(intentFilter)}.`
         : 'No animations in project.'
       list.appendChild(empty)
+      if (intentFilter) {
+        const createBtn = document.createElement('button')
+        createBtn.type = 'button'
+        createBtn.className = 'btn perform-animate-empty__create'
+        createBtn.textContent = 'Create'
+        createBtn.addEventListener('click', () => {
+          void createAnimationForFilteredIntent(intentFilter)
+        })
+        list.appendChild(createBtn)
+      }
       return
     }
     for (const row of anims) {
@@ -259,6 +272,59 @@ export function createPerformAnimatePanel () {
   projectGraph.subscribe(['animations', 'actions', 'intents:def'], render)
   subscribeAnimationPlayState(syncAllRowPlayStates)
   render()
+
+  /**
+   * @param {string} targetIntentGuid
+   * @returns {Promise<void>}
+   */
+  async function createAnimationForFilteredIntent (targetIntentGuid) {
+    const caps = getCapabilities()
+    const animationCaps = Array.isArray(caps?.animations) ? caps.animations : []
+    const options = animationCaps
+      .map(item => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return null
+        const row = /** @type {Record<string, unknown>} */ (item)
+        const cls = typeof row.class === 'string' ? row.class : ''
+        if (!cls) return null
+        const viewer = getAnimatorViewer(cls)
+        const label =
+          viewer?.getName() ??
+          (typeof row.name === 'string' && row.name ? row.name : cls)
+        return { value: cls, label }
+      })
+      .filter(Boolean)
+    if (options.length === 0) {
+      await modalWarn('No animator classes available.')
+      return
+    }
+    const choice = await pickChoice('Create animation type', options)
+    if (!choice) return
+
+    const suffix =
+      globalThis.crypto?.randomUUID?.() ??
+      `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const guid = `anim-${suffix}`
+    const intentName = resolveIntentName(targetIntentGuid)
+    const value = {
+      guid,
+      class: choice,
+      name: intentName,
+      targetIntent: targetIntentGuid
+    }
+    sendGraphCommand({
+      op: 'upsert',
+      entityType: 'animation',
+      guid,
+      value,
+      persistence: 'runtimeAndDurable'
+    })
+    projectGraph.applyGraphDelta({
+      entityType: 'animation',
+      op: 'upsert',
+      guid,
+      value
+    })
+  }
 
   return { panel, getIntentFilter, setIntentFilter, subscribeFilter }
 }

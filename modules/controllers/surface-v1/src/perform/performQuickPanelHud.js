@@ -57,7 +57,12 @@ export class PerformQuickPanelHud {
         this._raf = 0
       }
     }
-    this._unsub = projectGraph.subscribe(() => this._reconcilePanels())
+    // Knob values follow runtime patches (animation), so subscribe to runtime too.
+    // `scenes` for active scene overlay changes; `controller` for quickPanelDotKeys.
+    this._unsub = projectGraph.subscribe(
+      ['intents:def', 'intents:runtime', 'scenes', 'controller'],
+      () => this._reconcilePanels()
+    )
     this._reconcilePanels()
     this.markLayoutActivity()
   }

@@ -71,7 +71,11 @@ export class PerformPane {
     this._render()
     this._subnavShell.syncSubpaneFromState()
     this._el.hidden = false
-    this._unsubscribe = projectGraph.subscribe(() => this._render())
+    // Buttons re-render on input/action/scene changes; intent runtime values do not affect them.
+    this._unsubscribe = projectGraph.subscribe(
+      ['inputs', 'actions', 'scenes', 'controller'],
+      () => this._render()
+    )
   }
 
   deactivate () {

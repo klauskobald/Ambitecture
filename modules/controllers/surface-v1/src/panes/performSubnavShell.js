@@ -75,7 +75,8 @@ export class PerformSubnavShell {
     })
 
     animate.subscribeFilter(guid => this._renderFilterChip(guid))
-    projectGraph.subscribe(() => {
+    // Filter chip shows the filtered intent's name; only `intents:def` changes that.
+    projectGraph.subscribe(['intents:def'], () => {
       this._renderFilterChip(animate.getIntentFilter())
     })
 

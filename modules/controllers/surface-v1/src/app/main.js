@@ -115,7 +115,7 @@ async function main () {
     if (typeof name !== 'string' || name.length === 0) return
     sendSceneActivate(name, { runtimeMergeClear: 'scene' })
   })
-  projectGraph.subscribe(syncRuntimeOverlayResetUi)
+  projectGraph.subscribe(['runtimeOverlayHints', 'scenes'], syncRuntimeOverlayResetUi)
   syncRuntimeOverlayResetUi()
 
   initRouter(overlay)

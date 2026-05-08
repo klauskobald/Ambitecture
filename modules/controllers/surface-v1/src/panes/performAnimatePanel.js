@@ -254,7 +254,9 @@ export function createPerformAnimatePanel () {
     return wrap
   }
 
-  projectGraph.subscribe(render)
+  // Re-render row list when animations / actions / intent definitions change.
+  // Runtime intent patches (animation frames) are intentionally excluded.
+  projectGraph.subscribe(['animations', 'actions', 'intents:def'], render)
   subscribeAnimationPlayState(syncAllRowPlayStates)
   render()
 

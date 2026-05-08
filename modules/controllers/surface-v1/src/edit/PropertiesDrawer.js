@@ -99,7 +99,12 @@ export class PropertiesDrawer {
       this._selectionUnsub = selectionState.subscribe(() => this._onSelectionChange())
     }
     if (!this._graphUnsub) {
-      this._graphUnsub = projectGraph.subscribe(() => this._onProjectGraphChange())
+      // Property values follow runtime patches (animation), so include `intents:runtime`.
+      // `scenes` for active-scene overlay; `controller` for capability-driven UI shifts.
+      this._graphUnsub = projectGraph.subscribe(
+        ['intents:def', 'intents:runtime', 'scenes', 'controller'],
+        () => this._onProjectGraphChange()
+      )
     }
   }
 

@@ -89,7 +89,9 @@ export class ScenesPane {
     this._ensureActiveScene()
     this._render()
 
-    this._unsubscribe = projectGraph.subscribe(() => {
+    // Only react to scene/intent-definition changes. `intents:runtime` from animation
+    // must NOT wake this pane or the list rebuilds every animation frame.
+    this._unsubscribe = projectGraph.subscribe(['scenes', 'intents:def'], () => {
       this._ensureActiveScene()
       this._render()
     })

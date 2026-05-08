@@ -22,11 +22,48 @@ import {
  * @property {Record<string, unknown>} [overlay]
  */
 
+/**
+ * Change topics emitted by {@link ProjectGraph._notify}. Subscribers can opt into a subset
+ * so e.g. ScenesPane is not woken by per-frame `intents:runtime` patches from animation.
+ *
+ * - `scenes` — scene list, scene-intent refs, scene overlays, active scene name
+ * - `intents:def` — intent definition rows (graph:init, config, graph:delta entity intent, reconcileIntents)
+ * - `intents:runtime` — runtime intent patches (`runtime:update` from animation, perform-drag, …)
+ * - `fixtures` — `_fixtures` map and zone-derived data
+ * - `actions` / `inputs` / `animations` — entity maps
+ * - `controller` — controller state, intentRefs, intentConfig, interaction policies
+ * - `runtimeOverlayHints` — hub hint `runtimeOverlayGuidsInScene`
+ * - `project` — projectName, controllerGuid, zones, zoneToRenderer, capabilities
+ *
+ * @typedef {(
+ *   'scenes' |
+ *   'intents:def' |
+ *   'intents:runtime' |
+ *   'fixtures' |
+ *   'actions' |
+ *   'inputs' |
+ *   'animations' |
+ *   'controller' |
+ *   'runtimeOverlayHints' |
+ *   'project'
+ * )} ProjectGraphTopic
+ */
+
 class ProjectGraph {
   constructor () {
     this._rendererGuid = ''
-    /** @type {Set<() => void>} */
+    /**
+     * Each listener has an optional topic filter (`null` = wake on any change).
+     * @type {Set<{ topics: Set<string> | null, fn: (topics: Set<string>) => void }>}
+     */
     this._listeners = new Set()
+    /**
+     * Topic accumulator for the current public mutation. `null` means we are not inside
+     * a batch — `_notify` then fires immediately. {@link _withBatch} sets this to a Set
+     * so per-delta topic notifications coalesce into one outer fire.
+     * @type {Set<string> | null}
+     */
+    this._pendingTopics = null
     /**
      * Guids whose row in `_data.intents` last matched hub snapshot (`projectPatch` / graph intent / runtime echo).
      * For these, `getEffectiveIntent` must not re-apply `scenes[].overlay` — that YAML is stale vs merged hub rows.
@@ -68,10 +105,34 @@ class ProjectGraph {
 
   // ─── Subscriptions ────────────────────────────────────────────────────────────
 
-  /** @param {() => void} fn @returns {() => void} unsubscribe */
-  subscribe (fn) {
-    this._listeners.add(fn)
-    return () => this._listeners.delete(fn)
+  /**
+   * Subscribe to graph change notifications.
+   *
+   * Two call shapes are supported (legacy single-arg form is preserved so panes can
+   * migrate incrementally):
+   *
+   *   subscribe(fn)              // wake on every change (back-compat)
+   *   subscribe(topics, fn)      // wake only when one of the listed topics changed;
+   *                              // pass `null` for "all topics".
+   *
+   * The callback receives the Set of topics that fired. Legacy callbacks ignore it.
+   *
+   * @param {ProjectGraphTopic[] | null | ((topics: Set<string>) => void)} topicsOrFn
+   * @param {((topics: Set<string>) => void)} [maybeFn]
+   * @returns {() => void} unsubscribe
+   */
+  subscribe (topicsOrFn, maybeFn) {
+    const fn = typeof topicsOrFn === 'function' ? topicsOrFn : maybeFn
+    if (typeof fn !== 'function') {
+      throw new TypeError('projectGraph.subscribe requires a function')
+    }
+    const topics =
+      topicsOrFn === null || typeof topicsOrFn === 'function'
+        ? null
+        : new Set(topicsOrFn)
+    const entry = { topics, fn }
+    this._listeners.add(entry)
+    return () => this._listeners.delete(entry)
   }
 
   /** @deprecated Use {@link subscribe}; runtime deltas merge into `intents` and use the same notify path. */
@@ -79,16 +140,76 @@ class ProjectGraph {
     return this.subscribe(fn)
   }
 
-  _notify () {
-    for (const fn of this._listeners) fn()
+  /**
+   * Notify subscribers that one or more topics changed. Inside {@link _withBatch}
+   * topics accumulate into a Set and a single outer notify fires when the batch ends.
+   *
+   * @param {ProjectGraphTopic | ProjectGraphTopic[] | null | undefined} topic
+   */
+  _notify (topic) {
+    const pending = this._pendingTopics
+    if (pending !== null) {
+      addTopicsToSet(pending, topic)
+      return
+    }
+    const set = new Set()
+    addTopicsToSet(set, topic)
+    this._fireListeners(set)
+  }
+
+  /**
+   * Run `mutator` then fire one notify with the union of topics emitted during it.
+   * Used by `applyConfig`, `applyGraphInit`, `applyGraphDelta`, `applyRuntimeUpdate`,
+   * `applyPatch`, etc. — anywhere multiple internal mutations should look like one
+   * change to subscribers.
+   * @param {() => void} mutator
+   * @param {ProjectGraphTopic | ProjectGraphTopic[]} [extraTopics] always-on topics for the batch
+   */
+  _withBatch (mutator, extraTopics) {
+    const previous = this._pendingTopics
+    const set = previous ?? new Set()
+    if (extraTopics !== undefined) addTopicsToSet(set, extraTopics)
+    this._pendingTopics = set
+    try {
+      mutator()
+    } finally {
+      this._pendingTopics = previous
+    }
+    if (previous === null) this._fireListeners(set)
+  }
+
+  /** @param {Set<string>} topics */
+  _fireListeners (topics) {
+    if (this._listeners.size === 0) return
+    const snapshot = [...this._listeners]
+    for (const entry of snapshot) {
+      const filter = entry.topics
+      if (filter !== null) {
+        let intersects = false
+        for (const t of topics) {
+          if (filter.has(t)) { intersects = true; break }
+        }
+        if (!intersects) continue
+      }
+      entry.fn(topics)
+    }
   }
 
   /**
    * Wakes graph subscribers without mutating project data. Used when
-   * `systemCapabilities` arrives so UI that resolves intent descriptors can rebuild.
+   * `systemCapabilities` arrives so UI that resolves intent / animation / input /
+   * scene descriptors can rebuild from the new capability map.
    */
   notifyListeners () {
-    this._notify()
+    this._notify([
+      'project',
+      'intents:def',
+      'animations',
+      'actions',
+      'inputs',
+      'scenes',
+      'controller'
+    ])
   }
 
   // ─── Derived state ────────────────────────────────────────────────────────────
@@ -356,7 +477,7 @@ class ProjectGraph {
   /** @param {string} name */
   setActiveScene (name) {
     this._data.activeSceneName = name
-    this._notify()
+    this._notify('scenes')
   }
 
   /**
@@ -373,7 +494,7 @@ class ProjectGraph {
     }
     this._data.scenes.push({ guid: this._newGuid('scene'), name, intents })
     this._data.activeSceneName = name
-    this._notify()
+    this._notify('scenes')
     return true
   }
 
@@ -385,7 +506,7 @@ class ProjectGraph {
     if (this._data.activeSceneName === name) {
       this._data.activeSceneName = this._data.scenes[0]?.name ?? null
     }
-    this._notify()
+    this._notify('scenes')
   }
 
   /**
@@ -401,7 +522,7 @@ class ProjectGraph {
     if (!guid) return
     this._trustHubReconciledIntentRow.delete(guid)
     this._data.intents.set(guid, record)
-    this._notify()
+    this._notify('intents:def')
   }
 
   toggleSceneIntent (sceneName, guid) {
@@ -413,7 +534,7 @@ class ProjectGraph {
     } else {
       scene.intents.splice(idx, 1)
     }
-    this._notify()
+    this._notify('scenes')
   }
 
   /**
@@ -428,7 +549,7 @@ class ProjectGraph {
     const idx = scene.intents.findIndex(ref => ref.guid === guid)
     if (idx === -1) return false
     scene.intents.splice(idx, 1)
-    this._notify()
+    this._notify('scenes')
     return true
   }
 
@@ -443,7 +564,7 @@ class ProjectGraph {
     if (!scene) return false
     if (scene.intents.some(ref => ref.guid === guid)) return false
     scene.intents.push({ guid })
-    this._notify()
+    this._notify('scenes')
     return true
   }
 
@@ -487,7 +608,7 @@ class ProjectGraph {
     let nextState = cloneAndDeleteAtDotPath(base, dotKeyPerform)
     nextState = cloneAndDeleteAtDotPath(nextState, dotKeyQuick)
     this._data.controller.state = nextState
-    this._notify()
+    this._notify(['intents:def', 'scenes', 'controller'])
   }
 
   /**
@@ -502,7 +623,7 @@ class ProjectGraph {
     if (!ref) return false
     this._trustHubReconciledIntentRow.delete(guid)
     ref.overlay = { ...(ref.overlay ?? {}), [dotKey]: cloneSceneValue(value) }
-    this._notify()
+    this._notify('scenes')
     return true
   }
 
@@ -527,7 +648,7 @@ class ProjectGraph {
     } else {
       delete ref.overlay
     }
-    this._notify()
+    this._notify('scenes')
     return true
   }
 
@@ -540,7 +661,7 @@ class ProjectGraph {
     const current =
       this._data.controller.intentConfig.get(guid) ?? Object.create(null)
     this._data.controller.intentConfig.set(guid, { ...current, [key]: value })
-    this._notify()
+    this._notify('controller')
   }
 
   /**
@@ -556,7 +677,7 @@ class ProjectGraph {
       value
     )
     this._applyControllerStateDerivedValue(dotKey, value)
-    this._notify()
+    this._notify('controller')
     return { guid: this._data.controllerGuid, patch: { [dotKey]: value } }
   }
 
@@ -586,7 +707,7 @@ class ProjectGraph {
       value
     )
     this._data.intents.set(guid, updated)
-    this._notify()
+    this._notify('intents:def')
     return { guid, patch: { [dotKey]: value } }
   }
 
@@ -607,8 +728,8 @@ class ProjectGraph {
       this.isSceneIntentOverlayed(activeScene, guid, dotKey)
     )
     if (useOverlay && activeScene) {
+      // setSceneIntentOverlay already emits 'scenes'; no extra notify needed.
       this.setSceneIntentOverlay(activeScene, guid, dotKey, value)
-      this._notify()
       return { guid, patch: { [dotKey]: value } }
     }
     return { guid, patch: { [dotKey]: value } }
@@ -641,7 +762,7 @@ class ProjectGraph {
       dotKey
     )
     this._data.intents.set(guid, updated)
-    this._notify()
+    this._notify('intents:def')
     return { guid, remove: [dotKey] }
   }
 
@@ -755,7 +876,7 @@ class ProjectGraph {
     for (const guid of incoming.keys()) {
       this._trustHubReconciledIntentRow.add(guid)
     }
-    this._notify()
+    this._notify('intents:def')
   }
 
   // ─── Patch application ───────────────────────────────────────────────────────
@@ -766,6 +887,8 @@ class ProjectGraph {
    * @param {unknown} data
    */
   applyPatch (key, data) {
+    /** @type {string[]} */
+    const topics = []
     switch (key) {
       case 'intents': {
         const list = Array.isArray(data) ? data : []
@@ -778,6 +901,7 @@ class ProjectGraph {
         this._spatial = this._computeSpatial()
         this._zoneBoxes = this._computeZoneBoxes()
         this._fixtures = this._computeFixtures()
+        topics.push('fixtures', 'project')
         break
       }
       case 'zoneToRenderer': {
@@ -787,10 +911,12 @@ class ProjectGraph {
             : {}
         this._spatial = this._computeSpatial()
         this._zoneBoxes = this._computeZoneBoxes()
+        topics.push('fixtures', 'project')
         break
       }
       case 'projectName': {
         if (typeof data === 'string') this._data.projectName = data
+        topics.push('project')
         break
       }
       case 'activeSceneName': {
@@ -803,6 +929,7 @@ class ProjectGraph {
         } else {
           this._data.activeSceneName = null
         }
+        topics.push('scenes')
         break
       }
       case 'scenes': {
@@ -816,26 +943,30 @@ class ProjectGraph {
         ) {
           this._data.activeSceneName = this._data.scenes[0]?.name ?? null
         }
+        topics.push('scenes')
         break
       }
       case 'actions': {
         this._data.actions = normalizeEntityMap(data)
+        topics.push('actions')
         break
       }
       case 'inputs': {
         this._data.inputs = normalizeEntityMap(data)
+        topics.push('inputs')
         break
       }
       case 'runtimeOverlayGuidsInScene': {
         this._data.runtimeOverlayGuidsInScene = Array.isArray(data)
           ? /** @type {unknown[]} */ (data).filter(d => typeof d === 'string')
           : []
+        topics.push('runtimeOverlayHints')
         break
       }
       default:
         break
     }
-    this._notify()
+    this._notify(topics)
   }
 
   /**
@@ -844,43 +975,54 @@ class ProjectGraph {
    * @param {string} rendererGuid
    */
   applyGraphInit (payload, rendererGuid) {
-    this.applyConfig(payload, rendererGuid)
-    const p = /** @type {Record<string, unknown> | null} */ (
-      payload && typeof payload === 'object' && !Array.isArray(payload)
-        ? payload
-        : null
-    )
-    const intents = Array.isArray(p?.intents)
-      ? /** @type {unknown[]} */ (p.intents)
-      : []
-    this._setControllerIntentRefsFromIntentsList(intents)
-    this.reconcileIntents(intents, null)
-
-    const rawOverlay = p?.runtimeOverlayGuidsInScene
-    if (Array.isArray(rawOverlay)) {
-      this._data.runtimeOverlayGuidsInScene = rawOverlay.filter(
-        x => typeof x === 'string'
+    // Full-snapshot replace: emit kitchen-sink topics so every pane reconciles once.
+    this._withBatch(() => {
+      this.applyConfig(payload, rendererGuid)
+      const p = /** @type {Record<string, unknown> | null} */ (
+        payload && typeof payload === 'object' && !Array.isArray(payload)
+          ? payload
+          : null
       )
-    } else {
-      this._data.runtimeOverlayGuidsInScene = []
-    }
+      const intents = Array.isArray(p?.intents)
+        ? /** @type {unknown[]} */ (p.intents)
+        : []
+      this._setControllerIntentRefsFromIntentsList(intents)
+      this.reconcileIntents(intents, null)
 
-    const entitiesRaw = p?.entities
-    if (entitiesRaw && typeof entitiesRaw === 'object' && !Array.isArray(entitiesRaw)) {
-      this._data.animations.clear()
-      const animationMap = /** @type {Record<string, unknown>} */ (entitiesRaw).animation
-      if (
-        animationMap &&
-        typeof animationMap === 'object' &&
-        !Array.isArray(animationMap)
-      ) {
-        this._mergeAnimationsFromEntityMap(
-          /** @type {Record<string, Record<string, unknown>>} */ (animationMap),
+      const rawOverlay = p?.runtimeOverlayGuidsInScene
+      if (Array.isArray(rawOverlay)) {
+        this._data.runtimeOverlayGuidsInScene = rawOverlay.filter(
+          x => typeof x === 'string'
         )
+      } else {
+        this._data.runtimeOverlayGuidsInScene = []
       }
-    }
 
-    this._notify()
+      const entitiesRaw = p?.entities
+      if (entitiesRaw && typeof entitiesRaw === 'object' && !Array.isArray(entitiesRaw)) {
+        this._data.animations.clear()
+        const animationMap = /** @type {Record<string, unknown>} */ (entitiesRaw).animation
+        if (
+          animationMap &&
+          typeof animationMap === 'object' &&
+          !Array.isArray(animationMap)
+        ) {
+          this._mergeAnimationsFromEntityMap(
+            /** @type {Record<string, Record<string, unknown>>} */ (animationMap),
+          )
+        }
+      }
+    }, [
+      'project',
+      'scenes',
+      'intents:def',
+      'fixtures',
+      'actions',
+      'inputs',
+      'animations',
+      'controller',
+      'runtimeOverlayHints'
+    ])
   }
 
   /**
@@ -907,7 +1049,7 @@ class ProjectGraph {
       ...this._data.controller.intentRefs,
       { guid }
     ]
-    this._notify()
+    this._notify('controller')
   }
 
   /** @returns {Array<{ guid: string }>} copy for hub patch */
@@ -921,69 +1063,85 @@ class ProjectGraph {
    */
   applyGraphDelta (payload) {
     const deltas = Array.isArray(payload) ? payload : [payload]
-    for (const raw of deltas) {
-      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue
-      const delta = /** @type {Record<string, unknown>} */ (raw)
-      const entityType = String(delta.entityType ?? '')
-      const guid = String(delta.guid ?? '')
-      const op = String(delta.op ?? '')
-      if (!entityType || !guid) continue
-      switch (entityType) {
-        case 'intent':
-          this._applyIntentDelta(guid, op, delta)
-          break
-        case 'fixture':
-          this._applyFixtureDelta(guid, op, delta)
-          break
-        case 'scene':
-          this._applySceneDelta(guid, op, delta)
-          break
-        case 'action':
-          this._applyEntityDelta(this._data.actions, guid, op, delta)
-          break
-        case 'input':
-          this._applyEntityDelta(this._data.inputs, guid, op, delta)
-          break
-        case 'animation':
-          this._applyEntityDelta(this._data.animations, guid, op, delta)
-          break
-        case 'project':
-          this._applyProjectDelta(delta)
-          break
-        case 'controller':
-          this._applyControllerDelta(guid, op, delta)
-          break
-        default:
-          break
+    this._withBatch(() => {
+      for (const raw of deltas) {
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue
+        const delta = /** @type {Record<string, unknown>} */ (raw)
+        const entityType = String(delta.entityType ?? '')
+        const guid = String(delta.guid ?? '')
+        const op = String(delta.op ?? '')
+        if (!entityType || !guid) continue
+        switch (entityType) {
+          case 'intent':
+            this._applyIntentDelta(guid, op, delta)
+            this._notify('intents:def')
+            break
+          case 'fixture':
+            this._applyFixtureDelta(guid, op, delta)
+            this._notify('fixtures')
+            break
+          case 'scene':
+            this._applySceneDelta(guid, op, delta)
+            this._notify('scenes')
+            break
+          case 'action':
+            this._applyEntityDelta(this._data.actions, guid, op, delta)
+            this._notify('actions')
+            break
+          case 'input':
+            this._applyEntityDelta(this._data.inputs, guid, op, delta)
+            this._notify('inputs')
+            break
+          case 'animation':
+            this._applyEntityDelta(this._data.animations, guid, op, delta)
+            this._notify('animations')
+            break
+          case 'project':
+            // _applyProjectDelta touches activeSceneName + runtimeOverlayHints.
+            this._applyProjectDelta(delta)
+            this._notify(['scenes', 'runtimeOverlayHints'])
+            break
+          case 'controller':
+            this._applyControllerDelta(guid, op, delta)
+            this._notify('controller')
+            break
+          default:
+            break
+        }
       }
-    }
-    this._notify()
+    })
   }
 
   /**
    * Applies hub `runtime:update` deltas into the intents replica (same merge as hub; no parallel map).
+   * Hot path: animation drives this every frame, so we only emit `intents:runtime`
+   * (and `fixtures` when a fixture patch comes through). Panes that don't subscribe
+   * to those topics are not woken.
    * @param {unknown} payload
    */
   applyRuntimeUpdate (payload) {
     const updates = Array.isArray(payload) ? payload : [payload]
-    for (const raw of updates) {
-      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue
-      const update = /** @type {Record<string, unknown>} */ (raw)
-      const entityType = String(update.entityType ?? '')
-      const guid = String(update.guid ?? '')
-      if (!entityType || !guid) continue
-      switch (entityType) {
-        case 'intent':
-          this._applyRuntimeIntentDelta(guid, update)
-          break
-        case 'fixture':
-          this._applyFixtureDelta(guid, 'patch', update)
-          break
-        default:
-          break
+    this._withBatch(() => {
+      for (const raw of updates) {
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue
+        const update = /** @type {Record<string, unknown>} */ (raw)
+        const entityType = String(update.entityType ?? '')
+        const guid = String(update.guid ?? '')
+        if (!entityType || !guid) continue
+        switch (entityType) {
+          case 'intent':
+            this._applyRuntimeIntentDelta(guid, update)
+            this._notify('intents:runtime')
+            break
+          case 'fixture':
+            this._applyFixtureDelta(guid, 'patch', update)
+            this._notify('fixtures')
+            break
+          default:
+            break
+        }
       }
-    }
-    this._notify()
+    })
   }
 
   // ─── Config application ───────────────────────────────────────────────────────
@@ -1004,75 +1162,84 @@ class ProjectGraph {
     )
     if (!p) return
 
-    this._data.projectName = String(p.projectName ?? '')
-    this._data.controllerGuid = String(
-      p.controllerGuid ?? this._data.controllerGuid
-    )
-    this._data.zoneToRenderer = /** @type {Record<string, string[]>} */ (
-      p.zoneToRenderer ?? {}
-    )
-    this._data.zones = Array.isArray(p.zones)
-      ? /** @type {unknown[]} */ (p.zones)
-      : []
-
-    const rawScenes = Array.isArray(p.scenes)
-      ? /** @type {Array<Record<string, unknown>>} */ (p.scenes)
-      : []
-    this._data.scenes = rawScenes.map(normalizeScene).filter(s => s.name)
-    this._data.actions = normalizeEntityMap(p.actions)
-    this._data.inputs = normalizeEntityMap(p.inputs)
-
-    const hubActive =
-      typeof p.activeSceneName === 'string' && p.activeSceneName
-        ? p.activeSceneName
-        : null
-    if (hubActive && this._data.scenes.some(s => s.name === hubActive)) {
-      this._data.activeSceneName = hubActive
-    } else if (!this._data.activeSceneName && this._data.scenes.length > 0) {
-      this._data.activeSceneName = this._data.scenes[0].name
-    }
-
-    // Round-trip: restore intentConfig if hub sends it back (future persistence)
-    if (
-      p.intentConfig &&
-      typeof p.intentConfig === 'object' &&
-      !Array.isArray(p.intentConfig)
-    ) {
-      const saved = /** @type {Record<string, Record<string, unknown>>} */ (
-        p.intentConfig
+    // Full-config replace: coalesce internal `setIntentConfig` etc. into the outer
+    // kitchen-sink fire. (When called from `applyGraphInit`, the outer batch wins.)
+    this._withBatch(() => {
+      this._data.projectName = String(p.projectName ?? '')
+      this._data.controllerGuid = String(
+        p.controllerGuid ?? this._data.controllerGuid
       )
-      for (const [guid, config] of Object.entries(saved)) {
-        if (!this._data.controller.intentConfig.has(guid)) {
-          this._data.controller.intentConfig.set(guid, config)
+      this._data.zoneToRenderer = /** @type {Record<string, string[]>} */ (
+        p.zoneToRenderer ?? {}
+      )
+      this._data.zones = Array.isArray(p.zones)
+        ? /** @type {unknown[]} */ (p.zones)
+        : []
+
+      const rawScenes = Array.isArray(p.scenes)
+        ? /** @type {Array<Record<string, unknown>>} */ (p.scenes)
+        : []
+      this._data.scenes = rawScenes.map(normalizeScene).filter(s => s.name)
+      this._data.actions = normalizeEntityMap(p.actions)
+      this._data.inputs = normalizeEntityMap(p.inputs)
+
+      const hubActive =
+        typeof p.activeSceneName === 'string' && p.activeSceneName
+          ? p.activeSceneName
+          : null
+      if (hubActive && this._data.scenes.some(s => s.name === hubActive)) {
+        this._data.activeSceneName = hubActive
+      } else if (!this._data.activeSceneName && this._data.scenes.length > 0) {
+        this._data.activeSceneName = this._data.scenes[0].name
+      }
+
+      // Round-trip: restore intentConfig if hub sends it back (future persistence)
+      if (
+        p.intentConfig &&
+        typeof p.intentConfig === 'object' &&
+        !Array.isArray(p.intentConfig)
+      ) {
+        const saved = /** @type {Record<string, Record<string, unknown>>} */ (
+          p.intentConfig
+        )
+        for (const [guid, config] of Object.entries(saved)) {
+          if (!this._data.controller.intentConfig.has(guid)) {
+            this._data.controller.intentConfig.set(guid, config)
+          }
         }
       }
-    }
 
-    if (
-      p.interactionPolicies &&
-      typeof p.interactionPolicies === 'object' &&
-      !Array.isArray(p.interactionPolicies)
-    ) {
-      this._applyInteractionPolicies(
-        /** @type {Record<string, unknown>} */ (p.interactionPolicies)
-      )
-    }
-    if (
-      p.controllerState &&
-      typeof p.controllerState === 'object' &&
-      !Array.isArray(p.controllerState)
-    ) {
-      this._data.controller.state = /** @type {Record<string, unknown>} */ (
-        p.controllerState
-      )
-      this._applyControllerStateDerivedValues(this._data.controller.state)
-    }
+      if (
+        p.interactionPolicies &&
+        typeof p.interactionPolicies === 'object' &&
+        !Array.isArray(p.interactionPolicies)
+      ) {
+        this._applyInteractionPolicies(
+          /** @type {Record<string, unknown>} */ (p.interactionPolicies)
+        )
+      }
+      if (
+        p.controllerState &&
+        typeof p.controllerState === 'object' &&
+        !Array.isArray(p.controllerState)
+      ) {
+        this._data.controller.state = /** @type {Record<string, unknown>} */ (
+          p.controllerState
+        )
+        this._applyControllerStateDerivedValues(this._data.controller.state)
+      }
 
-    this._spatial = this._computeSpatial()
-    this._zoneBoxes = this._computeZoneBoxes()
-    this._fixtures = this._computeFixtures()
-
-    this._notify()
+      this._spatial = this._computeSpatial()
+      this._zoneBoxes = this._computeZoneBoxes()
+      this._fixtures = this._computeFixtures()
+    }, [
+      'project',
+      'scenes',
+      'fixtures',
+      'actions',
+      'inputs',
+      'controller'
+    ])
   }
 
   // ─── Serialization ────────────────────────────────────────────────────────────
@@ -1735,6 +1902,22 @@ function normalizeQuickPanelDotKeys (value) {
     out.push(s)
   }
   return out
+}
+
+/**
+ * Normalize a topic argument (string, array, or nullish) into a Set in place.
+ * No-op for nullish so call sites that don't yet declare topics still work.
+ * @param {Set<string>} target
+ * @param {string | string[] | null | undefined} topic
+ */
+function addTopicsToSet (target, topic) {
+  if (topic === null || topic === undefined) return
+  if (typeof topic === 'string') { target.add(topic); return }
+  if (Array.isArray(topic)) {
+    for (const t of topic) {
+      if (typeof t === 'string' && t.length > 0) target.add(t)
+    }
+  }
 }
 
 export const projectGraph = new ProjectGraph()

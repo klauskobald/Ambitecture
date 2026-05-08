@@ -21,6 +21,7 @@ interface MessageHandler {
 
 /** Max wait for TCP + WebSocket handshake; avoids hanging on unreachable hub. */
 const CONNECT_TIMEOUT_MS = 5000;
+const RECONNECT_DELAY_MS = 1000;
 
 export class HubConnection {
     private ws: WebSocket | null = null;
@@ -89,7 +90,7 @@ export class HubConnection {
                 return;
             }
             Logger.warn('[ws] connection closed, reconnecting');
-            setImmediate(() => this.connect());
+            setTimeout(() => this.connect(), RECONNECT_DELAY_MS);
         });
 
         ws.on('error', (err: Error) => {

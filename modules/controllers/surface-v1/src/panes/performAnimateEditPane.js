@@ -131,7 +131,7 @@ export function createAnimationEditPane ({ onClose }) {
           }
         )
 
-      body.appendChild(makeFieldRow(label, hint, widget))
+      body.appendChild(makeFieldRow(label, null, widget))
     }
   }
 
@@ -294,7 +294,7 @@ function makeRadialKnobWidget (
       currentValue = domain
       onChange(domain)
     },
-    showInnerSvgTitle: false,
+    showInnerSvgTitle: true,
     hint: typeof hint === 'string' && hint.length > 0 ? hint : undefined
   })
   knob.mount(container)

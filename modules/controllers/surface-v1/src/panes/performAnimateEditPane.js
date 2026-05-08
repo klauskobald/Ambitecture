@@ -3,8 +3,7 @@ import { getCapabilities } from '../core/systemCapabilities.js'
 import { sendGraphCommand } from '../core/outboundQueue.js'
 import { readAtDotPath } from '../core/dotPath.js'
 import { getAnimatorViewer } from './animators/animatorViewerRegistry.js'
-import { ScalarDragSlider } from '../edit/components/ScalarDragSlider.js'
-import { evaluate as fnEvaluate, inverse as fnInverse } from '../edit/controls/fnCurve.js'
+import { ScalarRadialKnob } from '../edit/components/ScalarRadialKnob.js'
 
 /**
  * Edit pane for a single animation record.
@@ -62,7 +61,8 @@ export function createAnimationEditPane ({ onClose }) {
     currentGuid = String(record.guid ?? '')
 
     nameInput.value = String(record.name ?? '')
-    nameInput.onchange = () => sendAnimationPatch(currentGuid, { name: nameInput.value })
+    nameInput.onchange = () =>
+      sendAnimationPatch(currentGuid, { name: nameInput.value })
 
     const intentGuid = String(record.targetIntent ?? record.intent ?? '')
     intentSpan.textContent = resolveIntentName(intentGuid)
@@ -82,43 +82,77 @@ export function createAnimationEditPane ({ onClose }) {
     // class switcher — only when hub advertises ≥ 2 classes
     const animClasses = getAnimationClasses(caps)
     if (animClasses.length >= 2) {
-      body.appendChild(makeFieldRow('Class', null,
-        makeClassSelect(cls, animClasses, newClass => {
-          const warn = viewer?.shouldWarnOnClassSwitch(record) ?? false
-          if (warn && !confirm(`Switching to "${newClass}" will clear this animation's content. Continue?`)) return
-          sendAnimationPatch(guid, { class: newClass, content: {} })
-          const fresh = projectGraph.getAnimations().get(guid)
-          if (fresh) renderBody(fresh)
-        })
-      ))
+      body.appendChild(
+        makeFieldRow(
+          'Class',
+          null,
+          makeClassSelect(cls, animClasses, newClass => {
+            const warn = viewer?.shouldWarnOnClassSwitch(record) ?? false
+            if (
+              warn &&
+              !confirm(
+                `Switching to "${newClass}" will clear this animation's content. Continue?`
+              )
+            )
+              return
+            sendAnimationPatch(guid, { class: newClass, content: {} })
+            const fresh = projectGraph.getAnimations().get(guid)
+            if (fresh) renderBody(fresh)
+          }),
+          'full'
+        )
+      )
     }
 
     // content fields from systemCapabilities.animations[class].display
     const display = getClassDisplayMap(caps, cls)
     if (display) {
       for (const [dotKey, displayConfig] of Object.entries(display)) {
-        const value = readAtDotPath(/** @type {Record<string, unknown>} */ (record), dotKey)
+        const value = readAtDotPath(
+          /** @type {Record<string, unknown>} */ (record),
+          dotKey
+        )
         const descriptor = viewer?.getFieldDescriptor(dotKey) ?? null
         const label = descriptor?.name ?? dotKeyToLabel(dotKey)
         const hint = descriptor?.hint ?? null
 
-        const customEl = viewer?.renderField(dotKey, value, newValue => {
-          sendAnimationPatch(guid, { [dotKey]: newValue })
-        }) ?? null
+        const customEl =
+          viewer?.renderField(dotKey, value, newValue => {
+            sendAnimationPatch(guid, { [dotKey]: newValue })
+          }) ?? null
+
+        const widgetType =
+          displayConfig && typeof displayConfig === 'object'
+            ? String(
+                /** @type {Record<string, unknown>} */ (displayConfig).type ??
+                  ''
+              )
+            : ''
+        const layout = layoutForField(widgetType, customEl)
 
         if (customEl) {
-          body.appendChild(makeFieldRow(label, hint, customEl))
+          body.appendChild(makeFieldRow(label, hint, customEl, layout))
           continue
         }
 
-        const widgetType = displayConfig && typeof displayConfig === 'object'
-          ? String(/** @type {Record<string, unknown>} */ (displayConfig).type ?? '')
-          : ''
-        body.appendChild(makeFieldRow(label, hint,
-          makeGenericWidget(widgetType, value, descriptor, newValue => {
-            sendAnimationPatch(guid, { [dotKey]: newValue })
-          })
-        ))
+        body.appendChild(
+          makeFieldRow(
+            label,
+            hint,
+            makeGenericWidget(
+              widgetType,
+              value,
+              descriptor,
+              guid,
+              dotKey,
+              label,
+              newValue => {
+                sendAnimationPatch(guid, { [dotKey]: newValue })
+              }
+            ),
+            layout
+          )
+        )
       }
     }
   }
@@ -130,19 +164,45 @@ export function createAnimationEditPane ({ onClose }) {
 
 /** @param {string} guid @param {Record<string, unknown>} patch */
 function sendAnimationPatch (guid, patch) {
-  sendGraphCommand({ op: 'upsert', entityType: 'animation', guid, patch, persistence: 'runtimeAndDurable' })
+  sendGraphCommand({
+    op: 'upsert',
+    entityType: 'animation',
+    guid,
+    patch,
+    persistence: 'runtimeAndDurable'
+  })
   // Hub filters the matching delta from its echo back to the source controller, so apply locally.
-  projectGraph.applyGraphDelta({ entityType: 'animation', op: 'upsert', guid, patch })
+  projectGraph.applyGraphDelta({
+    entityType: 'animation',
+    op: 'upsert',
+    guid,
+    patch
+  })
+}
+
+/**
+ * @param {string} widgetType
+ * @param {HTMLElement | null} customEl
+ * @returns {'full' | 'tile'}
+ */
+function layoutForField (widgetType, customEl) {
+  if (customEl) return 'full'
+  if (widgetType === 'select' || widgetType === 'dropdown') return 'full'
+  return 'tile'
 }
 
 /**
  * @param {string} label
  * @param {string | null} hint
  * @param {HTMLElement} widget
+ * @param {'full' | 'tile'} [layout]
  */
-function makeFieldRow (label, hint, widget) {
+function makeFieldRow (label, hint, widget, layout = 'full') {
   const row = document.createElement('div')
-  row.className = 'perform-animate-field'
+  row.className =
+    layout === 'tile'
+      ? 'perform-animate-field perform-animate-field--tile'
+      : 'perform-animate-field perform-animate-field--full'
 
   const labelEl = document.createElement('div')
   labelEl.className = 'perform-animate-field__label'
@@ -205,11 +265,29 @@ function makeClassSelect (current, classes, onChange) {
  * @param {string} type
  * @param {unknown} value
  * @param {{ name?: string, range?: [number, number], step?: number, default?: number | string, options?: string[], optionsRef?: string, stepFunction?: string } | null} descriptor
+ * @param {string} animationGuid
+ * @param {string} dotKey
+ * @param {string} label
  * @param {(value: unknown) => void} onChange
  */
-function makeGenericWidget (type, value, descriptor, onChange) {
+function makeGenericWidget (
+  type,
+  value,
+  descriptor,
+  animationGuid,
+  dotKey,
+  label,
+  onChange
+) {
   if (type === 'slider') {
-    return makeSliderWidget(value, descriptor, onChange)
+    return makeRadialKnobWidget(
+      value,
+      descriptor,
+      animationGuid,
+      dotKey,
+      label,
+      onChange
+    )
   }
   if (type === 'select' || type === 'dropdown') {
     let options = descriptor?.options ?? null
@@ -238,45 +316,57 @@ function makeGenericWidget (type, value, descriptor, onChange) {
 /**
  * @param {unknown} value
  * @param {{ range?: [number, number], step?: number, default?: number | string, stepFunction?: string } | null} descriptor
+ * @param {string} animationGuid
+ * @param {string} dotKey
+ * @param {string} label
  * @param {(value: number) => void} onChange
  */
-function makeSliderWidget (value, descriptor, onChange) {
+function makeRadialKnobWidget (
+  value,
+  descriptor,
+  animationGuid,
+  dotKey,
+  label,
+  onChange
+) {
   const min = descriptor?.range?.[0] ?? 0
   const max = descriptor?.range?.[1] ?? 100
-  const span = max - min
-  const step = descriptor?.step
-  const fallback = typeof descriptor?.default === 'number' ? descriptor.default : min
-  const initial = typeof value === 'number' && Number.isFinite(value) ? value : fallback
-  const stepFnName = typeof descriptor?.stepFunction === 'string' && descriptor.stepFunction.length > 0
-    ? descriptor.stepFunction : null
+  const fallback =
+    typeof descriptor?.default === 'number' ? descriptor.default : min
+  const initial =
+    typeof value === 'number' && Number.isFinite(value) ? value : fallback
+  let currentValue = initial
 
   const container = document.createElement('div')
-  container.className = 'perform-animate-field__slider'
+  container.className = 'perform-animate-field__knob'
 
-  /** @param {number} v */
-  const snap = v => step
-    ? Math.max(min, Math.min(max, Math.round((v - min) / step) * step + min))
-    : Math.max(min, Math.min(max, v))
+  const stepFnName =
+    typeof descriptor?.stepFunction === 'string' &&
+    descriptor.stepFunction.length > 0
+      ? descriptor.stepFunction
+      : null
 
-  // onCommit() has no argument — track the live value via onInput, commit on release.
-  let pendingValue = initial
-  const sliderOpts = stepFnName == null
-    ? { min, max, step, value: initial, onInput: v => { pendingValue = v }, onCommit: () => onChange(pendingValue) }
-    : {
-        min, max, step, value: initial,
-        onInput: v => { pendingValue = v },
-        onCommit: () => onChange(pendingValue),
-        valueAtT: t => snap(min + span * fnEvaluate(stepFnName, t)),
-        tAtValue: v => {
-          if (span <= 0) return 0
-          const u = (snap(v) - min) / span
-          return Math.max(0, Math.min(1, fnInverse(stepFnName, u)))
-        }
-      }
+  /** @type {Record<string, unknown>} */
+  const knobDescriptor = {
+    name: label,
+    range: [min, max],
+    step: descriptor?.step,
+    defaultValue: fallback,
+    dotKey
+  }
+  if (stepFnName) knobDescriptor.stepFunction = stepFnName
 
-  const slider = new ScalarDragSlider(sliderOpts)
-  slider.mount(container)
-  requestAnimationFrame(() => slider.configure({ value: initial }))
+  const knob = new ScalarRadialKnob({
+    descriptor: knobDescriptor,
+    intentGuid: animationGuid,
+    readValue: () => currentValue,
+    onCommit: domain => {
+      currentValue = domain
+      onChange(domain)
+    }
+  })
+  knob.mount(container)
+  requestAnimationFrame(() => knob.syncFromExternal())
   return container
 }
 
@@ -288,20 +378,30 @@ function makeSliderWidget (value, descriptor, onChange) {
 function makeNumberInput (value, descriptor, onChange) {
   const input = document.createElement('input')
   input.type = 'number'
-  input.className = 'perform-animate-field__input perform-animate-field__input--number'
-  const numDefault = typeof descriptor?.default === 'number' ? descriptor.default : undefined
+  input.className =
+    'perform-animate-field__input perform-animate-field__input--number'
+  const numDefault =
+    typeof descriptor?.default === 'number' ? descriptor.default : undefined
   const numInitial = typeof value === 'number' ? value : numDefault
   input.value = numInitial !== undefined ? String(numInitial) : ''
-  if (descriptor?.range) { input.min = String(descriptor.range[0]); input.max = String(descriptor.range[1]) }
+  if (descriptor?.range) {
+    input.min = String(descriptor.range[0])
+    input.max = String(descriptor.range[1])
+  }
   if (descriptor?.step !== undefined) input.step = String(descriptor.step)
-  input.addEventListener('change', () => { const n = parseFloat(input.value); if (Number.isFinite(n)) onChange(n) })
+  input.addEventListener('change', () => {
+    const n = parseFloat(input.value)
+    if (Number.isFinite(n)) onChange(n)
+  })
   return input
 }
 
 /** @param {string} guid */
 function resolveIntentName (guid) {
   if (!guid) return ''
-  const intent = /** @type {Record<string, unknown> | undefined} */ (projectGraph.getIntents().get(guid))
+  const intent = /** @type {Record<string, unknown> | undefined} */ (
+    projectGraph.getIntents().get(guid)
+  )
   const name = intent?.name
   return typeof name === 'string' && name ? name : guid
 }
@@ -311,7 +411,10 @@ function getAnimationClasses (caps) {
   const list = caps?.animations
   if (!Array.isArray(list)) return []
   return list
-    .map(entry => ({ cls: String(entry.class ?? ''), name: String(entry.name ?? entry.class ?? '') }))
+    .map(entry => ({
+      cls: String(entry.class ?? ''),
+      name: String(entry.name ?? entry.class ?? '')
+    }))
     .filter(e => e.cls.length > 0)
 }
 
@@ -319,9 +422,12 @@ function getAnimationClasses (caps) {
 function getClassDisplayMap (caps, cls) {
   const list = caps?.animations
   if (!Array.isArray(list) || !cls) return null
-  const entry = /** @type {Record<string, unknown> | undefined} */ (list.find(e => e.class === cls))
+  const entry = /** @type {Record<string, unknown> | undefined} */ (
+    list.find(e => e.class === cls)
+  )
   const display = entry?.display
-  if (!display || typeof display !== 'object' || Array.isArray(display)) return null
+  if (!display || typeof display !== 'object' || Array.isArray(display))
+    return null
   return /** @type {Record<string, unknown>} */ (display)
 }
 

@@ -643,28 +643,56 @@
 .perform-animate-edit__body {
   flex: 1 1 auto;
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 4px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7.75rem, 1fr));
+  gap: 6px;
+  padding: 6px;
+  align-content: start;
 }
 
-/* field rows — no border/background/radius, height driven by slider */
-
 .perform-animate-field {
+  min-width: 0;
+}
+
+.perform-animate-field--full {
+  grid-column: 1 / -1;
   display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.perform-animate-field--full .perform-animate-field__label {
+  flex: 0 0 auto;
+  width: 6.5rem;
+}
+
+.perform-animate-field--tile {
+  display: flex;
+  flex-direction: column;
   align-items: stretch;
   gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg-raised);
+  min-height: 6.75rem;
+  box-sizing: border-box;
 }
 
 .perform-animate-field__label {
   flex: 0 0 auto;
-  width: 6.5rem;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   padding: 1px 0;
   min-height: 0;
+}
+
+.perform-animate-field--tile .perform-animate-field__label {
+  width: auto;
+  align-items: center;
+  text-align: center;
 }
 
 .perform-animate-field__label-name {
@@ -675,6 +703,12 @@
   text-overflow: ellipsis;
 }
 
+.perform-animate-field--tile .perform-animate-field__label-name {
+  white-space: normal;
+  text-align: center;
+  line-height: 1.15;
+}
+
 .perform-animate-field__hint {
   font-size: 0.62rem;
   color: var(--color-text-muted);
@@ -682,6 +716,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.perform-animate-field--tile .perform-animate-field__hint {
+  white-space: normal;
+  text-align: center;
+  max-height: 2.4em;
 }
 
 .perform-animate-field__input {
@@ -698,6 +738,13 @@
 
 .perform-animate-field__input--number {
   max-width: 7rem;
+}
+
+.perform-animate-field--tile .perform-animate-field__input--number {
+  max-width: none;
+  align-self: center;
+  width: 100%;
+  text-align: center;
 }
 
 .perform-animate-field__select {
@@ -719,9 +766,20 @@
   align-self: center;
 }
 
-.perform-animate-field__slider {
+.perform-animate-field--tile .perform-animate-field__select {
+  width: 100%;
+}
+
+.perform-animate-field__knob {
   flex: 1 1 auto;
-  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+
+.perform-animate-field--tile .perform-animate-field__knob .quick-panel-knob__caption {
+  display: none;
 }
 
 .perform-input--button {

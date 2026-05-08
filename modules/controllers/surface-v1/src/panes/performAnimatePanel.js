@@ -10,7 +10,7 @@ import {
   subscribeAnimationPlayState
 } from '../core/animationPlayRegistry.js'
 import { subscribeBinding } from '../core/bindingRegistry.js'
-import { ScalarRadialKnob } from '../perform/ScalarRadialKnob.js'
+import { ScalarRadialKnob } from '../edit/components/ScalarRadialKnob.js'
 import { getAnimatorViewer } from './animators/animatorViewerRegistry.js'
 import { createAnimationEditPane } from './performAnimateEditPane.js'
 
@@ -60,10 +60,14 @@ export function createPerformAnimatePanel () {
     const toggle = rowEl.querySelector('.perform-animate-toggle')
     if (!toggle) return
     const playing = isAnimationPlaying(guid)
-    const name = rowEl.querySelector('.perform-animate-row__name')?.textContent ?? guid
+    const name =
+      rowEl.querySelector('.perform-animate-row__name')?.textContent ?? guid
     toggle.classList.toggle('perform-animate-toggle--stop', playing)
     toggle.classList.toggle('perform-animate-toggle--play', !playing)
-    toggle.setAttribute('aria-label', playing ? `Stop animation ${name}` : `Play animation ${name}`)
+    toggle.setAttribute(
+      'aria-label',
+      playing ? `Stop animation ${name}` : `Play animation ${name}`
+    )
     toggle.setAttribute('aria-pressed', playing ? 'true' : 'false')
     toggle.textContent = playing ? '■' : '▶'
   }
@@ -185,14 +189,19 @@ export function createPerformAnimatePanel () {
     wrap.className = 'perform-animate-speed-wrap'
 
     const knob = new ScalarRadialKnob({
-      descriptor: { name: 'Speed', range: [0.25, 4], step: 0.01, defaultValue: 1 },
+      descriptor: {
+        name: 'Speed',
+        range: [0.25, 4],
+        step: 0.01,
+        defaultValue: 1
+      },
       intentGuid: guid,
       readValue: () => currentSpeed,
-      onCommit: domain => sendBindingSet(key, domain),
+      onCommit: domain => sendBindingSet(key, domain)
     })
     knob.mount(wrap)
 
-    subscribeBinding(key, (value) => {
+    subscribeBinding(key, value => {
       if (value === null || value === undefined) {
         wrap.classList.add('perform-animate-speed-wrap--offline')
         return

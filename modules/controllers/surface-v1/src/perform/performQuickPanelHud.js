@@ -3,7 +3,7 @@ import { performPolicy } from '../viewport/interactionPolicies.js'
 import { worldToCanvas } from '../viewport/spatialMath.js'
 import { resolveDescriptorsForClass } from '../core/systemCapabilities.js'
 import { queueIntentUpdate } from '../core/outboundQueue.js'
-import { ScalarRadialKnob } from './ScalarRadialKnob.js'
+import { ScalarRadialKnob } from '../edit/components/ScalarRadialKnob.js'
 
 /** World height (meters, XZ) of the nominal pivot marker — not intent spread radius. Scales with map zoom. */
 export const PERFORM_HUD_ICON_WORLD_METERS = 0.28

@@ -4,7 +4,7 @@
  * (↑/→ increase, ↓/← decrease), not angular finger position on the dial.
  */
 
-import { evaluate as fnEvaluate, inverse as fnInverse } from '../edit/controls/fnCurve.js'
+import { evaluate as fnEvaluate, inverse as fnInverse } from '../controls/fnCurve.js'
 
 /** Pixels of combined (↑ + →) pointer travel for normalized t to sweep 0→1. */
 const SCRUB_PIXELS_PER_FULL_RANGE = 120

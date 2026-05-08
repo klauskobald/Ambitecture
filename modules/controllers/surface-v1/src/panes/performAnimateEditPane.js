@@ -46,7 +46,7 @@ export function createAnimationEditPane ({ onClose }) {
   const deleteBtn = document.createElement('button')
   deleteBtn.type = 'button'
   deleteBtn.className = 'perform-animate-edit__delete btn--danger'
-  deleteBtn.textContent = '⌫'
+  deleteBtn.textContent = '❌'
 
   topRow.appendChild(backBtn)
   topRow.appendChild(nameLabel)
@@ -325,7 +325,7 @@ function makeRadialKnobWidget (
       currentValue = domain
       onChange(domain)
     },
-    showInnerSvgTitle: true,
+    showInnerSvgTitle: false,
     hint: typeof hint === 'string' && hint.length > 0 ? hint : undefined
   })
   knob.mount(container)

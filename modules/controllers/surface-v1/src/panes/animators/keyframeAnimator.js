@@ -9,8 +9,12 @@ import { ScalarRadialKnobSvg } from '../../edit/components/ScalarRadialKnobSvg.j
 const activeBindings = new Map()
 
 export class KeyframeAnimatorViewer extends AnimatorViewer {
-  getClassName () { return 'keyframeAnimator' }
-  getName () { return 'Keyframe' }
+  getClassName () {
+    return 'keyframeAnimator'
+  }
+  getName () {
+    return 'Keyframe'
+  }
 
   shouldWarnOnClassSwitch (record) {
     const steps = record?.content?.steps
@@ -77,7 +81,9 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
       nextBtn.textContent = 'Next'
       nextBtn.disabled = total === 0 || idx >= total - 1
       nextBtn.addEventListener('click', () => {
-        sendBindingSet(bindingKey, { currentStepIndex: Math.min(total - 1, idx + 1) })
+        sendBindingSet(bindingKey, {
+          currentStepIndex: Math.min(total - 1, idx + 1)
+        })
       })
 
       const counter = document.createElement('span')
@@ -99,9 +105,13 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
           if (
             hasValidLength &&
             hasValidCurrentTime &&
-            roundToHundredths(currentTimeSeconds) >= roundToHundredths(lengthSeconds)
+            roundToHundredths(currentTimeSeconds) >=
+              roundToHundredths(lengthSeconds)
           ) {
-            notification.warn('Cannot add: last step is already at or beyond animation length.', `animation-add-denied-${guid}`)
+            notification.warn(
+              'Cannot add: last step is already at or beyond animation length.',
+              `animation-add-denied-${guid}`
+            )
             return
           }
         }
@@ -126,8 +136,9 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
 
       const removeBtn = document.createElement('button')
       removeBtn.type = 'button'
-      removeBtn.className = 'animator-edit-section__nav-btn animator-edit-section__dump-remove'
-      removeBtn.textContent = 'Remove'
+      removeBtn.className =
+        'animator-edit-section__nav-btn animator-edit-section__dump-remove'
+      removeBtn.textContent = '❌'
       removeBtn.disabled = total <= 1
       removeBtn.addEventListener('click', e => {
         e.stopPropagation()
@@ -246,12 +257,16 @@ function makeStepTimeKnob (state, idx, total, bindingKey, animationGuid) {
       sendBindingSet(bindingKey, {
         currentStepIndex: Number(state?.currentStepIndex) || 0,
         currentStepContent: {
-          ...(state?.currentStepContent && typeof state.currentStepContent === 'object' ? state.currentStepContent : {}),
+          ...(state?.currentStepContent &&
+          typeof state.currentStepContent === 'object'
+            ? state.currentStepContent
+            : {}),
           time: currentTime
         },
         editAction: 'set'
       })
-    }
+    },
+    showInnerSvgTitle: false
   })
   knob.mount(wrap)
   requestAnimationFrame(() => knob.syncFromExternal())
@@ -273,7 +288,11 @@ function roundToHundredths (value) {
  * @param {{ initialStep: unknown, mode: 'add' | 'edit' }} options
  * @returns {Promise<void>}
  */
-async function openStepContentEditor (state, bindingKey, options = { initialStep: state?.currentStepContent, mode: 'edit' }) {
+async function openStepContentEditor (
+  state,
+  bindingKey,
+  options = { initialStep: state?.currentStepContent, mode: 'edit' }
+) {
   let draft = formatStepText(options.initialStep)
   let reason = ''
   let parsed = null

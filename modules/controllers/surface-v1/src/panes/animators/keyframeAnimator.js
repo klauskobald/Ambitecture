@@ -123,10 +123,11 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
 
       const removeBtn = document.createElement('button')
       removeBtn.type = 'button'
-      removeBtn.className = 'animator-edit-section__nav-btn'
+      removeBtn.className = 'animator-edit-section__nav-btn animator-edit-section__dump-remove'
       removeBtn.textContent = 'Remove'
       removeBtn.disabled = total <= 1
-      removeBtn.addEventListener('click', () => {
+      removeBtn.addEventListener('click', e => {
+        e.stopPropagation()
         sendBindingSet(bindingKey, {
           currentStepIndex: idx,
           editAction: 'remove'
@@ -135,15 +136,17 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
 
       const timeKnob = makeStepTimeKnob(record, state, idx, total, bindingKey)
       if (timeKnob) {
-        tools.replaceChildren(addBtn, mergeBtn, removeBtn, timeKnob)
+        tools.replaceChildren(addBtn, mergeBtn, timeKnob)
       } else {
-        tools.replaceChildren(addBtn, mergeBtn, removeBtn)
+        tools.replaceChildren(addBtn, mergeBtn)
       }
 
       nav.appendChild(prevBtn)
       nav.appendChild(counter)
       nav.appendChild(nextBtn)
 
+      const dumpWrap = document.createElement('div')
+      dumpWrap.className = 'animator-edit-section__dump-wrap'
       const dump = document.createElement('pre')
       dump.className = 'animator-edit-section__dump'
       dump.textContent = formatStepText(state?.currentStepContent)
@@ -152,10 +155,12 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
       dump.addEventListener('click', () => {
         void openStepContentEditor(state, bindingKey)
       })
+      dumpWrap.appendChild(dump)
+      dumpWrap.appendChild(removeBtn)
 
       topLeft.replaceChildren(header, tools)
       top.replaceChildren(topLeft, nav)
-      body.appendChild(dump)
+      body.appendChild(dumpWrap)
     }
 
     const onState = value => {

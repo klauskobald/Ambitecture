@@ -95,6 +95,19 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
         })
       })
 
+      const mergeBtn = document.createElement('button')
+      mergeBtn.type = 'button'
+      mergeBtn.className = 'animator-edit-section__nav-btn'
+      mergeBtn.textContent = 'Merge'
+      mergeBtn.title = 'Apply intent changes into this step (newer values win)'
+      mergeBtn.disabled = total <= 0
+      mergeBtn.addEventListener('click', () => {
+        sendBindingSet(bindingKey, {
+          currentStepIndex: idx,
+          editAction: 'merge'
+        })
+      })
+
       const removeBtn = document.createElement('button')
       removeBtn.type = 'button'
       removeBtn.className = 'animator-edit-section__nav-btn'
@@ -107,7 +120,7 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
         })
       })
 
-      tools.replaceChildren(addBtn, removeBtn)
+      tools.replaceChildren(addBtn, mergeBtn, removeBtn)
 
       nav.appendChild(prevBtn)
       nav.appendChild(counter)

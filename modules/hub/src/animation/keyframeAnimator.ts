@@ -401,6 +401,48 @@ export class KeyframeAnimator {
       }
       return;
     }
+    if (action === 'merge') {
+      const tg = this.editTargetGuid;
+      const getDelta = this.editGetIntentDeltaPatch;
+      if (!tg || !getDelta) {
+        Logger.warn('[keyframeAnimator] merge ignored — edit delta provider missing');
+      } else {
+        const curStep = this.editSteps[this.editIndex];
+        const timeMs = curStep?.time;
+        const sourceIndex = this.editSourceIndices[this.editIndex];
+        if (
+          typeof timeMs !== 'number' ||
+          !Number.isFinite(timeMs) ||
+          typeof sourceIndex !== 'number' ||
+          !Number.isFinite(sourceIndex) ||
+          sourceIndex < 0
+        ) {
+          Logger.warn('[keyframeAnimator] merge ignored — invalid current step');
+        } else {
+          const delta = getDelta(tg);
+          const baseArgs =
+            curStep?.args !== undefined &&
+              typeof curStep.args === 'object' &&
+              curStep.args !== null &&
+              !Array.isArray(curStep.args)
+              ? cloneRecord(curStep.args as Record<string, unknown>)
+              : {};
+          const merged: Record<string, unknown> = { ...baseArgs, ...delta };
+          const incomingStep: { time: number; args?: Record<string, unknown> } = {
+            time: timeMs,
+            ...(Object.keys(merged).length > 0 ? { args: merged } : {}),
+          };
+          this.persistEditedStep(sourceIndex, incomingStep);
+          this.normalizeStoredStepsAndRefresh(sourceIndex);
+          this.callbacks.onDefinitionChanged?.();
+          this.emitCurrentEditStep();
+        }
+      }
+      if (this.editBindingMgr && this.editBindingKey) {
+        this.editBindingMgr.receiveFromMaster(this.editBindingKey, this.computeEditState());
+      }
+      return;
+    }
     const indexChanged = clamped !== previousIndex;
     if (Object.prototype.hasOwnProperty.call(incoming, 'currentStepContent') && !indexChanged) {
       const incomingStep = this.parseIncomingEditStep(incoming['currentStepContent'], this.editSteps[this.editIndex]);

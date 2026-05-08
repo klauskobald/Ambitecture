@@ -172,7 +172,8 @@ export class PropertyControl {
     }
     if ((this._sceneDirty || hasOverlayTargets) && activeScene) {
       sendSaveProject('scenes', projectGraph.getScenesData())
-      sendSceneActivate(activeScene)
+      const sceneGuid = projectGraph.getSceneGuid(activeScene)
+      if (sceneGuid) sendSceneActivate(sceneGuid)
     }
     this._sceneDirty = false
   }
@@ -371,7 +372,8 @@ export class PropertyControl {
     }
 
     sendSaveProject('scenes', projectGraph.getScenesData())
-    sendSceneActivate(activeScene)
+    const sceneGuid = projectGraph.getSceneGuid(activeScene)
+    if (sceneGuid) sendSceneActivate(sceneGuid)
     this.refresh(this._currentGuids)
   }
 

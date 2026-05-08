@@ -165,7 +165,7 @@ export class ProjectGraph {
   private projectName = '';
   private revision = 0;
   private controllerGuid = '';
-  private activeSceneName: string | null = null;
+  private activeSceneGuid: string | null = null;
   private readonly intents = new Map<string, IntentRecord>();
   private readonly scenes = new Map<string, SceneRecord>();
   private readonly actions = new Map<string, ActionRecord>();
@@ -179,7 +179,7 @@ export class ProjectGraph {
     this.projectName = stringValue(payload['projectName']);
     this.revision = finiteNumber(payload['revision']) ?? this.revision;
     this.controllerGuid = stringValue(payload['controllerGuid']);
-    this.activeSceneName = typeof payload['activeSceneName'] === 'string' ? payload['activeSceneName'] : null;
+    this.activeSceneGuid = typeof payload['activeSceneGuid'] === 'string' ? payload['activeSceneGuid'] : null;
 
     this.intents.clear();
     for (const rawIntent of Array.isArray(payload['intents']) ? payload['intents'] : []) {
@@ -253,7 +253,11 @@ export class ProjectGraph {
   }
 
   getActiveSceneName(): string | null {
-    return this.activeSceneName;
+    if (!this.activeSceneGuid) return null;
+    for (const scene of this.scenes.values()) {
+      if (scene.guid === this.activeSceneGuid) return scene.name;
+    }
+    return null;
   }
 
   getIntent(guid: string): IntentRecord | null {
@@ -269,10 +273,16 @@ export class ProjectGraph {
   }
 
   isIntentInActiveScene(guid: string): boolean {
-    if (!this.activeSceneName) {
+    if (!this.activeSceneGuid) {
       return false;
     }
-    const scene = this.scenes.get(this.activeSceneName);
+    let scene: SceneRecord | undefined;
+    for (const row of this.scenes.values()) {
+      if (row.guid === this.activeSceneGuid) {
+        scene = row;
+        break;
+      }
+    }
     return scene?.intents.includes(guid) ?? false;
   }
 
@@ -378,8 +388,8 @@ export class ProjectGraph {
   }
 
   private applyProjectDelta(delta: GraphDelta): void {
-    if (delta.patch && typeof delta.patch['activeSceneName'] === 'string') {
-      this.activeSceneName = delta.patch['activeSceneName'];
+    if (delta.patch && typeof delta.patch['activeSceneGuid'] === 'string') {
+      this.activeSceneGuid = delta.patch['activeSceneGuid'];
     }
   }
 

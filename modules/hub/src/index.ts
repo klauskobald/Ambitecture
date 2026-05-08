@@ -79,7 +79,7 @@ const pushControllerProjectPatches = (includeIntentsPatch: boolean): void => {
   const scenes = projectManager.getScenesWirePayload();
   const actions = projectManager.getActionsWirePayload();
   const zoneToRenderer = projectManager.getZoneToRendererPayload();
-  const activeSceneName = projectManager.getActiveSceneName();
+  const activeSceneGuid = projectManager.getActiveSceneGuid();
   const projectName = projectManager.getWireProjectName();
 
   const zonesMsg = JSON.stringify({
@@ -95,7 +95,7 @@ const pushControllerProjectPatches = (includeIntentsPatch: boolean): void => {
     message: { type: 'projectPatch', payload: { key: 'zoneToRenderer', data: zoneToRenderer } },
   });
   const activeMsg = JSON.stringify({
-    message: { type: 'projectPatch', payload: { key: 'activeSceneName', data: activeSceneName } },
+    message: { type: 'projectPatch', payload: { key: 'activeSceneGuid', data: activeSceneGuid } },
   });
   const nameMsg = JSON.stringify({
     message: { type: 'projectPatch', payload: { key: 'projectName', data: projectName } },
@@ -193,7 +193,7 @@ const publishGraphMutation = (source: import('ws').WebSocket, result: GraphMutat
       p !== undefined
       && typeof p === 'object'
       && !Array.isArray(p)
-      && typeof /** @type {Record<string, unknown>} */ (p).activeSceneName === 'string'
+      && typeof /** @type {Record<string, unknown>} */ (p).activeSceneGuid === 'string'
     );
   });
 
@@ -206,7 +206,7 @@ const publishGraphMutation = (source: import('ws').WebSocket, result: GraphMutat
         p !== undefined
         && typeof p === 'object'
         && !Array.isArray(p)
-        && typeof /** @type {Record<string, unknown>} */ (p).activeSceneName === 'string'
+        && typeof /** @type {Record<string, unknown>} */ (p).activeSceneGuid === 'string'
       );
     });
     const rawOverlay = activeDelta?.patch?.['runtimeOverlayGuidsInScene'];

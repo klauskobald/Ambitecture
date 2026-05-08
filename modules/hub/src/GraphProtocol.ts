@@ -34,7 +34,7 @@ export interface GraphInitPayload {
   projectName: string;
   revision: number;
   controllerGuid: string;
-  activeSceneName: string | null;
+  activeSceneGuid: string | null;
   zoneToRenderer: Record<string, string[]>;
   zones: unknown[];
   intents: unknown[];

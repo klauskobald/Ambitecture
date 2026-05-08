@@ -144,11 +144,11 @@ export class ActionHandler implements MessageHandler {
 
   private executeSceneItem(ws: WebSocket, item: ActionExecuteItem, message: WsMessage): number {
     const scene = this.actionInputManager.getSceneForExecuteItem(item);
-    if (!scene?.name) {
+    if (!scene?.guid) {
       Logger.warn(`[action] scene target ${item.guid ?? 'unknown'} not found`);
       return 0;
     }
-    const result = this.graphStore.activateScene(scene.name, message.location, 'runtime');
+    const result = this.graphStore.activateScene(scene.guid, message.location, 'runtime');
     this.sendResultToSource(ws, result);
     this.publishMutation(ws, result, message.location);
     return 1;

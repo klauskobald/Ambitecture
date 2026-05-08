@@ -113,7 +113,9 @@ async function main () {
   overlayResetBtn?.addEventListener('click', () => {
     const name = projectGraph.getActiveSceneName()
     if (typeof name !== 'string' || name.length === 0) return
-    sendSceneActivate(name, { runtimeMergeClear: 'scene' })
+    const guid = projectGraph.getSceneGuid(name)
+    if (!guid) return
+    sendSceneActivate(guid, { runtimeMergeClear: 'scene' })
   })
   projectGraph.subscribe(['runtimeOverlayHints', 'scenes'], syncRuntimeOverlayResetUi)
   syncRuntimeOverlayResetUi()

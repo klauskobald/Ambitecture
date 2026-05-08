@@ -51,8 +51,8 @@ export class ProjectGraphStore {
     const zoneToRenderer = config['zoneToRenderer'] && typeof config['zoneToRenderer'] === 'object'
       ? config['zoneToRenderer'] as Record<string, string[]>
       : {};
-    const activeSceneName = typeof config['activeSceneName'] === 'string'
-      ? config['activeSceneName']
+    const activeSceneGuid = typeof config['activeSceneGuid'] === 'string'
+      ? config['activeSceneGuid']
       : null;
     const sceneIntentGuids = this.projectManager.getActiveSceneIntents()
       .map(intent => intent.guid)
@@ -65,7 +65,7 @@ export class ProjectGraphStore {
       projectName: this.projectManager.getWireProjectName(),
       revision: this.revision,
       controllerGuid: guid,
-      activeSceneName,
+      activeSceneGuid,
       zoneToRenderer,
       zones,
       intents,
@@ -128,8 +128,8 @@ export class ProjectGraphStore {
         if (!patch) {
           return this.applyOpaqueCommand(command);
         }
-        const sceneName = patch['activeSceneName'];
-        if (typeof sceneName !== 'string') {
+        const sceneGuid = patch['activeSceneGuid'];
+        if (typeof sceneGuid !== 'string') {
           return this.applyOpaqueCommand(command);
         }
         const rmcRaw = patch['runtimeMergeClear'];
@@ -140,7 +140,7 @@ export class ProjectGraphStore {
           runtimeMergeClear = 'scene';
         }
         return this.activateScene(
-          sceneName,
+          sceneGuid,
           location,
           command.persistence ?? 'runtimeAndDurable',
           runtimeMergeClear !== undefined ? { runtimeMergeClear } : undefined,
@@ -156,7 +156,7 @@ export class ProjectGraphStore {
   }
 
   activateScene(
-    sceneName: string,
+    sceneGuid: string,
     location?: [number, number],
     persistence: GraphPersistence = 'runtimeAndDurable',
     options?: { runtimeMergeClear?: 'all' | 'scene' },
@@ -165,14 +165,23 @@ export class ProjectGraphStore {
     if (mergeClear === 'all') {
       this.runtimeMerge?.clearRuntimeIntentMergeCache();
     } else if (mergeClear === 'scene') {
-      const guids = this.projectManager.getSceneIntentGuidsByName(sceneName);
+      const scene = this.projectManager.getSceneByGuid(sceneGuid);
+      if (!scene?.name) {
+        return emptyMutationResult(this.revision);
+      }
+      const guids = this.projectManager.getSceneIntentGuidsByName(scene.name);
       const toEvict = guids.filter((g) =>
-        effectivePerformResetScene(this.projectManager.getSceneMergedIntent(sceneName, g)),
+        effectivePerformResetScene(this.projectManager.getSceneMergedIntent(scene.name, g)),
       );
       this.runtimeMerge?.evictRuntimeIntentMergeGuids(toEvict);
     }
+    const scene = this.projectManager.getSceneByGuid(sceneGuid);
+    if (!scene?.name) {
+      Logger.warn(`[graph] scene "${sceneGuid}" not found`);
+      return emptyMutationResult(this.revision);
+    }
     const persistDurable = persistence === 'durable' || persistence === 'runtimeAndDurable';
-    const newIntents = this.projectManager.setActiveScene(sceneName, persistDurable);
+    const newIntents = this.projectManager.setActiveScene(scene.name, persistDurable);
     const now = Date.now();
     const newGuids = new Set(newIntents.map(intent => intent.guid));
     const removalEvents = this.projectManager.getAllIntentDefinitionGuids()
@@ -195,13 +204,13 @@ export class ProjectGraphStore {
     const runtimeOverlayGuidsInScene = this.runtimeIntentStore
       ? this.runtimeIntentStore.listRuntimeOverlayGuidsInActiveScene(sceneIntentGuids)
       : [];
-    const delta = this.makeProjectActiveSceneDelta(sceneName, persistence, runtimeOverlayGuidsInScene);
+    const delta = this.makeProjectActiveSceneDelta(sceneGuid, persistence, runtimeOverlayGuidsInScene);
     const clearNote =
       mergeClear === 'all' ? ', runtimeMergeClear=all'
         : mergeClear === 'scene' ? ', runtimeMergeClear=scene'
           : '';
     Logger.info(
-      `[graph] activated scene "${sceneName}" at ${location?.join(', ') ?? 'unknown location'} (${persistence}${clearNote})`,
+      `[graph] activated scene "${sceneGuid}" at ${location?.join(', ') ?? 'unknown location'} (${persistence}${clearNote})`,
     );
     this.animationManager?.notifyActiveSceneIntentMembershipChanged(location);
     return {
@@ -579,7 +588,7 @@ export class ProjectGraphStore {
 
   /** Outbound project/active patch — never includes clear flags (`runtimeMergeClear`, legacy `clearRuntimeIntentMerge`). */
   private makeProjectActiveSceneDelta(
-    sceneName: string,
+    sceneGuid: string,
     persistence: GraphPersistence,
     runtimeOverlayGuidsInScene: string[],
   ): GraphDelta {
@@ -588,7 +597,7 @@ export class ProjectGraphStore {
       op: 'patch',
       entityType: 'project',
       guid: 'active',
-      patch: { activeSceneName: sceneName, runtimeOverlayGuidsInScene },
+      patch: { activeSceneGuid: sceneGuid, runtimeOverlayGuidsInScene },
       persistence,
       revision: this.revision,
     };

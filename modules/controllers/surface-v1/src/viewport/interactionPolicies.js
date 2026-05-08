@@ -80,7 +80,8 @@ function savePositionOverlayIfActive (guid) {
   )
     return false
   sendSaveProject('scenes', projectGraph.getScenesData())
-  sendSceneActivate(activeScene)
+  const sceneGuid = projectGraph.getSceneGuid(activeScene)
+  if (sceneGuid) sendSceneActivate(sceneGuid)
   return true
 }
 

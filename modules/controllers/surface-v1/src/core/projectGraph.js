@@ -82,7 +82,7 @@ class ProjectGraph {
       inputs: /** @type {Map<string, Record<string, unknown>>} */ (new Map()),
       /** Hub `entities.animation` from `graph:init` + `graph:delta` entityType `animation`. */
       animations: /** @type {Map<string, Record<string, unknown>>} */ (new Map()),
-      activeSceneName: /** @type {string | null} */ (null),
+      activeSceneGuid: /** @type {string | null} */ (null),
       /** Hub hint: perform merge overlaps these scene intent GUIDs — show reset when non-empty. */
       runtimeOverlayGuidsInScene: /** @type {string[]} */ ([]),
       controller: {
@@ -354,7 +354,9 @@ class ProjectGraph {
 
   /** @returns {string | null} */
   getActiveSceneName () {
-    return this._data.activeSceneName
+    const guid = this._data.activeSceneGuid
+    if (!guid) return null
+    return this._data.scenes.find(s => s.guid === guid)?.name ?? null
   }
 
   /** @returns {string[]} GUIDs with hub runtime merge on this scene's intents (reset affordance). */
@@ -392,7 +394,7 @@ class ProjectGraph {
     if (this._trustHubReconciledIntentRow.has(guid)) {
       return intent
     }
-    const active = this._data.activeSceneName
+    const active = this.getActiveSceneName()
     const ref = active ? this._findSceneIntentRef(active, guid) : null
     const overlay = ref?.overlay ?? {}
     return applyDotPathPatch({ ...intent }, overlay)
@@ -476,7 +478,7 @@ class ProjectGraph {
 
   /** @param {string} name */
   setActiveScene (name) {
-    this._data.activeSceneName = name
+    this._data.activeSceneGuid = this.getSceneGuid(name)
     this._notify('scenes')
   }
 
@@ -493,7 +495,7 @@ class ProjectGraph {
       if (source) intents = source.intents.map(ref => cloneSceneIntentRef(ref))
     }
     this._data.scenes.push({ guid: this._newGuid('scene'), name, intents })
-    this._data.activeSceneName = name
+    this._data.activeSceneGuid = this.getSceneGuid(name)
     this._notify('scenes')
     return true
   }
@@ -503,8 +505,8 @@ class ProjectGraph {
     const idx = this._data.scenes.findIndex(s => s.name === name)
     if (idx === -1) return
     this._data.scenes.splice(idx, 1)
-    if (this._data.activeSceneName === name) {
-      this._data.activeSceneName = this._data.scenes[0]?.name ?? null
+    if (this.getActiveSceneName() === name) {
+      this._data.activeSceneGuid = this._data.scenes[0]?.guid ?? null
     }
     this._notify('scenes')
   }
@@ -919,15 +921,15 @@ class ProjectGraph {
         topics.push('project')
         break
       }
-      case 'activeSceneName': {
+      case 'activeSceneGuid': {
         if (data === null) {
-          this._data.activeSceneName = null
+          this._data.activeSceneGuid = null
         } else if (typeof data === 'string' && data.length > 0) {
-          if (this._data.scenes.some(s => s.name === data)) {
-            this._data.activeSceneName = data
+          if (this._data.scenes.some(s => s.guid === data)) {
+            this._data.activeSceneGuid = data
           }
         } else {
-          this._data.activeSceneName = null
+          this._data.activeSceneGuid = null
         }
         topics.push('scenes')
         break
@@ -938,10 +940,10 @@ class ProjectGraph {
           : []
         this._data.scenes = rawScenes.map(normalizeScene).filter(s => s.name)
         if (
-          this._data.activeSceneName &&
-          !this._data.scenes.some(s => s.name === this._data.activeSceneName)
+          this._data.activeSceneGuid &&
+          !this._data.scenes.some(s => s.guid === this._data.activeSceneGuid)
         ) {
-          this._data.activeSceneName = this._data.scenes[0]?.name ?? null
+          this._data.activeSceneGuid = this._data.scenes[0]?.guid ?? null
         }
         topics.push('scenes')
         break
@@ -1097,7 +1099,7 @@ class ProjectGraph {
             this._notify('animations')
             break
           case 'project':
-            // _applyProjectDelta touches activeSceneName + runtimeOverlayHints.
+            // _applyProjectDelta touches activeSceneGuid + runtimeOverlayHints.
             this._applyProjectDelta(delta)
             this._notify(['scenes', 'runtimeOverlayHints'])
             break
@@ -1184,13 +1186,13 @@ class ProjectGraph {
       this._data.inputs = normalizeEntityMap(p.inputs)
 
       const hubActive =
-        typeof p.activeSceneName === 'string' && p.activeSceneName
-          ? p.activeSceneName
+        typeof p.activeSceneGuid === 'string' && p.activeSceneGuid
+          ? p.activeSceneGuid
           : null
-      if (hubActive && this._data.scenes.some(s => s.name === hubActive)) {
-        this._data.activeSceneName = hubActive
-      } else if (!this._data.activeSceneName && this._data.scenes.length > 0) {
-        this._data.activeSceneName = this._data.scenes[0].name
+      if (hubActive && this._data.scenes.some(s => s.guid === hubActive)) {
+        this._data.activeSceneGuid = hubActive
+      } else if (!this._data.activeSceneGuid && this._data.scenes.length > 0) {
+        this._data.activeSceneGuid = this._data.scenes[0].guid
       }
 
       // Round-trip: restore intentConfig if hub sends it back (future persistence)
@@ -1254,7 +1256,7 @@ class ProjectGraph {
       actions: [...this._data.actions.values()],
       inputs: [...this._data.inputs.values()],
       animations: [...this._data.animations.values()],
-      activeSceneName: this._data.activeSceneName,
+      activeSceneGuid: this._data.activeSceneGuid,
       runtimeOverlayGuidsInScene: [...this._data.runtimeOverlayGuidsInScene],
       controller: {
         state: this._data.controller.state,
@@ -1313,7 +1315,7 @@ class ProjectGraph {
         ? /** @type {Record<string, unknown>} */ (update.patch)
         : {}
     const remove = Array.isArray(update.remove) ? update.remove.map(String) : []
-    const activeScene = this._data.activeSceneName
+    const activeScene = this.getActiveSceneName()
     if (activeScene && Object.keys(patch).length > 0) {
       this._stripSceneOverlayKeysOverlappedByPatch(activeScene, guid, patch)
     }
@@ -1495,8 +1497,8 @@ class ProjectGraph {
       !Array.isArray(delta.patch)
         ? /** @type {Record<string, unknown>} */ (delta.patch)
         : {}
-    if (typeof patch.activeSceneName === 'string') {
-      this._data.activeSceneName = patch.activeSceneName
+    if (typeof patch.activeSceneGuid === 'string') {
+      this._data.activeSceneGuid = patch.activeSceneGuid
     }
     const rawOverlay = patch.runtimeOverlayGuidsInScene
     if (Array.isArray(rawOverlay)) {

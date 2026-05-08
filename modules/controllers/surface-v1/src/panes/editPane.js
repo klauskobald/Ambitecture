@@ -527,7 +527,8 @@ export class EditPane {
 
     sendSaveProject('scenes', projectGraph.getHubScenesWire())
     if (activeScene === projectGraph.getActiveSceneName()) {
-      sendSceneActivate(activeScene)
+      const sceneGuid = projectGraph.getSceneGuid(activeScene)
+      if (sceneGuid) sendSceneActivate(sceneGuid)
     }
 
     this._drawer.close()
@@ -561,7 +562,8 @@ export class EditPane {
       }
       sendSaveProject('scenes', projectGraph.getHubScenesWire())
       if (activeScene === projectGraph.getActiveSceneName()) {
-        sendSceneActivate(activeScene)
+        const sceneGuid = projectGraph.getSceneGuid(activeScene)
+        if (sceneGuid) sendSceneActivate(sceneGuid)
       }
       this._drawer.close()
       this._exitSelectModeIfActive()
@@ -602,7 +604,10 @@ export class EditPane {
         })
       }
       const activeScene = projectGraph.getActiveSceneName()
-      if (activeScene) sendSceneActivate(activeScene)
+      if (activeScene) {
+        const sceneGuid = projectGraph.getSceneGuid(activeScene)
+        if (sceneGuid) sendSceneActivate(sceneGuid)
+      }
       this._drawer.close()
       this._exitSelectModeIfActive()
     }
@@ -670,7 +675,8 @@ export class EditPane {
       })
     }
     sendSaveProject('scenes', projectGraph.getScenesData())
-    sendSceneActivate(activeScene)
+    const sceneGuid = projectGraph.getSceneGuid(activeScene)
+    if (sceneGuid) sendSceneActivate(sceneGuid)
 
     selectionState.clearAll()
     selectionState.toggleGuid(guid)

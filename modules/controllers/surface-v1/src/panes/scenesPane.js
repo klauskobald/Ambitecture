@@ -120,7 +120,8 @@ export class ScenesPane {
     const fallback = scenes[0] ?? null
     if (fallback) {
       projectGraph.setActiveScene(fallback)
-      sendSceneActivate(fallback)
+      const sceneGuid = projectGraph.getSceneGuid(fallback)
+      if (sceneGuid) sendSceneActivate(sceneGuid)
     }
   }
 
@@ -134,7 +135,8 @@ export class ScenesPane {
       li.textContent = name
       li.addEventListener('click', () => {
         projectGraph.setActiveScene(name)
-        sendSceneActivate(name)
+        const sceneGuid = projectGraph.getSceneGuid(name)
+        if (sceneGuid) sendSceneActivate(sceneGuid)
       })
       this._listEl.appendChild(li)
     }
@@ -188,7 +190,8 @@ export class ScenesPane {
         projectGraph.toggleSceneIntent(activeScene, guid)
         sendSaveProject('scenes', toHubScenes(projectGraph.getScenesData()))
         if (activeScene === projectGraph.getActiveSceneName()) {
-          sendSceneActivate(activeScene)
+          const sceneGuid = projectGraph.getSceneGuid(activeScene)
+          if (sceneGuid) sendSceneActivate(sceneGuid)
         }
       })
       container.appendChild(btn)
@@ -210,7 +213,8 @@ export class ScenesPane {
     target.name = nextName
     projectGraph.setActiveScene(nextName)
     sendSaveProject('scenes', toHubScenes(scenes))
-    sendSceneActivate(nextName)
+    const renamedGuid = projectGraph.getSceneGuid(nextName)
+    if (renamedGuid) sendSceneActivate(renamedGuid)
   }
 
   async _onCopyClick () {
@@ -228,7 +232,8 @@ export class ScenesPane {
     scenes.push({ guid: newGuid('scene'), name: nextName, intents: source.intents.map(cloneSceneIntentRef) })
     projectGraph.setActiveScene(nextName)
     sendSaveProject('scenes', toHubScenes(scenes))
-    sendSceneActivate(nextName)
+    const copiedGuid = projectGraph.getSceneGuid(nextName)
+    if (copiedGuid) sendSceneActivate(copiedGuid)
   }
 
   async _onDeleteClick () {
@@ -248,7 +253,8 @@ export class ScenesPane {
     const nextActive = scenes[Math.max(0, idx - 1)]?.name ?? scenes[0]?.name ?? null
     if (nextActive) {
       projectGraph.setActiveScene(nextActive)
-      sendSceneActivate(nextActive)
+      const nextGuid = projectGraph.getSceneGuid(nextActive)
+      if (nextGuid) sendSceneActivate(nextGuid)
     }
     if (removedGuid) {
       sendGraphCommand({

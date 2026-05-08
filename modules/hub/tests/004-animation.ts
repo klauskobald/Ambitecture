@@ -21,7 +21,7 @@ interface AnimationKeyframeContentRead {
 
 interface AnimationTestConfig {
   location: [number, number];
-  sceneName: string;
+  sceneGuid: string;
   /** `action:trigger` payload `args.command` (default START). start | stop | pause | setTimescale */
   triggerCommand: string;
   /** Passed as `args.timescale` — used by start (initial factor) and setTimescale. */
@@ -130,7 +130,7 @@ function readConfig(testconfig: Record<string, unknown>): AnimationTestConfig {
 
   return {
     location: testconfig['location'] as [number, number],
-    sceneName: String(testconfig['sceneName'] ?? ''),
+    sceneGuid: String(testconfig['sceneGuid'] ?? ''),
     triggerCommand,
     timescale,
     intentGuid: String(testconfig['intentGuid'] ?? ''),
@@ -184,13 +184,13 @@ function upsertTestAnimation(ws: WebSocket, location: [number, number], config: 
   }));
 }
 
-function activateScene(ws: WebSocket, location: [number, number], sceneName: string): void {
-  if (sceneName.length === 0) return;
+function activateScene(ws: WebSocket, location: [number, number], sceneGuid: string): void {
+  if (sceneGuid.length === 0) return;
   ws.send(buildEnvelope('graph:command', location, {
     op: 'patch',
     entityType: 'project',
     guid: 'active',
-    patch: { activeSceneName: sceneName },
+    patch: { activeSceneGuid: sceneGuid },
     persistence: 'runtimeAndDurable',
   }));
 }
@@ -314,7 +314,7 @@ export async function main(
       started = true;
       upsertTestAnimation(controller, config.location, config);
       setTimeout(() => {
-        activateScene(controller, config.location, config.sceneName);
+        activateScene(controller, config.location, config.sceneGuid);
         setTimeout(() => {
           actionTriggered = true;
           triggerAction(controller, config.location, config.animationGuid, {

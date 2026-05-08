@@ -4,7 +4,7 @@ export const defaultArgs: string[] = [];
 
 interface IntentActionConfig {
   location: [number, number];
-  sceneName: string;
+  sceneGuid: string;
   actionGuid: string;
   intentGuid: string;
   expectedParams: Record<string, unknown>;
@@ -17,7 +17,7 @@ function buildEnvelope(type: string, location: [number, number], payload: unknow
 function readConfig(testconfig: Record<string, unknown>): IntentActionConfig {
   return {
     location: testconfig['location'] as [number, number],
-    sceneName: String(testconfig['sceneName'] ?? ''),
+    sceneGuid: String(testconfig['sceneGuid'] ?? ''),
     actionGuid: String(testconfig['actionGuid'] ?? ''),
     intentGuid: String(testconfig['intentGuid'] ?? ''),
     expectedParams: testconfig['expectedParams'] as Record<string, unknown>,
@@ -40,12 +40,12 @@ function registerRenderer(ws: WebSocket, location: [number, number]): void {
   }));
 }
 
-function activateScene(ws: WebSocket, location: [number, number], sceneName: string): void {
+function activateScene(ws: WebSocket, location: [number, number], sceneGuid: string): void {
   ws.send(buildEnvelope('graph:command', location, {
     op: 'patch',
     entityType: 'project',
     guid: 'active',
-    patch: { activeSceneName: sceneName },
+    patch: { activeSceneGuid: sceneGuid },
     persistence: 'runtimeAndDurable',
   }));
 }
@@ -128,7 +128,7 @@ export async function main(
       if (!controllerReady || !rendererReady || actionTriggered) return;
       upsertIntentAction(controller, config.location, config.actionGuid, config.intentGuid);
       setTimeout(() => {
-        activateScene(controller, config.location, config.sceneName);
+      activateScene(controller, config.location, config.sceneGuid);
         setTimeout(() => {
           actionTriggered = true;
           triggerAction(controller, config.location, config.actionGuid);

@@ -183,7 +183,7 @@ interface Project {
   scenes?: Scene[];
   actions?: ActionDefinition[];
   animations?: AnimationDefinition[];
-  activeScene?: string;
+  activeSceneGuid?: string;
   zones: Zone[];
   controller?: ControllerDef[];
   graphEntities?: Record<string, Record<string, unknown>>;
@@ -240,7 +240,7 @@ export class ProjectManager {
     }
 
     const scenes = this.project.scenes ?? [];
-    const storedScene = scenes.find(s => s.name === this.project!.activeScene);
+    const storedScene = scenes.find(s => s.guid === this.project!.activeSceneGuid);
     const initialScene = storedScene ?? scenes[0];
     this.activeSceneName = initialScene?.name ?? null;
 
@@ -296,7 +296,7 @@ export class ProjectManager {
       'scenes',
       'actions',
       'animations',
-      'activeScene',
+      'activeSceneGuid',
       'zones',
       'controller',
     ]);
@@ -549,7 +549,7 @@ export class ProjectManager {
       'scenes',
       'actions',
       'animations',
-      'activeScene',
+      'activeSceneGuid',
       'zones',
       'controller',
     ]);
@@ -659,7 +659,11 @@ export class ProjectManager {
     }
     this.activeSceneName = sceneName;
     if (this.project && persistDurable) {
-      this.project.activeScene = sceneName;
+      if (scene.guid) {
+        this.project.activeSceneGuid = scene.guid;
+      } else {
+        delete this.project.activeSceneGuid;
+      }
       this._scheduleSave();
     }
     const intents = this.getActiveSceneIntents();
@@ -679,6 +683,11 @@ export class ProjectManager {
 
   getActiveSceneName(): string | null {
     return this.activeSceneName;
+  }
+
+  getActiveSceneGuid(): string | null {
+    if (!this.activeSceneName || !this.project?.scenes) return null;
+    return this.project.scenes.find(s => s.name === this.activeSceneName)?.guid ?? null;
   }
 
   getActiveSceneIntents(): ControllerIntent[] {
@@ -907,7 +916,7 @@ export class ProjectManager {
       scenes,
       actions,
       inputs,
-      activeSceneName: this.activeSceneName,
+      activeSceneGuid: this.getActiveSceneGuid(),
       ...passThrough,
     };
   }

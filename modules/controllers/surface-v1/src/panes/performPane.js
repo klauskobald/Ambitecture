@@ -64,6 +64,10 @@ export class PerformPane {
     } catch {
       this._quickHud = null
     }
+    this._overlay.setSingleTapIntentCallback(guid => {
+      if (this._subnavShell.activeSubpane !== 'animate') return
+      this._subnavShell.toggleIntentFilter(guid)
+    })
     this._render()
     this._subnavShell.syncSubpaneFromState()
     this._el.hidden = false
@@ -76,6 +80,7 @@ export class PerformPane {
     this._unsubscribe?.()
     this._unsubscribe = null
     this._overlay.setCoactivityCallback(null)
+    this._overlay.setSingleTapIntentCallback(null)
     if (this._quickHud) {
       this._quickHud.stop()
       this._quickHud = null

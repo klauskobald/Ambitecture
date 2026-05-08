@@ -48,6 +48,8 @@ export class OverlayCanvas {
     this._draggedFixtures = new Map()
     /** @type {((guid: string) => void) | null} */
     this._doubleTapIntentCallback = null
+    /** @type {((guid: string) => void) | null} */
+    this._singleTapIntentCallback = null
     /** @type {((detail: { clientX: number, clientY: number }) => void) | null} */
     this._doubleTapEmptyCallback = null
     /** @type {{ pointerId: number, downX: number, downY: number, downClientX: number, downClientY: number, intentGuid: string | null } | null} */
@@ -270,6 +272,14 @@ export class OverlayCanvas {
   }
 
   /**
+   * Single-tap (no drag) on an intent marker. Fires on pointer-up.
+   * @param {((guid: string) => void) | null} fn
+   */
+  setSingleTapIntentCallback (fn) {
+    this._singleTapIntentCallback = fn
+  }
+
+  /**
    * Second tap on empty canvas (no intent under first tap), same time/distance window as intent double-tap.
    * @param {((detail: { clientX: number, clientY: number }) => void) | null} fn
    */
@@ -460,6 +470,7 @@ export class OverlayCanvas {
         x - this._tapTracker.downX,
         y - this._tapTracker.downY
       )
+      const tappedIntent = this._tapTracker.intentGuid
       this._lastTap =
         dist < 10
           ? {
@@ -468,10 +479,18 @@ export class OverlayCanvas {
               t: performance.now(),
               clientX: this._tapTracker.downClientX,
               clientY: this._tapTracker.downClientY,
-              intentGuid: this._tapTracker.intentGuid
+              intentGuid: tappedIntent
             }
           : null
       this._tapTracker = null
+      if (
+        dist < 10 &&
+        tappedIntent &&
+        this._singleTapIntentCallback &&
+        !isIntentLocked(tappedIntent)
+      ) {
+        this._singleTapIntentCallback(tappedIntent)
+      }
     }
 
     const guid = this._draggedIntents.get(ev.pointerId)

@@ -15,12 +15,41 @@ import { getAnimatorViewer } from './animators/animatorViewerRegistry.js'
 import { createAnimationEditPane } from './performAnimateEditPane.js'
 
 /**
- * @returns {{ panel: HTMLDivElement }}
+ * @returns {{
+ *   panel: HTMLDivElement,
+ *   getIntentFilter: () => string | null,
+ *   setIntentFilter: (guid: string | null) => void,
+ *   subscribeFilter: (cb: (guid: string | null) => void) => () => void
+ * }}
  */
 export function createPerformAnimatePanel () {
   const panel = document.createElement('div')
   panel.className = 'perform-subpane perform-subpane--animate'
   panel.hidden = true
+
+  /** @type {string | null} */
+  let intentFilter = null
+  /** @type {Set<(guid: string | null) => void>} */
+  const filterListeners = new Set()
+
+  function getIntentFilter () {
+    return intentFilter
+  }
+
+  /** @param {string | null} guid */
+  function setIntentFilter (guid) {
+    const next = guid || null
+    if (next === intentFilter) return
+    intentFilter = next
+    for (const cb of filterListeners) cb(intentFilter)
+    render()
+  }
+
+  /** @param {(guid: string | null) => void} cb */
+  function subscribeFilter (cb) {
+    filterListeners.add(cb)
+    return () => filterListeners.delete(cb)
+  }
 
   // ── list view ────────────────────────────────────────────────────────────
 
@@ -51,7 +80,7 @@ export function createPerformAnimatePanel () {
   function listKey (anims) {
     return anims
       .map(a => `${a.guid}:${a.name}:${a.class}:${a.targetIntent ?? ''}`)
-      .join('|')
+      .join('|') + `#${intentFilter ?? ''}`
   }
 
   function syncRowPlayState (rowEl) {
@@ -81,7 +110,10 @@ export function createPerformAnimatePanel () {
   }
 
   function render () {
-    const anims = projectGraph.getPlayableAnimationsList()
+    const allAnims = projectGraph.getPlayableAnimationsList()
+    const anims = intentFilter
+      ? allAnims.filter(a => a.targetIntent === intentFilter)
+      : allAnims
     const key = listKey(anims)
     if (key === lastListKey) {
       syncAllRowPlayStates()
@@ -92,7 +124,9 @@ export function createPerformAnimatePanel () {
     if (anims.length === 0) {
       const empty = document.createElement('p')
       empty.className = 'perform-animate-empty'
-      empty.textContent = 'No animations in project.'
+      empty.textContent = intentFilter
+        ? `No animations targeting ${resolveIntentName(intentFilter)}.`
+        : 'No animations in project.'
       list.appendChild(empty)
       return
     }
@@ -224,7 +258,7 @@ export function createPerformAnimatePanel () {
   subscribeAnimationPlayState(syncAllRowPlayStates)
   render()
 
-  return { panel }
+  return { panel, getIntentFilter, setIntentFilter, subscribeFilter }
 }
 
 /** @param {string} guid */

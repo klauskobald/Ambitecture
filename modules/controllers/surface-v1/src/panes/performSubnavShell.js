@@ -3,6 +3,7 @@
  * Layout/CSS: `.perform-subnav`, `.perform-pane-shell`, `.perform-subpanes`.
  */
 
+import { projectGraph } from '../core/projectGraph.js'
 import { createPerformControlPanel } from './performControlPanel.js'
 import { createPerformAnimatePanel } from './performAnimatePanel.js'
 
@@ -25,6 +26,16 @@ export class PerformSubnavShell {
     this._subnavToggle.setAttribute('aria-expanded', 'false')
     this._subnavToggle.textContent = '☰'
 
+    this._filterChip = document.createElement('button')
+    this._filterChip.type = 'button'
+    this._filterChip.className = 'perform-subnav-filter'
+    this._filterChip.hidden = true
+    this._filterChip.setAttribute('aria-label', 'Clear intent filter')
+    this._filterChip.innerHTML =
+      '<svg class="perform-subnav-filter__icon" viewBox="0 0 16 16" aria-hidden="true">' +
+      '<path d="M2 3h12l-4.5 5.5V13l-3 1.5V8.5z" fill="currentColor"/>' +
+      '</svg>'
+
     const subnavFill = document.createElement('span')
     subnavFill.className = 'perform-subnav-fill'
     subnavFill.setAttribute('aria-hidden', 'true')
@@ -42,6 +53,7 @@ export class PerformSubnavShell {
     this._linkAnimate.textContent = 'Animate'
 
     this._subnav.appendChild(this._subnavToggle)
+    this._subnav.appendChild(this._filterChip)
     this._subnav.appendChild(subnavFill)
     this._subnav.appendChild(this._linkControl)
     this._subnav.appendChild(this._linkAnimate)
@@ -56,6 +68,16 @@ export class PerformSubnavShell {
     const animate = createPerformAnimatePanel()
     this._animatePanel = animate.panel
     this.animateMount = this._animatePanel
+    this._animate = animate
+
+    this._filterChip.addEventListener('click', () => {
+      animate.setIntentFilter(null)
+    })
+
+    animate.subscribeFilter(guid => this._renderFilterChip(guid))
+    projectGraph.subscribe(() => {
+      this._renderFilterChip(animate.getIntentFilter())
+    })
 
     this._subpanes.appendChild(this._controlPanel)
     this._subpanes.appendChild(this._animatePanel)
@@ -112,5 +134,35 @@ export class PerformSubnavShell {
   closeMobileNav () {
     this._subnav.classList.remove('perform-subnav--open')
     this._subnavToggle.setAttribute('aria-expanded', 'false')
+  }
+
+  /**
+   * Set or clear the animate-list intent filter. Tapping the same intent twice clears.
+   * @param {string | null} guid
+   */
+  toggleIntentFilter (guid) {
+    const next = guid && this._animate.getIntentFilter() === guid ? null : guid
+    this._animate.setIntentFilter(next)
+  }
+
+  /**
+   * @param {string | null} guid
+   */
+  _renderFilterChip (guid) {
+    if (!guid) {
+      this._filterChip.hidden = true
+      return
+    }
+    const intent = /** @type {Record<string, unknown> | undefined} */ (
+      projectGraph.getIntents().get(guid)
+    )
+    const name =
+      typeof intent?.name === 'string' && intent.name ? intent.name : guid
+    this._filterChip.setAttribute(
+      'aria-label',
+      `Clear intent filter (${name})`
+    )
+    this._filterChip.title = `Filtering by ${name} — tap to clear`
+    this._filterChip.hidden = false
   }
 }

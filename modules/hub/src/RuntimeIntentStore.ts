@@ -20,6 +20,7 @@ import { transformIntentToNormalized } from './intents';
 
 function applyRuntimePatch(base: Record<string, unknown>, update: RuntimeUpdate): Record<string, unknown> {
   const next = cloneRecord(update.value ?? base);
+  console.log('applyRuntimePatch', next, update);
   next['guid'] = update.guid;
   for (const [key, value] of Object.entries(update.patch ?? {})) {
     setAtDotPath(next, key, value);

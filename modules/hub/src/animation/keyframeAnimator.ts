@@ -485,7 +485,8 @@ export class KeyframeAnimator {
       return;
     }
 
-    mutateIntent(targetGuid, cloneRecord(stepArgs));
+    mutateIntent(targetGuid, (stepArgs));
+    //    mutateIntent(targetGuid, cloneRecord(stepArgs)); // Is cloning necessary here?
   }
 
   start(intentAccess: IntentAccessFn, mutateIntent: MutateIntentFn): void {
@@ -674,7 +675,8 @@ export class KeyframeAnimator {
               this.pushTimeoutAtFireWall(fireWallAbs, () => {
                 if (this.cancelled || !this.inScene) return;
                 if (Object.keys(patchRecord).length === 0) return;
-                mutateIntent(targetGuid, cloneRecord(patchRecord));
+                mutateIntent(targetGuid, (patchRecord));
+                //                mutateIntent(targetGuid, cloneRecord(patchRecord)); // Is cloning necessary here?
               });
             }
           });

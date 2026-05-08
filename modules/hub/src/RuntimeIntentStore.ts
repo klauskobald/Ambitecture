@@ -19,8 +19,9 @@ import { effectivePerformResetScene, intentToEvent } from './handlers/intentHelp
 import { transformIntentToNormalized } from './intents';
 
 function applyRuntimePatch(base: Record<string, unknown>, update: RuntimeUpdate): Record<string, unknown> {
-  const next = cloneRecord(update.value ?? base);
-  console.log('applyRuntimePatch', next, update);
+  //  const next = cloneRecord(update.value ?? base); // Is cloning necessary here?
+  const next = (update.value ?? base);
+  // console.log('applyRuntimePatch', next, update);
   next['guid'] = update.guid;
   for (const [key, value] of Object.entries(update.patch ?? {})) {
     setAtDotPath(next, key, value);

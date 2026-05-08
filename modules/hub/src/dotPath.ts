@@ -1,6 +1,7 @@
 export type DotPathRecord = Record<string, unknown>;
 
 export function cloneRecord(value: DotPathRecord): DotPathRecord {
+
   return JSON.parse(JSON.stringify(value)) as DotPathRecord;
 }
 

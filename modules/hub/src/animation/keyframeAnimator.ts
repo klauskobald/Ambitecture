@@ -146,6 +146,22 @@ export class KeyframeAnimator {
     ],
   };
 
+  private static getDefaultStepArgsForNewKeyframe(): Record<string, unknown> {
+    const stepsRaw = KeyframeAnimator.defaultValues['steps'];
+    if (!Array.isArray(stepsRaw) || stepsRaw.length === 0) {
+      return {};
+    }
+    const row = stepsRaw[0];
+    if (!row || typeof row !== 'object' || Array.isArray(row)) {
+      return {};
+    }
+    const args = (row as Record<string, unknown>)['args'];
+    if (args !== undefined && typeof args === 'object' && args !== null && !Array.isArray(args)) {
+      return cloneRecord(args as Record<string, unknown>);
+    }
+    return {};
+  }
+
   private timers: ReturnType<typeof setTimeout>[] = [];
   private cancelled = false;
   private inScene = true;
@@ -169,6 +185,9 @@ export class KeyframeAnimator {
   private editSteps: { time: number; args?: Record<string, unknown> }[] = [];
   private editSourceIndices: number[] = [];
   private editIndex = 0;
+  /** Set in {@link enterEditMode}; snapshot intent after each stepped keyframe for Add-delta. */
+  private editCommitIntentBaseline?: (targetGuid: string) => void;
+  private editGetIntentDeltaPatch?: (targetGuid: string) => Record<string, unknown>;
 
   constructor(
     private animationGuid: string,
@@ -244,6 +263,8 @@ export class KeyframeAnimator {
     intentAccess: IntentAccessFn;
     mutateIntent: MutateIntentFn;
     bindingManager: BindingManager;
+    commitEditIntentBaseline: (targetGuid: string) => void;
+    getEditIntentDeltaPatch: (targetGuid: string) => Record<string, unknown>;
   }): void {
     if (this.editActive) return;
 
@@ -270,6 +291,8 @@ export class KeyframeAnimator {
     this.editActive = true;
     this.editIntentAccess = deps.intentAccess;
     this.editMutateIntent = deps.mutateIntent;
+    this.editCommitIntentBaseline = deps.commitEditIntentBaseline;
+    this.editGetIntentDeltaPatch = deps.getEditIntentDeltaPatch;
     this.editBindingMgr = deps.bindingManager;
     this.editBindingKey = `${this.animationGuid}-editState`;
     this.editTargetGuid = targetGuid;
@@ -296,6 +319,8 @@ export class KeyframeAnimator {
     delete this.editBindingKey;
     delete this.editIntentAccess;
     delete this.editMutateIntent;
+    delete this.editCommitIntentBaseline;
+    delete this.editGetIntentDeltaPatch;
     delete this.editTargetGuid;
     this.editSteps = [];
     this.editSourceIndices = [];
@@ -348,12 +373,28 @@ export class KeyframeAnimator {
       return;
     }
     if (action === 'add') {
-      const incomingStep = this.parseIncomingEditStep(incoming['currentStepContent'], this.editSteps[this.editIndex]);
-      if (incomingStep) {
-        const sourceIndex = this.insertNewStep(incomingStep);
-        this.normalizeStoredStepsAndRefresh(sourceIndex);
-        this.callbacks.onDefinitionChanged?.();
-        this.emitCurrentEditStep();
+      const tg = this.editTargetGuid;
+      const getDelta = this.editGetIntentDeltaPatch;
+      if (!tg || !getDelta) {
+        Logger.warn('[keyframeAnimator] add ignored — edit delta provider missing');
+      } else {
+        let patch = getDelta(tg);
+        if (Object.keys(patch).length === 0) {
+          patch = KeyframeAnimator.getDefaultStepArgsForNewKeyframe();
+        }
+        const timeMs = this.computeNewKeyframeTimeMs(this.editIndex);
+        if (timeMs === null) {
+          Logger.warn('[keyframeAnimator] add ignored — invalid step index for time');
+        } else {
+          const incomingStep: { time: number; args?: Record<string, unknown> } = {
+            time: timeMs,
+            ...(Object.keys(patch).length > 0 ? { args: patch } : {}),
+          };
+          const sourceIndex = this.insertNewStep(incomingStep);
+          this.normalizeStoredStepsAndRefresh(sourceIndex);
+          this.callbacks.onDefinitionChanged?.();
+          this.emitCurrentEditStep();
+        }
       }
       if (this.editBindingMgr && this.editBindingKey) {
         this.editBindingMgr.receiveFromMaster(this.editBindingKey, this.computeEditState());
@@ -423,6 +464,20 @@ export class KeyframeAnimator {
     const step = this.editSteps[this.editIndex];
     if (!step) return;
     this.emitOneKeyframe(this.editTargetGuid, this.editIntentAccess, this.editMutateIntent, step.args);
+    if (this.editCommitIntentBaseline) {
+      this.editCommitIntentBaseline(this.editTargetGuid);
+    }
+  }
+
+  /** Nominal ms for a new keyframe: after last step → +1s; else midpoint between current and next. */
+  private computeNewKeyframeTimeMs(editIndex: number): number | null {
+    const cur = this.editSteps[editIndex];
+    if (!cur) return null;
+    const next = this.editSteps[editIndex + 1];
+    if (next === undefined) {
+      return cur.time + 1000;
+    }
+    return (cur.time + next.time) / 2;
   }
 
   private persistEditedStep(

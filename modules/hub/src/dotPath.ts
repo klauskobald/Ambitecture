@@ -132,3 +132,75 @@ export function applyDotPathPatch(
   }
   return next;
 }
+
+/** Root keys omitted from keyframe delta patches (identity / routing noise). */
+const DIFF_PATCH_SKIP_ROOT_KEYS = new Set(['guid', 'entityType']);
+
+function deepEqualLeaves(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (a === null || b === null) return a === b;
+  if (a === undefined || b === undefined) return a === b;
+  if (typeof a !== typeof b) return false;
+  if (typeof a !== 'object') return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) {
+    const aa = a as unknown[];
+    const bb = b as unknown[];
+    if (aa.length !== bb.length) return false;
+    for (let i = 0; i < aa.length; i++) {
+      if (!deepEqualLeaves(aa[i], bb[i])) return false;
+    }
+    return true;
+  }
+  const ao = a as Record<string, unknown>;
+  const bo = b as Record<string, unknown>;
+  const aKeys = Object.keys(ao);
+  const bKeys = Object.keys(bo);
+  if (aKeys.length !== bKeys.length) return false;
+  const bSet = new Set(bKeys);
+  for (const k of aKeys) {
+    if (!bSet.has(k)) return false;
+    if (!deepEqualLeaves(ao[k], bo[k])) return false;
+  }
+  return true;
+}
+
+function walkNextLeavesForDiff(
+  nextVal: unknown,
+  base: DotPathRecord,
+  prefix: string,
+  patch: DotPathRecord,
+): void {
+  if (nextVal === null || typeof nextVal !== 'object' || Array.isArray(nextVal)) {
+    if (prefix.length === 0) return;
+    const baseVal = readAtDotPath(base, prefix);
+    if (!deepEqualLeaves(baseVal, nextVal)) {
+      patch[prefix] = nextVal as unknown;
+    }
+    return;
+  }
+  const nextObj = nextVal as Record<string, unknown>;
+  const keys = Object.keys(nextObj);
+  if (keys.length === 0) {
+    if (prefix.length === 0) return;
+    const baseVal = readAtDotPath(base, prefix);
+    if (!deepEqualLeaves(baseVal, nextObj)) {
+      patch[prefix] = nextObj;
+    }
+    return;
+  }
+  for (const k of keys) {
+    if (prefix === '' && DIFF_PATCH_SKIP_ROOT_KEYS.has(k)) continue;
+    const childPrefix = prefix.length === 0 ? k : `${prefix}.${k}`;
+    walkNextLeavesForDiff(nextObj[k], base, childPrefix, patch);
+  }
+}
+
+/**
+ * Flat dot-path patch of leaf values in `next` that differ from `base` (same shape as runtime / keyframe `args`).
+ */
+export function diffRecordsToPatch(base: DotPathRecord, next: DotPathRecord): DotPathRecord {
+  const patch: DotPathRecord = {};
+  walkNextLeavesForDiff(next, base, '', patch);
+  return patch;
+}

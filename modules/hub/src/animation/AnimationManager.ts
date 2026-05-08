@@ -6,6 +6,7 @@ import { KeyframeAnimator, type MutateIntentFn } from './keyframeAnimator';
 import { Logger } from '../Logger';
 import type { RuntimeUpdate } from '../RuntimeProtocol';
 import type { BindingManager } from '../BindingManager';
+import { cloneRecord, diffRecordsToPatch } from '../dotPath';
 /**
  * Companion runner actions share the animation row's guid (`action:trigger` passes that guid).
  */
@@ -42,6 +43,14 @@ export class AnimationManager {
    * widen if/when another animator class implements its own edit lifecycle.
    */
   private edits = new Map<string, KeyframeAnimator>();
+  /**
+   * Baseline intent snapshot per animation in keyframe edit mode (authoritative stepped state).
+   * Manual runtime edits do not update this; {@link diffRecordsToPatch} vs effective intent builds new keyframe args on Add.
+   */
+  private editIntentBaselines = new Map<
+    string,
+    { targetGuid: string; baseline: Record<string, unknown> }
+  >();
   private onInternalStatus?: (guid: string, payload: AnimationStatusPayload) => void;
 
   constructor(
@@ -299,9 +308,41 @@ export class AnimationManager {
       intentAccess: g => this.intentAccessFn(g),
       mutateIntent,
       bindingManager: this.bindingManager,
+      commitEditIntentBaseline: (targetGuid: string) => {
+        this.commitEditIntentBaseline(animationGuid, targetGuid);
+      },
+      getEditIntentDeltaPatch: (targetGuid: string) =>
+        this.getEditIntentDeltaPatch(animationGuid, targetGuid),
     });
 
     this.edits.set(animationGuid, plugin);
+  }
+
+  private commitEditIntentBaseline(animationGuid: string, targetGuid: string): void {
+    const eff = this.intentAccessFn(targetGuid);
+    if (!eff) {
+      Logger.warn(`[animation] commitEditIntentBaseline skipped — no intent for ${targetGuid}`);
+      return;
+    }
+    this.editIntentBaselines.set(animationGuid, {
+      targetGuid,
+      baseline: cloneRecord(eff as unknown as Record<string, unknown>),
+    });
+  }
+
+  private getEditIntentDeltaPatch(animationGuid: string, targetGuid: string): Record<string, unknown> {
+    const entry = this.editIntentBaselines.get(animationGuid);
+    if (!entry || entry.targetGuid !== targetGuid) {
+      return {};
+    }
+    const current = this.intentAccessFn(targetGuid);
+    if (!current) {
+      return {};
+    }
+    return diffRecordsToPatch(
+      entry.baseline,
+      current as unknown as Record<string, unknown>,
+    );
   }
 
   /** Exit edit mode for `animationGuid`. The animator unregisters its own bindings. */
@@ -310,6 +351,7 @@ export class AnimationManager {
     if (!plugin) return;
     plugin.exitEditMode();
     this.edits.delete(animationGuid);
+    this.editIntentBaselines.delete(animationGuid);
   }
 
   /**

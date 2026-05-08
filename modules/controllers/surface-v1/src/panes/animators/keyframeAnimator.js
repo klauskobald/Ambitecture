@@ -89,10 +89,9 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
       addBtn.textContent = 'Add'
       addBtn.disabled = total <= 0
       addBtn.addEventListener('click', () => {
-        const base = state?.currentStepContent
-        void openStepContentEditor(state, bindingKey, {
-          initialStep: base,
-          mode: 'add'
+        sendBindingSet(bindingKey, {
+          currentStepIndex: idx,
+          editAction: 'add'
         })
       })
 

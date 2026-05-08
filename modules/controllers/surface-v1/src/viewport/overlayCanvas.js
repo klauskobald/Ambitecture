@@ -1,4 +1,4 @@
-import { intentName, intentRadius } from '../core/stores.js'
+import { intentLayer, intentName, intentRadius } from '../core/stores.js'
 import { projectGraph } from '../core/projectGraph.js'
 import {
   worldToCanvas,
@@ -16,6 +16,31 @@ import { isIntentLocked } from '../core/intentLockRegistry.js'
  */
 
 const DRAG_HIT_RADIUS_PX = 28
+
+/**
+ * Resolve every intent guid to its effective intent and return them sorted by
+ * `layer` ascending (NaN/missing → 0). Higher-layer intents end up last so
+ * canvas painting order naturally stacks them on top.
+ *
+ * @param {Map<string, unknown>} intents
+ * @returns {{ guid: string, intent: Record<string, unknown> }[]}
+ */
+function sortedByLayerAsc (intents) {
+  /** @type {{ guid: string, intent: Record<string, unknown>, layer: number }[]} */
+  const rows = []
+  for (const [guid, sharedIntent] of intents) {
+    const intent = projectGraph.getEffectiveIntent(guid) ?? sharedIntent
+    if (!intent || typeof intent !== 'object' || Array.isArray(intent)) continue
+    const layerNum = intentLayer(intent)
+    rows.push({
+      guid,
+      intent: /** @type {Record<string, unknown>} */ (intent),
+      layer: Number.isFinite(layerNum) ? layerNum : 0
+    })
+  }
+  rows.sort((a, b) => a.layer - b.layer)
+  return rows.map(r => ({ guid: r.guid, intent: r.intent }))
+}
 
 export class OverlayCanvas {
   /**
@@ -173,10 +198,10 @@ export class OverlayCanvas {
         }
       }
 
-      // intent radius circles
-      for (const [guid, sharedIntent] of projectGraph.getIntents()) {
+      // intent radius circles — paint lower layers first so higher layers stack on top
+      const sortedIntents = sortedByLayerAsc(projectGraph.getIntents())
+      for (const { guid, intent } of sortedIntents) {
         if (isIntentLocked(guid)) continue
-        const intent = projectGraph.getEffectiveIntent(guid) ?? sharedIntent
         if (!this._policy.isIntentVisible(intent)) continue
         const i = /** @type {Record<string, unknown>} */ (intent)
         const pos = /** @type {number[] | undefined} */ (i.position)
@@ -203,11 +228,10 @@ export class OverlayCanvas {
         ctx.restore()
       }
 
-      // out-of-zone intent markers
+      // out-of-zone intent markers — same layer ordering as the radius circles above
       const zoneBoxes = projectGraph.getZoneBoxes()
-      for (const [guid, sharedIntent] of projectGraph.getIntents()) {
+      for (const { guid, intent } of sortedIntents) {
         if (isIntentLocked(guid)) continue
-        const intent = projectGraph.getEffectiveIntent(guid) ?? sharedIntent
         if (!this._policy.isIntentVisible(intent)) continue
         const i = /** @type {Record<string, unknown>} */ (intent)
         const pos = /** @type {number[] | undefined} */ (i.position)

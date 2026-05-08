@@ -115,7 +115,12 @@ class CanvasRenderer {
 
   setIntentLayers (intentsByLayer) {
     this._events = new Map()
-    for (const [guid, intent] of intentsByLayer) {
+    // Insert in ascending layer order so that map iteration during draw()
+    // paints higher-layer events last (on top of lower-layer events).
+    const sorted = [...intentsByLayer.entries()].sort(
+      ([, a], [, b]) => (a.layer ?? 0) - (b.layer ?? 0)
+    )
+    for (const [guid, intent] of sorted) {
       const EventClass = EventBase.getClass(intent.intentType)
       if (!EventClass) continue
       this._events.set(guid, new EventClass(intent, this._eventDrawConfig))

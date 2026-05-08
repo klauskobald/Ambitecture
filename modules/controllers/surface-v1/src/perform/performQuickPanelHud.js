@@ -4,6 +4,7 @@ import { worldToCanvas } from '../viewport/spatialMath.js'
 import { resolveDescriptorsForClass } from '../core/systemCapabilities.js'
 import { queueIntentUpdate } from '../core/outboundQueue.js'
 import { ScalarRadialKnobSvg } from '../edit/components/ScalarRadialKnobSvg.js'
+import { intentLayer } from '../core/stores.js'
 
 /** World height (meters, XZ) of the nominal pivot marker — not intent spread radius. Scales with map zoom. */
 export const PERFORM_HUD_ICON_WORLD_METERS = 0.28
@@ -259,6 +260,9 @@ export class PerformQuickPanelHud {
       pane.root.style.top = `${Math.round(Math.max(8, ly))}px`
       pane.root.style.pointerEvents = 'auto'
       pane.root.style.transform = 'translate(-50%, -100%)'
+      // Higher-layer intents stack on top of lower ones (NaN/missing → 0).
+      const layerNum = intentLayer(intent)
+      pane.root.style.zIndex = String(Number.isFinite(layerNum) ? layerNum : 0)
     }
   }
 }

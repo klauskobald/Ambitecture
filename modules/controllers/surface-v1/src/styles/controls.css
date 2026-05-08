@@ -617,16 +617,26 @@
 .perform-animate-edit__name {
   flex: 1 1 0;
   min-width: 0;
-  background: var(--color-bg-raised);
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
+  background: transparent;
+  border: 0;
   color: var(--color-text);
   font-size: 0.8rem;
   font-family: inherit;
   font-weight: 600;
-  padding: 0.2rem 0.4rem;
+  text-align: left;
+  padding: 0;
   height: 1.8rem;
   box-sizing: border-box;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.perform-animate-edit__name:hover,
+.perform-animate-edit__name:focus-visible {
+  color: var(--color-accent);
+  outline: none;
 }
 
 .perform-animate-edit__intent {

@@ -5,11 +5,12 @@ import { readAtDotPath } from '../core/dotPath.js'
 import { getAnimatorViewer } from './animators/animatorViewerRegistry.js'
 import { ScalarRadialKnobSvg } from '../edit/components/ScalarRadialKnobSvg.js'
 import { SelectPopup } from '../edit/components/selectPopup.js'
+import * as Modal from '../core/Modal.js'
 
 /**
  * Edit pane for a single animation record.
  * Positioned absolute over the full pane-host (covers subnav).
- * Top row: back button | name input | target intent.
+ * Top row: back button | name label | target intent.
  * Body: content fields from systemCapabilities display.
  *
  * @param {{ onClose: () => void }} opts
@@ -34,16 +35,16 @@ export function createAnimationEditPane ({ onClose }) {
     onClose()
   })
 
-  const nameInput = document.createElement('input')
-  nameInput.type = 'text'
-  nameInput.className = 'perform-animate-edit__name'
-  nameInput.placeholder = 'Name'
+  const nameLabel = document.createElement('button')
+  nameLabel.type = 'button'
+  nameLabel.className = 'perform-animate-edit__name'
+  nameLabel.title = 'Edit animation name'
 
   const intentSpan = document.createElement('span')
   intentSpan.className = 'perform-animate-edit__intent'
 
   topRow.appendChild(backBtn)
-  topRow.appendChild(nameInput)
+  topRow.appendChild(nameLabel)
   topRow.appendChild(intentSpan)
 
   // ── body: content fields ───────────────────────────────────────────────────
@@ -61,9 +62,19 @@ export function createAnimationEditPane ({ onClose }) {
   function open (record) {
     currentGuid = String(record.guid ?? '')
 
-    nameInput.value = String(record.name ?? '')
-    nameInput.onchange = () =>
-      sendAnimationPatch(currentGuid, { name: nameInput.value })
+    nameLabel.textContent = String(record.name ?? '')
+    nameLabel.onclick = async () => {
+      const current = String(record.name ?? '')
+      const result = await Modal.prompt(
+        'Edit animation name',
+        [{ label: 'Name', key: 'name', value: current }]
+      )
+      if (result === null) return
+      const nextName = result.name ?? ''
+      nameLabel.textContent = nextName
+      sendAnimationPatch(currentGuid, { name: nextName })
+      record.name = nextName
+    }
 
     const intentGuid = String(record.targetIntent ?? record.intent ?? '')
     intentSpan.textContent = resolveIntentName(intentGuid)

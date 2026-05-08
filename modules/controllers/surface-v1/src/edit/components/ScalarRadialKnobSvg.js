@@ -8,8 +8,11 @@ import {
   inverse as fnInverse
 } from '../controls/fnCurve.js'
 
-/** Pixels of combined (↑ + →) pointer travel for normalized t to sweep 0→1. */
+/** Pixels of combined weighted (↑ + →) pointer travel for normalized t to sweep 0→1. */
 const SCRUB_PIXELS_PER_FULL_RANGE = 350
+const SCRUB_X_FACTOR = 0.1
+const SCRUB_X_LOCK_Y_PIXELS = 20
+const SCRUB_X_ACTIVATE_PIXELS = 20
 
 const DOUBLE_TAP_MS = 300
 const DOUBLE_TAP_DIST_PX = 40
@@ -107,6 +110,10 @@ export class ScalarRadialKnobSvg {
     this._downClientY = 0
     /** @type {boolean} */
     this._scrubMoved = false
+    /** @type {boolean} */
+    this._xScrubActive = false
+    /** @type {boolean} */
+    this._yScrubActive = false
 
     const range = /** @type {number[] | undefined} */ (this._descriptor.range)
     this._domainMin = range?.[0] ?? 0
@@ -579,6 +586,8 @@ export class ScalarRadialKnobSvg {
     this._downClientX = e.clientX
     this._downClientY = e.clientY
     this._scrubMoved = false
+    this._xScrubActive = false
+    this._yScrubActive = false
     this._dragPointerId = e.pointerId
     this._dragStartClientX = e.clientX
     this._dragStartClientY = e.clientY
@@ -599,7 +608,39 @@ export class ScalarRadialKnobSvg {
     if (slide <= 0) return
     const dx = e.clientX - this._dragStartClientX
     const dy = e.clientY - this._dragStartClientY
-    const increase = dx - dy
+    const wasXScrubActive = this._xScrubActive
+    const wasYScrubActive = this._yScrubActive
+    const xEscaped = Math.abs(dx) > SCRUB_X_ACTIVATE_PIXELS
+    const yEscaped = Math.abs(dy) > SCRUB_X_LOCK_Y_PIXELS
+    if (xEscaped && !yEscaped) {
+      this._xScrubActive = true
+      this._yScrubActive = false
+    } else if (yEscaped && !xEscaped) {
+      this._yScrubActive = true
+      this._xScrubActive = false
+    } else if (xEscaped && yEscaped) {
+      if (Math.abs(dx) >= Math.abs(dy)) {
+        this._xScrubActive = true
+        this._yScrubActive = false
+      } else {
+        this._yScrubActive = true
+        this._xScrubActive = false
+      }
+    }
+    const scrubModeChanged =
+      this._xScrubActive !== wasXScrubActive ||
+      this._yScrubActive !== wasYScrubActive
+    if (scrubModeChanged) {
+      this._dragStartClientX = e.clientX
+      this._dragStartClientY = e.clientY
+      this._dragStartT = this._t
+      e.preventDefault()
+      return
+    }
+    const weightedDx = dx * SCRUB_X_FACTOR
+    const effectiveDx = this._yScrubActive ? 0 : weightedDx
+    const effectiveDy = this._xScrubActive ? 0 : dy
+    const increase = effectiveDx - effectiveDy
     if (Math.abs(increase) > SCRUB_MOVE_THRESHOLD_PX) this._scrubMoved = true
     let nt = this._dragStartT + increase / slide
     nt = Math.max(0, Math.min(1, nt))
@@ -622,6 +663,8 @@ export class ScalarRadialKnobSvg {
       /* ignore */
     }
     this._setDialEngaged(false)
+    this._xScrubActive = false
+    this._yScrubActive = false
     const tapDist = Math.hypot(
       e.clientX - this._downClientX,
       e.clientY - this._downClientY
@@ -648,6 +691,8 @@ export class ScalarRadialKnobSvg {
       /* ignore */
     }
     this._setDialEngaged(false)
+    this._xScrubActive = false
+    this._yScrubActive = false
     this._lastTap = null
     e.preventDefault()
   }
@@ -660,6 +705,8 @@ export class ScalarRadialKnobSvg {
     if (!this._dial || this._dragPointerId !== e.pointerId) return
     this._dragPointerId = null
     this._setDialEngaged(false)
+    this._xScrubActive = false
+    this._yScrubActive = false
     this._lastTap = null
   }
 

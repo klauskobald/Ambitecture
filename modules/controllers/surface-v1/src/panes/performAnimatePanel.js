@@ -81,9 +81,11 @@ export function createPerformAnimatePanel () {
   let lastListKey = ''
 
   function listKey (anims) {
-    return anims
-      .map(a => `${a.guid}:${a.name}:${a.class}:${a.targetIntent ?? ''}`)
-      .join('|') + `#${intentFilter ?? ''}`
+    return (
+      anims
+        .map(a => `${a.guid}:${a.name}:${a.class}:${a.targetIntent ?? ''}`)
+        .join('|') + `#${intentFilter ?? ''}`
+    )
   }
 
   function syncRowPlayState (rowEl) {
@@ -94,6 +96,7 @@ export function createPerformAnimatePanel () {
     const toggle = rowEl.querySelector('.perform-animate-toggle')
     if (!toggle) return
     const playing = isAnimationPlaying(guid)
+    rowEl.classList.toggle('perform-animate-row--playing', playing)
     const name =
       rowEl.querySelector('.perform-animate-row__name')?.textContent ?? guid
     toggle.classList.toggle('perform-animate-toggle--stop', playing)
@@ -198,6 +201,7 @@ export function createPerformAnimatePanel () {
 
     function syncToggle () {
       const playing = isAnimationPlaying(row.guid)
+      el.classList.toggle('perform-animate-row--playing', playing)
       toggle.classList.toggle('perform-animate-toggle--stop', playing)
       toggle.classList.toggle('perform-animate-toggle--play', !playing)
       toggle.setAttribute(
@@ -244,9 +248,10 @@ export function createPerformAnimatePanel () {
     const knob = new ScalarRadialKnobSvg({
       descriptor: {
         name: 'Speed',
-        range: [0.25, 4],
+        range: [0.125, 16],
         step: 0.01,
-        defaultValue: 1
+        defaultValue: 1,
+        stepFunction: 'quadratic'
       },
       intentGuid: guid,
       readValue: () => currentSpeed,
@@ -282,7 +287,8 @@ export function createPerformAnimatePanel () {
     const animationCaps = Array.isArray(caps?.animations) ? caps.animations : []
     const options = animationCaps
       .map(item => {
-        if (!item || typeof item !== 'object' || Array.isArray(item)) return null
+        if (!item || typeof item !== 'object' || Array.isArray(item))
+          return null
         const row = /** @type {Record<string, unknown>} */ (item)
         const cls = typeof row.class === 'string' ? row.class : ''
         if (!cls) return null

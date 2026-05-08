@@ -198,6 +198,12 @@ textarea.modal-input.input-assign-modal__json {
   padding: calc(0.35rem * var(--modal-scale) + 0.2rem) calc(0.6rem * var(--modal-scale) + 0.25rem);
 }
 
+.modal-choice-list__btn--selected {
+  border-color: var(--color-accent);
+  background: var(--color-accent-dim);
+  color: var(--color-text);
+}
+
 /* ── Perform button sort (Edit pane modal) ─────────────────── */
 
 .perform-sort-list {

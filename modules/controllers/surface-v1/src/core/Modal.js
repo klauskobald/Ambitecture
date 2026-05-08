@@ -201,7 +201,7 @@ function _buildAlert (text) {
  * Stacked action buttons + cancel — domain-agnostic; caller supplies labels and `value` per option.
  * @param {string} message
  * @param {Array<{ value: string, label: string, disabled?: boolean, title?: string }>} options
- * @param {{ cancel?: string }} [opts]
+ * @param {{ cancel?: string, selected?: string | null }} [opts]
  * @returns {HTMLElement}
  */
 function _buildChoiceListModal (message, options, opts) {
@@ -216,8 +216,15 @@ function _buildChoiceListModal (message, options, opts) {
     card.appendChild(p)
   }
 
+  const selectedValue =
+    opts?.selected === null || opts?.selected === undefined
+      ? null
+      : String(opts.selected)
+
   const list = document.createElement('div')
   list.className = 'modal-choice-list'
+  /** @type {HTMLButtonElement | null} */
+  let selectedBtn = null
   for (const c of options) {
     const btn = document.createElement('button')
     btn.type = 'button'
@@ -225,6 +232,11 @@ function _buildChoiceListModal (message, options, opts) {
     btn.textContent = c.label
     btn.disabled = !!c.disabled
     if (c.title) btn.title = c.title
+    if (selectedValue !== null && c.value === selectedValue) {
+      btn.classList.add('modal-choice-list__btn--selected')
+      btn.setAttribute('aria-pressed', 'true')
+      if (!btn.disabled) selectedBtn = btn
+    }
     btn.addEventListener('click', () => {
       if (btn.disabled) return
       _dismiss(c.value)
@@ -243,6 +255,10 @@ function _buildChoiceListModal (message, options, opts) {
   card.appendChild(actions)
 
   requestAnimationFrame(() => {
+    if (selectedBtn) {
+      selectedBtn.focus()
+      return
+    }
     const el = list.querySelector('button:not([disabled])')
     if (el instanceof HTMLElement) el.focus()
     else cancelBtn.focus()
@@ -323,9 +339,10 @@ export function prompt (text, fields, buttons, callback) {
 /**
  * Modal with a short message, a vertical list of choices, and Cancel.
  * Returns the chosen option’s `value`, or `null` if the user cancels (Cancel or overlay click).
+ * Pass `selected` to highlight (and focus) the currently chosen option.
  * @param {string} message
  * @param {Array<{ value: string, label: string, disabled?: boolean, title?: string }>} options
- * @param {{ cancel?: string, callback?: (choice: string | null) => void }} [opts]
+ * @param {{ cancel?: string, selected?: string | null, callback?: (choice: string | null) => void }} [opts]
  * @returns {Promise<string | null>}
  */
 export function pickChoice (message, options, opts) {

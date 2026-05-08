@@ -69,8 +69,13 @@ export class SelectPopup {
     sync()
 
     btn.addEventListener('click', async () => {
+      const currentStr =
+        this._value === null || this._value === undefined
+          ? null
+          : String(this._value)
       const choice = await pickChoice('', this._options, {
-        cancel: 'Cancel'
+        cancel: 'Cancel',
+        selected: currentStr
       })
       if (choice === null) return
 

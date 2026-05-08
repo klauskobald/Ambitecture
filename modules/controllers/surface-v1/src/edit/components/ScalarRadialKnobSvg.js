@@ -9,7 +9,7 @@ import {
 } from '../controls/fnCurve.js'
 
 /** Pixels of combined (↑ + →) pointer travel for normalized t to sweep 0→1. */
-const SCRUB_PIXELS_PER_FULL_RANGE = 120
+const SCRUB_PIXELS_PER_FULL_RANGE = 350
 
 const DOUBLE_TAP_MS = 300
 const DOUBLE_TAP_DIST_PX = 40
@@ -410,8 +410,7 @@ export class ScalarRadialKnobSvg {
     const noRoomAbove = top < topBound
     if (noRoomAbove) {
       top = topBound
-      left =
-        fingerX > centerX ? fingerX - g - scaledW : fingerX + g
+      left = fingerX > centerX ? fingerX - g - scaledW : fingerX + g
     }
 
     if (top + scaledH > bottomBound) top = bottomBound - scaledH

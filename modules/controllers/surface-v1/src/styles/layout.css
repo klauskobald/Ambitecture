@@ -62,7 +62,7 @@ body.nav-open .app-nav .nav-link {
 }
 
 /* Desktop: nav always visible as a horizontal strip */
-@media (min-width: 400px) {
+@media (min-width: 300px) {
   .nav-toggle {
     display: none;
   }
@@ -107,7 +107,7 @@ body.nav-open .app-nav .nav-link {
   pointer-events: none;
 }
 
-@media (min-width: 400px) {
+@media (min-width: 300px) {
   .perform-subnav {
     flex-wrap: nowrap;
     flex-direction: row;

@@ -23,7 +23,7 @@
   background: var(--color-accent-dim);
 }
 
-@media (min-width: 400px) {
+@media (min-width: 300px) {
   .nav-link {
     border-left: none;
     border-bottom: 3px solid transparent;
@@ -825,6 +825,10 @@
   cursor: grabbing;
 }
 
+.quick-panel-knob--engaged .quick-panel-knob__caption {
+  display: none;
+}
+
 .quick-panel-knob__caption {
   font-size: 0.755rem;
   max-width: 3.8rem;
@@ -919,7 +923,7 @@
   box-shadow: 0 0 0 2px var(--color-accent);
 }
 
-@media (max-width: 400px) {
+@media (max-width: 300px) {
   .scenes-layout {
     grid-template-columns: 1fr;
   }

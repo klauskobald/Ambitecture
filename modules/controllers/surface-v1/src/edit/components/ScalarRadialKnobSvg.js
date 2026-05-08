@@ -25,6 +25,9 @@ export const RADIAL_KNOB_VIEW_MARGIN_PX = 10
 /** Step when reducing scale so the enlarged dial fits on screen. */
 export const RADIAL_KNOB_SCALE_SHRINK_STEP = 0.04
 
+/** Finger clearance for engaged knob (same px below/right/left of touch target). */
+const ENGAGE_FINGER_GAP_PX = 14
+
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
 /**
@@ -304,8 +307,6 @@ export class ScalarRadialKnobSvg {
       return
     }
     if (!root || !this._dial) return
-    // Capture viewport-relative position before moving to portal.
-    const rect = root.getBoundingClientRect()
     this._dialEngaged = true
     // Record DOM location so we can reattach on disengage.
     this._portalParent = root.parentNode
@@ -314,8 +315,6 @@ export class ScalarRadialKnobSvg {
     document.body.appendChild(root)
     root.classList.add('quick-panel-knob--engaged')
     root.style.position = 'fixed'
-    root.style.top = `${rect.top}px`
-    root.style.left = `${rect.left}px`
     root.style.transformOrigin = 'top left'
     root.style.zIndex = '9999'
     window.addEventListener('resize', this._boundResizeRelayout)
@@ -328,9 +327,9 @@ export class ScalarRadialKnobSvg {
   }
 
   /**
-   * Fits the fixed-positioned knob inside the visual viewport.
-   * With position:fixed + transform-origin:top left, top/left drive placement
-   * and scale(s) drives size — no iterative getBoundingClientRect loop needed.
+   * Scaled knob centered above the tap; if it would clip the top edge, pin to topBound and
+   * shift horizontally (left/right of finger by screen half) so it clears the thumb.
+   * transform-origin top-left; top/left are pre-scale layout coords.
    */
   _ensureEngagedDialOnScreen () {
     if (!this._dialEngaged || !this._root) return
@@ -360,13 +359,27 @@ export class ScalarRadialKnobSvg {
 
     const scaledW = naturalW * s
     const scaledH = naturalH * s
-    let top = parseFloat(root.style.top) || 0
-    let left = parseFloat(root.style.left) || 0
 
-    if (left + scaledW > rightBound) left = rightBound - scaledW
+    const fingerX = this._downClientX
+    const fingerY = this._downClientY
+    const centerX = vx + vw * 0.5
+    const g = ENGAGE_FINGER_GAP_PX
+
+    let top = fingerY - scaledH - g
+    let left = fingerX - scaledW * 0.5
+
+    const noRoomAbove = top < topBound
+    if (noRoomAbove) {
+      top = topBound
+      left =
+        fingerX > centerX ? fingerX - g - scaledW : fingerX + g
+    }
+
     if (top + scaledH > bottomBound) top = bottomBound - scaledH
-    if (left < leftBound) left = leftBound
     if (top < topBound) top = topBound
+
+    if (left < leftBound) left = leftBound
+    if (left + scaledW > rightBound) left = rightBound - scaledW
 
     root.style.top = `${top}px`
     root.style.left = `${left}px`

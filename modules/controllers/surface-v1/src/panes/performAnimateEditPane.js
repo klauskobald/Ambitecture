@@ -4,12 +4,13 @@ import { sendGraphCommand } from '../core/outboundQueue.js'
 import { readAtDotPath } from '../core/dotPath.js'
 import { getAnimatorViewer } from './animators/animatorViewerRegistry.js'
 import { ScalarRadialKnobSvg } from '../edit/components/ScalarRadialKnobSvg.js'
+import { SelectPopup } from '../edit/components/selectPopup.js'
 
 /**
  * Edit pane for a single animation record.
  * Positioned absolute over the full pane-host (covers subnav).
  * Top row: back button | name input | target intent.
- * Body: class switcher (if > 1 class) + content fields from systemCapabilities display.
+ * Body: content fields from systemCapabilities display.
  *
  * @param {{ onClose: () => void }} opts
  * @returns {{ el: HTMLElement, open: (record: Record<string, unknown>) => void }}
@@ -45,7 +46,7 @@ export function createAnimationEditPane ({ onClose }) {
   topRow.appendChild(nameInput)
   topRow.appendChild(intentSpan)
 
-  // ── body: class switcher + content fields ──────────────────────────────────
+  // ── body: content fields ───────────────────────────────────────────────────
 
   const body = document.createElement('div')
   body.className = 'perform-animate-edit__body'
@@ -79,85 +80,47 @@ export function createAnimationEditPane ({ onClose }) {
     const viewer = getAnimatorViewer(cls)
     const caps = getCapabilities()
 
-    // class switcher — only when hub advertises ≥ 2 classes
-    const animClasses = getAnimationClasses(caps)
-    if (animClasses.length >= 2) {
-      body.appendChild(
-        makeFieldRow(
-          'Class',
-          null,
-          makeClassSelect(cls, animClasses, newClass => {
-            const warn = viewer?.shouldWarnOnClassSwitch(record) ?? false
-            if (
-              warn &&
-              !confirm(
-                `Switching to "${newClass}" will clear this animation's content. Continue?`
-              )
-            )
-              return
-            sendAnimationPatch(guid, { class: newClass, content: {} })
-            const fresh = projectGraph.getAnimations().get(guid)
-            if (fresh) renderBody(fresh)
-          }),
-          'full'
-        )
-      )
-    }
-
     // content fields from systemCapabilities.animations[class].display
     const display = getClassDisplayMap(caps, cls)
-    if (display) {
-      for (const [dotKey, displayConfig] of Object.entries(display)) {
-        const value = readAtDotPath(
-          /** @type {Record<string, unknown>} */ (record),
-          dotKey
-        )
-        const descriptor = viewer?.getFieldDescriptor(dotKey) ?? null
-        const label = descriptor?.name ?? dotKeyToLabel(dotKey)
-        const hint = descriptor?.hint ?? null
+    if (!display) return
 
-        const customEl =
-          viewer?.renderField(dotKey, value, newValue => {
+    for (const [dotKey, displayConfig] of Object.entries(display)) {
+      const value = readAtDotPath(
+        /** @type {Record<string, unknown>} */ (record),
+        dotKey
+      )
+      const descriptor = viewer?.getFieldDescriptor(dotKey) ?? null
+      const label = descriptor?.name ?? dotKeyToLabel(dotKey)
+      const hint = descriptor?.hint ?? null
+
+      const customEl =
+        viewer?.renderField(dotKey, value, newValue => {
+          sendAnimationPatch(guid, { [dotKey]: newValue })
+        }) ?? null
+
+      const widgetType =
+        displayConfig && typeof displayConfig === 'object'
+          ? String(
+              /** @type {Record<string, unknown>} */ (displayConfig).type ?? ''
+            )
+          : ''
+
+      const widget =
+        customEl ??
+        makeGenericWidget(
+          widgetType,
+          value,
+          descriptor,
+          guid,
+          dotKey,
+          label,
+          hint,
+          newValue => {
             sendAnimationPatch(guid, { [dotKey]: newValue })
-          }) ?? null
-
-        const widgetType =
-          displayConfig && typeof displayConfig === 'object'
-            ? String(
-                /** @type {Record<string, unknown>} */ (displayConfig).type ??
-                  ''
-              )
-            : ''
-        const layout =
-          widgetType === 'slider'
-            ? 'knobrow'
-            : layoutForField(widgetType, customEl)
-
-        if (customEl) {
-          body.appendChild(makeFieldRow(label, hint, customEl, layout))
-          continue
-        }
-
-        body.appendChild(
-          makeFieldRow(
-            label,
-            widgetType === 'slider' ? null : hint,
-            makeGenericWidget(
-              widgetType,
-              value,
-              descriptor,
-              guid,
-              dotKey,
-              label,
-              hint,
-              newValue => {
-                sendAnimationPatch(guid, { [dotKey]: newValue })
-              }
-            ),
-            layout
-          )
+          }
         )
-      }
+
+      body.appendChild(makeFieldRow(label, hint, widget))
     }
   }
 
@@ -185,30 +148,13 @@ function sendAnimationPatch (guid, patch) {
 }
 
 /**
- * @param {string} widgetType
- * @param {HTMLElement | null} customEl
- * @returns {'full' | 'tile'}
- */
-function layoutForField (widgetType, customEl) {
-  if (customEl) return 'full'
-  if (widgetType === 'select' || widgetType === 'dropdown') return 'full'
-  return 'tile'
-}
-
-/**
  * @param {string} label
  * @param {string | null} hint
  * @param {HTMLElement} widget
- * @param {'full' | 'tile' | 'knobrow'} [layout]
  */
-function makeFieldRow (label, hint, widget, layout = 'full') {
+function makeFieldRow (label, hint, widget) {
   const row = document.createElement('div')
-  row.className =
-    layout === 'knobrow'
-      ? 'perform-animate-field perform-animate-field--knobrow'
-      : layout === 'tile'
-        ? 'perform-animate-field perform-animate-field--tile'
-        : 'perform-animate-field perform-animate-field--full'
+  row.className = 'perform-animate-field perform-animate-field--paramrow'
 
   const labelEl = document.createElement('div')
   labelEl.className = 'perform-animate-field__label'
@@ -228,43 +174,6 @@ function makeFieldRow (label, hint, widget, layout = 'full') {
   row.appendChild(labelEl)
   row.appendChild(widget)
   return row
-}
-
-/** @param {unknown} initialValue @param {(v: string) => void} onCommit */
-function makeTextInput (initialValue, onCommit) {
-  const input = document.createElement('input')
-  input.type = 'text'
-  input.className = 'perform-animate-field__input'
-  input.value = typeof initialValue === 'string' ? initialValue : ''
-  input.addEventListener('change', () => onCommit(input.value))
-  return input
-}
-
-/** @param {string} text */
-function makeReadOnly (text) {
-  const span = document.createElement('span')
-  span.className = 'perform-animate-field__readonly'
-  span.textContent = text || '—'
-  return span
-}
-
-/**
- * @param {string} current
- * @param {Array<{ cls: string, name: string }>} classes
- * @param {(cls: string) => void} onChange
- */
-function makeClassSelect (current, classes, onChange) {
-  const select = document.createElement('select')
-  select.className = 'perform-animate-field__select'
-  for (const { cls, name } of classes) {
-    const opt = document.createElement('option')
-    opt.value = cls
-    opt.textContent = name
-    if (cls === current) opt.selected = true
-    select.appendChild(opt)
-  }
-  select.addEventListener('change', () => onChange(select.value))
-  return select
 }
 
 /**
@@ -306,18 +215,17 @@ function makeGenericWidget (
       if (Array.isArray(ref)) options = /** @type {string[]} */ (ref)
     }
     const list = options ?? []
-    const select = document.createElement('select')
-    select.className = 'perform-animate-field__select'
     const effectiveValue = value ?? descriptor?.default ?? null
-    for (const opt of list) {
-      const o = document.createElement('option')
-      o.value = String(opt)
-      o.textContent = String(opt)
-      if (opt === effectiveValue) o.selected = true
-      select.appendChild(o)
-    }
-    select.addEventListener('change', () => onChange(select.value))
-    return select
+    const host = document.createElement('div')
+    host.className = 'perform-animate-field__select-host'
+    const popup = new SelectPopup({
+      value: effectiveValue,
+      options: list,
+      onChange,
+      ariaLabel: label
+    })
+    popup.mount(host)
+    return host
   }
   return makeNumberInput(value, descriptor, onChange)
 }
@@ -376,8 +284,7 @@ function makeRadialKnobWidget (
       onChange(domain)
     },
     showInnerSvgTitle: false,
-    hint:
-      typeof hint === 'string' && hint.length > 0 ? hint : undefined
+    hint: typeof hint === 'string' && hint.length > 0 ? hint : undefined
   })
   knob.mount(container)
   requestAnimationFrame(() => knob.syncFromExternal())
@@ -418,18 +325,6 @@ function resolveIntentName (guid) {
   )
   const name = intent?.name
   return typeof name === 'string' && name ? name : guid
-}
-
-/** @param {Record<string, unknown> | null} caps */
-function getAnimationClasses (caps) {
-  const list = caps?.animations
-  if (!Array.isArray(list)) return []
-  return list
-    .map(entry => ({
-      cls: String(entry.class ?? ''),
-      name: String(entry.name ?? entry.class ?? '')
-    }))
-    .filter(e => e.cls.length > 0)
 }
 
 /** @param {Record<string, unknown> | null} caps @param {string} cls */

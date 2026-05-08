@@ -49,7 +49,9 @@ export function createPerformAnimatePanel () {
   let lastListKey = ''
 
   function listKey (anims) {
-    return anims.map(a => `${a.guid}:${a.name}:${a.class}`).join('|')
+    return anims
+      .map(a => `${a.guid}:${a.name}:${a.class}:${a.targetIntent ?? ''}`)
+      .join('|')
   }
 
   function syncRowPlayState (rowEl) {
@@ -169,9 +171,13 @@ export function createPerformAnimatePanel () {
     })
 
     const speedDial = makeSpeedDial(row.guid)
+    const intentEl = document.createElement('span')
+    intentEl.className = 'perform-animate-row__intent'
+    intentEl.textContent = resolveIntentName(row.targetIntent)
 
     el.appendChild(editBtn)
     el.appendChild(label)
+    el.appendChild(intentEl)
     el.appendChild(speedDial)
     el.appendChild(toggle)
     return el
@@ -219,4 +225,14 @@ export function createPerformAnimatePanel () {
   render()
 
   return { panel }
+}
+
+/** @param {string} guid */
+function resolveIntentName (guid) {
+  if (!guid) return ''
+  const intent = /** @type {Record<string, unknown> | undefined} */ (
+    projectGraph.getIntents().get(guid)
+  )
+  const name = intent?.name
+  return typeof name === 'string' && name ? name : guid
 }

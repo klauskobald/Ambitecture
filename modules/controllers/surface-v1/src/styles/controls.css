@@ -480,6 +480,17 @@
   white-space: nowrap;
 }
 
+.perform-animate-row__intent {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 7rem;
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .perform-animate-toggle {
   flex: 0 0 auto;
   width: 2.25rem;

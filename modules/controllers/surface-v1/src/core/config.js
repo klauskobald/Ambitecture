@@ -13,6 +13,14 @@ import * as statusDisplay from '../app/statusDisplay.js'
  * @property {string} overlayFingerStrokeRgba
  * @property {number} overlayLineWidthPx
  * @property {number} overlayTrailFadeMs
+ * @property {number} animateEditCellWidthPx
+ * @property {number} animateEditCellGapPx
+ * @property {number} animateEditCellPaddingPx
+ * @property {number} animateEditKnobRowHeightPx
+ * @property {number} animateEditKnobRowPaddingXPx
+ * @property {number} animateEditKnobRowPaddingYPx
+ * @property {number} animateEditKnobRowGapPx
+ * @property {number} animateEditKnobRowDialSizePx
  */
 
 const REQUIRED_LAYOUT_KEYS = /** @type {(keyof LayoutConfig)[]} */ ([
@@ -26,7 +34,15 @@ const REQUIRED_LAYOUT_KEYS = /** @type {(keyof LayoutConfig)[]} */ ([
   'overlayFingerFillRgba',
   'overlayFingerStrokeRgba',
   'overlayLineWidthPx',
-  'overlayTrailFadeMs'
+  'overlayTrailFadeMs',
+  'animateEditCellWidthPx',
+  'animateEditCellGapPx',
+  'animateEditCellPaddingPx',
+  'animateEditKnobRowHeightPx',
+  'animateEditKnobRowPaddingXPx',
+  'animateEditKnobRowPaddingYPx',
+  'animateEditKnobRowGapPx',
+  'animateEditKnobRowDialSizePx'
 ])
 
 /**
@@ -67,6 +83,15 @@ export function applyLayoutCssVars (L) {
   root.style.setProperty('--control-strip-min-height', `${L.controlStripMinHeightPx}px`)
   root.style.setProperty('--iframe-z-index', String(L.iframeZIndex))
   root.style.setProperty('--overlay-z-index', String(L.overlayZIndex))
+
+  root.style.setProperty('--animate-edit-cell-width', `${L.animateEditCellWidthPx}px`)
+  root.style.setProperty('--animate-edit-cell-gap', `${L.animateEditCellGapPx}px`)
+  root.style.setProperty('--animate-edit-cell-padding', `${L.animateEditCellPaddingPx}px`)
+  root.style.setProperty('--animate-edit-knobrow-height', `${L.animateEditKnobRowHeightPx}px`)
+  root.style.setProperty('--animate-edit-knobrow-padding-x', `${L.animateEditKnobRowPaddingXPx}px`)
+  root.style.setProperty('--animate-edit-knobrow-padding-y', `${L.animateEditKnobRowPaddingYPx}px`)
+  root.style.setProperty('--animate-edit-knobrow-gap', `${L.animateEditKnobRowGapPx}px`)
+  root.style.setProperty('--animate-edit-knobrow-dial-size', `${L.animateEditKnobRowDialSizePx}px`)
 }
 
 export async function loadConfig () {

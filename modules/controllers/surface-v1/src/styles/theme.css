@@ -19,6 +19,16 @@
   --iframe-z-index: 1;
   --overlay-z-index: 2;
 
+  /* animation edit pane layout (animation details grid + knob rows) */
+  --animate-edit-cell-width: 120px;
+  --animate-edit-cell-gap: 4px;
+  --animate-edit-cell-padding: 4px;
+  --animate-edit-knobrow-height: 40px;
+  --animate-edit-knobrow-padding-x: 4px;
+  --animate-edit-knobrow-padding-y: 2px;
+  --animate-edit-knobrow-gap: 4px;
+  --animate-edit-knobrow-dial-size: 36px;
+
   /* app nav + perform subnav (shared .nav-link / .nav-toggle) */
   --nav-link-font-size: 0.8rem;
   --nav-toggle-font-size: 1.2rem;

@@ -173,14 +173,12 @@ export class ActionInputManager {
     }
 
     for (const actionGuid of targetActionGuids) {
-      const referencedElsewhere = this.isActionReferencedByInputs(actionGuid, matchingInputGuidSet);
-      if (referencedElsewhere) continue;
-      commands.push({
-        op: 'remove',
-        entityType: 'action',
-        guid: actionGuid,
-        persistence: 'runtimeAndDurable',
+      const referencedElsewhere = this.isActionReferencedInGraph(actionGuid, {
+        excludingInputGuids: matchingInputGuidSet,
+        excludingActionGuids: new Set([actionGuid]),
       });
+      if (referencedElsewhere) continue;
+      commands.push(this.removeActionCommand(actionGuid));
     }
 
     return commands;
@@ -229,16 +227,31 @@ export class ActionInputManager {
         });
       }
     }
+    const removedInputGuids = new Set(
+      commands
+        .filter(command => command.entityType === 'input' && command.op === 'remove')
+        .map(command => command.guid),
+    );
     for (const guid of actionGuids) {
-      commands.push({
-        op: 'remove',
-        entityType: 'action',
-        guid,
-        persistence: 'runtimeAndDurable',
+      const stillReferenced = this.isActionReferencedInGraph(guid, {
+        excludingInputGuids: removedInputGuids,
+        excludingActionGuids: new Set([guid]),
       });
+      if (stillReferenced) continue;
+      commands.push(this.removeActionCommand(guid));
     }
 
     return commands;
+  }
+
+  buildAnimationCleanupCommands(animationGuid: string): GraphCommand[] {
+    const action = this.projectManager.getActionByGuid(animationGuid);
+    if (!action) return [];
+    const stillReferenced = this.isActionReferencedInGraph(animationGuid, {
+      excludingActionGuids: new Set([animationGuid]),
+    });
+    if (stillReferenced) return [];
+    return [this.removeActionCommand(animationGuid)];
   }
 
   private findSceneAction(sceneGuid: string): ActionDefinition | undefined {
@@ -305,14 +318,60 @@ export class ActionInputManager {
     }
   }
 
-  private isActionReferencedByInputs(actionGuid: string, removedInputGuids: Set<string>): boolean {
-    for (const controller of this.projectManager.getControllersWirePayload()) {
-      for (const input of controller.inputs ?? []) {
-        if (typeof input.guid === 'string' && removedInputGuids.has(input.guid)) continue;
-        if (input.action === actionGuid) return true;
+  private isActionReferencedInGraph(
+    actionGuid: string,
+    opts: {
+      excludingInputGuids?: Set<string>;
+      excludingActionGuids?: Set<string>;
+    } = {},
+  ): boolean {
+    const excludingInputGuids = opts.excludingInputGuids ?? new Set<string>();
+    const excludingActionGuids = opts.excludingActionGuids ?? new Set<string>();
+    const graph = {
+      controllers: this.projectManager.getControllersWirePayload(),
+      scenes: this.projectManager.getScenesWirePayload(),
+      actions: this.projectManager.getActionsWirePayload(),
+      animations: this.projectManager.getAnimationsWirePayload(),
+    } as Record<string, unknown>;
+
+    const scan = (value: unknown, path: string[]): boolean => {
+      if (value === actionGuid) return true;
+      if (!value || typeof value !== 'object') return false;
+
+      if (Array.isArray(value)) {
+        for (let i = 0; i < value.length; i++) {
+          if (scan(value[i], [...path, String(i)])) return true;
+        }
+        return false;
       }
-    }
-    return false;
+
+      const row = value as Record<string, unknown>;
+      const scope = path[path.length - 2] ?? '';
+      if (scope === 'inputs') {
+        const inputGuid = typeof row.guid === 'string' ? row.guid : '';
+        if (inputGuid && excludingInputGuids.has(inputGuid)) return false;
+      }
+      if (scope === 'actions') {
+        const rowGuid = typeof row.guid === 'string' ? row.guid : '';
+        if (rowGuid && excludingActionGuids.has(rowGuid)) return false;
+      }
+
+      for (const [key, entry] of Object.entries(row)) {
+        if (scan(entry, [...path, key])) return true;
+      }
+      return false;
+    };
+
+    return scan(graph, []);
+  }
+
+  private removeActionCommand(guid: string): GraphCommand {
+    return {
+      op: 'remove',
+      entityType: 'action',
+      guid,
+      persistence: 'runtimeAndDurable',
+    };
   }
 
   private upsertCommand(

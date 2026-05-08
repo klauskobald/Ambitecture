@@ -395,19 +395,13 @@ export class ProjectGraphStore {
 
     if (command.op === 'remove') {
       this.animationManager?.onAnimationRemoved(command.guid);
-      const actions = this.projectManager.getActionsWirePayload().filter(a => a.guid !== sharedAnimationAndActionGuid);
-      this.projectManager.setProjectData('actions', actions);
-      const actionDelta = this.makeDelta({
-        op: 'remove',
-        entityType: 'action',
-        guid: sharedAnimationAndActionGuid,
-        persistence,
-      });
+      const cleanupCommands = this.actionInputManager?.buildAnimationCleanupCommands(command.guid) ?? [];
+      const cleanupResults = cleanupCommands.map(cleanupCommand => this.applyGraphCommand(cleanupCommand));
       return {
         revision: this.revision,
-        controllerDeltas: [animationDelta, actionDelta],
-        rendererEvents: [],
-        rendererConfigChangedFor: [],
+        controllerDeltas: [animationDelta, ...cleanupResults.flatMap(result => result.controllerDeltas)],
+        rendererEvents: cleanupResults.flatMap(result => result.rendererEvents),
+        rendererConfigChangedFor: cleanupResults.flatMap(result => result.rendererConfigChangedFor),
         durableChanged,
       };
     }

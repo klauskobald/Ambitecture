@@ -103,26 +103,6 @@ export function createAnimationEditPane ({ onClose }) {
         guid
       })
 
-      const companionAction = projectGraph.getActions().get(guid) ?? null
-      if (companionAction) {
-        const stillReferenced = projectGraph.isActionReferenced(guid, {
-          excludeActionGuid: guid
-        })
-        if (!stillReferenced) {
-          sendGraphCommand({
-            op: 'remove',
-            entityType: 'action',
-            guid,
-            persistence: 'runtimeAndDurable'
-          })
-          projectGraph.applyGraphDelta({
-            entityType: 'action',
-            op: 'remove',
-            guid
-          })
-        }
-      }
-
       el.hidden = true
       onClose()
     }

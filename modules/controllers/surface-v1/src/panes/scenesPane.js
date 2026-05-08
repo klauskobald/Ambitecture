@@ -89,9 +89,9 @@ export class ScenesPane {
     this._ensureActiveScene()
     this._render()
 
-    // Only react to scene/intent-definition changes. `intents:runtime` from animation
-    // must NOT wake this pane or the list rebuilds every animation frame.
-    this._unsubscribe = projectGraph.subscribe(['scenes', 'intents:def'], () => {
+    // React to scene structure, intent labels, and assign-row entities (actions/inputs).
+    // `intents:runtime` from animation must NOT wake this pane or the list rebuilds every frame.
+    this._unsubscribe = projectGraph.subscribe(['scenes', 'intents:def', 'actions', 'inputs'], () => {
       this._ensureActiveScene()
       this._render()
     })

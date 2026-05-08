@@ -213,8 +213,8 @@ function makeFieldRow (label, hint, widget) {
     labelEl.appendChild(hintSpan)
   }
 
-  row.appendChild(labelEl)
   row.appendChild(widget)
+  row.appendChild(labelEl)
   return row
 }
 

@@ -476,7 +476,7 @@ export class KeyframeAnimator {
     const rawTime = row['time'];
     const time =
       typeof rawTime === 'number' && Number.isFinite(rawTime) && rawTime >= 0
-        ? rawTime * 1000
+        ? this.roundTimeMsToHundredthSecond(rawTime * 1000)
         : fallbackTime;
 
     const rawArgs = row['args'];
@@ -494,7 +494,7 @@ export class KeyframeAnimator {
     time: number;
     args?: Record<string, unknown>;
   } {
-    const time = step.time / 1000;
+    const time = this.roundTimeMsToHundredthSecond(step.time) / 1000;
     if (step.args !== undefined) {
       return { time, args: step.args };
     }
@@ -509,6 +509,16 @@ export class KeyframeAnimator {
     if (this.editCommitIntentBaseline) {
       this.editCommitIntentBaseline(this.editTargetGuid);
     }
+  }
+
+  /** Round to centiseconds (2 decimals in seconds) to keep persisted keyframe times stable. */
+  private roundTimeMsToHundredthSecond(timeMs: number): number {
+    if (!Number.isFinite(timeMs)) return 0;
+    return Math.round(timeMs / 10) * 10;
+  }
+
+  private toStoredStepTimeSeconds(timeMs: number): number {
+    return this.roundTimeMsToHundredthSecond(timeMs) / 1000;
   }
 
   /**
@@ -526,7 +536,7 @@ export class KeyframeAnimator {
     }
     const next = this.editSteps[editIndex + 1];
     if (next !== undefined) {
-      return { ok: true, timeMs: (cur.time + next.time) / 2 };
+      return { ok: true, timeMs: this.roundTimeMsToHundredthSecond((cur.time + next.time) / 2) };
     }
     const lengthMs = this.parseSteps().cycleLengthMs;
     if (!Number.isFinite(lengthMs) || lengthMs < 0) {
@@ -535,7 +545,7 @@ export class KeyframeAnimator {
     if (cur.time >= lengthMs) {
       return { ok: false, reason: 'step would be outside animation length' };
     }
-    return { ok: true, timeMs: lengthMs };
+    return { ok: true, timeMs: this.roundTimeMsToHundredthSecond(lengthMs) };
   }
 
   private persistEditedStep(
@@ -549,7 +559,7 @@ export class KeyframeAnimator {
     const existing = rawSteps[sourceIndex];
     if (!existing || typeof existing !== 'object' || Array.isArray(existing)) return;
 
-    const timeSeconds = step.time / 1000;
+    const timeSeconds = this.toStoredStepTimeSeconds(step.time);
     const nextRow: Record<string, unknown> = {
       ...(existing as Record<string, unknown>),
       time: Number.isFinite(timeSeconds) ? timeSeconds : 0,
@@ -578,7 +588,7 @@ export class KeyframeAnimator {
     const cfg = this.keyframeConfigBag();
     if (!Array.isArray(cfg['steps'])) cfg['steps'] = [];
     const rawSteps = cfg['steps'] as unknown[];
-    const row: Record<string, unknown> = { time: step.time / 1000 };
+    const row: Record<string, unknown> = { time: this.toStoredStepTimeSeconds(step.time) };
     if (step.args !== undefined) row['args'] = step.args;
     rawSteps.push(row);
     return rawSteps.length - 1;

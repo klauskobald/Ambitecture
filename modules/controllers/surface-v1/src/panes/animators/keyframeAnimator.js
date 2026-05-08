@@ -3,6 +3,7 @@ import { subscribeBinding } from '../../core/bindingRegistry.js'
 import { sendAnimationEdit, sendBindingSet } from '../../core/outboundQueue.js'
 import { editText, warn as modalWarn } from '../../core/Modal.js'
 import { notification } from '../../app/notification.js'
+import { ScalarRadialKnobSvg } from '../../edit/components/ScalarRadialKnobSvg.js'
 
 /** Per-animation cleanup so reopening the pane drops the prior callback and edit session. */
 const activeBindings = new Map()
@@ -132,7 +133,12 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
         })
       })
 
-      tools.replaceChildren(addBtn, mergeBtn, removeBtn)
+      const timeKnob = makeStepTimeKnob(record, state, idx, total, bindingKey)
+      if (timeKnob) {
+        tools.replaceChildren(addBtn, mergeBtn, removeBtn, timeKnob)
+      } else {
+        tools.replaceChildren(addBtn, mergeBtn, removeBtn)
+      }
 
       nav.appendChild(prevBtn)
       nav.appendChild(counter)
@@ -201,6 +207,93 @@ function readAnimationLengthSeconds (record) {
   const fromRoot = Number(record?.length)
   if (Number.isFinite(fromRoot)) return fromRoot
   return Number.NaN
+}
+
+/**
+ * @param {Record<string, unknown>} record
+ * @param {Record<string, unknown>} state
+ * @param {number} idx
+ * @param {number} total
+ * @param {string} bindingKey
+ * @returns {HTMLElement | null}
+ */
+function makeStepTimeKnob (record, state, idx, total, bindingKey) {
+  if (total <= 2) return null
+  if (idx <= 0 || idx >= total - 1) return null
+
+  const neighbors = readNeighborTimesForIndex(record, idx)
+  if (!neighbors) return null
+  const min = neighbors.prev + 0.1
+  const max = neighbors.next - 0.1
+  if (!(Number.isFinite(min) && Number.isFinite(max) && max > min)) return null
+
+  const currentTimeRaw = Number(state?.currentStepContent?.time)
+  const fallback = roundToHundredths((min + max) / 2)
+  let currentTime = Number.isFinite(currentTimeRaw) ? currentTimeRaw : fallback
+  currentTime = Math.max(min, Math.min(max, currentTime))
+
+  const wrap = document.createElement('div')
+  wrap.className = 'perform-animate-speed-wrap'
+  const knob = new ScalarRadialKnobSvg({
+    descriptor: {
+      name: 'Time',
+      range: [min, max],
+      step: 0.01,
+      defaultValue: fallback
+    },
+    intentGuid: String(record?.guid ?? ''),
+    readValue: () => currentTime,
+    onCommit: domain => {
+      const rounded = roundToHundredths(domain)
+      currentTime = Math.max(min, Math.min(max, rounded))
+      sendBindingSet(bindingKey, {
+        currentStepIndex: Number(state?.currentStepIndex) || 0,
+        currentStepContent: {
+          ...(state?.currentStepContent && typeof state.currentStepContent === 'object' ? state.currentStepContent : {}),
+          time: currentTime
+        },
+        editAction: 'set'
+      })
+    }
+  })
+  knob.mount(wrap)
+  requestAnimationFrame(() => knob.syncFromExternal())
+  return wrap
+}
+
+/**
+ * @param {Record<string, unknown>} record
+ * @param {number} idx
+ * @returns {{ prev: number, next: number } | null}
+ */
+function readNeighborTimesForIndex (record, idx) {
+  const stepsRaw = Array.isArray(record?.content?.steps)
+    ? record.content.steps
+    : Array.isArray(record?.steps)
+      ? record.steps
+      : []
+  const rows = []
+  for (let i = 0; i < stepsRaw.length; i++) {
+    const row = stepsRaw[i]
+    if (!row || typeof row !== 'object' || Array.isArray(row)) continue
+    const t = Number(row.time)
+    if (!Number.isFinite(t)) continue
+    rows.push({ time: t, sourceIndex: i })
+  }
+  rows.sort((a, b) => (a.time === b.time ? a.sourceIndex - b.sourceIndex : a.time - b.time))
+  const prev = rows[idx - 1]
+  const next = rows[idx + 1]
+  if (!prev || !next) return null
+  return { prev: prev.time, next: next.time }
+}
+
+/**
+ * @param {number} value
+ * @returns {number}
+ */
+function roundToHundredths (value) {
+  if (!Number.isFinite(value)) return 0
+  return Math.round(value * 100) / 100
 }
 
 /**

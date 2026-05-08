@@ -45,6 +45,8 @@ const PATH_LEN_NORM = 1000
  * @property {string} intentGuid
  * @property {() => unknown} readValue effective domain scalar
  * @property {(domain: number) => void} onCommit
+ * @property {boolean} [showInnerSvgTitle] when false, hide the title inside the SVG until engaged (default true)
+ * @property {string} [hint] optional; when set, shown left of the dial only while engaged (zoomed)
  */
 
 export class ScalarRadialKnobSvg {
@@ -56,6 +58,14 @@ export class ScalarRadialKnobSvg {
     this._intentGuid = opts.intentGuid
     this._readValue = opts.readValue
     this._onCommit = opts.onCommit
+
+    /** When false, hide the property title inside the SVG (rest + default HUD). */
+    this._showInnerSvgTitle = opts.showInnerSvgTitle !== false
+
+    /** Copied from opts.hint; shown left of the dial only while engaged. */
+    const rawHint = opts.hint
+    this._hintWhenEngaged =
+      typeof rawHint === 'string' && rawHint.length > 0 ? rawHint : null
 
     /** @type {AbortController | null} */
     this._abort = null
@@ -69,6 +79,9 @@ export class ScalarRadialKnobSvg {
     this._labelText = null
     /** @type {SVGTextElement | null} */
     this._valueText = null
+
+    /** @type {HTMLElement | null} */
+    this._engageHintEl = null
 
     /** @type {number} normalized t ∈ [0,1] mapped through stepFunction then range */
     this._t = 0
@@ -144,6 +157,9 @@ export class ScalarRadialKnobSvg {
 
     const root = document.createElement('div')
     root.className = 'quick-panel-knob quick-panel-knob--svg'
+    if (!this._showInnerSvgTitle) {
+      root.classList.add('quick-panel-knob--hide-inner-title')
+    }
     root.dataset.intentGuid = this._intentGuid
     root.dataset.dotKey = /** @type {string} */ (
       String(this._descriptor.dotKey ?? '')
@@ -215,8 +231,24 @@ export class ScalarRadialKnobSvg {
 
     dial.appendChild(svg)
 
+    const controls = document.createElement('div')
+    controls.className = 'quick-panel-knob__controls'
+
+    if (this._hintWhenEngaged) {
+      const engageHint = document.createElement('span')
+      engageHint.className = 'quick-panel-knob__engage-hint'
+      engageHint.textContent = this._hintWhenEngaged
+      engageHint.hidden = true
+      controls.appendChild(engageHint)
+      this._engageHintEl = engageHint
+    } else {
+      this._engageHintEl = null
+    }
+
+    controls.appendChild(dial)
+
     root.appendChild(caption)
-    root.appendChild(dial)
+    root.appendChild(controls)
 
     this._root = root
     this._dial = dial
@@ -274,6 +306,7 @@ export class ScalarRadialKnobSvg {
     this._progressPath = null
     this._labelText = null
     this._valueText = null
+    this._engageHintEl = null
   }
 
   /**
@@ -289,6 +322,9 @@ export class ScalarRadialKnobSvg {
       if (vvOff) {
         vvOff.removeEventListener('resize', this._boundResizeRelayout)
         vvOff.removeEventListener('scroll', this._boundResizeRelayout)
+      }
+      if (this._engageHintEl) {
+        this._engageHintEl.hidden = true
       }
       if (root) {
         root.classList.remove('quick-panel-knob--engaged')
@@ -314,6 +350,9 @@ export class ScalarRadialKnobSvg {
     // Move to body — escapes any ancestor overflow:hidden or transform offset.
     document.body.appendChild(root)
     root.classList.add('quick-panel-knob--engaged')
+    if (this._engageHintEl) {
+      this._engageHintEl.hidden = false
+    }
     root.style.position = 'fixed'
     root.style.transformOrigin = 'top left'
     root.style.zIndex = '9999'

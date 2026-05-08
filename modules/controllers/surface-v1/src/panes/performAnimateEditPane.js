@@ -128,7 +128,10 @@ export function createAnimationEditPane ({ onClose }) {
                   ''
               )
             : ''
-        const layout = layoutForField(widgetType, customEl)
+        const layout =
+          widgetType === 'slider'
+            ? 'knobrow'
+            : layoutForField(widgetType, customEl)
 
         if (customEl) {
           body.appendChild(makeFieldRow(label, hint, customEl, layout))
@@ -138,7 +141,7 @@ export function createAnimationEditPane ({ onClose }) {
         body.appendChild(
           makeFieldRow(
             label,
-            hint,
+            widgetType === 'slider' ? null : hint,
             makeGenericWidget(
               widgetType,
               value,
@@ -146,6 +149,7 @@ export function createAnimationEditPane ({ onClose }) {
               guid,
               dotKey,
               label,
+              hint,
               newValue => {
                 sendAnimationPatch(guid, { [dotKey]: newValue })
               }
@@ -195,14 +199,16 @@ function layoutForField (widgetType, customEl) {
  * @param {string} label
  * @param {string | null} hint
  * @param {HTMLElement} widget
- * @param {'full' | 'tile'} [layout]
+ * @param {'full' | 'tile' | 'knobrow'} [layout]
  */
 function makeFieldRow (label, hint, widget, layout = 'full') {
   const row = document.createElement('div')
   row.className =
-    layout === 'tile'
-      ? 'perform-animate-field perform-animate-field--tile'
-      : 'perform-animate-field perform-animate-field--full'
+    layout === 'knobrow'
+      ? 'perform-animate-field perform-animate-field--knobrow'
+      : layout === 'tile'
+        ? 'perform-animate-field perform-animate-field--tile'
+        : 'perform-animate-field perform-animate-field--full'
 
   const labelEl = document.createElement('div')
   labelEl.className = 'perform-animate-field__label'
@@ -264,10 +270,11 @@ function makeClassSelect (current, classes, onChange) {
 /**
  * @param {string} type
  * @param {unknown} value
- * @param {{ name?: string, range?: [number, number], step?: number, default?: number | string, options?: string[], optionsRef?: string, stepFunction?: string } | null} descriptor
+ * @param {{ name?: string, hint?: string, range?: [number, number], step?: number, default?: number | string, options?: string[], optionsRef?: string, stepFunction?: string } | null} descriptor
  * @param {string} animationGuid
  * @param {string} dotKey
  * @param {string} label
+ * @param {string | null} hint
  * @param {(value: unknown) => void} onChange
  */
 function makeGenericWidget (
@@ -277,6 +284,7 @@ function makeGenericWidget (
   animationGuid,
   dotKey,
   label,
+  hint,
   onChange
 ) {
   if (type === 'slider') {
@@ -286,6 +294,7 @@ function makeGenericWidget (
       animationGuid,
       dotKey,
       label,
+      hint,
       onChange
     )
   }
@@ -319,6 +328,7 @@ function makeGenericWidget (
  * @param {string} animationGuid
  * @param {string} dotKey
  * @param {string} label
+ * @param {string | null} hint
  * @param {(value: number) => void} onChange
  */
 function makeRadialKnobWidget (
@@ -327,6 +337,7 @@ function makeRadialKnobWidget (
   animationGuid,
   dotKey,
   label,
+  hint,
   onChange
 ) {
   const min = descriptor?.range?.[0] ?? 0
@@ -363,7 +374,10 @@ function makeRadialKnobWidget (
     onCommit: domain => {
       currentValue = domain
       onChange(domain)
-    }
+    },
+    showInnerSvgTitle: false,
+    hint:
+      typeof hint === 'string' && hint.length > 0 ? hint : undefined
   })
   knob.mount(container)
   requestAnimationFrame(() => knob.syncFromExternal())

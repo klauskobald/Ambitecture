@@ -35,6 +35,7 @@ export interface KeyframeAnimatorCallbacks {
     message: { text: string };
     data: Record<string, unknown>;
   }) => void;
+  onDefinitionChanged?: () => void;
 }
 
 /** Deep-clone one subtree read from the intent so lerp planning never mutates the live object. */
@@ -323,12 +324,40 @@ export class KeyframeAnimator {
       this.editIndex = clamped;
       this.emitCurrentEditStep();
     }
+    const action = incoming['editAction'];
+    if (action === 'remove') {
+      this.removeCurrentStep();
+      this.callbacks.onDefinitionChanged?.();
+      if (this.editBindingMgr && this.editBindingKey) {
+        this.editBindingMgr.receiveFromMaster(this.editBindingKey, this.computeEditState());
+      }
+      return;
+    }
+    if (action === 'add') {
+      const incomingStep = this.parseIncomingEditStep(incoming['currentStepContent'], this.editSteps[this.editIndex]);
+      if (incomingStep) {
+        const sourceIndex = this.insertNewStep(incomingStep);
+        this.normalizeStoredStepsAndRefresh(sourceIndex);
+        this.callbacks.onDefinitionChanged?.();
+        this.emitCurrentEditStep();
+      }
+      if (this.editBindingMgr && this.editBindingKey) {
+        this.editBindingMgr.receiveFromMaster(this.editBindingKey, this.computeEditState());
+      }
+      return;
+    }
     const indexChanged = clamped !== previousIndex;
     if (Object.prototype.hasOwnProperty.call(incoming, 'currentStepContent') && !indexChanged) {
       const incomingStep = this.parseIncomingEditStep(incoming['currentStepContent'], this.editSteps[this.editIndex]);
       if (incomingStep) {
-        this.editSteps[this.editIndex] = incomingStep;
-        this.persistEditedStep(this.editIndex, incomingStep);
+        const sourceIndex = this.editSourceIndices[this.editIndex];
+        if (typeof sourceIndex === 'number') {
+          this.persistEditedStep(sourceIndex, incomingStep);
+          this.normalizeStoredStepsAndRefresh(sourceIndex);
+          this.callbacks.onDefinitionChanged?.();
+        } else {
+          this.editSteps[this.editIndex] = incomingStep;
+        }
         this.emitCurrentEditStep();
       }
     }
@@ -383,11 +412,10 @@ export class KeyframeAnimator {
   }
 
   private persistEditedStep(
-    stepIndex: number,
+    sourceIndex: number,
     step: { time: number; args?: Record<string, unknown> },
   ): void {
-    const sourceIndex = this.editSourceIndices[stepIndex];
-    if (typeof sourceIndex !== 'number' || !Number.isFinite(sourceIndex) || sourceIndex < 0) return;
+    if (!Number.isFinite(sourceIndex) || sourceIndex < 0) return;
     const cfg = this.keyframeConfigBag();
     const rawSteps = cfg['steps'];
     if (!Array.isArray(rawSteps)) return;
@@ -405,6 +433,91 @@ export class KeyframeAnimator {
       delete nextRow['args'];
     }
     rawSteps[sourceIndex] = nextRow;
+  }
+
+  private removeCurrentStep(): void {
+    if (this.editSteps.length <= 1) return;
+    const sourceIndex = this.editSourceIndices[this.editIndex];
+    if (typeof sourceIndex !== 'number' || !Number.isFinite(sourceIndex) || sourceIndex < 0) return;
+    const cfg = this.keyframeConfigBag();
+    const rawSteps = cfg['steps'];
+    if (!Array.isArray(rawSteps)) return;
+    if (sourceIndex >= rawSteps.length) return;
+    rawSteps.splice(sourceIndex, 1);
+    this.normalizeStoredStepsAndRefresh();
+  }
+
+  private insertNewStep(step: { time: number; args?: Record<string, unknown> }): number {
+    const cfg = this.keyframeConfigBag();
+    if (!Array.isArray(cfg['steps'])) cfg['steps'] = [];
+    const rawSteps = cfg['steps'] as unknown[];
+    const row: Record<string, unknown> = { time: step.time / 1000 };
+    if (step.args !== undefined) row['args'] = step.args;
+    rawSteps.push(row);
+    return rawSteps.length - 1;
+  }
+
+  private refreshEditStepsFromConfig(preferredSourceIndex?: number): void {
+    const previousIndex = this.editIndex;
+    const { steps, stepSourceIndices } = this.parseSteps();
+    this.editSteps = steps;
+    this.editSourceIndices = stepSourceIndices;
+    if (steps.length === 0) {
+      this.editIndex = 0;
+      return;
+    }
+    if (typeof preferredSourceIndex === 'number') {
+      const movedIndex = stepSourceIndices.indexOf(preferredSourceIndex);
+      if (movedIndex >= 0) {
+        this.editIndex = movedIndex;
+        return;
+      }
+    }
+    this.editIndex = Math.max(0, Math.min(steps.length - 1, previousIndex));
+  }
+
+  /**
+   * Canonicalize stored `steps` order in-definition (time asc, stable by previous row index),
+   * then refresh edit caches and remap selected step to the moved row.
+   */
+  private normalizeStoredStepsAndRefresh(preferredSourceIndex?: number): void {
+    const cfg = this.keyframeConfigBag();
+    const rawSteps = cfg['steps'];
+    if (!Array.isArray(rawSteps)) {
+      this.refreshEditStepsFromConfig(preferredSourceIndex);
+      return;
+    }
+
+    const rows: {
+      row: Record<string, unknown>;
+      sourceIndex: number;
+      timeMs: number;
+    }[] = [];
+    for (let index = 0; index < rawSteps.length; index++) {
+      const raw = rawSteps[index];
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+      const row = raw as Record<string, unknown>;
+      const t = Number(row['time']) * 1000;
+      if (!Number.isFinite(t)) continue;
+      rows.push({ row, sourceIndex: index, timeMs: t });
+    }
+    rows.sort((a, b) => (a.timeMs === b.timeMs ? a.sourceIndex - b.sourceIndex : a.timeMs - b.timeMs));
+
+    const indexMap = new Map<number, number>();
+    const ordered: Record<string, unknown>[] = [];
+    for (let i = 0; i < rows.length; i++) {
+      const entry = rows[i];
+      if (!entry) continue;
+      ordered.push(entry.row);
+      indexMap.set(entry.sourceIndex, i);
+    }
+    cfg['steps'] = ordered;
+
+    const mappedPreferred =
+      typeof preferredSourceIndex === 'number'
+        ? indexMap.get(preferredSourceIndex)
+        : undefined;
+    this.refreshEditStepsFromConfig(mappedPreferred);
   }
 
   /**

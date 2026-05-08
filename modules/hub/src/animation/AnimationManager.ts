@@ -151,6 +151,7 @@ export class AnimationManager {
       onStatus: p => {
         this.emitAnimatorStatus(animationGuid, p, opts.location ?? this.runners.get(animationGuid)?.lastLocation);
       },
+      onDefinitionChanged: () => this.projectManager.touchAnimations(),
     });
     plugin.setTimescale(effectiveTimescale);
 
@@ -285,6 +286,7 @@ export class AnimationManager {
       onStatus: p => {
         this.emitAnimatorStatus(animationGuid, p, opts.location);
       },
+      onDefinitionChanged: () => this.projectManager.touchAnimations(),
     });
 
     const mutateIntent: MutateIntentFn = (guid, patch) => {

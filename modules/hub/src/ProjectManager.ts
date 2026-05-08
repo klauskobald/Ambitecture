@@ -821,6 +821,14 @@ export class ProjectManager {
     if (anim) Object.assign(anim, patch);
   }
 
+  /**
+   * Mark project dirty after in-place animation definition mutations.
+   * No graph event/broadcast; only schedules durable save.
+   */
+  touchAnimations(): void {
+    this._scheduleSave();
+  }
+
   getSceneByGuid(guid: string): Scene | undefined {
     return (this.project?.scenes ?? []).find(scene => scene.guid === guid);
   }

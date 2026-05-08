@@ -39,9 +39,15 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
     const top = document.createElement('div')
     top.className = 'animator-edit-section__top'
 
+    const topLeft = document.createElement('div')
+    topLeft.className = 'animator-edit-section__top-left'
+
     const header = document.createElement('div')
     header.className = 'animator-edit-section__header'
     header.textContent = 'Keyframe edit'
+
+    const tools = document.createElement('div')
+    tools.className = 'animator-edit-section__tools'
 
     const body = document.createElement('div')
     body.className = 'animator-edit-section__body'
@@ -77,6 +83,33 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
       counter.className = 'animator-edit-section__counter'
       counter.textContent = total > 0 ? `${idx + 1} of ${total}` : '0 of 0'
 
+      const addBtn = document.createElement('button')
+      addBtn.type = 'button'
+      addBtn.className = 'animator-edit-section__nav-btn'
+      addBtn.textContent = 'Add'
+      addBtn.disabled = total <= 0
+      addBtn.addEventListener('click', () => {
+        const base = state?.currentStepContent
+        void openStepContentEditor(state, bindingKey, {
+          initialStep: base,
+          mode: 'add'
+        })
+      })
+
+      const removeBtn = document.createElement('button')
+      removeBtn.type = 'button'
+      removeBtn.className = 'animator-edit-section__nav-btn'
+      removeBtn.textContent = 'Remove'
+      removeBtn.disabled = total <= 1
+      removeBtn.addEventListener('click', () => {
+        sendBindingSet(bindingKey, {
+          currentStepIndex: idx,
+          editAction: 'remove'
+        })
+      })
+
+      tools.replaceChildren(addBtn, removeBtn)
+
       nav.appendChild(prevBtn)
       nav.appendChild(counter)
       nav.appendChild(nextBtn)
@@ -90,7 +123,8 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
         void openStepContentEditor(state, bindingKey)
       })
 
-      top.replaceChildren(header, nav)
+      topLeft.replaceChildren(header, tools)
+      top.replaceChildren(topLeft, nav)
       body.appendChild(dump)
     }
 
@@ -136,10 +170,11 @@ function formatStepText (value) {
 /**
  * @param {Record<string, unknown>} state
  * @param {string} bindingKey
+ * @param {{ initialStep: unknown, mode: 'add' | 'edit' }} options
  * @returns {Promise<void>}
  */
-async function openStepContentEditor (state, bindingKey) {
-  let draft = formatStepText(state?.currentStepContent)
+async function openStepContentEditor (state, bindingKey, options = { initialStep: state?.currentStepContent, mode: 'edit' }) {
+  let draft = formatStepText(options.initialStep)
   let reason = ''
   let parsed = null
   while (true) {
@@ -175,6 +210,7 @@ async function openStepContentEditor (state, bindingKey) {
   }
   sendBindingSet(bindingKey, {
     currentStepIndex: Number(state?.currentStepIndex) || 0,
-    currentStepContent: parsed
+    currentStepContent: parsed,
+    editAction: options.mode === 'add' ? 'add' : 'set'
   })
 }

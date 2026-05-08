@@ -1044,6 +1044,18 @@
   flex-wrap: wrap;
 }
 
+.animator-edit-section__top-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.animator-edit-section__tools {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 .animator-edit-section__body {
   display: flex;
   flex-direction: column;

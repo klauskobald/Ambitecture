@@ -38,6 +38,7 @@ function _ensureOverlay () {
 function _dismiss (value) {
   if (!_overlay) return
   _overlay.classList.remove('is-open')
+  _overlay.classList.remove('modal-overlay--fullscreen')
   _overlay.innerHTML = ''
   const cb = _resolve
   _resolve = null
@@ -267,6 +268,69 @@ function _buildChoiceListModal (message, options, opts) {
   return card
 }
 
+/**
+ * Generic fullscreen text editor modal.
+ * @param {{
+ *   title?: string,
+ *   text: string,
+ *   saveLabel?: string,
+ *   cancelLabel?: string
+ * }} options
+ * @returns {HTMLElement}
+ */
+function _buildFullscreenEditorModal (options) {
+  const card = document.createElement('div')
+  card.className = 'modal modal--fullscreen modal-full-editor'
+  card.addEventListener('click', (e) => e.stopPropagation())
+
+  const top = document.createElement('div')
+  top.className = 'modal-full-editor__top'
+
+  const title = document.createElement('p')
+  title.className = 'modal-text modal-full-editor__title'
+  title.textContent = options.title ?? 'Edit'
+
+  const actions = document.createElement('div')
+  actions.className = 'modal-actions'
+
+  const cancelBtn = document.createElement('button')
+  cancelBtn.type = 'button'
+  cancelBtn.className = 'btn'
+  cancelBtn.textContent = options.cancelLabel ?? 'Cancel'
+  cancelBtn.addEventListener('click', () => _dismiss(null))
+
+  const saveBtn = document.createElement('button')
+  saveBtn.type = 'button'
+  saveBtn.className = 'btn btn--primary'
+  saveBtn.textContent = options.saveLabel ?? 'Save'
+
+  actions.appendChild(cancelBtn)
+  actions.appendChild(saveBtn)
+  top.appendChild(title)
+  top.appendChild(actions)
+
+  const input = document.createElement('textarea')
+  input.className = 'modal-input modal-full-editor__input'
+  input.spellcheck = false
+  input.value = options.text
+
+  const onSave = () => {
+    _dismiss(input.value)
+  }
+  saveBtn.addEventListener('click', onSave)
+  input.addEventListener('keydown', (evt) => {
+    const wantsSave = evt.key === 'Enter' && (evt.metaKey || evt.ctrlKey)
+    if (!wantsSave) return
+    evt.preventDefault()
+    onSave()
+  })
+
+  card.appendChild(top)
+  card.appendChild(input)
+  requestAnimationFrame(() => input.focus())
+  return card
+}
+
 // ── Public API ─────────────────────────────────────────────────────────────────
 
 /**
@@ -379,6 +443,36 @@ export function openModalCard (factory) {
     }
     const card = factory(dismiss)
     _overlay.appendChild(card)
+    _overlay.classList.add('is-open')
+  })
+}
+
+/**
+ * Opens a generic fullscreen text editor.
+ * @param {{
+ *   title?: string,
+ *   text?: string,
+ *   saveLabel?: string,
+ *   cancelLabel?: string,
+ *   callback?: (value: string | null) => void
+ * }} options
+ * @returns {Promise<string | null>}
+ */
+export function editText (options) {
+  _dismiss(null)
+  _ensureOverlay()
+  _overlay.classList.add('modal-overlay--fullscreen')
+  return new Promise((resolve) => {
+    _resolve = (val) => {
+      resolve(/** @type {string | null} */ (val))
+      options.callback?.(/** @type {string | null} */ (val))
+    }
+    _overlay.appendChild(_buildFullscreenEditorModal({
+      title: options.title,
+      text: options.text ?? '',
+      saveLabel: options.saveLabel,
+      cancelLabel: options.cancelLabel
+    }))
     _overlay.classList.add('is-open')
   })
 }

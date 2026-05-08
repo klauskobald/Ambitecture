@@ -152,6 +152,7 @@ export class KeyframeAnimator {
   private editMutateIntent?: MutateIntentFn;
   private editTargetGuid?: string;
   private editSteps: { time: number; args?: Record<string, unknown> }[] = [];
+  private editSourceIndices: number[] = [];
   private editIndex = 0;
 
   constructor(
@@ -231,7 +232,7 @@ export class KeyframeAnimator {
   }): void {
     if (this.editActive) return;
 
-    const { steps } = this.parseSteps();
+    const { steps, stepSourceIndices } = this.parseSteps();
     const targetGuid = this.targetIntentGuid();
 
     if (!targetGuid) {
@@ -258,6 +259,7 @@ export class KeyframeAnimator {
     this.editBindingKey = `${this.animationGuid}-editState`;
     this.editTargetGuid = targetGuid;
     this.editSteps = steps;
+    this.editSourceIndices = stepSourceIndices;
     this.editIndex = 0;
 
     this.emitCurrentEditStep();
@@ -281,6 +283,7 @@ export class KeyframeAnimator {
     delete this.editMutateIntent;
     delete this.editTargetGuid;
     this.editSteps = [];
+    this.editSourceIndices = [];
     this.editIndex = 0;
   }
 
@@ -295,7 +298,7 @@ export class KeyframeAnimator {
     return {
       totalSteps: total,
       currentStepIndex: idx,
-      currentStepContent: step ?? null,
+      currentStepContent: step ? this.toExternalEditStep(step) : null,
     };
   }
 
@@ -309,6 +312,7 @@ export class KeyframeAnimator {
     if (total === 0) return;
 
     const incoming = value as Record<string, unknown>;
+    const previousIndex = this.editIndex;
     const rawIdx = incoming['currentStepIndex'];
     if (typeof rawIdx !== 'number' || !Number.isFinite(rawIdx)) {
       Logger.warn('[keyframeAnimator] applyEditState ignored — invalid currentStepIndex');
@@ -319,9 +323,56 @@ export class KeyframeAnimator {
       this.editIndex = clamped;
       this.emitCurrentEditStep();
     }
+    const indexChanged = clamped !== previousIndex;
+    if (Object.prototype.hasOwnProperty.call(incoming, 'currentStepContent') && !indexChanged) {
+      const incomingStep = this.parseIncomingEditStep(incoming['currentStepContent'], this.editSteps[this.editIndex]);
+      if (incomingStep) {
+        this.editSteps[this.editIndex] = incomingStep;
+        this.persistEditedStep(this.editIndex, incomingStep);
+        this.emitCurrentEditStep();
+      }
+    }
     if (this.editBindingMgr && this.editBindingKey) {
       this.editBindingMgr.receiveFromMaster(this.editBindingKey, this.computeEditState());
     }
+  }
+
+  private parseIncomingEditStep(
+    value: unknown,
+    fallback?: { time: number; args?: Record<string, unknown> },
+  ): { time: number; args?: Record<string, unknown> } | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      Logger.warn('[keyframeAnimator] applyEditState ignored — currentStepContent must be an object');
+      return null;
+    }
+    const row = value as Record<string, unknown>;
+    const fallbackTime = fallback?.time ?? 0;
+    const rawTime = row['time'];
+    const time =
+      typeof rawTime === 'number' && Number.isFinite(rawTime) && rawTime >= 0
+        ? rawTime * 1000
+        : fallbackTime;
+
+    const rawArgs = row['args'];
+    if (rawArgs === undefined) {
+      return { time };
+    }
+    if (!rawArgs || typeof rawArgs !== 'object' || Array.isArray(rawArgs)) {
+      Logger.warn('[keyframeAnimator] applyEditState ignored — currentStepContent.args must be an object');
+      return null;
+    }
+    return { time, args: rawArgs as Record<string, unknown> };
+  }
+
+  private toExternalEditStep(step: { time: number; args?: Record<string, unknown> }): {
+    time: number;
+    args?: Record<string, unknown>;
+  } {
+    const time = step.time / 1000;
+    if (step.args !== undefined) {
+      return { time, args: step.args };
+    }
+    return { time };
   }
 
   private emitCurrentEditStep(): void {
@@ -329,6 +380,31 @@ export class KeyframeAnimator {
     const step = this.editSteps[this.editIndex];
     if (!step) return;
     this.emitOneKeyframe(this.editTargetGuid, this.editIntentAccess, this.editMutateIntent, step.args);
+  }
+
+  private persistEditedStep(
+    stepIndex: number,
+    step: { time: number; args?: Record<string, unknown> },
+  ): void {
+    const sourceIndex = this.editSourceIndices[stepIndex];
+    if (typeof sourceIndex !== 'number' || !Number.isFinite(sourceIndex) || sourceIndex < 0) return;
+    const cfg = this.keyframeConfigBag();
+    const rawSteps = cfg['steps'];
+    if (!Array.isArray(rawSteps)) return;
+    const existing = rawSteps[sourceIndex];
+    if (!existing || typeof existing !== 'object' || Array.isArray(existing)) return;
+
+    const timeSeconds = step.time / 1000;
+    const nextRow: Record<string, unknown> = {
+      ...(existing as Record<string, unknown>),
+      time: Number.isFinite(timeSeconds) ? timeSeconds : 0,
+    };
+    if (step.args !== undefined) {
+      nextRow['args'] = step.args;
+    } else {
+      delete nextRow['args'];
+    }
+    rawSteps[sourceIndex] = nextRow;
   }
 
   /**
@@ -384,6 +460,7 @@ export class KeyframeAnimator {
 
   private parseSteps(): {
     steps: { time: number; args?: Record<string, unknown> }[];
+    stepSourceIndices: number[];
     repeatLoops: number;
     cycleLengthMs: number;
     lengthClampActive: boolean;
@@ -408,9 +485,9 @@ export class KeyframeAnimator {
       }
       parsed.push(entry);
     }
-    const sorted = parsed
-      .sort((a, b) => (a.time === b.time ? a._index - b._index : a.time - b.time))
-      .map(p => (p.args !== undefined ? { time: p.time, args: p.args } : { time: p.time }));
+    const sortedEntries = parsed.sort((a, b) => (a.time === b.time ? a._index - b._index : a.time - b.time));
+    const sorted = sortedEntries.map(p => (p.args !== undefined ? { time: p.time, args: p.args } : { time: p.time }));
+    const sortedIndices = sortedEntries.map(p => p._index);
 
     const repeatRaw = cfg['repeat'];
     const repeatLoops =
@@ -424,6 +501,7 @@ export class KeyframeAnimator {
       const fallbackPeriod = sorted.length === 0 ? 1 : Math.max(...sorted.map(s => s.time), 1);
       return {
         steps: sorted,
+        stepSourceIndices: sortedIndices,
         repeatLoops,
         cycleLengthMs: fallbackPeriod,
         lengthClampActive: false,
@@ -431,11 +509,21 @@ export class KeyframeAnimator {
       };
     }
 
-    const steps = sorted.filter(s => s.time < lengthMs);
+    const steps: { time: number; args?: Record<string, unknown> }[] = [];
+    const stepSourceIndices: number[] = [];
+    for (let i = 0; i < sorted.length; i++) {
+      const row = sorted[i];
+      const sourceIndex = sortedIndices[i];
+      if (!row || typeof sourceIndex !== 'number') continue;
+      if (row.time >= lengthMs) continue;
+      steps.push(row);
+      stepSourceIndices.push(sourceIndex);
+    }
     const cycleLengthMs = lengthMs;
 
     return {
       steps,
+      stepSourceIndices,
       repeatLoops,
       cycleLengthMs,
       lengthClampActive: true,

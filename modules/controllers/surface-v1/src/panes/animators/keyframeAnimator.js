@@ -1,8 +1,9 @@
 import { AnimatorViewer } from './AnimatorViewer.js'
 import { subscribeBinding } from '../../core/bindingRegistry.js'
 import { sendAnimationEdit, sendBindingSet } from '../../core/outboundQueue.js'
+import { editText, warn as modalWarn } from '../../core/Modal.js'
 
-/** Per-animation subscription handle so reopening the pane drops the prior callback. */
+/** Per-animation cleanup so reopening the pane drops the prior callback and edit session. */
 const activeBindings = new Map()
 
 export class KeyframeAnimatorViewer extends AnimatorViewer {
@@ -25,36 +26,25 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
     const guid = String(record?.guid ?? '')
     if (!guid) return null
 
-    const prev = activeBindings.get(guid)
-    if (prev) prev()
-    activeBindings.delete(guid)
+    for (const [otherGuid, cleanup] of activeBindings.entries()) {
+      cleanup()
+      activeBindings.delete(otherGuid)
+    }
 
     const bindingKey = `${guid}-editState`
 
     const section = document.createElement('section')
     section.className = 'animator-edit-section'
 
+    const top = document.createElement('div')
+    top.className = 'animator-edit-section__top'
+
     const header = document.createElement('div')
     header.className = 'animator-edit-section__header'
     header.textContent = 'Keyframe edit'
 
-    const toggle = document.createElement('button')
-    toggle.type = 'button'
-    toggle.className = 'animator-edit-section__toggle'
-    toggle.textContent = 'Edit Mode: off'
-
     const body = document.createElement('div')
     body.className = 'animator-edit-section__body'
-
-    let editing = false
-
-    const renderIdle = () => {
-      body.replaceChildren()
-      const note = document.createElement('div')
-      note.className = 'animator-edit-section__note'
-      note.textContent = 'Not in edit mode.'
-      body.appendChild(note)
-    }
 
     const renderState = state => {
       body.replaceChildren()
@@ -63,80 +53,128 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
         ? Number(state.currentStepIndex)
         : 0
 
-      const counter = document.createElement('div')
-      counter.className = 'animator-edit-section__counter'
-      counter.textContent = total > 0 ? `Step ${idx + 1} of ${total}` : 'No steps'
-
-      const dump = document.createElement('pre')
-      dump.className = 'animator-edit-section__dump'
-      dump.textContent = formatJson(state?.currentStepContent)
-
       const nav = document.createElement('div')
       nav.className = 'animator-edit-section__nav'
+
       const prevBtn = document.createElement('button')
       prevBtn.type = 'button'
       prevBtn.className = 'animator-edit-section__nav-btn'
-      prevBtn.textContent = '◀ Prev'
+      prevBtn.textContent = 'Prev'
       prevBtn.disabled = idx <= 0
       prevBtn.addEventListener('click', () => {
-        sendBindingSet(bindingKey, {
-          ...state,
-          currentStepIndex: Math.max(0, idx - 1)
-        })
+        sendBindingSet(bindingKey, { currentStepIndex: Math.max(0, idx - 1) })
       })
       const nextBtn = document.createElement('button')
       nextBtn.type = 'button'
       nextBtn.className = 'animator-edit-section__nav-btn'
-      nextBtn.textContent = 'Next ▶'
+      nextBtn.textContent = 'Next'
       nextBtn.disabled = total === 0 || idx >= total - 1
       nextBtn.addEventListener('click', () => {
-        sendBindingSet(bindingKey, {
-          ...state,
-          currentStepIndex: Math.min(total - 1, idx + 1)
-        })
+        sendBindingSet(bindingKey, { currentStepIndex: Math.min(total - 1, idx + 1) })
       })
+
+      const counter = document.createElement('span')
+      counter.className = 'animator-edit-section__counter'
+      counter.textContent = total > 0 ? `${idx + 1} of ${total}` : '0 of 0'
+
       nav.appendChild(prevBtn)
+      nav.appendChild(counter)
       nav.appendChild(nextBtn)
 
-      body.appendChild(counter)
+      const dump = document.createElement('pre')
+      dump.className = 'animator-edit-section__dump'
+      dump.textContent = formatStepText(state?.currentStepContent)
+      dump.tabIndex = 0
+      dump.title = 'Tap to edit step content'
+      dump.addEventListener('click', () => {
+        void openStepContentEditor(state, bindingKey)
+      })
+
+      top.replaceChildren(header, nav)
       body.appendChild(dump)
-      body.appendChild(nav)
     }
 
     const onState = value => {
       if (value == null) {
-        editing = false
-        toggle.textContent = 'Edit Mode: off'
-        toggle.classList.remove('animator-edit-section__toggle--on')
-        renderIdle()
+        body.replaceChildren()
+        const note = document.createElement('div')
+        note.className = 'animator-edit-section__note'
+        note.textContent = 'Waiting for edit state...'
+        body.appendChild(note)
         return
       }
-      editing = true
-      toggle.textContent = 'Edit Mode: on'
-      toggle.classList.add('animator-edit-section__toggle--on')
       renderState(value)
     }
 
-    toggle.addEventListener('click', () => {
-      sendAnimationEdit(guid, !editing)
+    const unsub = subscribeBinding(bindingKey, onState)
+    sendAnimationEdit(guid, true)
+    activeBindings.set(guid, () => {
+      unsub()
+      sendAnimationEdit(guid, false)
     })
 
-    const unsub = subscribeBinding(bindingKey, onState)
-    activeBindings.set(guid, unsub)
-    renderIdle()
+    const note = document.createElement('div')
+    note.className = 'animator-edit-section__note'
+    note.textContent = 'Waiting for edit state...'
+    body.appendChild(note)
 
-    section.appendChild(header)
-    section.appendChild(toggle)
+    section.appendChild(top)
     section.appendChild(body)
     return section
   }
 }
 
-function formatJson (value) {
+function formatStepText (value) {
   if (value === undefined) return ''
   try {
     return JSON.stringify(value, null, 2)
   } catch {
     return String(value)
   }
+}
+
+/**
+ * @param {Record<string, unknown>} state
+ * @param {string} bindingKey
+ * @returns {Promise<void>}
+ */
+async function openStepContentEditor (state, bindingKey) {
+  let draft = formatStepText(state?.currentStepContent)
+  let reason = ''
+  let parsed = null
+  while (true) {
+    const raw = await editText({
+      title: reason ? `Edit keyframe step (${reason})` : 'Edit keyframe step',
+      text: draft,
+      saveLabel: 'Save',
+      cancelLabel: 'Cancel'
+    })
+    if (raw === null) return
+    draft = raw
+    try {
+      parsed = JSON.parse(raw)
+    } catch (err) {
+      reason = err instanceof Error ? err.message : 'Invalid syntax.'
+      await modalWarn(reason)
+      continue
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      reason = 'Step must be a JSON object.'
+      await modalWarn(reason)
+      continue
+    }
+    if ('args' in parsed) {
+      const args = parsed.args
+      if (!args || typeof args !== 'object' || Array.isArray(args)) {
+        reason = 'Step "args" must be a JSON object.'
+        await modalWarn(reason)
+        continue
+      }
+    }
+    break
+  }
+  sendBindingSet(bindingKey, {
+    currentStepIndex: Number(state?.currentStepIndex) || 0,
+    currentStepContent: parsed
+  })
 }

@@ -1430,7 +1430,19 @@ class ProjectGraph {
   _applySceneDelta (guid, op, delta) {
     const idx = this._data.scenes.findIndex(s => s.guid === guid)
     if (op === 'remove') {
-      if (idx >= 0) this._data.scenes.splice(idx, 1)
+      if (idx >= 0) {
+        const wasActive = this._data.activeSceneGuid === guid
+        this._data.scenes.splice(idx, 1)
+        if (wasActive) {
+          this._data.activeSceneGuid = this._data.scenes[0]?.guid ?? null
+        }
+      }
+      if (
+        this._data.activeSceneGuid &&
+        !this._data.scenes.some(s => s.guid === this._data.activeSceneGuid)
+      ) {
+        this._data.activeSceneGuid = this._data.scenes[0]?.guid ?? null
+      }
       return
     }
     const value =
@@ -1451,6 +1463,14 @@ class ProjectGraph {
       this._data.scenes[idx] = scene
     } else if (scene.name) {
       this._data.scenes.push(scene)
+    }
+    if (
+      this._data.activeSceneGuid &&
+      !this._data.scenes.some(s => s.guid === this._data.activeSceneGuid)
+    ) {
+      this._data.activeSceneGuid = this._data.scenes[0]?.guid ?? null
+    } else if (!this._data.activeSceneGuid && this._data.scenes.length > 0) {
+      this._data.activeSceneGuid = this._data.scenes[0].guid
     }
   }
 

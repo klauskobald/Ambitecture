@@ -249,13 +249,7 @@ export class ScenesPane {
     const idx = scenes.findIndex(s => s.name === active)
     if (idx === -1) return
     const removedGuid = scenes[idx]?.guid
-    scenes.splice(idx, 1)
-    const nextActive = scenes[Math.max(0, idx - 1)]?.name ?? scenes[0]?.name ?? null
-    if (nextActive) {
-      projectGraph.setActiveScene(nextActive)
-      const nextGuid = projectGraph.getSceneGuid(nextActive)
-      if (nextGuid) sendSceneActivate(nextGuid)
-    }
+    const nextGuid = scenes[idx - 1]?.guid ?? scenes[idx + 1]?.guid ?? null
     if (removedGuid) {
       sendGraphCommand({
         op: 'remove',
@@ -263,8 +257,9 @@ export class ScenesPane {
         guid: removedGuid,
         persistence: 'runtimeAndDurable'
       })
+      if (nextGuid) sendSceneActivate(nextGuid)
     } else {
-      sendSaveProject('scenes', toHubScenes(scenes))
+      sendSaveProject('scenes', toHubScenes(projectGraph.getScenesData()))
     }
   }
 }

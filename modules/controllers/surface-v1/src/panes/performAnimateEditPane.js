@@ -6,11 +6,12 @@ import { getAnimatorViewer } from './animators/animatorViewerRegistry.js'
 import { ScalarRadialKnobSvg } from '../edit/components/ScalarRadialKnobSvg.js'
 import { SelectPopup } from '../edit/components/selectPopup.js'
 import * as Modal from '../core/Modal.js'
+import { InputAssignManager } from '../edit/InputAssignManager.js'
 
 /**
  * Edit pane for a single animation record.
  * Positioned absolute over the full pane-host (covers subnav).
- * Top row: back button | name label | target intent.
+ * Top row: back button | name label | perform assign | target intent.
  * Body: content fields from systemCapabilities display.
  *
  * @param {{ onClose: () => void }} opts
@@ -40,6 +41,9 @@ export function createAnimationEditPane ({ onClose }) {
   nameLabel.className = 'perform-animate-edit__name'
   nameLabel.title = 'Edit animation name'
 
+  const assignHost = document.createElement('div')
+  assignHost.className = 'perform-animate-edit__assign'
+
   const intentSpan = document.createElement('span')
   intentSpan.className = 'perform-animate-edit__intent'
 
@@ -50,6 +54,7 @@ export function createAnimationEditPane ({ onClose }) {
 
   topRow.appendChild(backBtn)
   topRow.appendChild(nameLabel)
+  topRow.appendChild(assignHost)
   topRow.appendChild(intentSpan)
   topRow.appendChild(deleteBtn)
 
@@ -64,9 +69,35 @@ export function createAnimationEditPane ({ onClose }) {
   /** @type {string} */
   let currentGuid = ''
 
+  /** @type {Record<string, unknown> | null} */
+  let lastOpenRecord = null
+
+  function renderAssignRow () {
+    if (!lastOpenRecord || !currentGuid) return
+    assignHost.replaceChildren()
+    const iam = new InputAssignManager({
+      context: { type: 'animation', guid: currentGuid },
+      labelDefault: String(lastOpenRecord.name ?? currentGuid)
+    })
+    assignHost.appendChild(
+      iam.getInlinePane({
+        rowClass: 'scene-perform-row',
+        toggleClass: 'intent-toggle scene-perform-button',
+        labelClass: 'btn scene-perform-label'
+      })
+    )
+  }
+
+  projectGraph.subscribe(['actions', 'inputs'], () => {
+    if (!el.hidden && currentGuid && lastOpenRecord) {
+      renderAssignRow()
+    }
+  })
+
   /** @param {Record<string, unknown>} record */
   function open (record) {
     currentGuid = String(record.guid ?? '')
+    lastOpenRecord = record
 
     nameLabel.textContent = String(record.name ?? '')
     nameLabel.onclick = async () => {
@@ -79,6 +110,7 @@ export function createAnimationEditPane ({ onClose }) {
       nameLabel.textContent = nextName
       sendAnimationPatch(currentGuid, { name: nextName })
       record.name = nextName
+      renderAssignRow()
     }
 
     const intentGuid = String(record.targetIntent ?? record.intent ?? '')
@@ -108,6 +140,7 @@ export function createAnimationEditPane ({ onClose }) {
     }
 
     el.hidden = false
+    renderAssignRow()
     renderBody(record)
   }
 

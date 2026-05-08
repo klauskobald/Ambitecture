@@ -429,4 +429,23 @@ testParams:
         - time: 5
           args:
             "position.2": 5
-       
+
+  # Timescale WebSocket binding stays registered after stop (no null to slaves).
+  005-timescale-binding.ts:
+    location: [0, 0]
+    sceneGuid: ""
+    timescale: 2
+    intentGuid: color-3
+    animationGuid: animation-timescale-binding-test
+    class: keyframeAnimator
+    content:
+      repeat: 0
+      length: 10000
+      steps:
+        - time: 0
+          args:
+            "position.2": 1
+        - time: 5000
+          args:
+            "position.2": 2
+

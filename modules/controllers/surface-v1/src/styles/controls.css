@@ -632,11 +632,18 @@
 
 .perform-animate-edit__top {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
   padding: 4px;
   flex-shrink: 0;
   border-bottom: 1px solid var(--color-border);
+}
+
+.perform-animate-edit__assign {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(14rem, 100%);
 }
 
 .perform-animate-edit__back {

@@ -64,6 +64,51 @@ export class AnimationManager {
     this.onInternalStatus = cb;
   }
 
+  private timescaleBindingKey(animationGuid: string): string {
+    return `${animationGuid}-timescale`;
+  }
+
+  /** Effective timescale for hub binding: active runner, else persisted animation row, else 1. */
+  private getTimescaleForBinding(animationGuid: string): number {
+    const runner = this.runners.get(animationGuid);
+    if (
+      runner &&
+      typeof runner.timescale === 'number' &&
+      Number.isFinite(runner.timescale) &&
+      runner.timescale > 0
+    ) {
+      return runner.timescale;
+    }
+    const def = this.projectManager.getAnimationByGuid(animationGuid) as unknown as
+      | Record<string, unknown>
+      | undefined;
+    const ts = def?.['timescale'];
+    if (typeof ts === 'number' && Number.isFinite(ts) && ts > 0) {
+      return ts;
+    }
+    return 1;
+  }
+
+  /** Idempotent: replaces master so get/set always resolve through {@link getTimescaleForBinding} / {@link setTimescale}. */
+  private ensureTimescaleMaster(animationGuid: string): void {
+    if (!this.bindingManager) {
+      return;
+    }
+    const key = this.timescaleBindingKey(animationGuid);
+    this.bindingManager.registerMaster(
+      key,
+      () => this.getTimescaleForBinding(animationGuid),
+      value => {
+        const n = Number(value);
+        this.setTimescale(animationGuid, n);
+      },
+    );
+  }
+
+  private unregisterTimescaleMaster(animationGuid: string): void {
+    this.bindingManager?.unregisterMaster(this.timescaleBindingKey(animationGuid));
+  }
+
   private intentAccessFn(guid: string): ControllerIntent | undefined {
     const eff = this.runtimeIntentStore.getEffectiveIntent(guid);
     if (eff) return eff;
@@ -87,10 +132,12 @@ export class AnimationManager {
   }
 
   /**
-   * Finite run completed all cycles; plugin is idle — drop registration so scene re-enter does not restart it.
+   * Finite run completed all cycles; plugin is idle — remove runner without tearing down timescale binding.
    */
   private unregisterNaturallyFinishedRunner(animationGuid: string): void {
-    if (!this.runners.has(animationGuid)) return;
+    const existing = this.runners.get(animationGuid);
+    if (!existing) return;
+    existing.plugin.stripTimers();
     this.runners.delete(animationGuid);
   }
 
@@ -176,17 +223,12 @@ export class AnimationManager {
     if (!inScene) {
       plugin.onSceneMembershipChanged(false);
       this.runners.set(animationGuid, runnerBase);
+      this.ensureTimescaleMaster(animationGuid);
       return;
     }
 
     this.runners.set(animationGuid, runnerBase);
-
-    const runner = runnerBase;
-    this.bindingManager?.registerMaster(
-      `${animationGuid}-timescale`,
-      () => runner.timescale,
-      value => this.setTimescale(animationGuid, Number(value)),
-    );
+    this.ensureTimescaleMaster(animationGuid);
 
     const mutateIntent: MutateIntentFn = (guid, patch) => {
       if (Object.keys(patch).length === 0) return;
@@ -205,12 +247,13 @@ export class AnimationManager {
     }
     const runner = this.runners.get(animationGuid);
     if (!runner) {
-      Logger.warn(`[animation] setTimescale ignored — no runner for ${animationGuid}`);
+      this.projectManager.patchAnimationFields(animationGuid, { timescale: factor });
+      this.bindingManager?.receiveFromMaster(this.timescaleBindingKey(animationGuid), factor);
       return;
     }
     runner.timescale = factor;
     runner.plugin.setTimescale(factor);
-    this.bindingManager?.receiveFromMaster(`${animationGuid}-timescale`, runner.timescale);
+    this.bindingManager?.receiveFromMaster(this.timescaleBindingKey(animationGuid), runner.timescale);
     this.projectManager.patchAnimationFields(animationGuid, { timescale: factor });
   }
 
@@ -245,7 +288,6 @@ export class AnimationManager {
     if (!existing) {
       return;
     }
-    this.bindingManager?.unregisterMaster(`${animationGuid}-timescale`);
     existing.plugin.cancel(reason);
     this.runners.delete(animationGuid);
   }
@@ -257,6 +299,12 @@ export class AnimationManager {
     }
     for (const g of [...this.edits.keys()]) {
       this.exitEditMode(g);
+    }
+    for (const anim of this.projectManager.getAnimationsWirePayload()) {
+      const guid = anim.guid;
+      if (typeof guid === 'string' && guid.length > 0) {
+        this.unregisterTimescaleMaster(guid);
+      }
     }
   }
 
@@ -427,5 +475,6 @@ export class AnimationManager {
   onAnimationRemoved(animationGuid: string, _location?: [number, number]): void {
     this.stopRunner(animationGuid, 'animation removed');
     this.exitEditMode(animationGuid);
+    this.unregisterTimescaleMaster(animationGuid);
   }
 }

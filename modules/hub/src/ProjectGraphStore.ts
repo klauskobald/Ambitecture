@@ -417,9 +417,29 @@ export class ProjectGraphStore {
 
     const animRow = nextAnimations.find(a => a.guid === command.guid);
     const animName = typeof animRow?.name === 'string' && animRow.name.length > 0 ? animRow.name : command.guid;
+    const prevAnimRow = animations.find(a => a.guid === command.guid);
+    const prevAnimName =
+      typeof prevAnimRow?.name === 'string' && prevAnimRow.name.length > 0 ? prevAnimRow.name : command.guid;
+    const autoNext = `Run ${animName}`;
+    const autoPrev = `Run ${prevAnimName}`;
+    const existingCompanion = this.projectManager
+      .getActionsWirePayload()
+      .find(a => a.guid === sharedAnimationAndActionGuid);
+    const existingName =
+      typeof existingCompanion?.name === 'string' ? existingCompanion.name.trim() : '';
+    let companionName = autoNext;
+    if (existingCompanion !== undefined) {
+      if (existingName.length === 0) {
+        companionName = autoNext;
+      } else if (existingName === autoPrev) {
+        companionName = autoNext;
+      } else {
+        companionName = existingName;
+      }
+    }
     const companionAction: ActionDefinition = {
       guid: sharedAnimationAndActionGuid,
-      name: `Run ${animName}`,
+      name: companionName,
       execute: [{ type: 'animation', guid: command.guid }],
     };
     const actions = this.projectManager.getActionsWirePayload().filter(a => a.guid !== sharedAnimationAndActionGuid);

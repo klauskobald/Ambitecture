@@ -133,6 +133,9 @@ export function createAnimationEditPane ({ onClose }) {
 
       body.appendChild(makeFieldRow(label, null, widget))
     }
+
+    const editSection = viewer?.renderEditSection?.(record)
+    if (editSection) body.appendChild(editSection)
   }
 
   return { el, open }

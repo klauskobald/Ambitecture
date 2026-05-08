@@ -35,6 +35,13 @@ export type AnimationStatusPayload = {
  */
 export class AnimationManager {
   private runners = new Map<string, ActiveRunner>();
+  /**
+   * Animations currently in keyframe-stepping edit mode. Disjoint from {@link runners} —
+   * `enterEditMode` always stops the runner first; `trigger` always exits edit first.
+   * Type narrowed to KeyframeAnimator since it is currently the only class with edit support;
+   * widen if/when another animator class implements its own edit lifecycle.
+   */
+  private edits = new Map<string, KeyframeAnimator>();
   private onInternalStatus?: (guid: string, payload: AnimationStatusPayload) => void;
 
   constructor(
@@ -95,8 +102,12 @@ export class AnimationManager {
 
   /**
    * Start or restart animation. Kills any existing runner for the same guid.
+   * If the animation is in edit mode, that mode exits first.
    */
   trigger(animationGuid: string, opts: { location?: [number, number]; timescale?: number } = {}): void {
+    if (this.edits.has(animationGuid)) {
+      this.exitEditMode(animationGuid);
+    }
     const def = this.projectManager.getAnimationByGuid(animationGuid);
     if (!def) {
       Logger.warn(`[animation] unknown animation ${animationGuid}`);
@@ -234,6 +245,69 @@ export class AnimationManager {
     for (const g of [...this.runners.keys()]) {
       this.stopRunner(g, reason);
     }
+    for (const g of [...this.edits.keys()]) {
+      this.exitEditMode(g);
+    }
+  }
+
+  /**
+   * Enter live keyframe-stepping edit mode for `animationGuid`.
+   * Stops any active runner, instantiates the animator, and hands it the BindingManager so the
+   * animator can register its own master binding(s). The shape and key are entirely the animator's
+   * concern — this method does not touch editState.
+   */
+  enterEditMode(animationGuid: string, opts: { location?: [number, number] } = {}): void {
+    if (!this.bindingManager) {
+      Logger.warn('[animation] enterEditMode ignored — no BindingManager');
+      return;
+    }
+    if (this.edits.has(animationGuid)) {
+      return;
+    }
+
+    const def = this.projectManager.getAnimationByGuid(animationGuid);
+    if (!def) {
+      Logger.warn(`[animation] enterEditMode ignored — unknown animation ${animationGuid}`);
+      return;
+    }
+    const record = def as unknown as Record<string, unknown>;
+    const animClass = typeof record['class'] === 'string' ? record['class'] : '';
+    if (animClass !== 'keyframeAnimator') {
+      Logger.warn(`[animation] enterEditMode unsupported class "${animClass}" for ${animationGuid}`);
+      return;
+    }
+
+    if (this.runners.has(animationGuid)) {
+      this.stopRunner(animationGuid, 'replaced by edit');
+    }
+
+    const plugin = new KeyframeAnimator(animationGuid, record, {
+      onStatus: p => {
+        this.emitAnimatorStatus(animationGuid, p, opts.location);
+      },
+    });
+
+    const mutateIntent: MutateIntentFn = (guid, patch) => {
+      if (Object.keys(patch).length === 0) return;
+      const update: RuntimeUpdate = { entityType: 'intent', guid, patch, source: 'hub:animation' };
+      this.runtimeUpdateDispatcher.dispatch([update], opts.location, Date.now());
+    };
+
+    plugin.enterEditMode({
+      intentAccess: g => this.intentAccessFn(g),
+      mutateIntent,
+      bindingManager: this.bindingManager,
+    });
+
+    this.edits.set(animationGuid, plugin);
+  }
+
+  /** Exit edit mode for `animationGuid`. The animator unregisters its own bindings. */
+  exitEditMode(animationGuid: string): void {
+    const plugin = this.edits.get(animationGuid);
+    if (!plugin) return;
+    plugin.exitEditMode();
+    this.edits.delete(animationGuid);
   }
 
   /**
@@ -292,10 +366,20 @@ export class AnimationManager {
         this.stopRunner(guid, 'target intent removed');
       }
     }
+    for (const guid of [...this.edits.keys()]) {
+      const def = this.projectManager.getAnimationByGuid(guid) as Record<string, unknown> | undefined;
+      const target = typeof def?.['targetIntent'] === 'string' ? def['targetIntent']
+        : typeof def?.['intent'] === 'string' ? def['intent']
+        : undefined;
+      if (target === intentGuid) {
+        this.exitEditMode(guid);
+      }
+    }
   }
 
   /** Stop runner when animation definition is removed from the project graph. */
   onAnimationRemoved(animationGuid: string, _location?: [number, number]): void {
     this.stopRunner(animationGuid, 'animation removed');
+    this.exitEditMode(animationGuid);
   }
 }

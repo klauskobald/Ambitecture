@@ -23,6 +23,7 @@ import { HubStatusDispatcher } from './hubStatusTypes';
 import { AnimationManager } from './animation/AnimationManager';
 import { BindingManager } from './BindingManager';
 import { BindingHandler } from './handlers/BindingHandler';
+import { AnimationEditHandler } from './handlers/AnimationEditHandler';
 
 const serverConfig = new Config('server');
 const systemConfig = new Config('system', true);
@@ -268,6 +269,7 @@ router.register('saveProject', new SaveProjectHandler(projectManager));
 const bindingHandler = new BindingHandler(registry, bindingManager);
 router.register('binding:subscribe', bindingHandler);
 router.register('binding:set', bindingHandler);
+router.register('animation:edit', new AnimationEditHandler(registry, animationManager));
 
 graphStore.useProject(serverConfig.get<string>('defaultProject'), () => {
   pushConfigsToModules();

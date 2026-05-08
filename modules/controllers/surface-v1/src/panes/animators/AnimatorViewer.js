@@ -45,4 +45,13 @@ export class AnimatorViewer {
    * @returns {boolean}
    */
   shouldWarnOnClassSwitch (_record) { return false }
+
+  /**
+   * Optional animator-specific edit section appended below the generic param widgets in the
+   * animation edit pane. Each animator class owns its own UI, binding keys, and state shape —
+   * there is no shared contract beyond "return an HTMLElement (or null) for the edit pane to mount".
+   * @param {Record<string, unknown>} _record full animation record
+   * @returns {HTMLElement | null}
+   */
+  renderEditSection (_record) { return null }
 }

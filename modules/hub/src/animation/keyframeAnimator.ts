@@ -1,5 +1,6 @@
 import type { ControllerIntent } from '../ProjectManager';
 import type { AnimationRunStatus } from '../hubStatusTypes';
+import type { BindingManager } from '../BindingManager';
 import { Logger } from '../Logger';
 import { applyDotPathPatch, cloneRecord, readAtDotPath, setAtDotPath } from '../dotPath';
 
@@ -143,8 +144,18 @@ export class KeyframeAnimator {
   /** Re-enters the cycle scheduler from a given cycle + step; set in start(). */
   private _resumeFn?: (cIdx: number, startStepIdx: number) => void;
 
+  // ── edit mode (controller-driven keyframe stepping) ───────────────────────
+  private editActive = false;
+  private editBindingKey?: string;
+  private editBindingMgr?: BindingManager;
+  private editIntentAccess?: IntentAccessFn;
+  private editMutateIntent?: MutateIntentFn;
+  private editTargetGuid?: string;
+  private editSteps: { time: number; args?: Record<string, unknown> }[] = [];
+  private editIndex = 0;
+
   constructor(
-    _animationGuid: string,
+    private animationGuid: string,
     private rawDef: Record<string, unknown>,
     private callbacks: KeyframeAnimatorCallbacks,
   ) { }
@@ -205,6 +216,119 @@ export class KeyframeAnimator {
         data: {},
       });
     }
+  }
+
+  /**
+   * Enter live keyframe-stepping edit mode. Caller has already stopped any runner.
+   * The animator owns its own master binding (`${guid}-editState`) and emits step 0 immediately.
+   * editState shape and binding lifecycle are private to this class — AnimationManager only
+   * forwards the deps and calls exitEditMode on teardown.
+   */
+  enterEditMode(deps: {
+    intentAccess: IntentAccessFn;
+    mutateIntent: MutateIntentFn;
+    bindingManager: BindingManager;
+  }): void {
+    if (this.editActive) return;
+
+    const { steps } = this.parseSteps();
+    const targetGuid = this.targetIntentGuid();
+
+    if (!targetGuid) {
+      this.callbacks.onStatus({
+        status: 'stopped',
+        message: { text: 'No targetIntent (edit aborted)' },
+        data: {},
+      });
+      return;
+    }
+    if (steps.length === 0) {
+      this.callbacks.onStatus({
+        status: 'stopped',
+        message: { text: 'No keyframe steps to edit' },
+        data: {},
+      });
+      return;
+    }
+
+    this.editActive = true;
+    this.editIntentAccess = deps.intentAccess;
+    this.editMutateIntent = deps.mutateIntent;
+    this.editBindingMgr = deps.bindingManager;
+    this.editBindingKey = `${this.animationGuid}-editState`;
+    this.editTargetGuid = targetGuid;
+    this.editSteps = steps;
+    this.editIndex = 0;
+
+    this.emitCurrentEditStep();
+
+    deps.bindingManager.registerMaster(
+      this.editBindingKey,
+      () => this.computeEditState(),
+      value => this.applyEditState(value),
+    );
+  }
+
+  exitEditMode(): void {
+    if (!this.editActive) return;
+    if (this.editBindingMgr && this.editBindingKey) {
+      this.editBindingMgr.unregisterMaster(this.editBindingKey);
+    }
+    this.editActive = false;
+    delete this.editBindingMgr;
+    delete this.editBindingKey;
+    delete this.editIntentAccess;
+    delete this.editMutateIntent;
+    delete this.editTargetGuid;
+    this.editSteps = [];
+    this.editIndex = 0;
+  }
+
+  private computeEditState(): {
+    totalSteps: number;
+    currentStepIndex: number;
+    currentStepContent: unknown;
+  } {
+    const total = this.editSteps.length;
+    const idx = total > 0 ? Math.max(0, Math.min(total - 1, this.editIndex)) : 0;
+    const step = this.editSteps[idx];
+    return {
+      totalSteps: total,
+      currentStepIndex: idx,
+      currentStepContent: step ?? null,
+    };
+  }
+
+  private applyEditState(value: unknown): void {
+    if (!this.editActive) return;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      Logger.warn('[keyframeAnimator] applyEditState ignored — non-object value');
+      return;
+    }
+    const total = this.editSteps.length;
+    if (total === 0) return;
+
+    const incoming = value as Record<string, unknown>;
+    const rawIdx = incoming['currentStepIndex'];
+    if (typeof rawIdx !== 'number' || !Number.isFinite(rawIdx)) {
+      Logger.warn('[keyframeAnimator] applyEditState ignored — invalid currentStepIndex');
+      return;
+    }
+    const clamped = Math.max(0, Math.min(total - 1, Math.floor(rawIdx)));
+    if (clamped !== this.editIndex) {
+      this.editIndex = clamped;
+      this.emitCurrentEditStep();
+    }
+    if (this.editBindingMgr && this.editBindingKey) {
+      this.editBindingMgr.receiveFromMaster(this.editBindingKey, this.computeEditState());
+    }
+  }
+
+  private emitCurrentEditStep(): void {
+    if (!this.editTargetGuid || !this.editIntentAccess || !this.editMutateIntent) return;
+    const step = this.editSteps[this.editIndex];
+    if (!step) return;
+    this.emitOneKeyframe(this.editTargetGuid, this.editIntentAccess, this.editMutateIntent, step.args);
   }
 
   /**

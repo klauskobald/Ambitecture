@@ -170,6 +170,23 @@ export function sendBindingSet (key, value) {
 }
 
 /**
+ * Toggle live edit mode for a keyframe-style animation. Hub installs/removes the
+ * animator-owned editState binding in response.
+ * @param {string} animationGuid
+ * @param {boolean} on
+ */
+export function sendAnimationEdit (animationGuid, on) {
+  if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation) return
+  activeWs.send(JSON.stringify({
+    message: {
+      type: 'animation:edit',
+      location: activeLocation,
+      payload: { animationGuid, on: !!on }
+    }
+  }))
+}
+
+/**
  * @param {string} actionGuid
  * @param {Record<string, unknown>=} args
  */

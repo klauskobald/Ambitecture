@@ -1016,3 +1016,108 @@
   border-color: var(--color-accent);
   color: var(--color-accent);
 }
+
+/* ─── Animator edit section (live keyframe stepping) ──────────────── */
+
+.animator-edit-section {
+  grid-column: 1 / -1;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border, #2a2a2a);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.animator-edit-section__header {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.animator-edit-section__toggle {
+  align-self: flex-start;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid #444;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.animator-edit-section__toggle:hover {
+  border-color: #666;
+  color: var(--color-text);
+}
+
+.animator-edit-section__toggle--on {
+  background: var(--color-accent-dim);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.animator-edit-section__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.animator-edit-section__note {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.animator-edit-section__counter {
+  color: var(--color-text);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.animator-edit-section__dump {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  background: #161616;
+  color: var(--color-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+.animator-edit-section__nav {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.animator-edit-section__nav-btn {
+  flex: 1 1 auto;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #444;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.animator-edit-section__nav-btn:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.animator-edit-section__nav-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

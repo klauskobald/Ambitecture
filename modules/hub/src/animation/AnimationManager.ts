@@ -17,7 +17,6 @@ export function companionActionGuid(animationGuid: string): string {
 type ActiveRunner = {
   plugin: KeyframeAnimator;
   targetIntentGuid: string;
-  definitionRecord: Record<string, unknown>;
   lastInScene: boolean;
   timescale: number;
   lastLocation?: [number, number];
@@ -156,18 +155,19 @@ export class AnimationManager {
       }
     }
 
-    const plugin = new KeyframeAnimator(animationGuid, record, {
+    const plugin = new KeyframeAnimator(animationGuid, {
       onStatus: p => {
         this.emitAnimatorStatus(animationGuid, p, opts.location ?? this.runners.get(animationGuid)?.lastLocation);
       },
       onDefinitionChanged: () => this.projectManager.touchAnimations(),
+      getDefinitionRecord: () =>
+        this.projectManager.getAnimationByGuid(animationGuid) as unknown as Record<string, unknown> | undefined,
     });
     plugin.setTimescale(effectiveTimescale);
 
     const runnerBase: ActiveRunner = {
       plugin,
       targetIntentGuid: target,
-      definitionRecord: record,
       lastInScene: inScene,
       timescale: effectiveTimescale,
       ...(opts.location !== undefined ? { lastLocation: opts.location } : {}),
@@ -291,11 +291,13 @@ export class AnimationManager {
       this.stopRunner(animationGuid, 'replaced by edit');
     }
 
-    const plugin = new KeyframeAnimator(animationGuid, record, {
+    const plugin = new KeyframeAnimator(animationGuid, {
       onStatus: p => {
         this.emitAnimatorStatus(animationGuid, p, opts.location);
       },
       onDefinitionChanged: () => this.projectManager.touchAnimations(),
+      getDefinitionRecord: () =>
+        this.projectManager.getAnimationByGuid(animationGuid) as unknown as Record<string, unknown> | undefined,
     });
 
     const mutateIntent: MutateIntentFn = (guid, patch) => {
@@ -375,10 +377,11 @@ export class AnimationManager {
       }
 
       runner.plugin.stripTimers();
-      const record = runner.definitionRecord;
-      const fresh = new KeyframeAnimator(guid, record, {
+      const fresh = new KeyframeAnimator(guid, {
         onStatus: p =>
           this.emitAnimatorStatus(guid, p, location ?? this.runners.get(guid)?.lastLocation),
+        getDefinitionRecord: () =>
+          this.projectManager.getAnimationByGuid(guid) as unknown as Record<string, unknown> | undefined,
       });
       fresh.setTimescale(runner.timescale);
 
@@ -386,7 +389,6 @@ export class AnimationManager {
       const next: ActiveRunner = {
         plugin: fresh,
         targetIntentGuid: runner.targetIntentGuid,
-        definitionRecord: record,
         lastInScene: true,
         timescale: runner.timescale,
         ...(nextLocation !== undefined ? { lastLocation: nextLocation } : {}),

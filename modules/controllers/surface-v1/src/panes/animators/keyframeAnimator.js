@@ -19,7 +19,7 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
 
   /**
    * Live keyframe-stepping edit section. The hub-side animator owns the editState shape
-   * `{ totalSteps, currentStepIndex, currentStepContent }`; this UI just displays it and
+   * edit state (incl. neighbor times + explicit length from hub); this UI displays it and
    * sends back a clamped step index on prev/next.
    * @param {Record<string, unknown>} record
    * @returns {HTMLElement | null}
@@ -60,7 +60,6 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
       const idx = Number.isFinite(state?.currentStepIndex)
         ? Number(state.currentStepIndex)
         : 0
-
       const nav = document.createElement('div')
       nav.className = 'animator-edit-section__nav'
 
@@ -93,11 +92,15 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
       addBtn.addEventListener('click', () => {
         const isLastStep = total > 0 && idx >= total - 1
         if (isLastStep) {
-          const lengthSeconds = readAnimationLengthSeconds(record)
+          const lengthSeconds = Number(state?.explicitAnimationLengthSec)
           const currentTimeSeconds = Number(state?.currentStepContent?.time)
           const hasValidLength = Number.isFinite(lengthSeconds)
           const hasValidCurrentTime = Number.isFinite(currentTimeSeconds)
-          if (hasValidLength && hasValidCurrentTime && currentTimeSeconds >= lengthSeconds) {
+          if (
+            hasValidLength &&
+            hasValidCurrentTime &&
+            roundToHundredths(currentTimeSeconds) >= roundToHundredths(lengthSeconds)
+          ) {
             notification.warn('Cannot add: last step is already at or beyond animation length.', `animation-add-denied-${guid}`)
             return
           }
@@ -134,7 +137,7 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
         })
       })
 
-      const timeKnob = makeStepTimeKnob(record, state, idx, total, bindingKey)
+      const timeKnob = makeStepTimeKnob(state, idx, total, bindingKey, guid)
       if (timeKnob) {
         tools.replaceChildren(addBtn, mergeBtn, timeKnob)
       } else {
@@ -203,33 +206,22 @@ function formatStepText (value) {
 }
 
 /**
- * @param {Record<string, unknown>} record
- * @returns {number}
- */
-function readAnimationLengthSeconds (record) {
-  const fromContent = Number(record?.content?.length)
-  if (Number.isFinite(fromContent)) return fromContent
-  const fromRoot = Number(record?.length)
-  if (Number.isFinite(fromRoot)) return fromRoot
-  return Number.NaN
-}
-
-/**
- * @param {Record<string, unknown>} record
  * @param {Record<string, unknown>} state
  * @param {number} idx
  * @param {number} total
  * @param {string} bindingKey
+ * @param {string} animationGuid
  * @returns {HTMLElement | null}
  */
-function makeStepTimeKnob (record, state, idx, total, bindingKey) {
+function makeStepTimeKnob (state, idx, total, bindingKey, animationGuid) {
   if (total <= 2) return null
   if (idx <= 0 || idx >= total - 1) return null
 
-  const neighbors = readNeighborTimesForIndex(record, idx)
-  if (!neighbors) return null
-  const min = neighbors.prev + 0.1
-  const max = neighbors.next - 0.1
+  const prevT = Number(state?.prevStepTimeSec)
+  const nextT = Number(state?.nextStepTimeSec)
+  if (!Number.isFinite(prevT) || !Number.isFinite(nextT)) return null
+  const min = prevT + 0.1
+  const max = nextT - 0.1
   if (!(Number.isFinite(min) && Number.isFinite(max) && max > min)) return null
 
   const currentTimeRaw = Number(state?.currentStepContent?.time)
@@ -246,7 +238,7 @@ function makeStepTimeKnob (record, state, idx, total, bindingKey) {
       step: 0.01,
       defaultValue: fallback
     },
-    intentGuid: String(record?.guid ?? ''),
+    intentGuid: String(animationGuid),
     readValue: () => currentTime,
     onCommit: domain => {
       const rounded = roundToHundredths(domain)
@@ -264,32 +256,6 @@ function makeStepTimeKnob (record, state, idx, total, bindingKey) {
   knob.mount(wrap)
   requestAnimationFrame(() => knob.syncFromExternal())
   return wrap
-}
-
-/**
- * @param {Record<string, unknown>} record
- * @param {number} idx
- * @returns {{ prev: number, next: number } | null}
- */
-function readNeighborTimesForIndex (record, idx) {
-  const stepsRaw = Array.isArray(record?.content?.steps)
-    ? record.content.steps
-    : Array.isArray(record?.steps)
-      ? record.steps
-      : []
-  const rows = []
-  for (let i = 0; i < stepsRaw.length; i++) {
-    const row = stepsRaw[i]
-    if (!row || typeof row !== 'object' || Array.isArray(row)) continue
-    const t = Number(row.time)
-    if (!Number.isFinite(t)) continue
-    rows.push({ time: t, sourceIndex: i })
-  }
-  rows.sort((a, b) => (a.time === b.time ? a.sourceIndex - b.sourceIndex : a.time - b.time))
-  const prev = rows[idx - 1]
-  const next = rows[idx + 1]
-  if (!prev || !next) return null
-  return { prev: prev.time, next: next.time }
 }
 
 /**

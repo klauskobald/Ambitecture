@@ -36,6 +36,11 @@ export interface KeyframeAnimatorCallbacks {
     data: Record<string, unknown>;
   }) => void;
   onDefinitionChanged?: () => void;
+  /**
+   * Live row from {@link ProjectManager.getAnimationByGuid} — never cache on the animator.
+   * Graph upserts replace `animations[]` with cloned rows; a stale reference would persist edits to a detached object.
+   */
+  getDefinitionRecord: () => Record<string, unknown> | undefined;
 }
 
 /** Deep-clone one subtree read from the intent so lerp planning never mutates the live object. */
@@ -191,7 +196,6 @@ export class KeyframeAnimator {
 
   constructor(
     private animationGuid: string,
-    private rawDef: Record<string, unknown>,
     private callbacks: KeyframeAnimatorCallbacks,
   ) { }
 
@@ -331,14 +335,33 @@ export class KeyframeAnimator {
     totalSteps: number;
     currentStepIndex: number;
     currentStepContent: unknown;
+    prevStepTimeSec: number | null;
+    nextStepTimeSec: number | null;
+    explicitAnimationLengthSec: number | null;
   } {
     const total = this.editSteps.length;
     const idx = total > 0 ? Math.max(0, Math.min(total - 1, this.editIndex)) : 0;
     const step = this.editSteps[idx];
+    const prevStep = idx > 0 ? this.editSteps[idx - 1] : undefined;
+    const nextStep = idx < total - 1 ? this.editSteps[idx + 1] : undefined;
+    const lenMs = this.parseExplicitAnimationLengthMs();
+    const explicitAnimationLengthSec =
+      lenMs !== undefined
+        ? this.roundTimeMsToHundredthSecond(lenMs) / 1000
+        : null;
     return {
       totalSteps: total,
       currentStepIndex: idx,
       currentStepContent: step ? this.toExternalEditStep(step) : null,
+      prevStepTimeSec:
+        prevStep !== undefined
+          ? this.roundTimeMsToHundredthSecond(prevStep.time) / 1000
+          : null,
+      nextStepTimeSec:
+        nextStep !== undefined
+          ? this.roundTimeMsToHundredthSecond(nextStep.time) / 1000
+          : null,
+      explicitAnimationLengthSec,
     };
   }
 
@@ -391,9 +414,11 @@ export class KeyframeAnimator {
             ...(Object.keys(patch).length > 0 ? { args: patch } : {}),
           };
           const sourceIndex = this.insertNewStep(incomingStep);
-          this.normalizeStoredStepsAndRefresh(sourceIndex);
-          this.callbacks.onDefinitionChanged?.();
-          this.emitCurrentEditStep();
+          if (sourceIndex >= 0) {
+            this.normalizeStoredStepsAndRefresh(sourceIndex);
+            this.callbacks.onDefinitionChanged?.();
+            this.emitCurrentEditStep();
+          }
         }
       }
       if (this.editBindingMgr && this.editBindingKey) {
@@ -522,10 +547,23 @@ export class KeyframeAnimator {
   }
 
   /**
+   * Explicit `length` from definition only (seconds → ms). When omitted, keyframe timing has no cycle cap in YAML.
+   */
+  private parseExplicitAnimationLengthMs(): number | undefined {
+    const cfg = this.keyframeConfigBag();
+    if (!cfg) return undefined;
+    const lenRaw = cfg['length'];
+    if (typeof lenRaw === 'number' && Number.isFinite(lenRaw) && lenRaw > 0) {
+      return lenRaw * 1000;
+    }
+    return undefined;
+  }
+
+  /**
    * Nominal ms for a new keyframe:
    * - non-last step: midpoint between current and next
-   * - last step: animation length boundary
-   * Denies add when last step is already at/over animation length.
+   * - last step with explicit `length`: new time = length (rounded); deny if current step already at/over length
+   * - last step without `length`: +1 s after current (no cap)
    */
   private computeNewKeyframeTimeMs(editIndex: number):
     | { ok: true; timeMs: number }
@@ -538,14 +576,16 @@ export class KeyframeAnimator {
     if (next !== undefined) {
       return { ok: true, timeMs: this.roundTimeMsToHundredthSecond((cur.time + next.time) / 2) };
     }
-    const lengthMs = this.parseSteps().cycleLengthMs;
-    if (!Number.isFinite(lengthMs) || lengthMs < 0) {
-      return { ok: false, reason: 'animation length is invalid' };
+    const explicitLengthMs = this.parseExplicitAnimationLengthMs();
+    const curR = this.roundTimeMsToHundredthSecond(cur.time);
+    if (explicitLengthMs !== undefined) {
+      const lenR = this.roundTimeMsToHundredthSecond(explicitLengthMs);
+      if (curR >= lenR) {
+        return { ok: false, reason: 'step would be outside animation length' };
+      }
+      return { ok: true, timeMs: lenR };
     }
-    if (cur.time >= lengthMs) {
-      return { ok: false, reason: 'step would be outside animation length' };
-    }
-    return { ok: true, timeMs: this.roundTimeMsToHundredthSecond(lengthMs) };
+    return { ok: true, timeMs: this.roundTimeMsToHundredthSecond(cur.time + 1000) };
   }
 
   private persistEditedStep(
@@ -554,6 +594,7 @@ export class KeyframeAnimator {
   ): void {
     if (!Number.isFinite(sourceIndex) || sourceIndex < 0) return;
     const cfg = this.keyframeConfigBag();
+    if (!cfg) return;
     const rawSteps = cfg['steps'];
     if (!Array.isArray(rawSteps)) return;
     const existing = rawSteps[sourceIndex];
@@ -577,6 +618,7 @@ export class KeyframeAnimator {
     const sourceIndex = this.editSourceIndices[this.editIndex];
     if (typeof sourceIndex !== 'number' || !Number.isFinite(sourceIndex) || sourceIndex < 0) return;
     const cfg = this.keyframeConfigBag();
+    if (!cfg) return;
     const rawSteps = cfg['steps'];
     if (!Array.isArray(rawSteps)) return;
     if (sourceIndex >= rawSteps.length) return;
@@ -586,6 +628,10 @@ export class KeyframeAnimator {
 
   private insertNewStep(step: { time: number; args?: Record<string, unknown> }): number {
     const cfg = this.keyframeConfigBag();
+    if (!cfg) {
+      Logger.warn('[keyframeAnimator] insertNewStep ignored — animation definition not in project');
+      return -1;
+    }
     if (!Array.isArray(cfg['steps'])) cfg['steps'] = [];
     const rawSteps = cfg['steps'] as unknown[];
     const row: Record<string, unknown> = { time: this.toStoredStepTimeSeconds(step.time) };
@@ -619,6 +665,10 @@ export class KeyframeAnimator {
    */
   private normalizeStoredStepsAndRefresh(preferredSourceIndex?: number): void {
     const cfg = this.keyframeConfigBag();
+    if (!cfg) {
+      this.refreshEditStepsFromConfig(preferredSourceIndex);
+      return;
+    }
     const rawSteps = cfg['steps'];
     if (!Array.isArray(rawSteps)) {
       this.refreshEditStepsFromConfig(preferredSourceIndex);
@@ -660,8 +710,9 @@ export class KeyframeAnimator {
   /**
    * Keyframe fields live in `content` when present; otherwise root-level repeat/length/steps (legacy).
    */
-  private keyframeConfigBag(): Record<string, unknown> {
-    const raw = this.rawDef as Record<string, unknown>;
+  private keyframeConfigBag(): Record<string, unknown> | null {
+    const raw = this.callbacks.getDefinitionRecord();
+    if (!raw) return null;
     const content = raw['content'];
     if (
       content !== undefined &&
@@ -684,6 +735,7 @@ export class KeyframeAnimator {
     }
     | null {
     const cfg = this.keyframeConfigBag();
+    if (!cfg) return null;
     const lerp = cfg['lerp'];
     if (!lerp || typeof lerp !== 'object' || Array.isArray(lerp)) {
       return null;
@@ -717,6 +769,16 @@ export class KeyframeAnimator {
     clippedByLength: boolean;
   } {
     const cfg = this.keyframeConfigBag();
+    if (!cfg) {
+      return {
+        steps: [],
+        stepSourceIndices: [],
+        repeatLoops: 0,
+        cycleLengthMs: 1,
+        lengthClampActive: false,
+        clippedByLength: false,
+      };
+    }
     const stepsRaw = cfg['steps'];
     const arr = Array.isArray(stepsRaw) ? stepsRaw : [];
     const parsed: { time: number; args?: Record<string, unknown>; _index: number }[] = [];
@@ -782,8 +844,10 @@ export class KeyframeAnimator {
   }
 
   private targetIntentGuid(): string | undefined {
-    const a = this.rawDef['targetIntent'];
-    const b = this.rawDef['intent'];
+    const raw = this.callbacks.getDefinitionRecord();
+    if (!raw) return undefined;
+    const a = raw['targetIntent'];
+    const b = raw['intent'];
     if (typeof a === 'string' && a.length > 0) return a;
     if (typeof b === 'string' && b.length > 0) return b;
     return undefined;

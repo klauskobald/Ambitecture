@@ -2,6 +2,7 @@ import { AnimatorViewer } from './AnimatorViewer.js'
 import { subscribeBinding } from '../../core/bindingRegistry.js'
 import { sendAnimationEdit, sendBindingSet } from '../../core/outboundQueue.js'
 import { editText, warn as modalWarn } from '../../core/Modal.js'
+import { notification } from '../../app/notification.js'
 
 /** Per-animation cleanup so reopening the pane drops the prior callback and edit session. */
 const activeBindings = new Map()
@@ -89,6 +90,17 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
       addBtn.textContent = 'Add'
       addBtn.disabled = total <= 0
       addBtn.addEventListener('click', () => {
+        const isLastStep = total > 0 && idx >= total - 1
+        if (isLastStep) {
+          const lengthSeconds = readAnimationLengthSeconds(record)
+          const currentTimeSeconds = Number(state?.currentStepContent?.time)
+          const hasValidLength = Number.isFinite(lengthSeconds)
+          const hasValidCurrentTime = Number.isFinite(currentTimeSeconds)
+          if (hasValidLength && hasValidCurrentTime && currentTimeSeconds >= lengthSeconds) {
+            notification.warn('Cannot add: last step is already at or beyond animation length.', `animation-add-denied-${guid}`)
+            return
+          }
+        }
         sendBindingSet(bindingKey, {
           currentStepIndex: idx,
           editAction: 'add'
@@ -177,6 +189,18 @@ function formatStepText (value) {
   } catch {
     return String(value)
   }
+}
+
+/**
+ * @param {Record<string, unknown>} record
+ * @returns {number}
+ */
+function readAnimationLengthSeconds (record) {
+  const fromContent = Number(record?.content?.length)
+  if (Number.isFinite(fromContent)) return fromContent
+  const fromRoot = Number(record?.length)
+  if (Number.isFinite(fromRoot)) return fromRoot
+  return Number.NaN
 }
 
 /**

@@ -382,12 +382,12 @@ export class KeyframeAnimator {
         if (Object.keys(patch).length === 0) {
           patch = KeyframeAnimator.getDefaultStepArgsForNewKeyframe();
         }
-        const timeMs = this.computeNewKeyframeTimeMs(this.editIndex);
-        if (timeMs === null) {
-          Logger.warn('[keyframeAnimator] add ignored — invalid step index for time');
+        const nextTime = this.computeNewKeyframeTimeMs(this.editIndex);
+        if (!nextTime.ok) {
+          Logger.warn(`[keyframeAnimator] add ignored — ${nextTime.reason}`);
         } else {
           const incomingStep: { time: number; args?: Record<string, unknown> } = {
-            time: timeMs,
+            time: nextTime.timeMs,
             ...(Object.keys(patch).length > 0 ? { args: patch } : {}),
           };
           const sourceIndex = this.insertNewStep(incomingStep);
@@ -511,15 +511,31 @@ export class KeyframeAnimator {
     }
   }
 
-  /** Nominal ms for a new keyframe: after last step → +1s; else midpoint between current and next. */
-  private computeNewKeyframeTimeMs(editIndex: number): number | null {
+  /**
+   * Nominal ms for a new keyframe:
+   * - non-last step: midpoint between current and next
+   * - last step: animation length boundary
+   * Denies add when last step is already at/over animation length.
+   */
+  private computeNewKeyframeTimeMs(editIndex: number):
+    | { ok: true; timeMs: number }
+    | { ok: false; reason: string } {
     const cur = this.editSteps[editIndex];
-    if (!cur) return null;
-    const next = this.editSteps[editIndex + 1];
-    if (next === undefined) {
-      return cur.time + 1000;
+    if (!cur) {
+      return { ok: false, reason: 'invalid step index for time' };
     }
-    return (cur.time + next.time) / 2;
+    const next = this.editSteps[editIndex + 1];
+    if (next !== undefined) {
+      return { ok: true, timeMs: (cur.time + next.time) / 2 };
+    }
+    const lengthMs = this.parseSteps().cycleLengthMs;
+    if (!Number.isFinite(lengthMs) || lengthMs < 0) {
+      return { ok: false, reason: 'animation length is invalid' };
+    }
+    if (cur.time >= lengthMs) {
+      return { ok: false, reason: 'step would be outside animation length' };
+    }
+    return { ok: true, timeMs: lengthMs };
   }
 
   private persistEditedStep(
@@ -739,7 +755,7 @@ export class KeyframeAnimator {
       const row = sorted[i];
       const sourceIndex = sortedIndices[i];
       if (!row || typeof sourceIndex !== 'number') continue;
-      if (row.time >= lengthMs) continue;
+      if (row.time > lengthMs) continue;
       steps.push(row);
       stepSourceIndices.push(sourceIndex);
     }

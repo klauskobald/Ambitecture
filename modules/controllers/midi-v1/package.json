@@ -1,0 +1,21 @@
+{
+  "name": "ambitecture-midi-controller",
+  "version": "0.1.0",
+  "description": "Ambitecture MIDI input controller",
+  "main": "src/MidiManager.ts",
+  "scripts": {
+    "start": "ts-node tests/midi-test.ts",
+    "dev": "node --watch --watch-path=src --watch-path=tests --require ts-node/register tests/midi-test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "author": "Klaus P Kobald Gmbh",
+  "license": "ISC",
+  "dependencies": {
+    "@julusian/midi": "^3.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.3"
+  }
+}

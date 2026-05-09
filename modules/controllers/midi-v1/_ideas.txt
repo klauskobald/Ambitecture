@@ -1,18 +1,25 @@
+
+
 this is a typescript project for running on a mac or pi
 
-use midi input to send intents (light/audio/smell/motor) but only light class for now.
-read surface-v1 on how to subscribe to the hub and project graph.
+use midi input to send 
+1. direct runtime intent data (use runtime commands)
+2. trigger existing actions
+3. send data to bindings
+
+WE ONLY IMPLEMENT 1 for first pass.
+
+read controllers surface-v1 and starter on how to subscribe to the hub and project graph.
 
 we start simple for now - no gui - cli only
 
-assign to one or many intents
-- play like sound: note on/off turns on/off intent, optional velocity could modulate brightness
-- use note together with volume control: hold note set brightnes release note (or move in X/Y/Z) - more controllers could act on different params
+assign to one or many targets
+- play like sound: note on/off turns on/off intent, optional velocity could modulate alpha
+- use note together with volume control: hold note - set alpha - release note (or move in X/Y/Z) - more controllers could act on different params
 
 so we need a generic approacch
 source -> key (dot separated) of intent parameter. targets try to look for the given types like intent by guid. so the controller has to receive the project graph to find them.
-other possible types are scenes, sequences for now.
-The targets function are usual easy to extend functions like linear (default), square, etc.
+The targets function curves are used to transform the value before sending
 
 this graph will live inside the project under the controllers section:
 
@@ -20,42 +27,42 @@ controller:
   - name: Controller Midi
     guid: controller-midi-1
     assignments:
-        - class: noteOnOff  
+        - class: receiver_noteOnOff  
           guid
           channel: 0 = any
           params:
             note: 1-127
-            velocityRange: [0,127]
+            velocityRange: [0-127,0-127]
+            velocityOffset: 0
+            velocityScale: 1
           targets:
             - type: intent
               guid
-              key: brightness
-              function: linear
-            - type: intent
-              guid
-              key: brightness
+              key: params.alpha
               function: linear
 
-        - class: noteAndControl
+        - class: receiver_noteAndControl
           guid
           channel: 0 = any
           params:
             note: 1-127
-            velocityRange: 0-127
+            velocityRange: [0-127,0-127] 
             controller: 1-127
-            valueRange: [0-127]
           targets:
             - type: intent
               guid
-              key: brightness
+              key: params.alpha
               function: linear
 
 
-multiple classes for the source
-class noteOnOff:
-playing intents like an instrument. note off is the same as not on with velocity 0
+create these receiver classes dereived from receiver_base 
+class receiver_noteOnOff:
+playing intents like an instrument. note-off is translated to note-on with velocity 0. when note-on is received it's velocity has to be within a given range to be considered. Then velocityOffset is added and multiplied by velocityScale. Then a final function curve is applied for each target and then a runtime update is sent.
 
-class noteAndControl:
-note on selects a state graph for this note/channel and waits for a given controller number to arrive, which then sends the value to targets until note off is received
+class receiver_noteAndControl:
+note-on selects a state (in memory) for this note/channel and waits for a given controller number to arrive, which then sends the value to targets after function is applied until note-off is received.
+
+It is important to design everything on class / plugin basis. 
+Create class traget_intent derived from target_base
 
 

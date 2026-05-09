@@ -25,7 +25,11 @@ export class MidiController {
   private readonly midi: MidiManager;
   private readonly pluginServer: PluginServer;
   private receivers: ReceiverBase[] = [];
-  private learn: { assignmentGuid: string; field: string } | null = null;
+  private learn: {
+    assignmentGuid: string;
+    field: string;
+    capture: 'noteOn' | 'controlChange';
+  } | null = null;
 
   constructor(config: MidiV1Config, logger: Logger) {
     this.config = config;
@@ -52,11 +56,16 @@ export class MidiController {
 
     this.pluginServer = new PluginServer(config.pluginServer, {
       getAssignments: () => this.graph.getAssignments(),
+      getIntentsForPlugin: () => this.graph.listIntentsForPlugin(),
       summarizeForPlugin: a => summarizeAssignmentForPlugin(a, this.graph),
       onSave: arr => this.persistAssignmentsFromUi(arr),
-      onLearnStart: (assignmentGuid, field) => {
-        this.learn = { assignmentGuid, field };
-        this.logger.info(`MIDI learn armed (${field}) for ${assignmentGuid}`);
+      onLearnStart: (assignmentGuid, field, capture) => {
+        let cap: 'noteOn' | 'controlChange';
+        if (capture === 'noteOn' || capture === 'controlChange') cap = capture;
+        else if (field === 'controller') cap = 'controlChange';
+        else cap = 'noteOn';
+        this.learn = { assignmentGuid, field, capture: cap };
+        this.logger.info(`MIDI learn armed (${field}, ${cap}) for ${assignmentGuid}`);
       },
     }, logger);
   }
@@ -164,9 +173,9 @@ export class MidiController {
 
   private dispatchNoteOn(e: MidiNoteEvent): void {
     const pending = this.learn;
-    if (pending !== null && pending.field === 'note') {
+    if (pending !== null && pending.capture === 'noteOn') {
       this.learn = null;
-      this.pluginServer.sendLearnResult(pending.assignmentGuid, 'note', e.note);
+      this.pluginServer.sendLearnResult(pending.assignmentGuid, pending.field, e.note);
       return;
     }
     for (const r of this.receivers) r.handleNoteOn(e);
@@ -177,6 +186,13 @@ export class MidiController {
   }
 
   private dispatchCc(e: MidiCcEvent): void {
+    const pending = this.learn;
+    if (pending !== null && pending.capture === 'controlChange') {
+      this.learn = null;
+      this.pluginServer.sendLearnResult(pending.assignmentGuid, pending.field, e.controller);
+      return;
+    }
     for (const r of this.receivers) r.handleCc(e);
   }
 }
+

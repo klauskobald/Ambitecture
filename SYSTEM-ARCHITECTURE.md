@@ -175,6 +175,10 @@ Renderer data authority model:
 
 **`controllers/midi-v1/`** — Headless MIDI controller: **`graph:init` / `graph:delta`** drive **`GraphReplica`** assignments → receivers; **`graph:command`** `patch` on its own controller guid persists assignment edits from the plugin UI. Runs a small **HTTP + WebSocket** server (`PluginServer`, static `ui/assign.html`) for the assign editor; **`register`** includes **`discovery`** built from **`PLUGIN_PUBLIC_HOST`** + **`PLUGIN_LISTEN_PORT`**. The iframe connects to **`/ws`** on that server for live state (trusted LAN). The assign UI reads **`filter`** from the page URL and shows only assignments that include an **`intent`** target with that GUID (client-side; full list still arrives over the socket).
 
+- **Plugin `state` message** — `{ type: 'state', assignments, intents }` where **`intents`** is `{ guid, name }[]` from **`GraphReplica.listIntentsForPlugin()`** (for default targets / warnings in the editor).
+- **`learnStart`** — Client may send **`capture`: `noteOn` | `controlChange`** together with **`field`** (e.g. `note` / `controller`); the controller arms one-shot learn from the next matching MIDI event and replies with **`learnValue`**.
+- **Assign UI code** — ES modules under **`ui/js/`** (`assignApp.js`, session/list/modal, **`assignmentRegistry.js`**, **`viewers/`** per assignment class, **`components/learnFieldRow.js`**). Add a new assignment class by implementing a viewer + registering it (mirror a new `Receiver*` in TypeScript).
+
 **Animator viewers (`src/panes/animators/`):**
 
 - **AnimatorViewer.js** — base class for animation-class viewers. Subclasses implement `getClassName()`, `getName()`, `getFieldDescriptor()`, `renderField(host, descriptor)`, `renderEditSection(host)`. Pattern matches the fixture-class abstraction rule.

@@ -6,11 +6,21 @@ import { Logger } from './Logger';
 import { PluginServerConfig } from './Config';
 import { AssignmentRecord } from './GraphReplica';
 
+export interface PluginIntentRow {
+  guid: string;
+  name: string;
+}
+
 export interface PluginServerHandlers {
   getAssignments: () => AssignmentRecord[];
+  getIntentsForPlugin: () => PluginIntentRow[];
   summarizeForPlugin: (a: AssignmentRecord) => string;
   onSave: (assignments: unknown[]) => void;
-  onLearnStart: (assignmentGuid: string, field: string) => void;
+  onLearnStart: (
+    assignmentGuid: string,
+    field: string,
+    capture?: 'noteOn' | 'controlChange',
+  ) => void;
 }
 
 const MIME: Record<string, string> = {
@@ -109,9 +119,7 @@ export class PluginServer {
   }
 
   pushState(): void {
-    const summarize = this.handlers.summarizeForPlugin;
-    const assignments = this.handlers.getAssignments().map(a => assignmentToWire(a, summarize(a)));
-    const payload = JSON.stringify({ type: 'state', assignments });
+    const payload = this.buildStatePayload();
     for (const ws of this.clients) {
       if (ws.readyState === WebSocket.OPEN) ws.send(payload);
     }
@@ -119,9 +127,14 @@ export class PluginServer {
 
   private pushStateTo(ws: WebSocket): void {
     if (ws.readyState !== WebSocket.OPEN) return;
+    ws.send(this.buildStatePayload());
+  }
+
+  private buildStatePayload(): string {
     const summarize = this.handlers.summarizeForPlugin;
     const assignments = this.handlers.getAssignments().map(a => assignmentToWire(a, summarize(a)));
-    ws.send(JSON.stringify({ type: 'state', assignments }));
+    const intents = this.handlers.getIntentsForPlugin();
+    return JSON.stringify({ type: 'state', assignments, intents });
   }
 
   sendLearnResult(assignmentGuid: string, field: string, value: number): void {
@@ -161,10 +174,20 @@ export class PluginServer {
     if (type === 'learnStart') {
       const guid = msg['assignmentGuid'];
       const field = msg['field'];
+      const capRaw = msg['capture'];
+      const capture =
+        capRaw === 'noteOn' || capRaw === 'controlChange' ? capRaw : undefined;
       if (typeof guid === 'string' && typeof field === 'string') {
-        this.handlers.onLearnStart(guid, field);
+        this.handlers.onLearnStart(guid, field, capture);
         if (sender.readyState === WebSocket.OPEN) {
-          sender.send(JSON.stringify({ type: 'learnWaiting', assignmentGuid: guid, field }));
+          sender.send(
+            JSON.stringify({
+              type: 'learnWaiting',
+              assignmentGuid: guid,
+              field,
+              ...(capture !== undefined ? { capture } : {}),
+            }),
+          );
         }
       }
     }

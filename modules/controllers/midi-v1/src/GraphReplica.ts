@@ -85,6 +85,17 @@ export class GraphReplica {
     return this.myAssignments;
   }
 
+  /** Stable list for plugin UIs (intent picker / default targets). */
+  listIntentsForPlugin(): { guid: string; name: string }[] {
+    const rows: { guid: string; name: string }[] = [];
+    for (const guid of this.intentGuids) {
+      const name = this.intentNames.get(guid) ?? guid;
+      rows.push({ guid, name });
+    }
+    rows.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+    return rows;
+  }
+
   /**
    * Apply assignments after a local `graph:command` save — the hub does not echo the sender's own
    * controller delta back on the same socket.

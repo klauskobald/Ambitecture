@@ -12,14 +12,14 @@
 
   <body>
     <div id="app">
-      <!-- <header class="hdr">
-      <h1 class="hdr__title">MIDI assignments</h1>
-    </header> -->
       <p id="banner-offline"
          class="banner banner--error"
          hidden>Disconnected from controller.</p>
-      <ul id="list"
-          class="list"></ul>
+      <div id="list-wrap"
+           class="list-wrap">
+        <ul id="list"
+            class="list"></ul>
+      </div>
     </div>
     <div id="modal"
          class="modal"
@@ -27,9 +27,7 @@
       <div class="modal__backdrop"></div>
       <div class="modal__panel"
            role="dialog"
-           aria-labelledby="modal-title">
-        <h2 id="modal-title"
-            class="modal__title">Edit assignment</h2>
+           aria-label="Edit MIDI assignment">
         <div id="modal-body"
              class="modal__body"></div>
         <div class="modal__actions">
@@ -39,7 +37,8 @@
         </div>
       </div>
     </div>
-    <script src="./assign.js"></script>
+    <script type="module"
+            src="./js/assignApp.js"></script>
   </body>
 
 </html>

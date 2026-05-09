@@ -61,7 +61,7 @@ export class EventsHandler {
             if (changed) {
                 anyChanged = true;
             } else if (event.position) {
-                Logger.debug(`[events] position [${JSON.stringify(event.position)}] matched no zones`);
+                // Logger.debug(`[events] position [${JSON.stringify(event.position)}] matched no zones`);
             }
         }
 

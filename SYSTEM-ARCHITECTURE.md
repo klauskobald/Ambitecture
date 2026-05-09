@@ -18,19 +18,32 @@ The hub is the **single source of truth** for system-wide configuration and grap
 - **`src/Logger.ts`** — Shared logging.
 - **`src/Server.ts`** — HTTP server + WebSocket server (`perMessageDeflate` enabled, heartbeat ping/pong supervision).
 - **`src/MessageRouter.ts`** — Message dispatch by `message.type`.
-- **`src/handlers/RegisterHandler.ts`** — Accepts `register`, stores module identity/metadata, pushes `config` to renderers, and pushes `graph:init` to controllers.
+- **`src/handlers/RegisterHandler.ts`** — Accepts `register`, stores module identity/metadata, pushes `config` and `systemCapabilities` to renderers/controllers, and pushes `graph:init` to controllers.
 - **`src/GraphProtocol.ts`** — Defines the open graph command/delta/init protocol used by controllers and the hub.
-- **`src/dotPath.ts`** — Hub-local dot-key helper for graph patches such as `params.color`. Use this for reading, setting, removing, cloning, and applying dot-path patches instead of reimplementing `split('.')` traversal.
-- **`src/ProjectGraphStore.ts`** — Hub-side graph state mutation boundary. Owns graph revisions, durable/runtime mutation policy, controller deltas, renderer event/config invalidation results, and opaque future entity persistence.
+- **`src/BindingProtocol.ts`** — Defines the `binding:subscribe` / `binding:set` / `binding:value` message shapes used to wire controller UI to live hub-owned values (animation timescale, edit-mode keyframe step, etc.).
+- **`src/dotPath.ts`** — Hub-local dot-key helper for graph patches such as `params.color`. Provides `readAtDotPath` / `setAtDotPath` / `removeAtDotPath` / `applyDotPathPatch` / `diffRecordsToPatch` / `cloneRecord`. Use these for reading, setting, removing, diffing, and applying dot-path patches instead of reimplementing `split('.')` traversal. Supports nested objects only (arrays addressed by stable `guid`, not by index).
+- **`src/FnCurve.ts`** — Named easing function evaluator. `FnCurve.evaluate(name, t ∈ [0,1])` supports `linear`, `quadratic`, `cubic`, `sqrt`, `smoothstep`, `hard`. Used by hub `paramLerpSchedule` to plan eased intermediate keyframe samples and mirrored verbatim in `dmx-ts/src/FnCurve.ts` and `simulator-2d/src/FnCurve.js` so renderers attenuate the same way.
+- **`src/ProjectGraphStore.ts`** — Hub-side graph state mutation boundary. Owns graph revisions, durable/runtime mutation policy, controller deltas, renderer event/config invalidation results, and opaque future entity persistence. Active-scene addressing uses **`activeSceneGuid`** (no longer `activeSceneName`); scene identity flows by stable GUID across the wire.
+- **`src/RuntimeIntentStore.ts`** — Hub-authoritative merge cache for runtime (perform) intent overlays. Keeps the three layers — definition, scene overlay, runtime perform patches — separate. `processRuntimeUpdates()` merges patches and emits normalized renderer events; `getEffectiveIntent(guid)` returns the currently merged intent; `listRuntimeOverlayGuidsInActiveScene()` lets controllers offer "clear overlay" UI; `evictMergeGuids()` and `clear()` invalidate selectively (scene change, project reload).
+- **`src/intents/`** — Class-specific intent normalization registry. `transformIntentToNormalized(intent)` dispatches by `class` and falls through to `PassthroughIntent` for unknown classes. `LightIntent` normalizes `params.color` into CIE 1931 `xyY` regardless of the input format used by the controller (HSL, hex, RGB). Add a new module + `registry.ts` entry to introduce a new intent class.
 - **`src/handlers/GraphCommandHandler.ts`** — Accepts controller `graph:command`, validates role/payload, applies it through `ProjectGraphStore`, and publishes mutation results.
 - **`src/handlers/EventsHandler.ts`** — Legacy/direct `events` forwarder kept for compatibility paths.
 - **`src/handlers/IntentsHandler.ts`** — Legacy controller `intents` path kept for compatibility. New controller code should send `graph:command` instead.
 - **`src/EventQueue.ts`** — Buckets/schedules generated renderer `events` by execution timestamp and dispatches to connected renderers.
-- **`src/ProjectManager.ts`** — Loads project + referenced fixtures, assigns missing GUIDs to mutable graph entities, serializes renderer/controller snapshots, saves durable YAML, and exposes project helper methods used by `ProjectGraphStore`.
-- **`src/RuntimeUpdateDispatcher.ts`** — Extracted dispatch layer for `runtime:command` and action-triggered intent execution: forwards `runtime:update` to all other connected controllers (excluding sender socket(s)), converts intent runtime updates to renderer events via a per-intent merge cache, and schedules them on `EventQueue`. Used by both `RuntimeCommandHandler` and `ActionHandler`.
+- **`src/ProjectManager.ts`** — Loads project + referenced fixtures, assigns missing GUIDs to mutable graph entities (including scenes), serializes renderer/controller snapshots, saves durable YAML, and exposes project helper methods used by `ProjectGraphStore`.
+- **`src/RuntimeUpdateDispatcher.ts`** — Extracted dispatch layer for `runtime:command` and action-triggered intent execution: forwards `runtime:update` to all other connected controllers, converts intent runtime updates to renderer events via `RuntimeIntentStore`, and schedules them on `EventQueue`. Used by `RuntimeCommandHandler`, `ActionHandler`, and `AnimationManager`.
 - **`src/ActionInputManager.ts`** — Builds `GraphCommand[]` from `ActionInputCommand` payloads (`ensureInputAssignment`, `removeInputAssignment`, `renameInput`). Validates input/display types against `systemCapabilities`, composes typed params via `composeInputParams.ts`, and wires actions ↔ inputs by target (`{ type, guid }`). Also provides `buildSceneCleanupCommands(sceneGuid)` for orphan removal when a scene is deleted.
 - **`src/inputAssignment/composeInputParams.ts`** — Pure stateless helpers for reading `systemCapabilities.inputTypes`/`displayTypes`, resolving defaults, validating type class strings, and composing typed `params` from `inputConfig` fields. Extend `applyParamKind()` here when adding new param kinds (currently only `jsonString`).
-- **`src/handlers/ActionHandler.ts`** — Handles `action:input` (delegates to `ActionInputManager` → `ProjectGraphStore`) and `action:trigger` (resolves action execute items: activates scenes or dispatches intent runtime updates via `RuntimeUpdateDispatcher`). Only registered controllers may send these messages.
+- **`src/handlers/ActionHandler.ts`** — Handles `action:input` (delegates to `ActionInputManager` → `ProjectGraphStore`) and `action:trigger`. Trigger execute items resolve to: scene activation, intent runtime updates via `RuntimeUpdateDispatcher`, or animation control via `AnimationManager` (`start` / `stop` / `pause` / `settimescale`). Only registered controllers may send these messages.
+- **`src/animation/AnimationManager.ts`** — Hub-side animation orchestrator. Holds one runner per animation `guid`, drives lifecycle (`trigger` / `stop` / `pause` / `setTimescale`), enters/exits live keyframe edit mode, broadcasts `hub:status` updates and per-target `lock:intent` notifications, and registers timescale + edit-state binding masters with `BindingManager`. Scene-membership changes gracefully restart runners so closures over stale graph state are dropped.
+- **`src/animation/keyframeAnimator.ts`** — Keyframe animation runner. Plays time-ordered keyframe steps against a `targetIntent`, dispatches mutations through `RuntimeUpdateDispatcher` (same path as a knob drag), and supports a live edit mode where the operator can step through keyframes and capture deltas vs. the live intent state via `Add` (uses `diffRecordsToPatch`). The only animation class with built-in edit support today; new classes plug in via `intents/registry.ts`-style registration.
+- **`src/animation/paramLerpSchedule.ts`** — Plans quantized intermediate patches between two keyframe anchors using `content.lerp` (quantization step, min interval, total time, named curve). Pure planning code; the runner schedules the resulting patches.
+- **`src/handlers/AnimationEditHandler.ts`** — Routes controller `animation:edit` (`{ animationGuid, on }`) into `AnimationManager.enterEditMode/exitEditMode`. Edit lifecycle is hub-owned, not viewer-owned, so multiple controllers stay in sync.
+- **`src/BindingManager.ts`** — Generic bidirectional binding layer. Hub modules call `registerMaster(key, getDataFn, setDataFn)`; controllers `binding:subscribe` to a key and `binding:set` to push values. The hub never caches master values — every read hits the live getter. Pending subscribers are queued until their master registers. Used today for animation timescale and keyframe edit state, and for any future hub-owned UI value.
+- **`src/handlers/BindingHandler.ts`** — Routes `binding:subscribe` and `binding:set` controller messages into `BindingManager`.
+- **`src/statsTool.ts`** — EMA-based per-key sample/rate counter with display-interval logging. Used to profile animation tick rates, runtime dispatch rates, and per-renderer event delivery.
+- **`src/hubStatusTypes.ts`** — Type definitions for `hub:status` payloads (currently `HubStatusAnimationPayload`: `kind` / `animationGuid` / `status: 'started' | 'paused' | 'stopped'` / `message` / `data`). Open by `kind` so future status sources can extend without breaking controllers.
+- **`src/hubWebSocketStats.ts`** — Per-socket WebSocket counters surfaced through `statsTool`.
 - **Profile example:** `config.DEMO/server.yml` defines `LISTEN_PORT` and `LISTEN_HOST` (demo uses `3000` and `0.0.0.0`). Use `.env` / `.env.DEMO` to point `CONFIG_PATH` at a profile such as `config.DEMO`.
 
 **Current runtime note:** The hub currently runs on Node's `http` server directly (not Express). WebSocket is attached to that server without a path restriction (not limited to `/ws` yet).
@@ -104,30 +117,55 @@ Renderer data authority model:
 
 **Role:** Front ends and tools that send control intent/state to the hub.
 
-**`controllers/surface-v1/`** — Primary operator controller. Architecture built around a **pane-based SPA** with lazy-loading panes and a touch overlay canvas:
+**`controllers/surface-v1/`** — Primary operator controller. Architecture built around a **pane-based SPA** with lazy-loading panes, a touch overlay canvas, and a resizable multi-pane bottom region:
 
 - **Pane router** (`src/app/router.js`): Three panes — **Perform**, **Edit**, **Setup** — each lazily imported, mounted once, and cycled via `activate()`/`deactivate()` lifecycle. No full page reloads or teardown on switch.
+- **Pane host resize** (`src/app/paneHostResize.js`): Drag-to-resize the lower pane region; persists last height per pane. Enables the Perform pane to host a resizable Animate panel under the perform HUD.
 - **Touch overlay** (`src/viewport/overlayCanvas.js`): Transparent canvas stacked on top of the simulator iframe. Handles pointer events for intent/fixture dragging, draws a finger-trail, intent radius circles, out-of-zone markers, and selection bubbles. Supports modality via **interaction policies** and an optional **SelectionManager**.
-- **Interaction policies** (`src/viewport/interactionPolicies.js`): `performPolicy` (allowance-gated drag), `editPolicy` (all intents and fixtures draggable), `noopPolicy` (no interaction). Policy switches per pane via `overlay.setPolicy()`.
+- **Interaction policies** (`src/viewport/interactionPolicies.js`): `performPolicy` (allowance-gated drag, also gated by `intentLockRegistry` so locked intents are not draggable), `editPolicy` (all intents and fixtures draggable), `noopPolicy` (no interaction). Policy switches per pane via `overlay.setPolicy()`.
 - **SelectionManager** (`src/viewport/selectionManager.js`): Generic bubble-overlay system — renders bubbles at world positions for any set of objects, detects taps within a hit radius, and calls an `onTap` callback. The manager holds no selection state — that belongs to the caller (e.g., allowances graph in `stores.js`). Can be enabled/disabled on the overlay canvas.
-- **Project graph** (`src/core/projectGraph.js`): Controller-side graph replica. Initializes from hub `graph:init`, stores entities by stable `guid`, applies `graph:delta`, derives scene/fixture/spatial views, and notifies UI subscribers.
+- **Project graph** (`src/core/projectGraph.js`): Controller-side graph replica with a path-scoped subscription model. Initializes from hub `graph:init`, stores entities by stable `guid`, applies `graph:delta`, derives scene/fixture/spatial views, and notifies UI subscribers. Subscribers register against named slices (`intents`, `actions`, `inputs`, `scenes`, etc.) and are batched per delta so multi-field changes (e.g., scene + linked input) fire once.
 - **Dot-key helper** (`src/core/dotPath.js`): Controller-local helper for reading and immutably editing nested graph properties addressed by dot keys such as `params.color`.
 - **State helpers** (`src/core/stores.js`): Pure helper functions for graph objects such as `intentGuid`, `intentLayer`, `intentName`, `intentRadius`, and `fixtureId`.
 - **Color** (`src/core/color.js`): Display-oriented color conversion. Detects format (HSL, xyY, hex, RGB array, RGB components) and converts to CSS `rgb()` strings or HSL for palette initialization. Internal math matches hub `color.ts` and simulator-2d `color.js`.
-- **Outbound queue** (`src/core/outboundQueue.js`): Rate-limited WebSocket send queue for minimal `graph:command` updates. Intent changes are sent as GUID-addressed patches/removals; fixture moves are sent by fixture GUID; scene saves are converted to graph upserts/removes.
-- **WebSocket** (`src/core/socket.js`): Auto-reconnecting WebSocket with `onOpen`/`onMessage`/`onClose` callbacks. Reconnects immediately on close/error.
-- **Config** (`src/core/config.js`): Loads `config.json` at startup, validates required keys (including `CONTROLLER_GUID`, `SIMULATOR_RENDERER_GUID`, `GEO_LOCATION`, `LAYOUT`), and applies layout CSS custom properties.
+- **Outbound queue** (`src/core/outboundQueue.js`): Rate-limited WebSocket send queue for minimal `graph:command` updates. Intent changes are sent as GUID-addressed patches/removals; fixture moves are sent by fixture GUID; scene saves are converted to graph upserts/removes. Also exposes `sendBindingSubscribe` / `sendBindingSet` / `sendAnimationEdit`.
+- **WebSocket** (`src/core/socket.js`): Auto-reconnecting WebSocket with `onOpen`/`onMessage`/`onClose` callbacks. Reconnects immediately on close/error (with a small backoff to avoid hammering a hub that just bounced).
+- **Config** (`src/core/config.js`): Loads `config.json` at startup, validates required keys (including `CONTROLLER_GUID`, `SIMULATOR_RENDERER_GUID`, `GEO_LOCATION`, `LAYOUT`, `STYLE`), and applies layout/style CSS custom properties from those blocks.
 - **Spatial math** (`src/viewport/spatialMath.js`): World ↔ canvas coordinate transforms, zone containment checks, client-to-world conversion via the simulator canvas rect.
-- **CSS split** by concern: `theme.css`, `layout.css`, `controls.css` (matching the frontend styling policy). Layout values driven from `config.json` `LAYOUT` block via CSS custom properties.
-- **HTML** (`index.html`): Semantic structure — app root, header with nav toggle/spatial readout, nav bar with pane links, sim area (iframe + overlay canvas), and pane host container.
+- **CSS split** by concern: `theme.css`, `layout.css`, `controls.css` (matching the frontend styling policy), plus `modal.css` and `editPanel.css`. Layout/theme values driven from `config.json` `LAYOUT` and `STYLE` blocks via CSS custom properties.
+- **HTML** (`index.html`): Semantic structure — app root, header with nav toggle/spatial readout/active scene readout, nav bar with pane links, sim area (iframe + overlay canvas), and pane host container with resize handle.
 - **Modal** (`src/core/Modal.js`): Single-overlay dark-themed modal system. One modal at a time — calling any method auto-dismisses the current one. API: `alert()`, `warn()`, `confirm()`, `prompt()`, `pickChoice()`, `openModalCard(factory)`. All return `Promise`. **Use `Modal.*` for all confirm/prompt/dialog flows — never `window.alert/confirm/prompt`.**
-- **systemCapabilities** (`src/core/systemCapabilities.js`): Receives and caches `systemCapabilities` pushed by the hub on register. Exposes `getInputTypes()`, `getDisplayTypes()`, `resolveDefaultPerformTypes()`, `resolveDescriptorsForClass(intentClass)` (with `optionsRef` resolution). Never hardcode input/display types or intent property descriptors — always read from this module.
+- **systemCapabilities** (`src/core/systemCapabilities.js`): Receives and caches `systemCapabilities` pushed by the hub on register. Exposes `getInputTypes()`, `getDisplayTypes()`, `getAnimationTypes()`, `resolveDefaultPerformTypes()`, `resolveDescriptorsForClass(intentClass)` (with `optionsRef` resolution). Never hardcode input/display/animation types or intent property descriptors — always read from this module.
+- **KeyboardManager** (`src/core/KeyboardManager.js`): Global key → action binding. Maps `keydown` / `keyup` to perform momentary on/off or one-shot button trigger, coordinates with `performMomentaryRegistry`, suppresses repeats, and skips when a focused input is editing text. Bindings are derived from inputs whose `params.key` is set; rebuilt on graph changes.
+- **performKeyboardVisual** (`src/core/performKeyboardVisual.js`): Visual feedback (pulse / hold highlight) for keyboard-triggered perform inputs.
+- **bindingRegistry** (`src/core/bindingRegistry.js`): Controller-side cache of `binding:value` messages keyed by binding key. UI subscribes via `subscribe(key, cb)`; underlying `binding:subscribe` is sent on first subscriber. Used by the animate edit pane (timescale, keyframe step) and any other hub-owned value the UI needs to observe live.
+- **animationPlayRegistry** (`src/core/animationPlayRegistry.js`): Subscribes to `hub:status` animation events; tracks which animation GUIDs are currently `started` / `paused`. Animate panel reads this for play/stop button state and for surfacing "now playing" indicators.
+- **intentLockRegistry** (`src/core/intentLockRegistry.js`): Tracks `lock:intent` notifications from the hub (intents currently driven by an animation). Edit/perform UIs query this to disable knobs and overlay drag while the lock is active.
+- **intentPerformDefaults** (`src/core/intentPerformDefaults.js`): Per-intent perform reset policies — controls which dot-keys snap back to defaults when a perform-mode override is cleared.
+- **performMomentaryRegistry** (`src/core/performMomentaryRegistry.js`): Tracks momentary inputs currently held (touch + keyboard) so that `argsOff` is dispatched exactly once on release regardless of input source.
 - **performButtonInputs** (`src/core/performButtonInputs.js`): `collectPerformButtonInputs()` — the canonical filter for which inputs appear as Perform pane buttons (`display.type === 'button'` + valid linked action). Always call this function instead of filtering inputs inline.
 - **ArraySorter** (`src/core/arraySorter.js`): Generic drag-to-reorder UI for any object array with a numeric sort-key property. `getItemsSorted()` stable-sorts by key then `guid`. `displaySortDialog(host, callbackDisplay, callbackLifecycle, onReorder)` renders pointer-capture draggable rows with ghost and drop markers, writes sort keys in place. Default key: `DEFAULT_PERFORM_INPUT_SORT_KEY` (`'_sortIdx'`). Use for any list that operators need to reorder.
-- **InputAssignManager** (`src/edit/InputAssignManager.js`): Reusable per-target class for assigning/editing/removing a controller input. Constructor: `new InputAssignManager({ context: { type, guid }, labelDefault? })`. Provides `getInvokeButton()` (standalone toggle button), `getInlinePane()` (row with toggle + rename button, used in property panel), and `showControl()` (full modal with type/displayType/name/params from `systemCapabilities`). Sends via `sendActionInputCommand()`. Supports any `targetType` — scene, intent, and future entity types.
+- **InputAssignManager** (`src/edit/InputAssignManager.js`): Reusable per-target class for assigning/editing/removing a controller input. Constructor: `new InputAssignManager({ context: { type, guid }, labelDefault? })`. Provides `getInvokeButton()` (standalone toggle button), `getInlinePane()` (row with toggle + rename button, used in property panel), and `showControl()` (full modal with type/displayType/name/params/key from `systemCapabilities`). Sends via `sendActionInputCommand()`. Supports any `targetType` — scene, intent, animation, and future entity types.
 - **paramKindHandlers** (`src/edit/inputAssign/paramKindHandlers.js`): Form-to-value parse/stringify for each input param `kind` (currently `jsonString`). Add new switch cases here when `system.yml` defines new param kinds.
-- **ScalarRadialKnob** (`src/perform/ScalarRadialKnob.js`): Canvas radial knob for continuous scalar values in the Perform HUD. Supports normal drag and zoomed precision mode (long-press expands the touch target). Driven by `requestAnimationFrame` layout from `PerformQuickPanelHud`.
-- **PerformQuickPanelHud** (`src/perform/performQuickPanelHud.js`): Per-intent floating HUD panel in the Perform pane. Reconciles panels against the live intent list via `projectGraph.subscribe()`. Creates `ScalarRadialKnob` instances for each descriptor with `quickPanel: true` in `systemCapabilities.intentProperties[class]`. Positioned by a `requestAnimationFrame` loop using world-to-canvas conversion. Activated/deactivated with the Perform pane via `start()`/`stop()`.
+- **PropertyPanel** (`src/edit/PropertyPanel.js`): Generic property editor card. Renders descriptor-driven controls (scalars, dropdowns, color, fnCurve, infoText) for one or many selected entities, integrates with `InputAssignManager`'s inline pane, and routes value changes through the project graph (`durable` for committed edits, `runtime` for live drag).
+- **selectPopup** (`src/edit/components/selectPopup.js`): Inline dropdown popup used by `PropertyPanel` and animator viewers (e.g., picking a `functionCurves` value).
+- **ScalarRadialKnobSvg** (`src/edit/components/ScalarRadialKnobSvg.js`): SVG-based radial knob for continuous scalar values. Replaces the older Canvas-based `perform/ScalarRadialKnob.js`. Used by both `PerformQuickPanelHud` and the Animate edit pane (animation timescale, keyframe field controls). Supports a long-press zoomed precision mode.
+- **performResetKeyMetas** (`src/edit/performResetKeyMetas.js`): Per-descriptor metadata for the Edit pane's "reset perform overrides" toggles.
+- **PerformQuickPanelHud** (`src/perform/performQuickPanelHud.js`): Per-intent floating HUD panel in the Perform pane. Reconciles panels against the live intent list via `projectGraph.subscribe()`. Creates `ScalarRadialKnobSvg` instances for each descriptor with `quickPanel: true` in `systemCapabilities.intentProperties[class]`. Positioned by a `requestAnimationFrame` loop using world-to-canvas conversion. Activated/deactivated with the Perform pane via `start()`/`stop()`. Hides knobs for intents present in `intentLockRegistry`.
+
+**Perform pane subnav (`src/panes/`):**
+
+- **performPane.js** — top-level Perform orchestrator. Mounts the perform HUD, scene buttons, perform buttons, and the **performSubnavShell** for the lower section.
+- **performSubnavShell.js** — nested navigation between **Control** and **Animate** subpanes inside Perform. Lazy-mounts each subpane, lifecycle parallel to the top-level router.
+- **performControlPanel.js** — Control subpane: scene activation buttons, perform buttons, system status.
+- **performAnimatePanel.js** — Animate subpane: list of project animations with play / stop / pause / open-edit controls. Subscribes to `animationPlayRegistry`.
+- **performAnimateEditPane.js** — Per-animation edit overlay. Uses an `AnimatorViewer` for the animation's class and the `bindingRegistry` to mirror timescale and keyframe step state from the hub.
+
+**Animator viewers (`src/panes/animators/`):**
+
+- **AnimatorViewer.js** — base class for animation-class viewers. Subclasses implement `getClassName()`, `getName()`, `getFieldDescriptor()`, `renderField(host, descriptor)`, `renderEditSection(host)`. Pattern matches the fixture-class abstraction rule.
+- **animatorViewerRegistry.js** — `registerAnimatorViewer(class, ctor)` and `createViewer(class, ...)`. Add new animation classes by registering here; never branch on class string in viewer host code.
+- **keyframeAnimator.js** (controller-side) — `KeyframeAnimatorViewer` implementation. Renders fields (length, repeat, lerp.*) from `systemCapabilities.animations[].display`, plus the live keyframe step editor (prev / next / add / remove / merge) wired to hub `animation:edit` mode through the `bindingRegistry`.
 
 **`controllers/starter/`** — Minimal TypeScript reference controller demonstrating the full connection lifecycle. Key classes:
 
@@ -208,17 +246,24 @@ Controllers should eventually receive room/scope-filtered graph init/delta data 
 
 Current controller/hub state sync uses a GUID-addressed graph/control protocol:
 
-- `graph:init` — hub -> controller, sent on controller register/reconnect/resync. This is the full controller snapshot and includes project name, revision, active scene, zones, scenes, controller-visible intents, renderer routing, and a generic entity map.
+- `graph:init` — hub -> controller, sent on controller register/reconnect/resync. This is the full controller snapshot and includes project name, revision, **`activeSceneGuid`** (no longer `activeSceneName`), zones, scenes, controller-visible intents, renderer routing, and a generic entity map.
 - `graph:command` — controller -> hub for authoritative graph/control mutations. It carries an operation, open `entityType` string, stable `guid`, optional `patch`, optional `remove`, optional full `value`, and a persistence policy.
 - `graph:delta` — hub -> controllers, sent after accepted mutations. It carries one or more deltas with hub-assigned `revision`.
 - `runtime:command` — controller -> hub for transient live updates. It carries an open `entityType`, stable `guid`, and optional `patch` / `remove` / `value` data. It must not save YAML, must not emit `graph:delta`, and must not call the authoritative project graph mutation path.
 - `runtime:update` — hub -> controllers for relayed live updates. Controllers apply these as transient state, separately from `graph:delta`.
+- `binding:subscribe` / `binding:set` — controller -> hub for per-key bindings to live hub-owned values (animation timescale, keyframe edit state).
+- `binding:value` — hub -> controllers, value pushes for subscribed binding keys.
+- `animation:edit` — controller -> hub, `{ animationGuid, on }` to enter/exit live keyframe edit mode for an animation.
+- `hub:status` — hub -> controllers, broadcast status updates (currently animation `started` / `paused` / `stopped` events). Open by `kind` for future status sources.
+- `lock:intent` — hub -> controllers, indicates an intent is currently driven by an animation and should be uneditable (knobs/drag disabled) until released.
 - `config` — hub -> renderer, still used for assigned zones/fixtures.
 - `events` — hub -> renderer, still used for incremental intent execution.
 
-Use `graph:command` for scene activation, controller state, durable edits, saves, and final committed graph changes. Use `runtime:command` for live data streams such as intent dragging, controller-generated loops, MIDI/sensor values, temporary overrides, and future realtime entity updates. Runtime traffic is latest-wins/coalesced by entity and must not block or rerender graph/control UI such as scene buttons.
+Use `graph:command` for scene activation, controller state, durable edits, saves, and final committed graph changes. Use `runtime:command` for live data streams such as intent dragging, controller-generated loops, MIDI/sensor values, temporary overrides, and future realtime entity updates. Runtime traffic is latest-wins/coalesced by entity and must not block or rerender graph/control UI such as scene buttons. Use `binding:*` for controller UI that needs to mirror or push hub-owned live values (animation timescale, edit state); never replicate hub state by polling.
 
-Example `graph:command`:
+Hub-owned runtime intent merge state lives in **`RuntimeIntentStore`** (`hub/src/RuntimeIntentStore.ts`). Controllers send compact `runtime:command` patches; the hub merges them on top of the active scene overlay and bare definition, normalizes the result through the **intent registry** (`hub/src/intents/`), and emits renderer events. Controllers do not perform this merge — they apply inbound `runtime:update` for sync only.
+
+Example `graph:command` (scene activation by GUID):
 
 ```json
 {
@@ -230,7 +275,7 @@ Example `graph:command`:
       "entityType": "project",
       "guid": "active",
       "patch": {
-        "activeSceneName": "Scene 1"
+        "activeSceneGuid": "scene-7f1c2a"
       },
       "persistence": "runtimeAndDurable"
     }
@@ -283,6 +328,7 @@ Color flows through the system in multiple formats, with CIE 1931 `xyY` as the i
 - **Hub** (`src/color.ts`): `Color.createFromObject()` accepts CIE xyY, hex strings, RGB components (0-255), and **HSL** (`{ h, s, l }`). All formats are converted to internal xyY on construction. HSL was added to support color picker output from controller UIs.
 - **Controller** (`surface-v1/src/core/color.js`): Display-oriented mirror — detects the same format set and converts to CSS `rgb()` strings for rendering, and to HSL for palette initialization.
 - **Simulator-2D**: Maintains its own `color.js` with the same conversion math for in-browser preview.
+- **Renderer-bound normalization happens on the hub**, not on the renderer: `LightIntent.transformToNormalized` (in `hub/src/intents/`) converts `params.color` to `xyY` regardless of the input format before the event payload is built. Renderers therefore always receive `params.color` as `{ x, y, Y }`.
 
 The format detection logic is `{ h, s, l }` → HSL, `{ x, y, Y }` → CIE xyY, `{ rgb: "#..." }` → hex, `{ rgb: [r,g,b] }` → RGB array, `{ r, g, b }` → RGB components.
 
@@ -332,6 +378,66 @@ Hub validates types against `systemCapabilities`, composes params via `composeIn
 - Collect Perform pane buttons via `collectPerformButtonInputs()` only; do not filter inputs inline in pane code.
 - When deleting a scene on the hub, call `ActionInputManager.buildSceneCleanupCommands(sceneGuid)` and apply the returned commands to remove orphaned inputs and actions.
 
+### Animations
+
+The hub runs animations as authoritative time-driven mutators of intents. The full lifecycle is hub-owned; controllers drive only triggers, edits, and UI display.
+
+**Hub side (`hub/src/animation/`):**
+
+- **`AnimationManager`** — one runner per animation `guid`. Methods: `trigger(guid, { location, timescale })`, `stop(guid)`, `pause(guid)`, `setTimescale(guid, value)`, `enterEditMode(guid)`, `exitEditMode(guid)`. On any state change it broadcasts `hub:status` (`started` / `paused` / `stopped`) and emits `lock:intent` for the animation's `targetIntent` so controllers disable that intent in UI.
+- **`keyframeAnimator`** — the only runner class today. Plays time-ordered keyframe steps against `targetIntent` and dispatches mutations through `RuntimeUpdateDispatcher` (same path as a knob drag — no graph writes). When `content.lerp` is set, intermediate patches are planned by `paramLerpSchedule.planIntermediateLerpPatches()` using the named function curve and the quantization/minMs/time settings.
+- **`paramLerpSchedule`** — pure planning of eased intermediate patches between two keyframe anchors.
+- **`AnimationEditHandler`** — routes controller `animation:edit` (`{ animationGuid, on }`) into `AnimationManager`. Live edit mode is hub-owned so multiple controllers stay in sync via `binding:value`.
+- Scene membership changes gracefully restart runners so closures over stale graph state are dropped.
+- Companion action GUID = animation GUID; `action:trigger` with that GUID maps through `ActionHandler` to `AnimationManager` (`start` default, or `stop` / `pause` / `settimescale` per execute item).
+
+**Controller side (`surface-v1/src/panes/animators/`):**
+
+- **`AnimatorViewer`** — abstract base; subclasses implement `getClassName/getName/getFieldDescriptor/renderField/renderEditSection`. `animatorViewerRegistry` maps class → constructor.
+- **`KeyframeAnimatorViewer`** — renders the field set defined in `systemCapabilities.animations[].display`, plus the live keyframe step editor (prev/next/add/remove/merge) wired through `bindingRegistry`.
+- **Animate panel** (`performAnimatePanel.js`) — animation list with play/stop/pause/open-edit; subscribes to `animationPlayRegistry`.
+- **Animate edit pane** (`performAnimateEditPane.js`) — opens the viewer for an animation, subscribes to its timescale and edit-state binding keys.
+
+**Rules:**
+
+- Animation runtime mutations must go through `RuntimeUpdateDispatcher` (transient, no YAML write). Do not write durable graph state from a running animation.
+- Add a new animation class by registering on both sides: a runner in `hub/src/animation/` (and an entry routed by `AnimationManager`), a `*Viewer` in `surface-v1/src/panes/animators/` registered via `animatorViewerRegistry`, and a matching entry in `system.yml → systemCapabilities.animations[]`.
+- The Edit pane and Perform HUD must respect `intentLockRegistry` — never let the operator drag/knob an intent currently driven by an animation.
+
+### Bindings
+
+`BindingManager` is the generic bidirectional binding layer between hub state and controller UI. It is intentionally free of any animation- or feature-specific logic.
+
+- **Hub side (`hub/src/BindingManager.ts`):** modules call `registerMaster(key, getDataFn, setDataFn)`. Subscribe requests for unknown keys are queued and flushed on later registration. Reads always go through the live getter — the hub never caches master values.
+- **Controller side (`surface-v1/src/core/bindingRegistry.js`):** `subscribe(key, callback)` returns the latest cached value and registers for future `binding:value` pushes; `set(key, value)` sends `binding:set`. The first subscriber to a key triggers `binding:subscribe`; later subscribers piggyback on the existing subscription.
+- **Today's keys:** animation timescale (`${animationGuid}-timescale`), keyframe edit state (per animation GUID).
+- **Use bindings, not polling**, when controller UI needs to reflect or push hub-owned live values (animations, future global mutators, future scene crossfaders, etc.).
+
+### Function curves
+
+Named easing functions used by the animation lerp planner and by renderer spatial attenuation. The implementation is mirrored verbatim across modules so an animation eased on the hub looks identical when rendered locally.
+
+- **Hub:** `hub/src/FnCurve.ts → FnCurve.evaluate(name, t ∈ [0,1])`.
+- **Renderers:** `dmx-ts/src/FnCurve.ts` and `simulator-2d/src/FnCurve.js` — same signature, same math.
+- **Available curves:** `linear`, `quadratic`, `cubic`, `sqrt`, `smoothstep`, `hard`. Listed in `systemCapabilities.functionCurves` and referenced from descriptors via `optionsRef: functionCurves`.
+- **Rule:** if you add a curve, add it on every side (hub + every renderer + system.yml) in the same change. Divergence shows up as visibly wrong attenuation/animation.
+
+### Hub status and stats
+
+- **`hub:status`** (`hub/src/hubStatusTypes.ts`) — broadcast hub-originated status notifications. Currently `HubStatusAnimationPayload` (`kind: 'animation'`, `animationGuid`, `status: 'started' | 'paused' | 'stopped'`, optional `message` and `data`). Open by `kind` so future status sources can extend without breaking older controllers.
+- **`lock:intent`** — paired with animation lifecycle to mark intents currently uneditable.
+- **`statsTool`** (`hub/src/statsTool.ts`) — EMA-based per-key sample/rate counter with display interval. Used to profile animation tick rates, runtime dispatch rates, and per-renderer event delivery.
+- **`hubWebSocketStats`** (`hub/src/hubWebSocketStats.ts`) — per-socket counters surfaced through `statsTool`.
+
+### Intent normalization registry
+
+`hub/src/intents/` holds class-specific transforms applied **before** intent state is published to renderers:
+
+- `transformIntentToNormalized(intent)` dispatches by `class`. Unknown classes fall through to `PassthroughIntent`.
+- `LightIntent.transformToNormalized` normalizes `params.color` into CIE 1931 `xyY` regardless of the input format the controller used (HSL, hex, RGB).
+- `MasterIntent.transformToNormalized` is currently a pass-through (placeholder for class-specific master logic).
+- Add a new class by adding a module + entry in `intents/registry.ts`. Renderer event payloads then carry already-normalized data.
+
 ### systemCapabilities
 
 The hub reads `systemCapabilities` from `system.yml` and broadcasts it to all connecting controllers as a `systemCapabilities` message immediately after registration. Both controller and hub sides normalize these the same way.
@@ -339,7 +445,8 @@ The hub reads `systemCapabilities` from `system.yml` and broadcasts it to all co
 Structure:
 - `inputTypes[]` — `{ class, name, hint, params: { paramKey: kind } }`. Param `kind` is currently `jsonString` only. To add a new kind: add a case in `applyParamKind()` (`hub/src/inputAssignment/composeInputParams.ts`) **and** in `parseParamFromForm()` (`surface-v1/src/edit/inputAssign/paramKindHandlers.js`).
 - `displayTypes[]` — `{ class, name }`. Currently only `button`.
-- `functionCurves[]` — string array; referenced via `optionsRef: functionCurves` in intentProperties descriptors.
+- `animations[]` — `{ class, name, display: { dotKey: { type } } }`. Drives the field set the controller `AnimatorViewer` renders for an animation class. Today only `keyframeAnimator` is registered, with `content.length`, `content.repeat`, and `content.lerp.{quantization, minMs, time, curve}` exposed. Add a new animation class by adding a hub runner (under `hub/src/animation/`), a controller viewer (under `surface-v1/src/panes/animators/`) registered through `animatorViewerRegistry`, and a matching `animations[]` entry.
+- `functionCurves[]` — string array of named easing functions (`linear`, `quadratic`, `cubic`, `sqrt`, `smoothstep`, `hard`). Resolved by hub `FnCurve.evaluate` and the matching renderer mirrors. Referenced via `optionsRef: functionCurves` in intentProperties descriptors and as `content.lerp.curve` for animations.
 - `intentProperties` — per-class descriptor arrays. Each descriptor has `dotKey`, `name`, `type`, and optional flags:
   - `quickPanel: true` — shown as a knob in the Perform HUD (`PerformQuickPanelHud`)
   - `allowOverlay: true` — editable via overlay controls in the Edit pane
@@ -347,7 +454,7 @@ Structure:
   - `optionsRef` — string referencing a top-level array key in `systemCapabilities` (e.g. `functionCurves`)
   - `delta` — describes how values change when used with incremental controls (e.g. ADD/MULTIPLY with range)
 
-**Rule:** Never hardcode input types, display types, or intent property names in controller code. Always read from `systemCapabilities.js` via the exported helper functions.
+**Rule:** Never hardcode input types, display types, animation classes, function curves, or intent property names in controller code. Always read from `systemCapabilities.js` via the exported helper functions.
 
 ### Modal system
 
@@ -392,13 +499,14 @@ CSS classes written by `ArraySorter`: `.array-sort-row`, `.array-sort-row--dragg
 
 ### Perform HUD
 
-The Perform pane renders a floating HUD panel above each intent's position on the canvas. It is driven by `PerformQuickPanelHud` (`surface-v1/src/perform/performQuickPanelHud.js`) and `ScalarRadialKnob` (`surface-v1/src/perform/ScalarRadialKnob.js`).
+The Perform pane renders a floating HUD panel above each intent's position on the canvas. It is driven by `PerformQuickPanelHud` (`surface-v1/src/perform/performQuickPanelHud.js`) and `ScalarRadialKnobSvg` (`surface-v1/src/edit/components/ScalarRadialKnobSvg.js`).
 
 - HUD panels are reconciled against the live intent list on each `projectGraph` change (subscribe callback).
 - Knob descriptors come from `resolveDescriptorsForClass(intent.class)` filtered to `quickPanel: true` — never hardcoded.
 - Panel position is calculated every `requestAnimationFrame` via world-to-canvas conversion using `worldToCanvas()` from `spatialMath.js`.
-- `ScalarRadialKnob` supports a zoomed precision mode (long-press): a larger overlay canvas appears for fine-grained control, then collapses on release.
+- `ScalarRadialKnobSvg` (SVG-based, replaces the older Canvas-based `perform/ScalarRadialKnob.js`) supports a zoomed precision mode (long-press): a larger overlay appears for fine-grained control, then collapses on release. The same component is reused by the Animate edit pane (timescale + keyframe field knobs).
 - Knob value changes are sent as `queueIntentUpdate()` (runtime, not graph commands).
+- Knobs for intents present in `intentLockRegistry` are hidden/disabled — those intents are currently driven by an animation.
 
 **Rule:** Add new Perform HUD controls by setting `quickPanel: true` on a descriptor in `system.yml → systemCapabilities.intentProperties`. Do not add special-case knob construction in `PerformQuickPanelHud` source.
 
@@ -631,6 +739,17 @@ Mandatory graph-state rules:
 - Do not rely on fixture names alone for synced mutable fixture identity. Use stable fixture GUIDs.
 - Do not remove existing comments while editing files.
 
+Mandatory animation / binding / intent-registry rules:
+
+- Animation runtime mutations must dispatch through `RuntimeUpdateDispatcher` (transient). Do not write durable graph state from a running animation.
+- Animation lifecycle (start / stop / pause / setTimescale / edit on/off) is hub-owned in `AnimationManager`. Controllers must not maintain their own playback state — read from `animationPlayRegistry` (sourced from `hub:status`) and write through `action:trigger` or `animation:edit`.
+- Adding a new animation class must touch all three sides in one change: hub runner under `hub/src/animation/` (and routed through `AnimationManager`), controller viewer under `surface-v1/src/panes/animators/` registered with `animatorViewerRegistry`, and a matching entry in `system.yml → systemCapabilities.animations[]`.
+- Edit and Perform UIs must respect `intentLockRegistry`. Do not let the operator drag/knob an intent currently driven by an animation.
+- Use `BindingManager` (via `bindingRegistry` on the controller) for any controller UI that must mirror or push hub-owned live values. Do not poll `runtime:update` or invent ad-hoc subscription messages.
+- Active scene addressing is by **`activeSceneGuid`**, not name. Do not reintroduce `activeSceneName` on the wire or in graph patches.
+- Intent normalization (color space, future class-specific transforms) belongs in `hub/src/intents/`. Do not duplicate normalization in renderers — events arrive already normalized.
+- Function curves must stay byte-identical across `hub/src/FnCurve.ts`, `dmx-ts/src/FnCurve.ts`, and `simulator-2d/src/FnCurve.js`. Adding a curve requires updating all three plus `system.yml → systemCapabilities.functionCurves`.
+
 Mandatory actions/inputs rules:
 
 - Do not use `sendGraphCommands` directly to create or remove inputs or actions. Use `sendActionInputCommand(command)` from `outboundQueue.js`. This ensures types are validated against `systemCapabilities` and action/input graph entries are kept in sync.
@@ -642,6 +761,8 @@ Mandatory actions/inputs rules:
 - Do not add new Perform HUD knobs by modifying `PerformQuickPanelHud` source. Set `quickPanel: true` on the descriptor in `system.yml → systemCapabilities.intentProperties`.
 - Do not add new input param kinds only on one side. When adding a new `kind` to `system.yml`, implement the coercion in `hub/src/inputAssignment/composeInputParams.ts → applyParamKind()` **and** the form parse/stringify in `surface-v1/src/edit/inputAssign/paramKindHandlers.js → parseParamFromForm()`.
 - Do not build new headless controllers from scratch. Start from `controllers/starter/` — it has the correct registration flow, graph replica, `action:trigger` send path, and `runtime:command` position path.
+- Do not bind keys to actions by attaching ad-hoc `keydown` listeners. Add `params.key` to the input via `InputAssignManager` and let `KeyboardManager` route the event through `performMomentaryRegistry` / `action:trigger`.
+- Do not subscribe to the project graph by reading the whole snapshot on every change. Use `projectGraph.subscribe(paths, callback)` — register against the slices you care about (`intents`, `inputs`, `actions`, `scenes`, etc.) so multi-field deltas batch.
 
 Mandatory dot-key rules:
 

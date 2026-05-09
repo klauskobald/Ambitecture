@@ -30,8 +30,19 @@ Ambitecture is intentionally modular: you can pair many controller types with ma
 
 - **Controllers** can be touch UIs, automation surfaces, timelines, or sensor-driven tools.
 - **Renderers** can be DMX fixtures, visual simulators, or custom output protocols.
-- **Hub** keeps shared project + intent state, distributes runtime config, and emits renderer-facing events from controller intents.
+- **Hub** keeps shared project + intent state, distributes runtime config, runs **animations** and **bindings**, and emits renderer-facing events from controller intents.
 - **Deliver** is an optional static host for browser-based controllers/renderers.
+
+### Current Capabilities
+
+- **Scenes** addressed by stable GUID (renames don't break references).
+- **Actions and inputs** wire scenes/intents/animations to perform buttons, momentary switches, and **keyboard shortcuts** (`KeyboardManager` in `surface-v1`).
+- **Animations** — hub runs keyframe animations against intents with eased intermediate samples (`linear` / `quadratic` / `cubic` / `sqrt` / `smoothstep` / `hard` curves). Live keyframe editing is hub-coordinated so multiple controllers stay in sync.
+- **Bindings** — generic bidirectional binding layer (`binding:subscribe` / `binding:set` / `binding:value`) for controller UI to mirror or push hub-owned live values such as animation timescale.
+- **Function curves** — named easing/attenuation curves shared verbatim across hub and renderers so animation lerps and fixture range falloff look identical wherever they're rendered.
+- **Intent normalization** — hub-side intent registry (`hub/src/intents/`) normalizes per-class data (color → CIE xyY, etc.) before events reach renderers.
+- **Runtime intent merge** — hub-owned `RuntimeIntentStore` merges controller perform patches on top of scene overlays so renderers always see a consistent normalized intent.
+- **Hub status** — `hub:status` broadcast and `lock:intent` notifications keep controllers aware of running animations and uneditable intents.
 
 Detailed protocol and runtime internals live in [SYSTEM-ARCHITECTURE.md](SYSTEM-ARCHITECTURE.md).
 
@@ -171,16 +182,28 @@ Config source:
 
 - `modules/hub/config.DEMO/test.yml`
 
-`001-blinker.ts` acts as a controller client, registers via WebSocket, and sends timed intent batches.
+Current test files:
+
+- `001-blinker.ts` — controller client that registers via WebSocket and sends timed intent batches.
+- `002-intent-action.ts` — exercises action/input wiring and `action:trigger` execution.
+- `003-runtime-echo.ts` — verifies that `runtime:command` patches round-trip back as `runtime:update` to other controllers.
+- `004-animation.ts` — keyframe animation lifecycle: trigger, lerp, edit mode, stop.
+- `005-timescale-binding.ts` — `binding:subscribe` / `binding:set` against the animation timescale master.
 
 ## Intent Workflow
 
-- Controllers send `message.type = "intents"` to the hub (not direct renderer `events`).
-- Intents should carry a stable `guid` so updates can target/replace the same logical intent over time.
-- Hub updates per-controller intent state and includes that state in controller `config` payloads.
-- Hub normalizes intent color into CIE 1931 `xyY`, converts relative `scheduled` offsets into absolute times, and queues renderer-facing `events`.
-- Hub forwards intent `guid` into renderer `events`.
-- Renderers consume queued `events` and apply them through their layer/capability engines, storing active intents by `guid` (allowing multiple intents at the same `params.layer`).
+- Controllers send authoritative graph mutations as `graph:command` and transient live updates as `runtime:command` (the legacy `intents` message is still accepted but new code should use the graph protocol).
+- Intents carry a stable `guid` so updates can target/replace the same logical intent over time.
+- The hub-side `RuntimeIntentStore` merges the three layers — bare definition, active-scene overlay, and runtime perform patches — and emits normalized renderer events through `RuntimeUpdateDispatcher` and `EventQueue`.
+- Per-class normalization (e.g., color → CIE 1931 `xyY` for `light` intents) happens in the hub-side intent registry (`hub/src/intents/`) before the event payload is built.
+- Renderers consume queued `events` and apply them through their layer/capability engines, storing active intents by `guid` (allowing multiple intents at the same `layer`). Spatial attenuation uses fixture range and a named function curve from `FnCurve`.
+
+## Animation and Binding Workflow
+
+- An animation is a graph entity with a stable `guid`, an `animator.class` (currently `keyframeAnimator`), keyframe steps, and a `targetIntent`.
+- Controllers fire animations via `action:trigger` (the action GUID equals the animation GUID) or send `animation:edit` to enter live keyframe edit mode.
+- The hub-side `AnimationManager` runs one runner per animation `guid`, dispatches mutations through the runtime path (no YAML writes), broadcasts `hub:status` for play/pause/stop, and emits `lock:intent` so controllers disable UI on intents currently driven by an animation.
+- `binding:subscribe` / `binding:set` / `binding:value` connect controller UI (e.g., timescale knob, current keyframe step) to live hub-owned values without polling.
 
 ## Resilience Notes
 

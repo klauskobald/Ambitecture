@@ -16,11 +16,15 @@ export class FnCurve {
     ['hard', (x) => (x > 0 ? 1 : 0)],
   ]);
 
-  static evaluate(name: unknown, x: number): number {
-    const fnName = typeof name === 'string' ? name : 'linear';
-    const fn = this.functions.get(fnName) ?? this.functions.get('linear')!;
+  static evaluateClamped(name: any, x: number): number {
+    const fn = this.functions.get(name) ?? this.functions.get('linear')!;
     const clampedX = Math.max(0, Math.min(1, x));
     const y = fn(clampedX);
     return Math.max(0, Math.min(1, y));
+  }
+
+  static evaluate(name: any, x: number): number {
+    const fn = this.functions.get(name) ?? this.functions.get('linear')!;
+    return fn(x);
   }
 }

@@ -9,6 +9,8 @@ interface NoteAndControlParams {
   velocityMin: number;
   velocityMax: number;
   controller: number;
+  controllerAdd: number;
+  controllerScale: number;
 }
 
 function readParams(raw: Record<string, unknown>): NoteAndControlParams | null {
@@ -22,7 +24,9 @@ function readParams(raw: Record<string, unknown>): NoteAndControlParams | null {
     velocityMin = range[0];
     velocityMax = range[1];
   }
-  return { note, controller, velocityMin, velocityMax };
+  const controllerAdd = typeof raw['controllerAdd'] === 'number' ? raw['controllerAdd'] : 0;
+  const controllerScale = typeof raw['controllerScale'] === 'number' ? raw['controllerScale'] : 1;
+  return { note, controller, velocityMin, velocityMax, controllerAdd, controllerScale };
 }
 
 export class ReceiverNoteAndControl extends ReceiverBase {
@@ -69,6 +73,10 @@ export class ReceiverNoteAndControl extends ReceiverBase {
     if (this.armedChannel === null) return;
     if (e.channel !== this.armedChannel) return;
     if (e.controller !== this.params.controller) return;
-    this.fanOut(e.value / 127);
+    // Pre-curve transform in raw 0..127 CC space: (cc + add) * scale, clamped, then normalized.
+    const adjusted = (e.value + this.params.controllerAdd) * this.params.controllerScale;
+    this.fanOut(adjusted / 127);
+    // const clamped = Math.max(0, Math.min(127, adjusted));
+    // this.fanOut(clamped / 127);
   }
 }

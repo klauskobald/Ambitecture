@@ -13,6 +13,7 @@ import { RuntimeCommandHandler } from './handlers/RuntimeCommandHandler';
 import { ActionHandler } from './handlers/ActionHandler';
 import { EventQueue } from './EventQueue';
 import { statsTool } from './statsTool';
+import { recordRendererEventDeliveries } from './hubWebSocketStats';
 import { RuntimeUpdateDispatcher } from './RuntimeUpdateDispatcher';
 import { RuntimeIntentStore } from './RuntimeIntentStore';
 import { ProjectManager } from './ProjectManager';
@@ -65,10 +66,15 @@ const graphStore = new ProjectGraphStore(
   animationManager,
 );
 
-const buildActiveSceneEventsMsg = (): string | null => {
+const buildActiveSceneEventsMsg = (): { msg: string | null; eventCount: number } => {
   const events = graphStore.getActiveSceneEvents();
-  if (events.length === 0) return null;
-  return JSON.stringify({ message: { type: 'events', payload: events } });
+  if (events.length === 0) {
+    return { msg: null, eventCount: 0 };
+  }
+  return {
+    msg: JSON.stringify({ message: { type: 'events', payload: events } }),
+    eventCount: events.length,
+  };
 };
 
 /**
@@ -134,15 +140,20 @@ const pushControllerProjectPatches = (includeIntentsPatch: boolean): void => {
 
 /** Renderers get full `config` + scene events; controllers get `projectPatch` only (full `config` on register). */
 const pushConfigsToModules = (includeControllerIntentPatch = true) => {
-  const sceneEventsMsg = buildActiveSceneEventsMsg();
+  const sceneEvents = buildActiveSceneEventsMsg();
+  let sceneEventRecipients = 0;
   for (const ws of registry.getByRole('renderer')) {
     const info = registry.get(ws);
     if (info && ws.readyState === ws.OPEN) {
       const config = graphStore.buildRendererConfig(info.guid);
       ws.send(JSON.stringify({ message: { type: 'config', payload: config } }));
-      if (sceneEventsMsg) ws.send(sceneEventsMsg);
+      if (sceneEvents.msg) {
+        ws.send(sceneEvents.msg);
+        sceneEventRecipients += 1;
+      }
     }
   }
+  recordRendererEventDeliveries(sceneEvents.eventCount, sceneEventRecipients);
   pushControllerProjectPatches(includeControllerIntentPatch);
 };
 

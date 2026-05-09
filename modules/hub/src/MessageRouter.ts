@@ -1,6 +1,7 @@
 import { WebSocket } from 'ws';
 import { Logger } from './Logger';
 import { ConnectionRegistry } from './ConnectionRegistry';
+import { recordInboundRoutedMessage } from './hubWebSocketStats';
 
 export interface WsMessage {
   type: string;
@@ -30,6 +31,7 @@ export class MessageRouter {
       Logger.warn(`[router] No handler for message type: ${message.type}`);
       return;
     }
+    recordInboundRoutedMessage(this.registry, ws, message);
     handler.handle(ws, message, this.registry);
   }
 }

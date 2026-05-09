@@ -3,6 +3,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { Logger } from './Logger';
 import { ConnectionRegistry } from './ConnectionRegistry';
 import { MessageRouter, WsMessage } from './MessageRouter';
+import { attachHubWebSocketStats } from './hubWebSocketStats';
 
 const HEARTBEAT_INTERVAL_MS = 10_000;
 const HEARTBEAT_TIMEOUT_MS = 15_000;
@@ -52,6 +53,7 @@ export class Server {
 
   private onConnection(ws: WebSocket): void {
     this.registry.add(ws);
+    attachHubWebSocketStats(ws);
     this.lastPongTimes.set(ws, Date.now());
 
     const heartbeatTimer = setInterval(() => this.checkHeartbeat(ws), HEARTBEAT_INTERVAL_MS);

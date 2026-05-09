@@ -5,6 +5,7 @@ import { ConnectionRegistry } from '../ConnectionRegistry';
 import { MessageHandler, WsMessage } from '../MessageRouter';
 import { ProjectGraphStore } from '../ProjectGraphStore';
 import { KeyframeAnimator } from '../animation/keyframeAnimator';
+import { recordRendererEventDeliveries } from '../hubWebSocketStats';
 
 interface RegisterPayload {
   role: 'renderer' | 'controller';
@@ -70,6 +71,7 @@ export class RegisterHandler implements MessageHandler {
 
       const events = this.graphStore.getActiveSceneEvents();
       if (events.length > 0) {
+        recordRendererEventDeliveries(events.length, 1);
         ws.send(JSON.stringify({ message: { type: 'events', payload: events } }));
         Logger.info(`[register] pushed ${events.length} active scene event(s) to renderer ${guid}`);
       }

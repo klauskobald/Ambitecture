@@ -1,5 +1,6 @@
 import { WebSocket } from 'ws';
 import { ConnectionRegistry } from './ConnectionRegistry';
+import { recordRendererEventDeliveries } from './hubWebSocketStats';
 
 export interface ScheduledEvent {
   event: object;
@@ -28,17 +29,19 @@ export class EventQueue {
           payload: group,
         },
       });
+      const eventCount = group.length;
       if (delay === 0) {
-        this.dispatch(outbound);
+        this.dispatch(outbound, eventCount);
       } else {
-        setTimeout(() => this.dispatch(outbound), delay);
+        setTimeout(() => this.dispatch(outbound, eventCount), delay);
       }
     }
   }
 
-  private dispatch(outbound: string): void {
+  private dispatch(outbound: string, eventCount: number): void {
     const renderers = this.registry.getByRole('renderer');
     const openRenderers = renderers.filter(r => r.readyState === WebSocket.OPEN);
+    recordRendererEventDeliveries(eventCount, openRenderers.length);
     for (const rendererWs of openRenderers) {
       rendererWs.send(outbound);
     }

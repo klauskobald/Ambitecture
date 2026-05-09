@@ -3,6 +3,7 @@ import { Logger } from '../Logger';
 import { ConnectionRegistry } from '../ConnectionRegistry';
 import { MessageHandler, WsMessage } from '../MessageRouter';
 import { Color } from '../color';
+import { recordRendererEventDeliveries } from '../hubWebSocketStats';
 
 interface EventParams {
   color?: unknown;
@@ -62,6 +63,7 @@ export class EventsHandler implements MessageHandler {
     const renderers = this.registry.getByRole('renderer');
     const openRenderers = renderers.filter(ws => ws.readyState === WebSocket.OPEN);
 
+    recordRendererEventDeliveries(normalizedEvents.length, openRenderers.length);
     for (const rendererWs of openRenderers) {
       rendererWs.send(outboundMessage);
     }

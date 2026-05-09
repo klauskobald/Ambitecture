@@ -6,7 +6,10 @@ import {
   ArraySorter,
   DEFAULT_PERFORM_INPUT_SORT_KEY
 } from '../core/arraySorter.js'
-import { collectPerformButtonInputs } from '../core/performButtonInputs.js'
+import {
+  collectPerformButtonInputs,
+  normalizeInputKeyChar
+} from '../core/performButtonInputs.js'
 import {
   getPerformInputArgs,
   performMomentaryPress,
@@ -113,11 +116,7 @@ export class PerformPane {
       const newText = String(input.name ?? 'Button')
       if (labelEl.textContent !== newText) labelEl.textContent = newText
 
-      const rawKey = input.keyChar
-      const keyLabel =
-        typeof rawKey === 'string' && rawKey.trim().length > 0
-          ? rawKey.trim()
-          : ''
+      const keyLabel = normalizeInputKeyChar(input.keyChar)
       if (keyHintEl) {
         keyHintEl.textContent = keyLabel
         keyHintEl.hidden = !keyLabel

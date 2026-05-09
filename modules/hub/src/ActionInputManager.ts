@@ -25,7 +25,8 @@ export type ActionInputCommand =
   | { command: 'removeInputAssignment'; targetType: AssignTargetType; targetGuid: string }
   | { command: 'renameInput'; inputGuid: string; name: string }
   | { command: 'assignExistingInput'; targetType: AssignTargetType; targetGuid: string; inputGuid: string }
-  | { command: 'deleteInput'; inputGuid: string; expectedLinkedTargetCount?: number };
+  | { command: 'deleteInput'; inputGuid: string; expectedLinkedTargetCount?: number }
+  | { command: 'setInputKeyChar'; inputGuid: string; keyChar?: string | null };
 
 export class ActionInputManager {
   constructor(
@@ -45,6 +46,8 @@ export class ActionInputManager {
         return this.assignExistingInputCommands(controllerGuid, command.targetType, command.targetGuid, command.inputGuid);
       case 'deleteInput':
         return this.deleteInputCommands(controllerGuid, command.inputGuid, command.expectedLinkedTargetCount);
+      case 'setInputKeyChar':
+        return this.setInputKeyCharCommands(controllerGuid, command.inputGuid, command.keyChar);
     }
   }
 
@@ -252,6 +255,36 @@ export class ActionInputManager {
           ...(input as unknown as Record<string, unknown>),
           name: nextName,
         },
+        { entityType: 'controller', guid: controllerGuid },
+      ),
+    ];
+  }
+
+  private setInputKeyCharCommands(
+    controllerGuid: string,
+    inputGuid: string,
+    keyChar: string | null | undefined,
+  ): GraphCommand[] {
+    const input = this.projectManager.getInputByGuid(inputGuid);
+    if (!input?.guid) return [];
+    const row = cloneRecord(input as unknown as Record<string, unknown>);
+    const prevRaw = row['keyChar'];
+    const prevNorm =
+      prevRaw === undefined || prevRaw === null ? '' : String(prevRaw).trim();
+    const clear = keyChar === null || keyChar === undefined || keyChar === '';
+    const nextNorm = clear ? '' : String(keyChar).trim();
+    if (prevNorm === nextNorm) return [];
+    if (clear) {
+      delete row['keyChar'];
+    } else {
+      row['keyChar'] = nextNorm;
+    }
+    row['guid'] = input.guid;
+    return [
+      this.upsertCommand(
+        'input',
+        input.guid,
+        row,
         { entityType: 'controller', guid: controllerGuid },
       ),
     ];

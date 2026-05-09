@@ -52,6 +52,16 @@ function isActionInputCommand(payload: unknown): payload is ActionInputCommand {
         && p['inputGuid'].length > 0
         && validCount;
     }
+    case 'setInputKeyChar': {
+      const k = p['keyChar'];
+      const keyOk =
+        k === null
+        || k === undefined
+        || typeof k === 'string';
+      return typeof p['inputGuid'] === 'string'
+        && p['inputGuid'].length > 0
+        && keyOk;
+    }
     default:
       return false;
   }

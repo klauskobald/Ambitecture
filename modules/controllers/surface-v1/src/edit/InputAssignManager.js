@@ -3,7 +3,8 @@ import {
   confirm as modalConfirm,
   openModalCard,
   pickChoice,
-  prompt as modalPrompt
+  prompt as modalPrompt,
+  sampleKey
 } from '../core/Modal.js'
 import { sendActionInputCommand } from '../core/outboundQueue.js'
 import {
@@ -11,6 +12,7 @@ import {
   getInputTypes,
   resolveDefaultPerformTypes
 } from '../core/systemCapabilities.js'
+import { normalizeInputKeyChar } from '../core/performButtonInputs.js'
 
 export class InputAssignManager {
   /**
@@ -208,11 +210,7 @@ export class InputAssignManager {
         const actionGuid =
           typeof inputRecord?.action === 'string' ? inputRecord.action : ''
         const unassigned = !actionGuid || !actions.has(actionGuid)
-        const rawKey = inputRecord?.keyChar
-        const keyLabel =
-          typeof rawKey === 'string' && rawKey.trim().length > 0
-            ? rawKey.trim()
-            : ''
+        const keyLabel = normalizeInputKeyChar(inputRecord?.keyChar)
         if (unassigned || keyLabel) {
           helpers.button.style.position = 'relative'
         }
@@ -230,6 +228,18 @@ export class InputAssignManager {
           badge.textContent = 'unassigned'
           helpers.button.appendChild(badge)
         }
+        const keyShortcutBtn = document.createElement('button')
+        keyShortcutBtn.type = 'button'
+        keyShortcutBtn.className =
+          'input-assign-inline-icon-btn input-assign-inline-icon-btn--key'
+        keyShortcutBtn.style.flex = '0 0 auto'
+        keyShortcutBtn.textContent = 'key'
+        keyShortcutBtn.setAttribute('aria-label', 'Set keyboard shortcut')
+        keyShortcutBtn.addEventListener('click', e => {
+          e.stopPropagation()
+          helpers.dismiss(`__sampleKey__:${option.value}`)
+        })
+        row.insertBefore(keyShortcutBtn, helpers.button)
         const editBtn = document.createElement('button')
         editBtn.type = 'button'
         editBtn.className =
@@ -258,6 +268,15 @@ export class InputAssignManager {
     })
 
     if (outcome === null) return
+    if (typeof outcome === 'string' && outcome.startsWith('__sampleKey__:')) {
+      const inputGuid = outcome.slice('__sampleKey__:'.length)
+      const captured = await sampleKey('Press Key', 'No Key')
+      if (captured !== null) {
+        await this._sendSetInputKeyCharAndSyncToGraph(inputGuid, captured)
+      }
+      await this.showControl()
+      return
+    }
     if (outcome === createChoiceValue) {
       await this._createInputAndAssign(inputTypes, displayTypes)
       this._refreshInvokeButton()
@@ -291,6 +310,49 @@ export class InputAssignManager {
       inputGuid: outcome
     })
     this._refreshInvokeButton()
+  }
+
+  /**
+   * Hub applies `setInputKeyChar` asynchronously (`graph:delta`). Wait until the local
+   * `projectGraph` matches so the reopened picker shows the new hint immediately.
+   * @param {string} inputGuid
+   * @param {string} captured `''` = clear; else `KeyboardEvent.key` from {@link sampleKey}
+   * @returns {Promise<void>}
+   */
+  async _sendSetInputKeyCharAndSyncToGraph (inputGuid, captured) {
+    const expected =
+      captured === '' ? '' : normalizeInputKeyChar(captured)
+    const matches = () =>
+      normalizeInputKeyChar(
+        projectGraph.getInputs().get(inputGuid)?.keyChar
+      ) === expected
+
+    if (matches()) return
+
+    await new Promise(resolve => {
+      let done = false
+      const finish = () => {
+        if (done) return
+        done = true
+        window.clearTimeout(tid)
+        unsub()
+        resolve()
+      }
+      const unsub = projectGraph.subscribe(['inputs'], () => {
+        if (matches()) finish()
+      })
+      const tid = window.setTimeout(finish, 2500)
+
+      sendActionInputCommand({
+        command: 'setInputKeyChar',
+        inputGuid,
+        keyChar: expected === '' ? null : expected
+      })
+
+      queueMicrotask(() => {
+        if (matches()) finish()
+      })
+    })
   }
 
   _refreshInvokeButton () {

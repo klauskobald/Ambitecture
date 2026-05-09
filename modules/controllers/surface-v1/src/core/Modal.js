@@ -15,6 +15,8 @@
  *     { value: 'a', label: 'Option A' },
  *     { value: 'b', label: 'Option B', disabled: true, title: 'Soon' }
  *   ]).then(v => { ... })  // v is chosen value string, or null if cancelled
+ *   sampleKey('Press Key', 'No Key').then(k => { ... })  // key string, '' = clear, null = cancel
+ *   Modal.sampleKey(...)  // same as named export
  *   openModalCard(dismiss => { ... build card, call dismiss(result) ... }).then(...)
  */
 
@@ -43,6 +45,45 @@ function _dismiss (value) {
   const cb = _resolve
   _resolve = null
   cb?.(value)
+}
+
+/** Ignore lone Shift/Ctrl/Alt/etc. so sampling waits for the actual character key. */
+const _MODIFIER_SAMPLE_KEYS = new Set([
+  'Shift',
+  'Control',
+  'Alt',
+  'Meta',
+  'AltGraph',
+  'CapsLock',
+  'NumLock',
+  'ScrollLock',
+  'Fn',
+  'FnLock',
+  'OS',
+  'Super',
+  'Hyper',
+  'Process'
+])
+
+/**
+ * @param {KeyboardEvent} e
+ * @returns {boolean}
+ */
+function _isModifierOnlyKeydown (e) {
+  if (_MODIFIER_SAMPLE_KEYS.has(e.key)) return true
+  const c = e.code
+  return (
+    c === 'ShiftLeft' ||
+    c === 'ShiftRight' ||
+    c === 'ControlLeft' ||
+    c === 'ControlRight' ||
+    c === 'AltLeft' ||
+    c === 'AltRight' ||
+    c === 'MetaLeft' ||
+    c === 'MetaRight' ||
+    c === 'AltGraph' ||
+    c === 'ContextMenu'
+  )
 }
 
 // ── Builders ───────────────────────────────────────────────────────────────────
@@ -503,4 +544,84 @@ export function editText (options) {
     }))
     _overlay.classList.add('is-open')
   })
+}
+
+/**
+ * Waits for any key (`KeyboardEvent.key`) or an explicit “no key” action.
+ * @param {string} message
+ * @param {string} [noKeyLabel]
+ * @returns {Promise<string | null>} `event.key` when a key is pressed; `''` when “no key” is chosen; `null` if cancelled (Escape or overlay click).
+ */
+export function sampleKey (message, noKeyLabel = 'No Key') {
+  _dismiss(null)
+  _ensureOverlay()
+  return new Promise((resolve) => {
+    let cleaned = false
+    const cleanup = () => {
+      if (cleaned) return
+      cleaned = true
+      window.removeEventListener('keydown', onKeyDown, true)
+    }
+    _resolve = (val) => {
+      cleanup()
+      resolve(/** @type {string | null} */ (val))
+    }
+
+    const card = document.createElement('div')
+    card.className = 'modal modal--sample-key'
+    card.tabIndex = -1
+    card.setAttribute('role', 'dialog')
+    card.addEventListener('click', (e) => e.stopPropagation())
+
+    const p = document.createElement('p')
+    p.className = 'modal-text'
+    p.textContent = message
+
+    const actions = document.createElement('div')
+    actions.className = 'modal-actions'
+
+    const noKeyBtn = document.createElement('button')
+    noKeyBtn.type = 'button'
+    noKeyBtn.className = 'btn'
+    noKeyBtn.textContent = noKeyLabel
+    noKeyBtn.addEventListener('click', (e) => {
+      e.preventDefault()
+      _dismiss('')
+    })
+
+    actions.appendChild(noKeyBtn)
+    card.appendChild(p)
+    card.appendChild(actions)
+
+    /** @param {KeyboardEvent} e */
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        _dismiss(null)
+        return
+      }
+      if (e.repeat) return
+      if (_isModifierOnlyKeydown(e)) return
+      e.preventDefault()
+      e.stopPropagation()
+      _dismiss(e.key)
+    }
+
+    window.addEventListener('keydown', onKeyDown, true)
+    _overlay.appendChild(card)
+    _overlay.classList.add('is-open')
+    requestAnimationFrame(() => card.focus())
+  })
+}
+
+/** Named exports plus `Modal.sampleKey`-style access */
+export const Modal = {
+  alert,
+  warn,
+  confirm,
+  prompt,
+  pickChoice,
+  openModalCard,
+  editText,
+  sampleKey
 }

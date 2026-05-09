@@ -435,6 +435,12 @@
   color: #c44;
 }
 
+.input-assign-inline-icon-btn--key {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.2rem 0.4rem;
+}
+
 .scene-perform-row--active {
   opacity: 1;
 }
@@ -917,11 +923,13 @@
 
 .perform-input__keyhint {
   position: absolute;
-  top: 3px;
-  left: 5px;
-  font-size: 0.85rem;
+  top: 2px;
+  right: 3px;
+  font-size: 0.75rem;
   line-height: 1.1;
   font-weight: 600;
+  width: 1rem;
+  border: 1px solid var(--color-border);
   color: var(--color-text-muted);
   pointer-events: none;
   max-width: 40%;

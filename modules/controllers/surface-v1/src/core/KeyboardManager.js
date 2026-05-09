@@ -1,5 +1,8 @@
 import { projectGraph } from './projectGraph.js'
-import { collectPerformButtonInputs } from './performButtonInputs.js'
+import {
+  collectPerformButtonInputs,
+  normalizeInputKeyChar
+} from './performButtonInputs.js'
 import {
   getPerformInputArgs,
   performMomentaryPress,
@@ -92,9 +95,7 @@ class KeyboardManager {
       const actionGuid = typeof input.action === 'string' ? input.action : ''
       if (!actionGuid || !actions.has(actionGuid)) continue
 
-      const raw = input.keyChar
-      const keyChar =
-        typeof raw === 'string' && raw.length > 0 ? raw.trim() : ''
+      const keyChar = normalizeInputKeyChar(input.keyChar)
       if (!keyChar) continue
 
       const prev = this._bindings.get(keyChar)

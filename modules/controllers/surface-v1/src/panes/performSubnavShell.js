@@ -8,8 +8,32 @@ import { createPerformControlPanel } from './performControlPanel.js'
 import { createPerformAnimatePanel } from './performAnimatePanel.js'
 import { getResolvedPerformPlugins } from '../plugins/pluginRegistry.js'
 import { postThemeToIframe } from '../plugins/themeToIframe.js'
+import {
+  getPerformIntentFilter,
+  setPerformIntentFilter,
+  subscribePerformIntentFilter,
+  togglePerformIntentFilter
+} from '../core/performIntentFilter.js'
 
 /** @typedef {'control' | 'animate' | string} PerformSubpaneId */
+
+/**
+ * @param {string} baseUrl
+ * @param {string | null} filterGuid
+ * @returns {string}
+ */
+function buildPluginIframeSrc (baseUrl, filterGuid) {
+  if (!baseUrl) return ''
+  let u
+  try {
+    u = new URL(baseUrl, window.location.href)
+  } catch {
+    return baseUrl
+  }
+  if (filterGuid) u.searchParams.set('filter', filterGuid)
+  else u.searchParams.delete('filter')
+  return u.toString()
+}
 
 export class PerformSubnavShell {
   constructor () {
@@ -78,13 +102,16 @@ export class PerformSubnavShell {
     this._animate = animate
 
     this._filterChip.addEventListener('click', () => {
-      animate.setIntentFilter(null)
+      setPerformIntentFilter(null)
     })
 
-    animate.subscribeFilter(guid => this._renderFilterChip(guid))
+    subscribePerformIntentFilter(() => {
+      this._syncActivePluginIframeFromFilter()
+      this._renderFilterChipFromState()
+    })
     // Filter chip shows the filtered intent's name; only `intents:def` changes that.
     projectGraph.subscribe(['intents:def'], () => {
-      this._renderFilterChip(animate.getIntentFilter())
+      this._renderFilterChipFromState()
     })
 
     this._subpanes.appendChild(this._controlPanel)
@@ -100,7 +127,7 @@ export class PerformSubnavShell {
     /** @type {PerformSubpaneId} */
     this._activeSubpane = 'control'
 
-    /** @type {Map<string, { link: HTMLAnchorElement, panel: HTMLElement, iframe: HTMLIFrameElement | null, offline: HTMLElement }>} */
+    /** @type {Map<string, { link: HTMLAnchorElement, panel: HTMLElement, iframe: HTMLIFrameElement | null, offline: HTMLElement, baseIframeUrl: string | null }>} */
     this._pluginSlots = new Map()
 
     this._subnavToggle.addEventListener('click', () => {
@@ -180,7 +207,17 @@ export class PerformSubnavShell {
       panel.appendChild(offline)
       if (iframe) panel.appendChild(iframe)
       this._pluginPaneMount.appendChild(panel)
-      this._pluginSlots.set(p.pluginGuid, { link, panel, iframe, offline })
+      const baseIframeUrl =
+        p.available && typeof p.iframeUrl === 'string' && p.iframeUrl
+          ? p.iframeUrl
+          : null
+      this._pluginSlots.set(p.pluginGuid, {
+        link,
+        panel,
+        iframe,
+        offline,
+        baseIframeUrl
+      })
     }
 
     const stillValid =
@@ -215,11 +252,15 @@ export class PerformSubnavShell {
       const active = id === guid
       slot.link.classList.toggle('nav-link--active', active)
       slot.panel.hidden = !active
-      if (active && slot.iframe && !slot.iframe.src) {
-        const meta = getResolvedPerformPlugins().find(x => x.pluginGuid === guid)
-        if (meta?.iframeUrl) slot.iframe.src = meta.iframeUrl
+      if (active && slot.iframe && slot.baseIframeUrl) {
+        const next = buildPluginIframeSrc(
+          slot.baseIframeUrl,
+          getPerformIntentFilter()
+        )
+        if (slot.iframe.src !== next) slot.iframe.src = next
       }
     }
+    this._renderFilterChipFromState()
   }
 
   syncSubpaneFromState () {
@@ -232,19 +273,36 @@ export class PerformSubnavShell {
   }
 
   /**
-   * Set or clear the animate-list intent filter. Tapping the same intent twice clears.
+   * Set or clear the perform intent filter. Tapping the same intent twice clears.
    * @param {string | null} guid
    */
   toggleIntentFilter (guid) {
-    const next = guid && this._animate.getIntentFilter() === guid ? null : guid
-    this._animate.setIntentFilter(next)
+    togglePerformIntentFilter(guid)
   }
 
   /**
-   * @param {string | null} guid
+   * @param {PerformSubpaneId} id
+   * @returns {boolean}
    */
-  _renderFilterChip (guid) {
-    if (!guid) {
+  isPluginSubpane (id) {
+    return id !== 'control' && id !== 'animate' && this._pluginSlots.has(id)
+  }
+
+  _syncActivePluginIframeFromFilter () {
+    const id = this._activeSubpane
+    if (!this._pluginSlots.has(id)) return
+    const slot = this._pluginSlots.get(id)
+    if (!slot?.iframe || !slot.baseIframeUrl) return
+    const next = buildPluginIframeSrc(
+      slot.baseIframeUrl,
+      getPerformIntentFilter()
+    )
+    if (slot.iframe.src !== next) slot.iframe.src = next
+  }
+
+  _renderFilterChipFromState () {
+    const guid = getPerformIntentFilter()
+    if (!guid || this._activeSubpane === 'control') {
       this._filterChip.hidden = true
       return
     }

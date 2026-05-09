@@ -16,6 +16,11 @@ import { createAnimationEditPane } from './performAnimateEditPane.js'
 import { getCapabilities } from '../core/systemCapabilities.js'
 import { pickChoice, warn as modalWarn } from '../core/Modal.js'
 import { sendGraphCommand } from '../core/outboundQueue.js'
+import {
+  getPerformIntentFilter,
+  setPerformIntentFilter,
+  subscribePerformIntentFilter
+} from '../core/performIntentFilter.js'
 
 /**
  * @returns {{
@@ -30,28 +35,18 @@ export function createPerformAnimatePanel () {
   panel.className = 'perform-subpane perform-subpane--animate'
   panel.hidden = true
 
-  /** @type {string | null} */
-  let intentFilter = null
-  /** @type {Set<(guid: string | null) => void>} */
-  const filterListeners = new Set()
-
   function getIntentFilter () {
-    return intentFilter
+    return getPerformIntentFilter()
   }
 
   /** @param {string | null} guid */
   function setIntentFilter (guid) {
-    const next = guid || null
-    if (next === intentFilter) return
-    intentFilter = next
-    for (const cb of filterListeners) cb(intentFilter)
-    render()
+    setPerformIntentFilter(guid)
   }
 
   /** @param {(guid: string | null) => void} cb */
   function subscribeFilter (cb) {
-    filterListeners.add(cb)
-    return () => filterListeners.delete(cb)
+    return subscribePerformIntentFilter(cb)
   }
 
   // ── list view ────────────────────────────────────────────────────────────
@@ -81,6 +76,7 @@ export function createPerformAnimatePanel () {
   let lastListKey = ''
 
   function listKey (anims) {
+    const intentFilter = getPerformIntentFilter()
     return (
       anims
         .map(a => `${a.guid}:${a.name}:${a.class}:${a.targetIntent ?? ''}`)
@@ -116,6 +112,7 @@ export function createPerformAnimatePanel () {
   }
 
   function render () {
+    const intentFilter = getPerformIntentFilter()
     const allAnims = projectGraph.getPlayableAnimationsList()
     const anims = intentFilter
       ? allAnims.filter(a => a.targetIntent === intentFilter)
@@ -282,6 +279,7 @@ export function createPerformAnimatePanel () {
   // Re-render row list when animations / actions / intent definitions change.
   // Runtime intent patches (animation frames) are intentionally excluded.
   projectGraph.subscribe(['animations', 'actions', 'intents:def'], render)
+  subscribePerformIntentFilter(() => render())
   subscribeAnimationPlayState(syncAllRowPlayStates)
   render()
 

@@ -61,7 +61,8 @@ export class PerformPane {
       this._quickHud = null
     }
     this._overlay.setSingleTapIntentCallback(guid => {
-      if (this._subnavShell.activeSubpane !== 'animate') return
+      const id = this._subnavShell.activeSubpane
+      if (id !== 'animate' && !this._subnavShell.isPluginSubpane(id)) return
       this._subnavShell.toggleIntentFilter(guid)
     })
     this._render()

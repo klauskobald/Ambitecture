@@ -162,6 +162,7 @@ Renderer data authority model:
 - **performControlPanel.js** — Control subpane: scene activation buttons, perform buttons, system status.
 - **performAnimatePanel.js** — Animate subpane: list of project animations with play / stop / pause / open-edit controls. Subscribes to `animationPlayRegistry`.
 - **performAnimateEditPane.js** — Per-animation edit overlay. Uses an `AnimatorViewer` for the animation's class and the `bindingRegistry` to mirror timescale and keyframe step state from the hub.
+- **performIntentFilter.js** (`src/core/performIntentFilter.js`) — Shared perform-mode **intent filter** (GUID or `null`). **performSubnavShell** drives the funnel chip from this module (chip visible on **Animate** and **plugin** subpanes; hidden on **Control** while the filter may still be remembered). Single-tap an intent on the perform overlay toggles the filter when **Animate** or an active **plugin** subpane is selected. **performSubnavShell** adds **`filter=<intentGuid>`** to the plugin iframe URL when set and drops it when the filter is cleared.
 
 **Plugin UI panels (headless controllers → surface-v1 Perform):**
 
@@ -170,8 +171,9 @@ Renderer data authority model:
 - **`src/plugins/discoveryRegistry.js`** — Client-side map updated from snapshot/delta.
 - **`src/plugins/pluginRegistry.js`** — **`getResolvedPerformPlugins()`** merges `projectGraph.getControllerPlugins()` with discovery for iframe URLs and online/offline.
 - **`src/plugins/themeToIframe.js`** — After iframe `load`, parent posts `{ type: 'theme', vars }` (`--color-*`, `--space-*`, `--radius-*` from `getComputedStyle`) so child UIs can match `theme.css`.
+- **Iframe `filter` query** — Optional **`filter=<intentGuid>`** on the plugin page URL (appended by **performSubnavShell** from **`performIntentFilter`**). Plugin UIs may use it to narrow lists client-side; the hub graph is unchanged.
 
-**`controllers/midi-v1/`** — Headless MIDI controller: **`graph:init` / `graph:delta`** drive **`GraphReplica`** assignments → receivers; **`graph:command`** `patch` on its own controller guid persists assignment edits from the plugin UI. Runs a small **HTTP + WebSocket** server (`PluginServer`, static `ui/assign.html`) for the assign editor; **`register`** includes **`discovery`** built from **`PLUGIN_PUBLIC_HOST`** + **`PLUGIN_LISTEN_PORT`**. The iframe connects to **`/ws`** on that server for live state (trusted LAN).
+**`controllers/midi-v1/`** — Headless MIDI controller: **`graph:init` / `graph:delta`** drive **`GraphReplica`** assignments → receivers; **`graph:command`** `patch` on its own controller guid persists assignment edits from the plugin UI. Runs a small **HTTP + WebSocket** server (`PluginServer`, static `ui/assign.html`) for the assign editor; **`register`** includes **`discovery`** built from **`PLUGIN_PUBLIC_HOST`** + **`PLUGIN_LISTEN_PORT`**. The iframe connects to **`/ws`** on that server for live state (trusted LAN). The assign UI reads **`filter`** from the page URL and shows only assignments that include an **`intent`** target with that GUID (client-side; full list still arrives over the socket).
 
 **Animator viewers (`src/panes/animators/`):**
 

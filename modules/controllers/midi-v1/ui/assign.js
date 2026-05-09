@@ -7,6 +7,11 @@
 
   /** @type {unknown[]} */
   let assignments = []
+  const filterParam = new URLSearchParams(window.location.search).get('filter')
+  const filterIntentGuid =
+    typeof filterParam === 'string' && filterParam.trim() !== ''
+      ? filterParam.trim()
+      : null
   let ws = null
   let reconnectTimer = null
   /** @type {ReturnType<typeof setTimeout> | null} */
@@ -23,13 +28,15 @@
     if (!vars || typeof vars !== 'object') return
     const root = document.documentElement
     for (const [k, v] of Object.entries(vars)) {
-      if (typeof k === 'string' && typeof v === 'string') root.style.setProperty(k, v)
+      if (typeof k === 'string' && typeof v === 'string')
+        root.style.setProperty(k, v)
     }
   }
 
   window.addEventListener('message', ev => {
     const d = ev.data
-    if (d && typeof d === 'object' && d.type === 'theme' && d.vars) applyTheme(d.vars)
+    if (d && typeof d === 'object' && d.type === 'theme' && d.vars)
+      applyTheme(d.vars)
   })
 
   function sendSave () {
@@ -82,14 +89,22 @@
         assignments = msg.assignments.map(a => JSON.parse(JSON.stringify(a)))
         renderList()
       }
-      if (msg.type === 'learnValue' && editing && msg.assignmentGuid === editing.guid && msg.field === 'note') {
+      if (
+        msg.type === 'learnValue' &&
+        editing &&
+        msg.assignmentGuid === editing.guid &&
+        msg.field === 'note'
+      ) {
         const n = Number(msg.value)
         if (Number.isFinite(n) && editing.params) {
           editing.params.note = n
           if (noteInput) noteInput.value = String(n)
           const g = typeof editing.guid === 'string' ? editing.guid : ''
           const idx = assignments.findIndex(
-            x => x && typeof x === 'object' && /** @type {Record<string, unknown>} */ (x).guid === g
+            x =>
+              x &&
+              typeof x === 'object' &&
+              /** @type {Record<string, unknown>} */ (x).guid === g
           )
           if (idx >= 0) assignments[idx] = JSON.parse(JSON.stringify(editing))
           renderList()
@@ -107,6 +122,27 @@
     return cls || 'Assignment'
   }
 
+  /**
+   * @param {Record<string, unknown>} a
+   * @returns {boolean}
+   */
+  function assignmentMatchesIntentFilter (a) {
+    if (!filterIntentGuid) return true
+    const targets = a.targets
+    if (!Array.isArray(targets)) return false
+    for (const t of targets) {
+      if (!t || typeof t !== 'object' || Array.isArray(t)) continue
+      const rec = /** @type {Record<string, unknown>} */ (t)
+      if (
+        rec.type === 'intent' &&
+        typeof rec.guid === 'string' &&
+        rec.guid === filterIntentGuid
+      )
+        return true
+    }
+    return false
+  }
+
   function renderList () {
     if (!listEl) return
     listEl.innerHTML = ''
@@ -115,6 +151,7 @@
       const a = /** @type {Record<string, unknown>} */ (raw)
       const guid = typeof a.guid === 'string' ? a.guid : ''
       if (!guid) continue
+      if (!assignmentMatchesIntentFilter(a)) continue
       const li = document.createElement('li')
       li.className = 'list__item'
       const summaryEl = document.createElement('div')
@@ -125,15 +162,9 @@
       const btn = document.createElement('button')
       btn.type = 'button'
       btn.className = 'btn'
-      btn.textContent = 'Edit'
+      btn.textContent = '✎'
       btn.addEventListener('click', () => openEdit(raw))
-      const btnDel = document.createElement('button')
-      btnDel.type = 'button'
-      btnDel.className = 'btn btn--danger'
-      btnDel.textContent = 'Delete'
-      btnDel.addEventListener('click', () => deleteAssignment(guid))
       actions.appendChild(btn)
-      actions.appendChild(btnDel)
       li.appendChild(summaryEl)
       li.appendChild(actions)
       listEl.appendChild(li)
@@ -142,9 +173,13 @@
 
   function deleteAssignment (guid) {
     if (!guid) return
-    if (typeof window !== 'undefined' && !window.confirm('Remove this assignment?')) return
     assignments = assignments.filter(
-      x => !(x && typeof x === 'object' && /** @type {Record<string, unknown>} */ (x).guid === guid)
+      x =>
+        !(
+          x &&
+          typeof x === 'object' &&
+          /** @type {Record<string, unknown>} */ (x).guid === guid
+        )
     )
     renderList()
     sendSave()
@@ -161,18 +196,25 @@
     if (Number.isFinite(n)) editing.params.note = n
     const g = typeof editing.guid === 'string' ? editing.guid : ''
     const idx = assignments.findIndex(
-      x => x && typeof x === 'object' && /** @type {Record<string, unknown>} */ (x).guid === g
+      x =>
+        x &&
+        typeof x === 'object' &&
+        /** @type {Record<string, unknown>} */ (x).guid === g
     )
     if (idx >= 0) assignments[idx] = JSON.parse(JSON.stringify(editing))
   }
 
   function openEdit (row) {
-    editing = /** @type {Record<string, unknown>} */ (JSON.parse(JSON.stringify(row)))
+    editing = /** @type {Record<string, unknown>} */ (
+      JSON.parse(JSON.stringify(row))
+    )
     if (!modal || !modalBody) return
     modalBody.innerHTML = ''
     const guid = typeof editing.guid === 'string' ? editing.guid : ''
     const params =
-      editing.params && typeof editing.params === 'object' && !Array.isArray(editing.params)
+      editing.params &&
+      typeof editing.params === 'object' &&
+      !Array.isArray(editing.params)
         ? /** @type {Record<string, unknown>} */ (editing.params)
         : {}
     if (!editing.params) editing.params = params
@@ -197,15 +239,33 @@
     btnLearn.textContent = 'Learn'
     btnLearn.addEventListener('click', () => {
       if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'learnStart', assignmentGuid: guid, field: 'note' }))
+        ws.send(
+          JSON.stringify({
+            type: 'learnStart',
+            assignmentGuid: guid,
+            field: 'note'
+          })
+        )
       }
     })
     learnRow.appendChild(btnLearn)
-    learnRow.appendChild(document.createTextNode('Play a note on your controller'))
+    learnRow.appendChild(
+      document.createTextNode('Play a note on your controller')
+    )
+
+    const btnDel = document.createElement('button')
+    btnDel.type = 'button'
+    btnDel.className = 'btn btn--danger'
+    btnDel.textContent = 'Delete'
+    btnDel.addEventListener('click', () => {
+      deleteAssignment(guid)
+      closeModal()
+    })
 
     modalBody.appendChild(label)
     modalBody.appendChild(noteInput)
     modalBody.appendChild(learnRow)
+    modalBody.appendChild(btnDel)
     modal.hidden = false
   }
 

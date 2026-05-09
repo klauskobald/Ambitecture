@@ -216,6 +216,7 @@ export class PerformSubnavShell {
         iframe.title = p.name
         iframe.sandbox.add('allow-scripts')
         iframe.sandbox.add('allow-same-origin')
+        iframe.sandbox.add('allow-modals')
         iframe.addEventListener('load', () => {
           if (iframe) postThemeToIframe(iframe)
         })

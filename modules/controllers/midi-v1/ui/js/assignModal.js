@@ -109,11 +109,15 @@ export function createAssignModal (opts) {
     btnDel.textContent = '❌'
     btnDel.addEventListener('click', () => {
       const g = editing && typeof editing.guid === 'string' ? editing.guid : ''
-      if (g) {
-        opts.session.deleteAssignment(g)
-        opts.refreshList()
-        opts.session.sendSave()
+      if (
+        !g ||
+        !window.confirm('Remove this assignment from the project?')
+      ) {
+        return
       }
+      opts.session.deleteAssignment(g)
+      opts.refreshList()
+      opts.session.sendSave()
       close()
     })
     headerRow.appendChild(btnDel)

@@ -40,6 +40,7 @@ systemCapabilities:
     - cubic
     - sqrt
     - smoothstep
+    - hard
   intentProperties:
     # these are the properties that are available for all intents and show up in the controllers.
     master:

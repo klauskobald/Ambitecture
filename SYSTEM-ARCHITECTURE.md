@@ -598,7 +598,7 @@ Hub resolves execute items: scene → activates scene; intent → dispatches as 
 - `radius` is a top-level spatial radius in world units, rendered as a circle on the controller overlay canvas.
 - `light.color.xyY` is composited in ascending layer order using each intent's `blend` (`ADD`, `ALPHA`, `MULTIPLY`) and `alpha`.
 - Scalar and boolean capabilities (`light.strobe`, `master.brightness`, `master.blackout`) resolve by highest layer carrying a typed value.
-- Spatial attenuation uses fixture range and a named function curve (`linear`, `quadratic`, `cubic`, `sqrt`, `smoothstep`), defaulting to `quadratic`.
+- Spatial attenuation uses fixture range and a named function curve (`linear`, `quadratic`, `cubic`, `sqrt`, `smoothstep`, `hard`), defaulting to `quadratic`. `hard` is full strength inside the radius and zero outside (no falloff).
 - On spatial intents with `position`, renderer intent state is zone-stamped and filtered against configured zones; if an existing intent moves outside all zones, that intent `guid` is removed from active state.
 
 ### Event dispatch model

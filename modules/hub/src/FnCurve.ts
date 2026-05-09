@@ -12,6 +12,8 @@ export class FnCurve {
     ['cubic', (x) => Math.pow(x, 3)],
     ['sqrt', (x) => Math.sqrt(x)],
     ['smoothstep', (x) => x * x * (3 - 2 * x)],
+    // Full strength inside the radius/range, instant cutoff at the edge.
+    ['hard', (x) => (x > 0 ? 1 : 0)],
   ]);
 
   static evaluate(name: unknown, x: number): number {

@@ -14,5 +14,7 @@ FnCurve._functions = {
     cubic: x => Math.pow(x, 3),
     sqrt: x => Math.sqrt(x),
     smoothstep: x => x * x * (3 - 2 * x),
+    // Full strength from center up to (but not including) the radius edge; 0 outside.
+    hard: x => (x > 0 ? 1 : 0),
 };
 

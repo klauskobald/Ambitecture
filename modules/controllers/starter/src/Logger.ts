@@ -1,3 +1,5 @@
+type Level = 'info' | 'warn' | 'error';
+
 export class Logger {
   constructor(private readonly source: string) {}
 
@@ -10,23 +12,13 @@ export class Logger {
   }
 
   error(message: string, error?: unknown): void {
-    const suffix = error instanceof Error ? `: ${error.message}` : '';
+    const suffix = error instanceof Error ? `: ${error.message}` : error ? `: ${String(error)}` : '';
     this.write('error', `${message}${suffix}`);
   }
 
-  private write(level: 'info' | 'warn' | 'error', message: string): void {
-    const timestamp = new Date().toISOString();
-    const line = `[${timestamp}] [${this.source}] ${message}`;
-    switch (level) {
-      case 'info':
-        console.log(line);
-        break;
-      case 'warn':
-        console.warn(line);
-        break;
-      case 'error':
-        console.error(line);
-        break;
-    }
+  private write(level: Level, message: string): void {
+    const line = `[${new Date().toISOString()}] [${this.source}] ${message}`;
+    const sink = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log;
+    sink(line);
   }
 }

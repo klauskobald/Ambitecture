@@ -1,24 +1,14 @@
 import dotenv from 'dotenv';
 
-export interface SampleLoopConfig {
-  enabled: boolean;
-  intentGuid: string;
-  intervalMs: number;
-  radius: number;
-}
-
-export interface SampleActionLoopConfig {
-  actionGuids: [string, string];
-  intervalMs: number;
-}
-
 export interface ControllerConfig {
   hubUrl: string;
   name: string;
   guid: string;
   location: [number, number];
-  sampleLoop: SampleLoopConfig;
-  sampleActionLoop: SampleActionLoopConfig;
+  /** When set, index.ts wires the optional sample runtime loop against this intent. */
+  sampleIntentGuid: string | null;
+  sampleIntervalMs: number;
+  sampleRadius: number;
 }
 
 function requiredEnv(key: string): string {
@@ -34,34 +24,7 @@ function optionalEnv(key: string, fallback: string): string {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : fallback;
 }
 
-function parseBoolean(value: string): boolean {
-  switch (value.trim().toLowerCase()) {
-    case '1':
-    case 'true':
-    case 'yes':
-    case 'on':
-      return true;
-    case '0':
-    case 'false':
-    case 'no':
-    case 'off':
-      return false;
-    default:
-      throw new Error(`Invalid boolean value "${value}"`);
-  }
-}
-
-function parsePositiveInteger(key: string, fallback: number): number {
-  const raw = optionalEnv(key, String(fallback));
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value <= 0) {
-    throw new Error(`${key} must be a positive integer`);
-  }
-  return value;
-}
-
-function parsePositiveNumber(key: string, fallback: number): number {
-  const raw = optionalEnv(key, String(fallback));
+function parsePositiveNumber(key: string, raw: string): number {
   const value = Number(raw);
   if (!Number.isFinite(value) || value <= 0) {
     throw new Error(`${key} must be a positive number`);
@@ -82,32 +45,15 @@ function parseLocation(raw: string): [number, number] {
 export function loadConfig(): ControllerConfig {
   dotenv.config();
 
-  const hubUrl = requiredEnv('AMBITECTURE_HUB_URL');
-  const name = requiredEnv('NAME');
-  const guid = requiredEnv('GUID');
-  const location = parseLocation(optionalEnv('GEO_LOCATION', '0.000 0.000'));
-  const enabled = parseBoolean(optionalEnv('SAMPLE_LOOP_ENABLED', 'true'));
-  const intentGuid = optionalEnv('SAMPLE_INTENT_GUID', 'color-1');
-  const intervalMs = parsePositiveInteger('SAMPLE_LOOP_INTERVAL_MS', 250);
-  const radius = parsePositiveNumber('SAMPLE_LOOP_RADIUS', 0.75);
-  const actionGuid1 = optionalEnv('SAMPLE_ACTION_GUID_1', '');
-  const actionGuid2 = optionalEnv('SAMPLE_ACTION_GUID_2', '');
-  const actionIntervalMs = parsePositiveInteger('SAMPLE_ACTION_INTERVAL_MS', 2_000);
+  const sampleIntentGuid = optionalEnv('SAMPLE_INTENT_GUID', '');
 
   return {
-    hubUrl,
-    name,
-    guid,
-    location,
-    sampleLoop: {
-      enabled,
-      intentGuid,
-      intervalMs,
-      radius,
-    },
-    sampleActionLoop: {
-      actionGuids: [actionGuid1, actionGuid2],
-      intervalMs: actionIntervalMs,
-    },
+    hubUrl: requiredEnv('AMBITECTURE_HUB_URL'),
+    name: requiredEnv('NAME'),
+    guid: requiredEnv('GUID'),
+    location: parseLocation(optionalEnv('GEO_LOCATION', '0 0')),
+    sampleIntentGuid: sampleIntentGuid || null,
+    sampleIntervalMs: parsePositiveNumber('SAMPLE_INTERVAL_MS', optionalEnv('SAMPLE_INTERVAL_MS', '40')),
+    sampleRadius: parsePositiveNumber('SAMPLE_RADIUS', optionalEnv('SAMPLE_RADIUS', '1')),
   };
 }

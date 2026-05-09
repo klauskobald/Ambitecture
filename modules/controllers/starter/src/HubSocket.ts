@@ -4,6 +4,7 @@ import { GraphCommand, RuntimeCommand, WsEnvelope, WsMessage } from './GraphProt
 import { Logger } from './Logger';
 
 const CONNECT_TIMEOUT_MS = 5_000;
+const RECONNECT_DELAY_MS = 1_000;
 
 export interface HubSocketHandlers {
   onConnected: () => void;
@@ -51,21 +52,42 @@ export class HubSocket {
     this.ws = null;
   }
 
+  /** Authoritative graph mutation. Hub returns `graph:delta` on success. */
   sendGraphCommand(command: GraphCommand): boolean {
     return this.sendMessage('graph:command', command);
   }
 
   /**
-   * Runtime commands are transient live data. They intentionally bypass the
-   * hub's authoritative graph mutation path so high-rate control streams do not
-   * compete with scene changes, saves, or other graph/control commands.
+   * Transient live update (intent drag, sensor stream, etc.). Bypasses the
+   * project-graph mutation path so high-rate streams do not block scene
+   * activation, saves, or other authoritative work.
    */
   sendRuntimeCommand(command: RuntimeCommand): boolean {
     return this.sendMessage('runtime:command', command);
   }
 
-  sendActionTrigger(actionGuid: string): boolean {
-    return this.sendMessage('action:trigger', { actionGuid });
+  /**
+   * Fire a named action by GUID. The hub's ActionHandler resolves execute
+   * items into scene activation, intent runtime updates, or animation control.
+   * Optional `args` are merged on top of intent execute patches.
+   */
+  sendActionTrigger(actionGuid: string, args?: Record<string, unknown>): boolean {
+    return this.sendMessage('action:trigger', args ? { actionGuid, args } : { actionGuid });
+  }
+
+  /** Subscribe to a hub-owned binding key. Hub will push current value + future changes as `binding:value`. */
+  sendBindingSubscribe(key: string): boolean {
+    return this.sendMessage('binding:subscribe', { key });
+  }
+
+  /** Push a new value to a hub-owned binding key (e.g., animation timescale). */
+  sendBindingSet(key: string, value: unknown): boolean {
+    return this.sendMessage('binding:set', { key, value });
+  }
+
+  /** Toggle hub-side live keyframe edit mode for an animation. */
+  sendAnimationEdit(animationGuid: string, on: boolean): boolean {
+    return this.sendMessage('animation:edit', { animationGuid, on });
   }
 
   sendMessage(type: string, payload: unknown): boolean {
@@ -91,6 +113,7 @@ export class HubSocket {
     this.logger.info(`connecting to ${wsUrl}`);
     const ws = new WebSocket(wsUrl);
     this.ws = ws;
+
     const connectTimer = setTimeout(() => {
       if (ws.readyState === WebSocket.CONNECTING) {
         this.logger.warn(`connection timed out after ${CONNECT_TIMEOUT_MS}ms`);
@@ -119,7 +142,7 @@ export class HubSocket {
       clearTimeout(connectTimer);
       this.handlers.onDisconnected();
       if (!this.stopped) {
-        setTimeout(() => this.attemptConnect(), 0);
+        setTimeout(() => this.attemptConnect(), RECONNECT_DELAY_MS);
       }
     });
 
@@ -130,12 +153,12 @@ export class HubSocket {
   }
 
   private register(): void {
-    const registered = this.sendMessage('register', {
+    const ok = this.sendMessage('register', {
       role: 'controller',
       guid: this.config.guid,
       scope: [],
     });
-    if (registered) {
+    if (ok) {
       this.handlers.onRegistered();
     }
   }

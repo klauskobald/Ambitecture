@@ -1,12 +1,16 @@
-import { ActionRecord, GraphDelta, IntentRecord, Position3, SceneRecord, ZoneRecord } from './GraphProtocol';
+// Lightweight controller-side replica of the hub's project graph.
+// Stores entities by stable GUID, applies graph:init / graph:delta, and
+// exposes simple lookup helpers. No subscription / no diffing — extend the
+// StarterController hooks if you need reactive UI.
 
-export interface MovementBounds {
-  center: Position3;
-  minX: number;
-  maxX: number;
-  minZ: number;
-  maxZ: number;
-}
+import {
+  ActionRecord,
+  GraphDelta,
+  IntentRecord,
+  Position3,
+  SceneRecord,
+  ZoneRecord,
+} from './GraphProtocol';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -21,9 +25,7 @@ function finiteNumber(value: unknown): number | null {
 }
 
 function toPosition3(value: unknown): Position3 | null {
-  if (!Array.isArray(value) || value.length !== 3) {
-    return null;
-  }
+  if (!Array.isArray(value) || value.length !== 3) return null;
   const x = finiteNumber(value[0]);
   const y = finiteNumber(value[1]);
   const z = finiteNumber(value[2]);
@@ -31,13 +33,9 @@ function toPosition3(value: unknown): Position3 | null {
 }
 
 function toBoundingBox(value: unknown): [number, number, number, number, number, number] | undefined {
-  if (!Array.isArray(value) || value.length !== 6) {
-    return undefined;
-  }
+  if (!Array.isArray(value) || value.length !== 6) return undefined;
   const box = value.map(finiteNumber);
-  if (box.some(item => item === null)) {
-    return undefined;
-  }
+  if (box.some(item => item === null)) return undefined;
   return box as [number, number, number, number, number, number];
 }
 
@@ -47,9 +45,7 @@ function setAtDotPath(target: Record<string, unknown>, dotKey: string, value: un
   for (let i = 0; i < segments.length - 1; i++) {
     const segment = segments[i]!;
     const existing = cursor[segment];
-    if (!isRecord(existing)) {
-      cursor[segment] = {};
-    }
+    if (!isRecord(existing)) cursor[segment] = {};
     cursor = cursor[segment] as Record<string, unknown>;
   }
   cursor[segments[segments.length - 1]!] = value;
@@ -61,61 +57,44 @@ function removeAtDotPath(target: Record<string, unknown>, dotKey: string): void 
   for (let i = 0; i < segments.length - 1; i++) {
     const segment = segments[i]!;
     const existing = cursor[segment];
-    if (!isRecord(existing)) {
-      return;
-    }
+    if (!isRecord(existing)) return;
     cursor = existing;
   }
   delete cursor[segments[segments.length - 1]!];
 }
 
-function cloneRecord(value: Record<string, unknown>): Record<string, unknown> {
-  return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
-}
-
-function applyPatch(base: Record<string, unknown>, patch: Record<string, unknown> = {}, remove: string[] = []): Record<string, unknown> {
-  const next = cloneRecord(base);
-  for (const [key, value] of Object.entries(patch)) {
-    setAtDotPath(next, key, value);
-  }
-  for (const key of remove) {
-    removeAtDotPath(next, key);
-  }
+function applyPatch(
+  base: Record<string, unknown>,
+  patch: Record<string, unknown> = {},
+  remove: string[] = [],
+): Record<string, unknown> {
+  const next = JSON.parse(JSON.stringify(base)) as Record<string, unknown>;
+  for (const [key, value] of Object.entries(patch)) setAtDotPath(next, key, value);
+  for (const key of remove) removeAtDotPath(next, key);
   return next;
 }
 
 function sceneIntentGuid(value: unknown): string {
-  if (typeof value === 'string') {
-    return value;
-  }
+  if (typeof value === 'string') return value;
   return isRecord(value) ? stringValue(value['guid']) : '';
 }
 
 function toSceneRecord(value: unknown): SceneRecord | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-  const name = stringValue(value['name']);
-  if (!name) {
-    return null;
-  }
+  if (!isRecord(value)) return null;
   const guid = stringValue(value['guid']);
+  if (!guid) return null;
   const rawIntents = Array.isArray(value['intents']) ? value['intents'] : [];
   return {
     guid,
-    name,
+    name: stringValue(value['name']),
     intents: rawIntents.map(sceneIntentGuid).filter(Boolean),
   };
 }
 
 function toIntentRecord(value: unknown): IntentRecord | null {
-  if (!isRecord(value)) {
-    return null;
-  }
+  if (!isRecord(value)) return null;
   const guid = stringValue(value['guid']);
-  if (!guid) {
-    return null;
-  }
+  if (!guid) return null;
   const position = toPosition3(value['position']);
   return {
     ...value,
@@ -126,13 +105,9 @@ function toIntentRecord(value: unknown): IntentRecord | null {
 }
 
 function toActionRecord(value: unknown): ActionRecord | null {
-  if (!isRecord(value)) {
-    return null;
-  }
+  if (!isRecord(value)) return null;
   const guid = stringValue(value['guid']);
-  if (!guid) {
-    return null;
-  }
+  if (!guid) return null;
   return {
     ...value,
     guid,
@@ -141,250 +116,125 @@ function toActionRecord(value: unknown): ActionRecord | null {
 }
 
 function toZoneRecord(value: unknown): ZoneRecord | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-  const name = stringValue(value['name']);
-  if (!name) {
-    return null;
-  }
+  if (!isRecord(value)) return null;
   const guid = stringValue(value['guid']);
+  if (!guid) return null;
   const boundingBox = toBoundingBox(value['boundingBox']);
   return {
-    ...(guid ? { guid } : {}),
-    name,
+    guid,
+    name: stringValue(value['name']),
     ...(boundingBox ? { boundingBox } : {}),
   };
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
 }
 
 export class ProjectGraph {
   private projectName = '';
   private revision = 0;
-  private controllerGuid = '';
   private activeSceneGuid: string | null = null;
   private readonly intents = new Map<string, IntentRecord>();
   private readonly scenes = new Map<string, SceneRecord>();
   private readonly actions = new Map<string, ActionRecord>();
-  private zones: ZoneRecord[] = [];
+  private readonly zones = new Map<string, ZoneRecord>();
 
   applyGraphInit(payload: unknown): void {
-    if (!isRecord(payload)) {
-      return;
-    }
+    if (!isRecord(payload)) return;
 
     this.projectName = stringValue(payload['projectName']);
     this.revision = finiteNumber(payload['revision']) ?? this.revision;
-    this.controllerGuid = stringValue(payload['controllerGuid']);
     this.activeSceneGuid = typeof payload['activeSceneGuid'] === 'string' ? payload['activeSceneGuid'] : null;
 
-    this.intents.clear();
-    for (const rawIntent of Array.isArray(payload['intents']) ? payload['intents'] : []) {
-      const intent = toIntentRecord(rawIntent);
-      if (intent) {
-        this.intents.set(intent.guid, intent);
-      }
-    }
-
-    this.scenes.clear();
-    for (const rawScene of Array.isArray(payload['scenes']) ? payload['scenes'] : []) {
-      const scene = toSceneRecord(rawScene);
-      if (scene) {
-        this.scenes.set(scene.name, scene);
-      }
-    }
-
-    this.actions.clear();
-    for (const rawAction of Array.isArray(payload['actions']) ? payload['actions'] : []) {
-      const action = toActionRecord(rawAction);
-      if (action) {
-        this.actions.set(action.guid, action);
-      }
-    }
-
-    this.zones = (Array.isArray(payload['zones']) ? payload['zones'] : [])
-      .map(toZoneRecord)
-      .filter((zone): zone is ZoneRecord => zone !== null);
+    this.replaceCollection(this.intents, payload['intents'], toIntentRecord);
+    this.replaceCollection(this.scenes, payload['scenes'], toSceneRecord);
+    this.replaceCollection(this.actions, payload['actions'], toActionRecord);
+    this.replaceCollection(this.zones, payload['zones'], toZoneRecord);
   }
 
   applyGraphDelta(payload: unknown): void {
     const deltas = Array.isArray(payload) ? payload : [payload];
-    for (const rawDelta of deltas) {
-      if (!isRecord(rawDelta)) {
-        continue;
-      }
-      const delta = rawDelta as unknown as GraphDelta;
+    for (const raw of deltas) {
+      if (!isRecord(raw)) continue;
+      const delta = raw as unknown as GraphDelta;
       const guid = stringValue(delta.guid);
-      const entityType = stringValue(delta.entityType);
       const op = stringValue(delta.op);
-      if (!guid || !entityType || !op) {
-        continue;
-      }
+      const entityType = stringValue(delta.entityType);
+      if (!guid || !op || !entityType) continue;
 
       switch (entityType) {
-        case 'intent':
-          this.applyIntentDelta(guid, op, delta);
-          break;
-        case 'scene':
-          this.applySceneDelta(guid, op, delta);
-          break;
-        case 'action':
-          this.applyActionDelta(guid, op, delta);
-          break;
-        case 'project':
-          this.applyProjectDelta(delta);
-          break;
-        case 'zone':
-          this.applyZoneDelta(guid, op, delta);
-          break;
-        default:
-          break;
+        case 'intent': this.applyEntityDelta(this.intents, guid, op, delta, toIntentRecord); break;
+        case 'scene':  this.applyEntityDelta(this.scenes,  guid, op, delta, toSceneRecord);  break;
+        case 'action': this.applyEntityDelta(this.actions, guid, op, delta, toActionRecord); break;
+        case 'zone':   this.applyEntityDelta(this.zones,   guid, op, delta, toZoneRecord);   break;
+        case 'project': this.applyProjectDelta(delta); break;
+        default: break;
       }
 
       this.revision = finiteNumber(delta.revision) ?? this.revision;
     }
   }
 
-  getProjectName(): string {
-    return this.projectName;
-  }
-
-  getActiveSceneName(): string | null {
-    if (!this.activeSceneGuid) return null;
-    for (const scene of this.scenes.values()) {
-      if (scene.guid === this.activeSceneGuid) return scene.name;
-    }
-    return null;
-  }
-
-  getIntent(guid: string): IntentRecord | null {
-    return this.intents.get(guid) ?? null;
-  }
-
-  getAction(guid: string): ActionRecord | null {
-    return this.actions.get(guid) ?? null;
-  }
-
-  getIntentPosition(guid: string): Position3 | null {
-    return this.getIntent(guid)?.position ?? null;
-  }
-
-  isIntentInActiveScene(guid: string): boolean {
-    if (!this.activeSceneGuid) {
-      return false;
-    }
-    let scene: SceneRecord | undefined;
-    for (const row of this.scenes.values()) {
-      if (row.guid === this.activeSceneGuid) {
-        scene = row;
-        break;
-      }
-    }
-    return scene?.intents.includes(guid) ?? false;
-  }
-
-  patchIntentPosition(guid: string, position: Position3): void {
+  /**
+   * Apply a runtime overlay (from `runtime:update`) to the in-memory intent.
+   * Runtime overlays are transient and do not change the durable graph.
+   */
+  applyIntentRuntimeOverlay(guid: string, patch?: Record<string, unknown>, remove?: string[]): void {
     const current = this.intents.get(guid);
-    if (!current) {
-      return;
-    }
-    this.intents.set(guid, { ...current, position });
-  }
-
-  getMovementBoundsForIntent(guid: string): MovementBounds | null {
-    const position = this.getIntentPosition(guid);
-    if (!position) {
-      return null;
-    }
-    const zone = this.zones.find(item => {
-      if (!item.boundingBox) {
-        return false;
-      }
-      const [x1, , z1, x2, , z2] = item.boundingBox;
-      const isWithinX = position[0] >= x1 && position[0] <= x2;
-      const isWithinZ = position[2] >= z1 && position[2] <= z2;
-      return isWithinX && isWithinZ;
-    });
-
-    if (!zone?.boundingBox) {
-      return {
-        center: position,
-        minX: position[0] - 1,
-        maxX: position[0] + 1,
-        minZ: position[2] - 1,
-        maxZ: position[2] + 1,
-      };
-    }
-
-    const [minX, , minZ, maxX, , maxZ] = zone.boundingBox;
-    return {
-      center: position,
-      minX,
-      maxX,
-      minZ,
-      maxZ,
-    };
-  }
-
-  private applyIntentDelta(guid: string, op: string, delta: GraphDelta): void {
-    if (op === 'remove') {
-      this.intents.delete(guid);
-      return;
-    }
-    const base = delta.value && isRecord(delta.value)
-      ? delta.value
-      : this.intents.get(guid) ?? { guid };
-    const next = delta.patch || delta.remove ? applyPatch(base, delta.patch, delta.remove) : cloneRecord(base);
+    if (!current) return;
+    const next = applyPatch(current, patch, remove);
     next['guid'] = guid;
     const intent = toIntentRecord(next);
-    if (intent) {
-      this.intents.set(guid, intent);
+    if (intent) this.intents.set(guid, intent);
+  }
+
+  getProjectName(): string { return this.projectName; }
+  getRevision(): number { return this.revision; }
+  getActiveSceneGuid(): string | null { return this.activeSceneGuid; }
+  getActiveScene(): SceneRecord | null { return this.activeSceneGuid ? this.scenes.get(this.activeSceneGuid) ?? null : null; }
+  getActiveSceneName(): string | null { return this.getActiveScene()?.name ?? null; }
+
+  getIntent(guid: string): IntentRecord | null { return this.intents.get(guid) ?? null; }
+  getAction(guid: string): ActionRecord | null { return this.actions.get(guid) ?? null; }
+  getScene(guid: string): SceneRecord | null { return this.scenes.get(guid) ?? null; }
+  getZone(guid: string): ZoneRecord | null { return this.zones.get(guid) ?? null; }
+
+  listIntents(): IntentRecord[] { return [...this.intents.values()]; }
+  listActions(): ActionRecord[] { return [...this.actions.values()]; }
+  listScenes(): SceneRecord[] { return [...this.scenes.values()]; }
+  listZones(): ZoneRecord[] { return [...this.zones.values()]; }
+
+  isIntentInActiveScene(guid: string): boolean {
+    return this.getActiveScene()?.intents.includes(guid) ?? false;
+  }
+
+  private replaceCollection<T extends { guid: string }>(
+    target: Map<string, T>,
+    raw: unknown,
+    coerce: (value: unknown) => T | null,
+  ): void {
+    target.clear();
+    for (const item of Array.isArray(raw) ? raw : []) {
+      const record = coerce(item);
+      if (record) target.set(record.guid, record);
     }
   }
 
-  private applySceneDelta(guid: string, op: string, delta: GraphDelta): void {
+  private applyEntityDelta<T extends { guid: string }>(
+    target: Map<string, T>,
+    guid: string,
+    op: string,
+    delta: GraphDelta,
+    coerce: (value: unknown) => T | null,
+  ): void {
     if (op === 'remove') {
-      for (const [name, scene] of this.scenes) {
-        if (scene.guid === guid) {
-          this.scenes.delete(name);
-          return;
-        }
-      }
+      target.delete(guid);
       return;
     }
-    const current = [...this.scenes.values()].find(scene => scene.guid === guid);
-    const base = delta.value && isRecord(delta.value)
+    const base = isRecord(delta.value)
       ? delta.value
-      : current
-        ? { guid: current.guid, name: current.name, intents: current.intents.map(intentGuid => ({ guid: intentGuid })) }
-        : { guid };
-    const next = delta.patch || delta.remove ? applyPatch(base, delta.patch, delta.remove) : cloneRecord(base);
-    const scene = toSceneRecord(next);
-    if (scene) {
-      if (current && current.name !== scene.name) {
-        this.scenes.delete(current.name);
-      }
-      this.scenes.set(scene.name, scene);
-    }
-  }
-
-  private applyActionDelta(guid: string, op: string, delta: GraphDelta): void {
-    if (op === 'remove') {
-      this.actions.delete(guid);
-      return;
-    }
-    const base = delta.value && isRecord(delta.value)
-      ? delta.value
-      : this.actions.get(guid) ?? { guid };
-    const next = delta.patch || delta.remove ? applyPatch(base, delta.patch, delta.remove) : cloneRecord(base);
+      : (target.get(guid) as Record<string, unknown> | undefined) ?? { guid };
+    const next = delta.patch || delta.remove ? applyPatch(base, delta.patch, delta.remove) : base;
     next['guid'] = guid;
-    const action = toActionRecord(next);
-    if (action) {
-      this.actions.set(guid, action);
-    }
+    const record = coerce(next);
+    if (record) target.set(guid, record);
   }
 
   private applyProjectDelta(delta: GraphDelta): void {
@@ -392,27 +242,4 @@ export class ProjectGraph {
       this.activeSceneGuid = delta.patch['activeSceneGuid'];
     }
   }
-
-  private applyZoneDelta(guid: string, op: string, delta: GraphDelta): void {
-    if (op === 'remove') {
-      this.zones = this.zones.filter(zone => zone.guid !== guid);
-      return;
-    }
-    const zone = toZoneRecord(delta.value);
-    if (!zone) {
-      return;
-    }
-    this.zones = this.zones.filter(item => item.guid !== guid);
-    this.zones.push(zone);
-  }
-}
-
-export function boundedLoopPosition(bounds: MovementBounds, radius: number, angleRadians: number): Position3 {
-  const usableRadiusX = Math.min(radius, Math.max((bounds.maxX - bounds.minX) / 2, 0));
-  const usableRadiusZ = Math.min(radius, Math.max((bounds.maxZ - bounds.minZ) / 2, 0));
-  const centerX = clamp(bounds.center[0], bounds.minX + usableRadiusX, bounds.maxX - usableRadiusX);
-  const centerZ = clamp(bounds.center[2], bounds.minZ + usableRadiusZ, bounds.maxZ - usableRadiusZ);
-  const x = clamp(centerX + Math.cos(angleRadians) * usableRadiusX, bounds.minX, bounds.maxX);
-  const z = clamp(centerZ + Math.sin(angleRadians) * usableRadiusZ, bounds.minZ, bounds.maxZ);
-  return [x, bounds.center[1], z];
 }

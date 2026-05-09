@@ -1,3 +1,6 @@
+// Wire-protocol types shared across all messages this controller speaks/listens to.
+// See SYSTEM-ARCHITECTURE.md for the canonical protocol description.
+
 export type Position3 = [number, number, number];
 export type HubLocation = [number, number];
 export type GraphEntityType = string;
@@ -30,10 +33,10 @@ export interface RuntimeCommand {
   patch?: Record<string, unknown>;
   remove?: string[];
   value?: Record<string, unknown>;
+}
+
+export interface RuntimeUpdate extends RuntimeCommand {
   source?: string;
-  class?: string;
-  target?: string;
-  scheduled?: number;
 }
 
 export interface GraphDelta extends GraphCommand {
@@ -59,7 +62,23 @@ export interface SceneRecord {
 }
 
 export interface ZoneRecord {
-  guid?: string;
+  guid: string;
   name: string;
   boundingBox?: [number, number, number, number, number, number];
+}
+
+export interface HubStatusPayload {
+  kind: string;
+  [key: string]: unknown;
+}
+
+export interface LockIntentPayload {
+  guid: string;
+  locked: boolean;
+  source?: string;
+}
+
+export interface BindingValuePayload {
+  key: string;
+  value: unknown;
 }

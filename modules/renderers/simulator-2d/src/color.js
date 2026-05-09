@@ -45,9 +45,14 @@ class Color {
                 return new Color(x_out, y_out, Y_out);
             }
             case 'MULTIPLY': {
-                const Y_out = this.Y * other.Y;
-                const x_out = (this.x + other.x) / 2;
-                const y_out = (this.y + other.y) / 2;
+                // lerp identity (this) ↔ multiplied result by alpha,
+                // so callers can attenuate MULTIPLY via spatial factor / user alpha
+                const Y_mul = this.Y * other.Y;
+                const Y_out = Y_mul * alpha + this.Y * (1 - alpha);
+                const x_mix = (this.x + other.x) / 2;
+                const y_mix = (this.y + other.y) / 2;
+                const x_out = this.x * (1 - alpha) + x_mix * alpha;
+                const y_out = this.y * (1 - alpha) + y_mix * alpha;
                 return new Color(x_out, y_out, Y_out);
             }
             default:

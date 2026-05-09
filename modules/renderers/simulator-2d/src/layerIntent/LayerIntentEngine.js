@@ -28,16 +28,21 @@ class LayerIntentEngine {
           intent.radius,
           intent.radiusFunction
         ) : 1
+        // Spatial factor folds into the blend alpha (not Y), so that ALPHA / MULTIPLY
+        // also fade out where the intent does not reach. Outside the radius
+        // effectiveAlpha = 0 → upper layer is fully transparent and the lower layer
+        // passes through. For ADD this is algebraically equivalent to the previous
+        // (Y * spatialFactor) approach.
+        const effectiveAlpha = Math.max(
+          0,
+          Math.min(1, (intent.alpha ?? 1) * spatialFactor)
+        )
         const layerColor = new Color(
           colorData.x,
           colorData.y,
-          Math.max(0, Math.min(1, colorData.Y * spatialFactor))
+          Math.max(0, Math.min(1, colorData.Y))
         )
-        mixed = mixed.blend(
-          layerColor,
-          intent.blend || 'ADD',
-          intent.alpha ?? 1
-        )
+        mixed = mixed.blend(layerColor, intent.blend || 'ADD', effectiveAlpha)
       }
       return mixed
     })

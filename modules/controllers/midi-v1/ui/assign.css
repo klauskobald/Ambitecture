@@ -5,9 +5,9 @@
   --color-muted: #9aa0a6;
   --color-accent: #8ab4f8;
   --color-danger: #f28b82;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
+  --space-2: 4px;
+  --space-3: 8px;
+  --space-4: 12px;
   --radius-md: 8px;
 }
 
@@ -117,6 +117,24 @@ body {
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-1);
+}
+
+.list__item--trigger {
+  outline: 1px solid var(--color-accent);
+  outline-offset: -1px;
+  animation: list-item-trigger 0.45s ease-out;
+}
+
+@keyframes list-item-trigger {
+  from {
+    outline-width: 2px;
+    box-shadow: 0 0 14px rgba(138, 180, 248, 0.35);
+  }
+
+  to {
+    outline-width: 1px;
+    box-shadow: none;
+  }
 }
 
 .list__summary {

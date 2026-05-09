@@ -86,8 +86,9 @@ export class ReceiverNoteOnOff extends ReceiverBase {
     targets: TargetBase[],
     logger: Logger,
     private readonly params: NoteOnOffParams,
+    onAssignmentActivity?: () => void,
   ) {
-    super(assignment, targets, logger);
+    super(assignment, targets, logger, onAssignmentActivity);
   }
 
   dispose(): void {
@@ -103,20 +104,29 @@ export class ReceiverNoteOnOff extends ReceiverBase {
     const params = readParams(a.params);
     if (params === null) return null;
     const chLabel = a.channel === 0 ? 'any' : String(a.channel);
-    const targetBits = formatIntentTargetsLine(a.targets, intentName);
+    const targetBits = formatIntentTargetsLine(a.targets, guid => {
+      const n = intentName(guid);
+      // Replace ASCII spaces (U+0020) with hard space (U+00A0)
+      return typeof n === 'string' ? n.replace(/ /g, '\u00A0') : n;
+    });
     const targetsJoined = targetBits.length > 0 ? targetBits.join(', ') : '—';
     const noteLabel = midiTools.noteAsString(params.note);
-    const envBit = envelopeSummary(params.envelope);
-    return `noteOnOff: [${chLabel}] ${noteLabel} (${params.velocityMin}–${params.velocityMax}) +${params.velocityOffset} ×${params.velocityScale} ${envBit} => ${targetsJoined}`;
+    // const envBit = envelopeSummary(params.envelope);
+    return `[${chLabel}] note ${noteLabel} (${params.velocityMin}–${params.velocityMax}) ${params.velocityOffset > 0 ? '+' + params.velocityOffset : params.velocityOffset}${params.velocityScale > 1 ? '×' + params.velocityScale : ''}${params.velocityScale < 1 ? '/' + params.velocityScale : ''} ⮕ ${targetsJoined}`;
   }
 
-  static build(assignment: AssignmentRecord, targets: TargetBase[], logger: Logger): ReceiverNoteOnOff | null {
+  static build(
+    assignment: AssignmentRecord,
+    targets: TargetBase[],
+    logger: Logger,
+    onAssignmentActivity?: () => void,
+  ): ReceiverNoteOnOff | null {
     const params = readParams(assignment.params);
     if (params === null) {
       logger.warn(`assignment ${assignment.guid} missing required noteOnOff params`);
       return null;
     }
-    return new ReceiverNoteOnOff(assignment, targets, logger, params);
+    return new ReceiverNoteOnOff(assignment, targets, logger, params, onAssignmentActivity);
   }
 
   private ensureEnvelope(note: number): EnvAr {
@@ -148,6 +158,7 @@ export class ReceiverNoteOnOff extends ReceiverBase {
     if (e.velocity < this.params.velocityMin || e.velocity > this.params.velocityMax) return;
 
     this.triggerVelocity = e.velocity;
+    this.signalAssignmentActivity();
 
     const envCfg = this.params.envelope;
     if (envCfg === null || !envCfg.enabled) {
@@ -165,14 +176,16 @@ export class ReceiverNoteOnOff extends ReceiverBase {
 
     const envCfg = this.params.envelope;
     if (envCfg === null || !envCfg.enabled) {
+      this.signalAssignmentActivity();
       this.fanOut(0);
       return;
     }
 
+    this.signalAssignmentActivity();
     const env = this.envelopes.get(e.note);
     if (env) env.noteOff();
     else this.fanOut(0);
   }
 
-  handleCc(_e: MidiCcEvent): void {}
+  handleCc(_e: MidiCcEvent): void { }
 }

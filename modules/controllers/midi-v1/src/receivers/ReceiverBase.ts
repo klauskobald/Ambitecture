@@ -8,7 +8,12 @@ export abstract class ReceiverBase {
     protected readonly assignment: AssignmentRecord,
     protected readonly targets: TargetBase[],
     protected readonly logger: Logger,
+    private readonly onAssignmentActivity?: () => void,
   ) {}
+
+  protected signalAssignmentActivity(): void {
+    this.onAssignmentActivity?.();
+  }
 
   describe(): string {
     const targetDescriptions = this.targets.map(t => t.describe()).join(', ');

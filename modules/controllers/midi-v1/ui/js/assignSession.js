@@ -29,6 +29,7 @@ const SAVE_DEBOUNCE_MS = 280
  *   onState: () => void,
  *   onOnline?: () => void,
  *   onOffline?: () => void,
+ *   onAssignmentTrigger?: (assignmentGuid: string) => void,
  *   getModal: () => { applyLearnValue: (m: Record<string, unknown>) => void } | null
  * }} opts
  * @returns {AssignSessionApi}
@@ -117,6 +118,10 @@ export function createAssignSession (opts) {
       if (msg.type === 'learnValue') {
         const modal = opts.getModal()
         modal?.applyLearnValue(/** @type {Record<string, unknown>} */ (msg))
+      }
+      if (msg.type === 'assignmentTrigger') {
+        const g = msg.assignmentGuid
+        if (typeof g === 'string' && g) opts.onAssignmentTrigger?.(g)
       }
     }
   }

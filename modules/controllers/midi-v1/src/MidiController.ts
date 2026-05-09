@@ -142,11 +142,12 @@ export class MidiController {
   }
 
   private buildReceiver(assignment: AssignmentRecord, targets: TargetBase[]): ReceiverBase | null {
+    const onActivity = () => this.pluginServer.sendAssignmentTrigger(assignment.guid);
     switch (assignment.class) {
       case 'noteAndControl':
-        return ReceiverNoteAndControl.build(assignment, targets, this.logger);
+        return ReceiverNoteAndControl.build(assignment, targets, this.logger, onActivity);
       case 'noteOnOff':
-        return ReceiverNoteOnOff.build(assignment, targets, this.logger);
+        return ReceiverNoteOnOff.build(assignment, targets, this.logger, onActivity);
       default:
         this.logger.warn(`assignment ${assignment.guid}: unknown class "${assignment.class}"`);
         return null;

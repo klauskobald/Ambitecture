@@ -52,6 +52,7 @@ export function createAssignList (opts) {
       if (!assignmentMatchesIntentFilter(a)) continue
       const li = document.createElement('li')
       li.className = 'list__item'
+      li.dataset.assignmentGuid = guid
       const summaryEl = document.createElement('div')
       summaryEl.className = 'list__summary'
       summaryEl.textContent = rowSummary(a)
@@ -85,5 +86,24 @@ export function createAssignList (opts) {
     }
   }
 
-  return { render }
+  /**
+   * @param {string} assignmentGuid
+   */
+  function pulseAssignment (assignmentGuid) {
+    const root = opts.listEl
+    if (!root || typeof assignmentGuid !== 'string' || !assignmentGuid) return
+    const item = root.querySelector(
+      `li.list__item[data-assignment-guid="${CSS.escape(assignmentGuid)}"]`
+    )
+    if (!item) return
+    item.classList.remove('list__item--trigger')
+    // retrigger animation if same row fires again quickly
+    void item.offsetWidth
+    item.classList.add('list__item--trigger')
+    const done = () => item.classList.remove('list__item--trigger')
+    item.addEventListener('animationend', done, { once: true })
+    window.setTimeout(done, 550)
+  }
+
+  return { render, pulseAssignment }
 }

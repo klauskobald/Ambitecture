@@ -144,6 +144,13 @@ export class PluginServer {
     }
   }
 
+  sendAssignmentTrigger(assignmentGuid: string): void {
+    const msg = JSON.stringify({ type: 'assignmentTrigger', assignmentGuid });
+    for (const ws of this.clients) {
+      if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+    }
+  }
+
   private serveFile(res: http.ServerResponse, filePath: string): void {
     fs.readFile(filePath, (err, data) => {
       if (err) {

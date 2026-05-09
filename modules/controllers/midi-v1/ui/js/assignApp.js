@@ -40,10 +40,13 @@ window.addEventListener('message', ev => {
 /** @type {ReturnType<typeof createAssignModal> | null} */
 let modalRef = null
 
+/** @type {ReturnType<typeof createAssignList> | null} */
+let listRef = null
+
 const session = createAssignSession({
   filterIntentGuid,
   onState: () => {
-    list.render()
+    listRef?.render()
   },
   onOnline: () => {
     if (bannerOffline) bannerOffline.hidden = true
@@ -51,10 +54,13 @@ const session = createAssignSession({
   onOffline: () => {
     if (bannerOffline) bannerOffline.hidden = false
   },
+  onAssignmentTrigger: assignmentGuid => {
+    listRef?.pulseAssignment(assignmentGuid)
+  },
   getModal: () => modalRef
 })
 
-const list = createAssignList({
+listRef = createAssignList({
   session,
   listEl,
   listWrap,
@@ -62,6 +68,8 @@ const list = createAssignList({
   onEdit: row => modalRef?.openEdit(row),
   onCreate: () => modalRef?.openCreate()
 })
+
+const list = listRef
 
 modalRef = createAssignModal({
   session,
@@ -71,7 +79,7 @@ modalRef = createAssignModal({
     modalClose,
     modalBackdrop
   },
-  refreshList: () => list.render()
+  refreshList: () => listRef?.render()
 })
 
 if (bannerOffline) bannerOffline.hidden = true

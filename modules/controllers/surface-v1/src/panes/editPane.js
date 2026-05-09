@@ -138,6 +138,7 @@ export class EditPane {
 
     this._selectionUnsub = selectionState.subscribe(() => {
       this._refreshActionBar()
+      this._overlay.markRenderActivity()
     })
     this._refreshActionBar()
 
@@ -225,6 +226,7 @@ export class EditPane {
     this._activeMode = modeId
     this._overlay.setPolicy(noopPolicy)
     this._overlay.setSelectionManager(manager)
+    this._overlay.markRenderActivity()
 
     const btn = this._modeBar.querySelector(`[data-mode-id="${modeId}"]`)
     btn?.classList.add('btn--active')
@@ -248,6 +250,7 @@ export class EditPane {
     const mode = this._modes().find(m => m.id === prev)
     if (btn && mode) btn.textContent = mode.label
     this._refreshActionBar()
+    this._overlay.markRenderActivity()
   }
 
   /** Leaves Select mode (toolbar + overlay); no-op if not in Select. */
@@ -349,7 +352,7 @@ export class EditPane {
         if (!pos || pos.length < 3) return null
         return { wx: pos[0], wz: pos[2] }
       },
-      onTap (id, obj) {
+      onTap: (id, obj) => {
         const guid = intentGuid(obj)
         const enabled = !projectGraph.getIntentConfig(guid).performEnabled
         const command = projectGraph.patchControllerState(
@@ -364,6 +367,7 @@ export class EditPane {
           patch: command.patch,
           persistence: 'runtimeAndDurable'
         })
+        this._overlay.markRenderActivity()
       },
       drawBubble (ctx, px, py, id, obj) {
         const guid = intentGuid(obj)

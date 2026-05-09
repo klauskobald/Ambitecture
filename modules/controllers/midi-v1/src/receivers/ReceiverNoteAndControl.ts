@@ -52,8 +52,9 @@ export class ReceiverNoteAndControl extends ReceiverBase {
     targets: TargetBase[],
     logger: Logger,
     private readonly params: NoteAndControlParams,
+    onAssignmentActivity?: () => void,
   ) {
-    super(assignment, targets, logger);
+    super(assignment, targets, logger, onAssignmentActivity);
   }
 
   /**
@@ -68,23 +69,31 @@ export class ReceiverNoteAndControl extends ReceiverBase {
     const params = readParams(a.params);
     if (params === null) return null;
     const chLabel = a.channel === 0 ? 'any' : String(a.channel);
-    const targetBits = formatIntentTargetsLine(a.targets, intentName);
+    const targetBits = formatIntentTargetsLine(
+      a.targets,
+      guid => {
+        const n = intentName(guid);
+        // Replace ASCII spaces (U+0020) with hard space (U+00A0)
+        return typeof n === 'string' ? n.replace(/ /g, '\u00A0') : n;
+      }
+    );
     const targetsJoined = targetBits.length > 0 ? targetBits.join(', ') : '—';
     const noteLabel = midiTools.noteAsString(params.note);
-    return `noteAndControl: [${chLabel}] ${noteLabel} (${params.velocityMin}–${params.velocityMax}) & ${params.controller} => ${targetsJoined}`;
+    return `[${chLabel}] ${noteLabel} (${params.velocityMin}–${params.velocityMax}) + ctrl ${params.controller} ⮕ ${targetsJoined}`;
   }
 
   static build(
     assignment: AssignmentRecord,
     targets: TargetBase[],
     logger: Logger,
+    onAssignmentActivity?: () => void,
   ): ReceiverNoteAndControl | null {
     const params = readParams(assignment.params);
     if (params === null) {
       logger.warn(`assignment ${assignment.guid} missing required note/controller params`);
       return null;
     }
-    return new ReceiverNoteAndControl(assignment, targets, logger, params);
+    return new ReceiverNoteAndControl(assignment, targets, logger, params, onAssignmentActivity);
   }
 
   handleNoteOn(e: MidiNoteEvent): void {
@@ -108,6 +117,7 @@ export class ReceiverNoteAndControl extends ReceiverBase {
     if (e.controller !== this.params.controller) return;
     // Pre-curve transform in raw 0..127 CC space: (cc + add) * scale, clamped, then normalized.
     const adjusted = (e.value + this.params.controllerAdd) * this.params.controllerScale;
+    this.signalAssignmentActivity();
     this.fanOut(adjusted / 127);
     // const clamped = Math.max(0, Math.min(127, adjusted));
     // this.fanOut(clamped / 127);

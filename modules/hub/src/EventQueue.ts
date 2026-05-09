@@ -1,6 +1,5 @@
 import { WebSocket } from 'ws';
 import { ConnectionRegistry } from './ConnectionRegistry';
-import { Logger } from './Logger';
 
 export interface ScheduledEvent {
   event: object;
@@ -11,9 +10,6 @@ export class EventQueue {
   constructor(private registry: ConnectionRegistry) { }
 
   schedule(entries: ScheduledEvent[], location?: [number, number]): void {
-    if (entries.length > 0) {
-      // Logger.info(`[queue] ${entries.length} incoming event(s)`);
-    }
 
     const groups = new Map<number, object[]>();
     for (const { event, scheduledAt } of entries) {

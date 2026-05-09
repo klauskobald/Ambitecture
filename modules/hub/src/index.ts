@@ -12,6 +12,7 @@ import { GraphCommandHandler } from './handlers/GraphCommandHandler';
 import { RuntimeCommandHandler } from './handlers/RuntimeCommandHandler';
 import { ActionHandler } from './handlers/ActionHandler';
 import { EventQueue } from './EventQueue';
+import { statsTool } from './statsTool';
 import { RuntimeUpdateDispatcher } from './RuntimeUpdateDispatcher';
 import { RuntimeIntentStore } from './RuntimeIntentStore';
 import { ProjectManager } from './ProjectManager';
@@ -42,6 +43,7 @@ const actionInputManager = new ActionInputManager(
 const registry = new ConnectionRegistry();
 const router = new MessageRouter(registry);
 const rateLimitEventsPerSecond = serverConfig.get<number>('rateLimitEventsPerSecond');
+statsTool.setup({});
 const eventQueue = new EventQueue(registry);
 const runtimeIntentStore = new RuntimeIntentStore(projectManager);
 projectManager.configureEffectiveIntentResolver(guid => runtimeIntentStore.getEffectiveIntent(guid));
@@ -164,14 +166,16 @@ const publishGraphMutation = (source: import('ws').WebSocket, result: GraphMutat
   }
   if (result.rendererEvents.length > 0) {
     const now = Date.now();
+    const entries = result.rendererEvents.map(event => {
+      const scheduled = (event as Record<string, unknown>)['scheduled'];
+      return {
+        event,
+        scheduledAt: typeof scheduled === 'number' ? scheduled : now,
+      };
+    })
+
     eventQueue.schedule(
-      result.rendererEvents.map(event => {
-        const scheduled = (event as Record<string, unknown>)['scheduled'];
-        return {
-          event,
-          scheduledAt: typeof scheduled === 'number' ? scheduled : now,
-        };
-      }),
+      entries,
       location,
     );
   }

@@ -27,7 +27,7 @@ controller:
   - name: Controller Midi
     guid: controller-midi-1
     assignments:
-        - class: receiver_noteOnOff  
+        - class: noteOnOff  
           guid
           channel: 0 = any
           params:
@@ -41,7 +41,7 @@ controller:
               key: params.alpha
               function: linear
 
-        - class: receiver_noteAndControl
+        - class: noteAndControl
           guid
           channel: 0 = any
           params:

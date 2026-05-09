@@ -1,0 +1,151 @@
+import { Logger } from './Logger';
+import { WsMessage } from './HubSocket';
+
+export interface TargetRecord {
+  type: string;
+  guid: string;
+  key: string;
+  function: string;
+}
+
+export interface AssignmentRecord {
+  class: string;
+  guid: string;
+  channel: number;
+  params: Record<string, unknown>;
+  targets: TargetRecord[];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function toTarget(raw: unknown): TargetRecord | null {
+  if (!isRecord(raw)) return null;
+  const type = raw['type'];
+  const guid = raw['guid'];
+  const key = raw['key'];
+  const fn = raw['function'];
+  if (typeof type !== 'string' || typeof guid !== 'string' || typeof key !== 'string') return null;
+  return {
+    type,
+    guid,
+    key,
+    function: typeof fn === 'string' ? fn : 'linear',
+  };
+}
+
+function toAssignment(raw: unknown): AssignmentRecord | null {
+  if (!isRecord(raw)) return null;
+  const cls = raw['class'];
+  const guid = raw['guid'];
+  if (typeof cls !== 'string' || typeof guid !== 'string') return null;
+  const channel = typeof raw['channel'] === 'number' && Number.isFinite(raw['channel']) ? raw['channel'] : 0;
+  const params = isRecord(raw['params']) ? raw['params'] : {};
+  const targetsRaw = Array.isArray(raw['targets']) ? raw['targets'] : [];
+  const targets: TargetRecord[] = [];
+  for (const t of targetsRaw) {
+    const target = toTarget(t);
+    if (target) targets.push(target);
+  }
+  return { class: cls, guid, channel, params, targets };
+}
+
+export type AssignmentsChangedReason = 'init' | 'controller-changed' | 'controller-removed';
+
+export class GraphReplica {
+  private intentGuids = new Set<string>();
+  private myAssignments: AssignmentRecord[] = [];
+
+  constructor(
+    private readonly ownGuid: string,
+    private readonly logger: Logger,
+    private readonly onAssignmentsChanged: (reason: AssignmentsChangedReason) => void,
+  ) {}
+
+  hasIntent(guid: string): boolean {
+    return this.intentGuids.has(guid);
+  }
+
+  getAssignments(): AssignmentRecord[] {
+    return this.myAssignments;
+  }
+
+  apply(message: WsMessage): void {
+    switch (message.type) {
+      case 'graph:init':
+        this.applyInit(message.payload);
+        return;
+      case 'graph:delta':
+        this.applyDelta(message.payload);
+        return;
+      default:
+        return;
+    }
+  }
+
+  private applyInit(payload: unknown): void {
+    if (!isRecord(payload)) return;
+    const entities = isRecord(payload['entities']) ? payload['entities'] : {};
+
+    this.intentGuids = new Set(Object.keys(isRecord(entities['intent']) ? entities['intent'] : {}));
+
+    const controllers = isRecord(entities['controller']) ? entities['controller'] : {};
+    const meRaw = controllers[this.ownGuid];
+    const me = isRecord(meRaw) ? meRaw : null;
+    this.myAssignments = this.parseAssignments(me);
+    this.onAssignmentsChanged('init');
+  }
+
+  private applyDelta(payload: unknown): void {
+    const deltas = Array.isArray(payload) ? payload : [payload];
+    let assignmentsTouched: AssignmentsChangedReason | null = null;
+
+    for (const raw of deltas) {
+      if (!isRecord(raw)) continue;
+      const entityType = raw['entityType'];
+      const guid = raw['guid'];
+      const op = raw['op'];
+      if (typeof entityType !== 'string' || typeof guid !== 'string' || typeof op !== 'string') continue;
+
+      if (entityType === 'intent') {
+        if (op === 'remove') this.intentGuids.delete(guid);
+        else this.intentGuids.add(guid);
+        continue;
+      }
+
+      if (entityType === 'controller' && guid === this.ownGuid) {
+        if (op === 'remove') {
+          this.myAssignments = [];
+          assignmentsTouched = 'controller-removed';
+          continue;
+        }
+        const value = isRecord(raw['value']) ? raw['value'] : null;
+        const patch = isRecord(raw['patch']) ? raw['patch'] : null;
+        const next = this.mergeControllerDelta(value, patch);
+        this.myAssignments = this.parseAssignments(next);
+        assignmentsTouched = 'controller-changed';
+      }
+    }
+
+    if (assignmentsTouched !== null) this.onAssignmentsChanged(assignmentsTouched);
+  }
+
+  private mergeControllerDelta(value: Record<string, unknown> | null, patch: Record<string, unknown> | null): Record<string, unknown> | null {
+    if (value !== null) return value;
+    if (patch !== null && Array.isArray(patch['assignments'])) return { assignments: patch['assignments'] };
+    return null;
+  }
+
+  private parseAssignments(controllerRecord: Record<string, unknown> | null): AssignmentRecord[] {
+    if (!controllerRecord) return [];
+    const raw = Array.isArray(controllerRecord['assignments']) ? controllerRecord['assignments'] : [];
+    const list: AssignmentRecord[] = [];
+    for (const item of raw) {
+      const a = toAssignment(item);
+      if (a) list.push(a);
+      else this.logger.warn('skipped malformed assignment in graph');
+    }
+    return list;
+  }
+}

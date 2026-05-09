@@ -1,6 +1,7 @@
 import { registerAssignmentClass } from '../assignmentRegistry.js'
 import { createLearnFieldRow } from '../components/learnFieldRow.js'
 import { noteAsString, parseNoteInput } from '../midiNote.js'
+import { mountEnvArRow } from './env_ar.js'
 
 const CLASS_ID = 'noteOnOff'
 const DEFAULT_DOT_KEY = 'xyy.x'
@@ -11,7 +12,7 @@ const DEFAULT_DOT_KEY = 'xyy.x'
  */
 function normalizeDotKey (raw) {
   if (typeof raw !== 'string') return ''
-  return raw.trim().toLowerCase()
+  return raw.trim()
 }
 
 const FN_CURVE_IDS = [
@@ -68,11 +69,47 @@ function ensureNoteOnOffShape (a) {
       Number.isFinite(hi) ? Math.max(0, Math.min(127, Math.round(hi))) : 127
     ]
   }
-  if (typeof p.velocityOffset !== 'number' || !Number.isFinite(p.velocityOffset)) {
+  if (
+    typeof p.velocityOffset !== 'number' ||
+    !Number.isFinite(p.velocityOffset)
+  ) {
     p.velocityOffset = 0
   }
-  if (typeof p.velocityScale !== 'number' || !Number.isFinite(p.velocityScale)) {
+  if (
+    typeof p.velocityScale !== 'number' ||
+    !Number.isFinite(p.velocityScale)
+  ) {
     p.velocityScale = 1
+  }
+  if (p.envelope === undefined) {
+    p.envelope = {
+      type: 'env_ar',
+      enabled: true,
+      attackMs: 0,
+      releaseMs: 0
+    }
+  } else if (p.envelope === null) {
+    p.envelope = {
+      type: 'env_ar',
+      enabled: false,
+      attackMs: 0,
+      releaseMs: 0
+    }
+  } else if (typeof p.envelope === 'object' && !Array.isArray(p.envelope)) {
+    const e = /** @type {Record<string, unknown>} */ (p.envelope)
+    e.type = 'env_ar'
+    if (typeof e.enabled !== 'boolean') e.enabled = true
+    const atk = Number(e.attackMs)
+    const rel = Number(e.releaseMs)
+    e.attackMs = Number.isFinite(atk) ? Math.max(0, Math.round(atk)) : 0
+    e.releaseMs = Number.isFinite(rel) ? Math.max(0, Math.round(rel)) : 0
+  } else {
+    p.envelope = {
+      type: 'env_ar',
+      enabled: true,
+      attackMs: 0,
+      releaseMs: 0
+    }
   }
   if (typeof a.channel !== 'number' || !Number.isFinite(a.channel))
     a.channel = 0
@@ -112,7 +149,13 @@ export function createDefaultNoteOnOff (context) {
       note: 0,
       velocityRange: [0, 127],
       velocityOffset: 0,
-      velocityScale: 1
+      velocityScale: 1,
+      envelope: {
+        type: 'env_ar',
+        enabled: true,
+        attackMs: 0,
+        releaseMs: 0
+      }
     },
     targets
   }
@@ -210,9 +253,7 @@ function mountNoteOnOffEditor (container, api) {
     fnSel.appendChild(opt)
   }
   const fnInit =
-    t0Init && typeof t0Init.function === 'string'
-      ? t0Init.function
-      : 'linear'
+    t0Init && typeof t0Init.function === 'string' ? t0Init.function : 'linear'
   fnSel.value = FN_CURVE_IDS.includes(fnInit) ? fnInit : 'linear'
 
   function setTargetFieldsDisabled (disabled) {
@@ -374,6 +415,15 @@ function mountNoteOnOffEditor (container, api) {
   row2.appendChild(scaleIn)
   frag.appendChild(row2)
 
+  const envUi = mountEnvArRow(frag, {
+    getParams: () => {
+      const asg = api.getAssignment()
+      ensureNoteOnOffShape(asg)
+      return /** @type {Record<string, unknown>} */ (asg.params)
+    },
+    onChange: () => api.onChange()
+  })
+
   container.appendChild(frag)
 
   function syncFromModel () {
@@ -385,8 +435,7 @@ function mountNoteOnOffEditor (container, api) {
       normalizeDotKey(t0 && typeof t0.key === 'string' ? t0.key : '') ||
       DEFAULT_DOT_KEY
     keyInput.value = k
-    const fn =
-      t0 && typeof t0.function === 'string' ? t0.function : 'linear'
+    const fn = t0 && typeof t0.function === 'string' ? t0.function : 'linear'
     fnSel.value = FN_CURVE_IDS.includes(fn) ? fn : 'linear'
     noteRow.syncInput()
     lo.value = String(/** @type {number[]} */ (p.velocityRange)[0])
@@ -394,10 +443,12 @@ function mountNoteOnOffEditor (container, api) {
     offIn.value = String(p.velocityOffset)
     scaleIn.value = String(p.velocityScale)
     noteRow.setLearnArmed(false)
+    envUi.syncFromModel()
   }
 
   return {
     teardown: () => {
+      envUi.teardown()
       container.replaceChildren()
     },
     syncFromModel

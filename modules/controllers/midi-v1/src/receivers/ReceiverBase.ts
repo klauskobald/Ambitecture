@@ -28,4 +28,6 @@ export abstract class ReceiverBase {
   protected fanOut(normalized: number): void {
     for (const t of this.targets) t.send(normalized);
   }
+
+  dispose(): void {}
 }

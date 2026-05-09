@@ -81,6 +81,7 @@ export class MidiController {
     this.pluginServer.stop();
     this.midi.stop();
     this.socket.disconnect();
+    for (const r of this.receivers) r.dispose();
     this.receivers = [];
   }
 
@@ -90,6 +91,7 @@ export class MidiController {
 
   private rebuildReceivers(reason: AssignmentsChangedReason): void {
     const assignments = this.graph.getAssignments();
+    const prev = this.receivers;
     const next: ReceiverBase[] = [];
     for (const a of assignments) {
       const targets = this.buildTargets(a.targets);
@@ -100,6 +102,7 @@ export class MidiController {
       const receiver = this.buildReceiver(a, targets);
       if (receiver) next.push(receiver);
     }
+    for (const r of prev) r.dispose();
     this.receivers = next;
     this.logger.info(`assignments rebuilt (${reason}): ${next.length} receiver(s)`);
     for (const r of next) this.logger.info(`  ${r.describe()}`);

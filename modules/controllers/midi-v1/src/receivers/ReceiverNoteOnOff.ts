@@ -1,3 +1,4 @@
+import { EnvAr } from '../envelope/env_ar';
 import { ReceiverBase } from './ReceiverBase';
 import { Logger } from '../Logger';
 import { AssignmentRecord, TargetRecord } from '../GraphReplica';
@@ -5,12 +6,40 @@ import { MidiCcEvent, MidiNoteEvent } from '../MidiManager';
 import { midiTools } from '../midiTools';
 import { TargetBase } from '../targets/TargetBase';
 
+interface EnvArParsed {
+  enabled: boolean;
+  attackMs: number;
+  releaseMs: number;
+}
+
 interface NoteOnOffParams {
   note: number;
   velocityMin: number;
   velocityMax: number;
   velocityOffset: number;
   velocityScale: number;
+  envelope: EnvArParsed | null;
+}
+
+function readEnvelope(raw: Record<string, unknown>): EnvArParsed | null {
+  const env = raw['envelope'];
+  if (env === null) return null;
+  if (env === undefined) {
+    return { enabled: true, attackMs: 0, releaseMs: 0 };
+  }
+  if (typeof env !== 'object' || Array.isArray(env)) return null;
+  const o = env as Record<string, unknown>;
+  if (o['type'] !== 'env_ar') return null;
+  const enabled = typeof o['enabled'] === 'boolean' ? o['enabled'] : true;
+  const attackMs =
+    typeof o['attackMs'] === 'number' && Number.isFinite(o['attackMs'])
+      ? Math.max(0, o['attackMs'])
+      : 0;
+  const releaseMs =
+    typeof o['releaseMs'] === 'number' && Number.isFinite(o['releaseMs'])
+      ? Math.max(0, o['releaseMs'])
+      : 0;
+  return { enabled, attackMs, releaseMs };
 }
 
 function readParams(raw: Record<string, unknown>): NoteOnOffParams | null {
@@ -25,7 +54,8 @@ function readParams(raw: Record<string, unknown>): NoteOnOffParams | null {
   }
   const velocityOffset = typeof raw['velocityOffset'] === 'number' ? raw['velocityOffset'] : 0;
   const velocityScale = typeof raw['velocityScale'] === 'number' ? raw['velocityScale'] : 1;
-  return { note, velocityMin, velocityMax, velocityOffset, velocityScale };
+  const envelope = readEnvelope(raw);
+  return { note, velocityMin, velocityMax, velocityOffset, velocityScale, envelope };
 }
 
 function formatIntentTargetsLine(
@@ -42,7 +72,15 @@ function formatIntentTargetsLine(
   return bits;
 }
 
+function envelopeSummary(env: EnvArParsed | null): string {
+  if (env === null || !env.enabled) return 'env off';
+  return `env_ar ${env.attackMs}/${env.releaseMs}ms`;
+}
+
 export class ReceiverNoteOnOff extends ReceiverBase {
+  private triggerVelocity = 0;
+  private readonly envelopes = new Map<number, EnvAr>();
+
   constructor(
     assignment: AssignmentRecord,
     targets: TargetBase[],
@@ -50,6 +88,11 @@ export class ReceiverNoteOnOff extends ReceiverBase {
     private readonly params: NoteOnOffParams,
   ) {
     super(assignment, targets, logger);
+  }
+
+  dispose(): void {
+    for (const env of this.envelopes.values()) env.dispose();
+    this.envelopes.clear();
   }
 
   static formatPluginListLine(
@@ -63,7 +106,8 @@ export class ReceiverNoteOnOff extends ReceiverBase {
     const targetBits = formatIntentTargetsLine(a.targets, intentName);
     const targetsJoined = targetBits.length > 0 ? targetBits.join(', ') : '—';
     const noteLabel = midiTools.noteAsString(params.note);
-    return `noteOnOff: [${chLabel}] ${noteLabel} (${params.velocityMin}–${params.velocityMax}) +${params.velocityOffset} ×${params.velocityScale} => ${targetsJoined}`;
+    const envBit = envelopeSummary(params.envelope);
+    return `noteOnOff: [${chLabel}] ${noteLabel} (${params.velocityMin}–${params.velocityMax}) +${params.velocityOffset} ×${params.velocityScale} ${envBit} => ${targetsJoined}`;
   }
 
   static build(assignment: AssignmentRecord, targets: TargetBase[], logger: Logger): ReceiverNoteOnOff | null {
@@ -75,19 +119,60 @@ export class ReceiverNoteOnOff extends ReceiverBase {
     return new ReceiverNoteOnOff(assignment, targets, logger, params);
   }
 
+  private ensureEnvelope(note: number): EnvAr {
+    let env = this.envelopes.get(note);
+    const ep = this.params.envelope;
+    if (!ep?.enabled) {
+      throw new Error('ReceiverNoteOnOff.ensureEnvelope without enabled envelope');
+    }
+    if (!env) {
+      env = new EnvAr({
+        attackMs: ep.attackMs,
+        releaseMs: ep.releaseMs,
+        onValue: env01 => {
+          const adjusted =
+            (this.triggerVelocity * env01 + this.params.velocityOffset) * this.params.velocityScale;
+          this.fanOut(adjusted / 127);
+        },
+      });
+      this.envelopes.set(note, env);
+    } else {
+      env.setParams(ep.attackMs, ep.releaseMs);
+    }
+    return env;
+  }
+
   handleNoteOn(e: MidiNoteEvent): void {
     if (!this.channelMatches(e.channel)) return;
     if (e.note !== this.params.note) return;
     if (e.velocity < this.params.velocityMin || e.velocity > this.params.velocityMax) return;
-    const adjusted = (e.velocity + this.params.velocityOffset) * this.params.velocityScale;
-    this.fanOut(adjusted / 127);
+
+    this.triggerVelocity = e.velocity;
+
+    const envCfg = this.params.envelope;
+    if (envCfg === null || !envCfg.enabled) {
+      const adjusted = (e.velocity + this.params.velocityOffset) * this.params.velocityScale;
+      this.fanOut(adjusted / 127);
+      return;
+    }
+
+    this.ensureEnvelope(e.note).noteOn();
   }
 
   handleNoteOff(e: MidiNoteEvent): void {
     if (!this.channelMatches(e.channel)) return;
     if (e.note !== this.params.note) return;
-    this.fanOut(this.params.velocityOffset);
+
+    const envCfg = this.params.envelope;
+    if (envCfg === null || !envCfg.enabled) {
+      this.fanOut(0);
+      return;
+    }
+
+    const env = this.envelopes.get(e.note);
+    if (env) env.noteOff();
+    else this.fanOut(0);
   }
 
-  handleCc(_e: MidiCcEvent): void { }
+  handleCc(_e: MidiCcEvent): void {}
 }

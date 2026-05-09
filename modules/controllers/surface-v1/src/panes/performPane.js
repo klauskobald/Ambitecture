@@ -107,14 +107,17 @@ export class PerformPane {
 
     const mount = this._subnavShell.controlsMount
 
+    const actions = projectGraph.getActions()
+
     for (const input of activeInputs) {
       const guid = String(input.guid ?? '')
       if (!guid) continue
       activeGuids.add(guid)
       const button = this._buttonForInput(guid)
 
+      const { labelEl, badgeEl } = this._ensurePerformButtonChrome(button)
       const newText = String(input.name ?? 'Button')
-      if (button.textContent !== newText) button.textContent = newText
+      if (labelEl.textContent !== newText) labelEl.textContent = newText
 
       const newAction = typeof input.action === 'string' ? input.action : ''
       if (button.dataset.actionGuid !== newAction) button.dataset.actionGuid = newAction
@@ -123,6 +126,11 @@ export class PerformPane {
 
       const newBehavior = typeof input.type === 'string' ? input.type : 'button'
       if (button.dataset.behavior !== newBehavior) button.dataset.behavior = newBehavior
+
+      const unassigned =
+        !newAction || !actions.has(newAction)
+      button.classList.toggle('perform-input--unassigned', unassigned)
+      if (badgeEl) badgeEl.hidden = !unassigned
 
       const isActive = highlightedInputGuid !== '' && guid === highlightedInputGuid
       button.classList.toggle('btn--active', isActive)
@@ -144,6 +152,31 @@ export class PerformPane {
    * @param {string} guid
    * @returns {HTMLButtonElement}
    */
+  /**
+   * @param {HTMLButtonElement} button
+   * @returns {{ labelEl: HTMLSpanElement, badgeEl: HTMLSpanElement | null }}
+   */
+  _ensurePerformButtonChrome (button) {
+    let labelEl = button.querySelector('.perform-input__label')
+    let badgeEl = button.querySelector('.perform-input__badge--unassigned')
+    if (!labelEl || !badgeEl) {
+      button.replaceChildren()
+      labelEl = document.createElement('span')
+      labelEl.className = 'perform-input__label'
+      badgeEl = document.createElement('span')
+      badgeEl.className =
+        'perform-input__badge perform-input__badge--unassigned'
+      badgeEl.textContent = 'unassigned'
+      badgeEl.hidden = true
+      button.appendChild(labelEl)
+      button.appendChild(badgeEl)
+    }
+    return {
+      labelEl: /** @type {HTMLSpanElement} */ (labelEl),
+      badgeEl: /** @type {HTMLSpanElement | null} */ (badgeEl)
+    }
+  }
+
   _buttonForInput (guid) {
     const existing = this._buttonByGuid.get(guid)
     if (existing) return existing

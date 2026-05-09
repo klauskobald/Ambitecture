@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { ActionDefinition, ActionExecuteItem, InputDefinition, ProjectManager, Scene } from './ProjectManager';
+import { cloneRecord } from './dotPath';
 import { GraphCommand } from './GraphProtocol';
 import { Logger } from './Logger';
 import {
@@ -143,51 +144,100 @@ export class ActionInputManager {
     ];
   }
 
+  /**
+   * Drops linkage to a target: trims `action.execute`, or orphans inputs + removes action when empty.
+   * Inputs are never removed — they become unassigned (no `target` / `action` / `context`).
+   */
   private removeInputAssignmentCommands(
     controllerGuid: string,
     targetType: AssignTargetType,
     targetGuid: string,
   ): GraphCommand[] {
     if (targetGuid.length === 0 || targetType.length === 0) return [];
-    const targetActionGuids = this.projectManager.getActionsWirePayload()
-      .filter(action => this.actionTargets(action, targetType, targetGuid))
-      .map(action => action.guid)
-      .filter((guid): guid is string => typeof guid === 'string' && guid.length > 0);
-    const actionGuidSet = new Set(targetActionGuids);
     const controllerInputs = this.projectManager.getInputsWirePayload(controllerGuid);
-    const matchingInputs = controllerInputs.filter(input => {
-      const hasTarget = this.inputTargets(input, targetType, targetGuid);
-      const pointsAtTargetAction = typeof input.action === 'string' && actionGuidSet.has(input.action);
-      return hasTarget || pointsAtTargetAction;
-    });
-    const matchingInputGuidSet = new Set(
-      matchingInputs
-        .map(input => input.guid)
-        .filter((guid): guid is string => typeof guid === 'string' && guid.length > 0),
-    );
-    const commands: GraphCommand[] = [];
+    const actionsTouchingTarget = this.projectManager.getActionsWirePayload()
+      .filter(action => this.actionTargets(action, targetType, targetGuid));
 
-    for (const input of matchingInputs) {
-      if (!input.guid) continue;
-      commands.push({
-        op: 'remove',
-        entityType: 'input',
-        guid: input.guid,
-        persistence: 'runtimeAndDurable',
-        parent: { entityType: 'controller', guid: controllerGuid },
+    const commands: GraphCommand[] = [];
+    const orphanedInputGuids = new Set<string>();
+
+    for (const action of actionsTouchingTarget) {
+      if (!action.guid || !Array.isArray(action.execute)) continue;
+      const remainingExecute = action.execute.filter(item => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return true;
+        const record = item as Record<string, unknown>;
+        return !(record['type'] === targetType && record['guid'] === targetGuid);
       });
+
+      if (remainingExecute.length === action.execute.length) {
+        continue;
+      }
+
+      if (remainingExecute.length > 0) {
+        commands.push(
+          this.upsertCommand('action', action.guid, {
+            ...(action as unknown as Record<string, unknown>),
+            execute: remainingExecute,
+          }),
+        );
+        continue;
+      }
+
+      const inputsForAction = controllerInputs.filter(
+        inp => typeof inp.action === 'string' && inp.action === action.guid,
+      );
+      const strippedForThisAction = new Set<string>();
+      for (const input of inputsForAction) {
+        if (!input.guid) continue;
+        strippedForThisAction.add(input.guid);
+        orphanedInputGuids.add(input.guid);
+        commands.push(
+          this.upsertCommand(
+            'input',
+            input.guid,
+            this.inputStrippedOfAssignment(input),
+            { entityType: 'controller', guid: controllerGuid },
+          ),
+        );
+      }
+
+      const referencedElsewhere = this.isActionReferencedInGraph(action.guid, {
+        excludingInputGuids: strippedForThisAction,
+        excludingActionGuids: new Set([action.guid]),
+      });
+      if (!referencedElsewhere) {
+        commands.push(this.removeActionCommand(action.guid));
+      }
     }
 
-    for (const actionGuid of targetActionGuids) {
-      const referencedElsewhere = this.isActionReferencedInGraph(actionGuid, {
-        excludingInputGuids: matchingInputGuidSet,
-        excludingActionGuids: new Set([actionGuid]),
-      });
-      if (referencedElsewhere) continue;
-      commands.push(this.removeActionCommand(actionGuid));
+    for (const input of controllerInputs) {
+      if (!input.guid || orphanedInputGuids.has(input.guid)) continue;
+      if (!this.inputTargets(input, targetType, targetGuid)) continue;
+      const ag = typeof input.action === 'string' ? input.action : '';
+      if (ag.length > 0) continue;
+      orphanedInputGuids.add(input.guid);
+      commands.push(
+        this.upsertCommand(
+          'input',
+          input.guid,
+          this.inputStrippedOfAssignment(input),
+          { entityType: 'controller', guid: controllerGuid },
+        ),
+      );
     }
 
     return commands;
+  }
+
+  private inputStrippedOfAssignment(input: InputDefinition): Record<string, unknown> {
+    const row = cloneRecord(input as unknown as Record<string, unknown>);
+    delete row['target'];
+    delete row['action'];
+    delete row['context'];
+    if (typeof input.guid === 'string' && input.guid.length > 0) {
+      row['guid'] = input.guid;
+    }
+    return row;
   }
 
   private renameInputCommands(controllerGuid: string, inputGuid: string, name: string): GraphCommand[] {
@@ -217,9 +267,39 @@ export class ActionInputManager {
     const input = this.projectManager.getInputByGuid(inputGuid);
     if (!input?.guid) return [];
     const actionGuid = typeof input.action === 'string' ? input.action : '';
-    if (!actionGuid) return [];
-    const action = this.projectManager.getActionByGuid(actionGuid);
-    if (!action?.guid) return [];
+    const action = actionGuid ? this.projectManager.getActionByGuid(actionGuid) : undefined;
+
+    if (!actionGuid || !action?.guid) {
+      const targetName = this.getTargetName(targetType, targetGuid);
+      const newActionGuid = `action-${randomUUID()}`;
+      const baseName =
+        typeof input.name === 'string' && input.name.trim().length > 0 ? input.name.trim() : targetName;
+      const newAction: ActionDefinition = {
+        guid: newActionGuid,
+        name: baseName,
+        execute: [{ type: targetType, guid: targetGuid }],
+      };
+      const inputRecord = cloneRecord(input as unknown as Record<string, unknown>);
+      inputRecord['action'] = newActionGuid;
+      inputRecord['target'] = { type: targetType, guid: targetGuid };
+      if (targetType === 'scene') {
+        inputRecord['context'] = targetGuid;
+      } else {
+        delete inputRecord['context'];
+      }
+      inputRecord['guid'] = input.guid;
+      const clearPrevious = this.removeInputAssignmentCommands(controllerGuid, targetType, targetGuid);
+      return [
+        ...clearPrevious,
+        this.upsertCommand('action', newActionGuid, newAction as unknown as Record<string, unknown>),
+        this.upsertCommand(
+          'input',
+          input.guid,
+          inputRecord,
+          { entityType: 'controller', guid: controllerGuid },
+        ),
+      ];
+    }
 
     const alreadyTargets = this.actionTargets(action, targetType, targetGuid);
     if (alreadyTargets) return [];
@@ -281,43 +361,82 @@ export class ActionInputManager {
   }
 
   buildSceneCleanupCommands(sceneGuid: string): GraphCommand[] {
-    const actionGuids = this.projectManager.getActionsWirePayload()
-      .filter(action => this.actionTargetsScene(action, sceneGuid))
-      .map(action => action.guid)
-      .filter((guid): guid is string => typeof guid === 'string' && guid.length > 0);
-    const actionGuidSet = new Set(actionGuids);
-    const commands: GraphCommand[] = [];
+    const actionsTouchingScene = this.projectManager.getActionsWirePayload()
+      .filter(action => this.actionTargetsScene(action, sceneGuid));
 
+    const commands: GraphCommand[] = [];
+    const orphanedInputGuids = new Set<string>();
     const controllers = this.projectManager.getControllersWirePayload();
+
+    for (const action of actionsTouchingScene) {
+      if (!action.guid || !Array.isArray(action.execute)) continue;
+      const remainingExecute = action.execute.filter(item => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return true;
+        const record = item as Record<string, unknown>;
+        return !(record['type'] === 'scene' && record['guid'] === sceneGuid);
+      });
+
+      if (remainingExecute.length === action.execute.length) {
+        continue;
+      }
+
+      if (remainingExecute.length > 0) {
+        commands.push(
+          this.upsertCommand('action', action.guid, {
+            ...(action as unknown as Record<string, unknown>),
+            execute: remainingExecute,
+          }),
+        );
+        continue;
+      }
+
+      const strippedForThisAction = new Set<string>();
+      for (const controller of controllers) {
+        const controllerGuid = controller.guid;
+        if (!controllerGuid) continue;
+        for (const input of this.projectManager.getInputsWirePayload(controllerGuid)) {
+          if (!input.guid) continue;
+          if (typeof input.action !== 'string' || input.action !== action.guid) continue;
+          strippedForThisAction.add(input.guid);
+          orphanedInputGuids.add(input.guid);
+          commands.push(
+            this.upsertCommand(
+              'input',
+              input.guid,
+              this.inputStrippedOfAssignment(input),
+              { entityType: 'controller', guid: controllerGuid },
+            ),
+          );
+        }
+      }
+
+      const referencedElsewhere = this.isActionReferencedInGraph(action.guid, {
+        excludingInputGuids: strippedForThisAction,
+        excludingActionGuids: new Set([action.guid]),
+      });
+      if (!referencedElsewhere) {
+        commands.push(this.removeActionCommand(action.guid));
+      }
+    }
+
     for (const controller of controllers) {
       const controllerGuid = controller.guid;
       if (!controllerGuid) continue;
       for (const input of this.projectManager.getInputsWirePayload(controllerGuid)) {
-        if (!input.guid) continue;
-        const hasSceneTarget = this.inputTargetsScene(input, sceneGuid);
-        const pointsAtSceneAction = typeof input.action === 'string' && actionGuidSet.has(input.action);
-        if (!hasSceneTarget && !pointsAtSceneAction) continue;
-        commands.push({
-          op: 'remove',
-          entityType: 'input',
-          guid: input.guid,
-          persistence: 'runtimeAndDurable',
-          parent: { entityType: 'controller', guid: controllerGuid },
-        });
+        if (!input.guid || orphanedInputGuids.has(input.guid)) continue;
+        if (!this.inputTargetsScene(input, sceneGuid)) continue;
+        const ag = typeof input.action === 'string' ? input.action : '';
+        if (ag.length > 0) continue;
+        orphanedInputGuids.add(input.guid);
+        commands.push(
+          this.upsertCommand(
+            'input',
+            input.guid,
+            this.inputStrippedOfAssignment(input),
+            { entityType: 'controller', guid: controllerGuid },
+          ),
+        );
       }
-    }
-    const removedInputGuids = new Set(
-      commands
-        .filter(command => command.entityType === 'input' && command.op === 'remove')
-        .map(command => command.guid),
-    );
-    for (const guid of actionGuids) {
-      const stillReferenced = this.isActionReferencedInGraph(guid, {
-        excludingInputGuids: removedInputGuids,
-        excludingActionGuids: new Set([guid]),
-      });
-      if (stillReferenced) continue;
-      commands.push(this.removeActionCommand(guid));
     }
 
     return commands;

@@ -202,6 +202,18 @@ export class InputAssignManager {
         row.style.flexWrap = 'nowrap'
         helpers.button.style.flex = '1 1 auto'
         helpers.button.style.width = 'auto'
+        const inputRecord = projectGraph.getInputs().get(option.value)
+        const actions = projectGraph.getActions()
+        const actionGuid =
+          typeof inputRecord?.action === 'string' ? inputRecord.action : ''
+        const unassigned = !actionGuid || !actions.has(actionGuid)
+        if (unassigned) {
+          helpers.button.classList.add('modal-choice-list__btn--unassigned')
+          const badge = document.createElement('span')
+          badge.className = 'modal-choice-list__unassigned-badge'
+          badge.textContent = 'unassigned'
+          helpers.button.appendChild(badge)
+        }
         const editBtn = document.createElement('button')
         editBtn.type = 'button'
         editBtn.className =

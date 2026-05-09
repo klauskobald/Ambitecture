@@ -18,6 +18,15 @@ export const PERFORM_HUD_ICON_EXTRA_GAP_PX = 2
  */
 export const PERFORM_HUD_ICON_ANCHOR_FRAC = 0.5
 
+/** Snap to target when within this many pixels (Euclidean in layer space). */
+export const PERFORM_HUD_LAYOUT_LERP_MIN_DIST_PX = 1
+
+/**
+ * Exponential smoothing rate (1/s) for HUD follow: higher = snappier.
+ * Position delta per frame uses `1 - exp(-lambda * dt)`.
+ */
+export const PERFORM_HUD_LAYOUT_LERP_LAMBDA = 10
+
 export class PerformQuickPanelHud {
   /**
    * @param {import('../viewport/overlayCanvas.js').OverlayCanvas} overlay
@@ -27,13 +36,15 @@ export class PerformQuickPanelHud {
     const layer = document.getElementById('perform-hud-layer')
     if (!layer) throw new Error('#perform-hud-layer missing from DOM.')
     this._layer = layer
-    /** @type {Map<string, { root: HTMLElement, knobs: ScalarRadialKnobSvg[], descriptorKeys: string }>} */
+    /** @type {Map<string, { root: HTMLElement, knobs: ScalarRadialKnobSvg[], descriptorKeys: string, layoutX?: number, layoutY?: number }>} */
     this._panels = new Map()
 
     /** @type {boolean} */
     this._runner = false
     /** @type {number} */
     this._raf = 0
+    /** @type {number} */
+    this._lastLayoutFrameMs = 0
     this._lastLayoutActivityMs = 0
     this._inactivityStopMs = 1000
     /** @type {(() => void) | null} */
@@ -45,6 +56,7 @@ export class PerformQuickPanelHud {
   start () {
     if (this._runner) return
     this._runner = true
+    this._lastLayoutFrameMs = 0
     this._layer.style.display = ''
     this._layer.hidden = false
     this._tick = () => {
@@ -227,18 +239,33 @@ export class PerformQuickPanelHud {
     const overlayRect = canvas.getBoundingClientRect()
     const layerRect = this._layer.getBoundingClientRect()
 
+    const now = performance.now()
+    let dtSec = 0
+    if (this._lastLayoutFrameMs > 0) {
+      dtSec = Math.min(0.1, Math.max(0, (now - this._lastLayoutFrameMs) / 1000))
+    }
+    this._lastLayoutFrameMs = now
+    const lerpAlpha =
+      dtSec > 0 ? 1 - Math.exp(-PERFORM_HUD_LAYOUT_LERP_LAMBDA * dtSec) : 0
+
+    let anyHudStillLerping = false
+
     for (const [, pane] of this._panels) {
       const id = String(pane.root.dataset.intentGuid ?? '')
       const intent =
         projectGraph.getEffectiveIntent(id) ?? projectGraph.getIntents().get(id)
       if (!intent) {
         pane.root.style.visibility = 'hidden'
+        pane.layoutX = undefined
+        pane.layoutY = undefined
         continue
       }
       const i = /** @type {Record<string, unknown>} */ (intent)
       const pos = /** @type {number[] | undefined} */ (i.position)
       if (!pos || pos.length < 3) {
         pane.root.style.visibility = 'hidden'
+        pane.layoutX = undefined
+        pane.layoutY = undefined
         continue
       }
       const { px, py } = worldToCanvas(
@@ -251,14 +278,37 @@ export class PerformQuickPanelHud {
       const spanM = Math.max(1e-9, spatial.x2 - spatial.x1)
       const mPerPx = spanM / Math.max(1, simRect.width)
       const iconPx = PERFORM_HUD_ICON_WORLD_METERS / mPerPx
-      const lx = overlayRect.left - layerRect.left + px
-      // translate(-50%,-100%): (lx, ly) is bottom-center of HUD — stack on small pivot marker, not spread radius.
-      const ly =
+      const tx = overlayRect.left - layerRect.left + px
+      // translate(-50%,-100%): (tx, ty) is bottom-center of HUD — stack on small pivot marker, not spread radius.
+      const ty =
         overlayRect.top -
         layerRect.top +
         py -
         iconPx * PERFORM_HUD_ICON_ANCHOR_FRAC -
         PERFORM_HUD_ICON_EXTRA_GAP_PX
+
+      let lx = pane.layoutX
+      let ly = pane.layoutY
+      if (lx === undefined || ly === undefined) {
+        lx = tx
+        ly = ty
+      } else {
+        const dist = Math.hypot(tx - lx, ty - ly)
+        if (dist <= PERFORM_HUD_LAYOUT_LERP_MIN_DIST_PX) {
+          lx = tx
+          ly = ty
+        } else if (lerpAlpha > 0) {
+          lx += (tx - lx) * lerpAlpha
+          ly += (ty - ly) * lerpAlpha
+        }
+      }
+      pane.layoutX = lx
+      pane.layoutY = ly
+
+      if (Math.hypot(tx - lx, ty - ly) > PERFORM_HUD_LAYOUT_LERP_MIN_DIST_PX) {
+        anyHudStillLerping = true
+      }
+
       pane.root.style.position = 'absolute'
       pane.root.style.visibility = ''
       pane.root.style.left = `${Math.round(lx)}px`
@@ -268,6 +318,10 @@ export class PerformQuickPanelHud {
       // Higher-layer intents stack on top of lower ones (NaN/missing → 0).
       const layerNum = intentLayer(intent)
       pane.root.style.zIndex = String(Number.isFinite(layerNum) ? layerNum : 0)
+    }
+
+    if (anyHudStillLerping) {
+      this._lastLayoutActivityMs = performance.now()
     }
   }
 }

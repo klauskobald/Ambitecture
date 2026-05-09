@@ -57,10 +57,21 @@ export function createAssignModal (opts) {
     const modalBody = opts.els.modalBody
     modalBody.replaceChildren()
 
-    const classRow = document.createElement('div')
-    classRow.className = 'modal__row modal__row--class'
+    const headerRow = document.createElement('div')
+    headerRow.className = 'modal__header-row'
+    
+    const closeBtn = document.createElement('button')
+    closeBtn.type = 'button'
+    closeBtn.className = 'btn btn--compact'
+    closeBtn.textContent = '⬅'
+    closeBtn.addEventListener('click', () => {
+      mergeBeforeClose()
+      close()
+    })
+    headerRow.appendChild(closeBtn)
+
     const sel = document.createElement('select')
-    sel.className = 'modal__select'
+    sel.className = 'modal__select modal__select--header'
     const classes = listAssignmentClasses()
     for (const { id, label } of classes) {
       const opt = document.createElement('option')
@@ -90,14 +101,12 @@ export function createAssignModal (opts) {
       editing.params = JSON.parse(JSON.stringify(fresh.params))
       remountEditor()
     })
-    classRow.appendChild(sel)
-    modalBody.appendChild(classRow)
-    modalBody.appendChild(editorHost)
-
+    headerRow.appendChild(sel)
+    
     const btnDel = document.createElement('button')
     btnDel.type = 'button'
     btnDel.className = 'btn btn--danger btn--compact'
-    btnDel.textContent = 'Delete'
+    btnDel.textContent = '❌'
     btnDel.addEventListener('click', () => {
       const g = editing && typeof editing.guid === 'string' ? editing.guid : ''
       if (g) {
@@ -107,7 +116,10 @@ export function createAssignModal (opts) {
       }
       close()
     })
-    modalBody.appendChild(btnDel)
+    headerRow.appendChild(btnDel)
+    
+    modalBody.appendChild(headerRow)
+    modalBody.appendChild(editorHost)
 
     remountEditor()
   }

@@ -28,13 +28,20 @@ function ensureNoteAndControlShape (a) {
   } else {
     p.controller = Math.max(0, Math.min(127, Math.round(p.controller)))
   }
-  if (typeof p.controllerAdd !== 'number' || !Number.isFinite(p.controllerAdd)) {
+  if (
+    typeof p.controllerAdd !== 'number' ||
+    !Number.isFinite(p.controllerAdd)
+  ) {
     p.controllerAdd = 0
   }
-  if (typeof p.controllerScale !== 'number' || !Number.isFinite(p.controllerScale)) {
+  if (
+    typeof p.controllerScale !== 'number' ||
+    !Number.isFinite(p.controllerScale)
+  ) {
     p.controllerScale = 1
   }
-  if (typeof a.channel !== 'number' || !Number.isFinite(a.channel)) a.channel = 0
+  if (typeof a.channel !== 'number' || !Number.isFinite(a.channel))
+    a.channel = 0
   a.channel = Math.max(0, Math.min(15, Math.round(a.channel)))
 }
 
@@ -101,9 +108,12 @@ function mountNoteAndControlEditor (container, api) {
     const warn = document.createElement('p')
     warn.className = 'modal__hint modal__hint--warn'
     warn.textContent =
-      'No intents in project — add targets in the project graph or load a project on the hub.'
+      'No intents in project — add targets in YAML or open surface with a loaded project.'
     frag.appendChild(warn)
   }
+
+  const row1 = document.createElement('div')
+  row1.className = 'modal__row modal__row--compact'
 
   const noteRow = createLearnFieldRow({
     field: 'note',
@@ -120,20 +130,19 @@ function mountNoteAndControlEditor (container, api) {
       noteRow.syncInput()
       api.onChange()
     },
-    requestLearn: ({ field, capture }) =>
-      api.requestLearn({ field, capture }),
+    requestLearn: ({ field, capture }) => api.requestLearn({ field, capture }),
     onLearnArmed: armed => noteRow.setLearnArmed(armed)
   })
-  frag.appendChild(noteRow.row)
+  row1.appendChild(noteRow.row)
 
   const velWrap = document.createElement('div')
-  velWrap.className = 'modal__row modal__row--velocity'
+  velWrap.className = 'modal__vel-wrap'
   const velLabel = document.createElement('span')
-  velLabel.className = 'modal__row-label'
-  velLabel.textContent = 'Velocity:'
+  velLabel.className = 'modal__vel-label'
+  velLabel.textContent = 'V:'
   const lo = document.createElement('input')
   lo.type = 'number'
-  lo.className = 'modal__input-num modal__input-num--vel'
+  lo.className = 'modal__input-num modal__input-num--2'
   lo.min = '0'
   lo.max = '127'
   lo.value = String(/** @type {number[]} */ (p.velocityRange)[0])
@@ -142,7 +151,7 @@ function mountNoteAndControlEditor (container, api) {
   dash.textContent = '–'
   const hi = document.createElement('input')
   hi.type = 'number'
-  hi.className = 'modal__input-num modal__input-num--vel'
+  hi.className = 'modal__input-num modal__input-num--2'
   hi.min = '0'
   hi.max = '127'
   hi.value = String(/** @type {number[]} */ (p.velocityRange)[1])
@@ -163,13 +172,21 @@ function mountNoteAndControlEditor (container, api) {
   velWrap.appendChild(lo)
   velWrap.appendChild(dash)
   velWrap.appendChild(hi)
-  frag.appendChild(velWrap)
+  row1.appendChild(velWrap)
+  frag.appendChild(row1)
+
+  const row2 = document.createElement('div')
+  row2.className = 'modal__row modal__row--compact'
+  const ctrlLabel = document.createElement('span')
+  ctrlLabel.className = 'modal__ctrl-label'
+  ctrlLabel.textContent = 'Ctrl:'
+  row2.appendChild(ctrlLabel)
 
   const ctrlStr = () => String(Math.round(Number(p.controller) || 0))
   const ctrlRow = createLearnFieldRow({
     field: 'controller',
     capture: 'controlChange',
-    maxLen: 4,
+    maxLen: 3,
     inputMode: 'numeric',
     getValue: ctrlStr,
     setValue: s => {
@@ -182,41 +199,45 @@ function mountNoteAndControlEditor (container, api) {
       ctrlRow.syncInput()
       api.onChange()
     },
-    requestLearn: ({ field, capture }) =>
-      api.requestLearn({ field, capture }),
+    requestLearn: ({ field, capture }) => api.requestLearn({ field, capture }),
     onLearnArmed: armed => ctrlRow.setLearnArmed(armed)
   })
-  frag.appendChild(ctrlRow.row)
+  row2.appendChild(ctrlRow.row)
 
-  const addScale = document.createElement('div')
-  addScale.className = 'modal__row modal__row--tight'
+  const addWrap = document.createElement('div')
+  addWrap.className = 'modal__add-scale'
+  const addLabel = document.createElement('span')
+  addLabel.textContent = 'Add:'
   const addIn = document.createElement('input')
   addIn.type = 'number'
-  addIn.className = 'modal__input-num modal__input-num--5'
+  addIn.className = 'modal__input-num modal__input-num--3'
   addIn.step = 'any'
-  addIn.title = 'controllerAdd'
-  addIn.setAttribute('aria-label', 'controllerAdd')
+  addIn.title = 'add'
   addIn.value = String(p.controllerAdd)
   addIn.addEventListener('change', () => {
     const n = Number(addIn.value)
     p.controllerAdd = Number.isFinite(n) ? n : 0
     api.onChange()
   })
+  const scaleLabel = document.createElement('span')
+  scaleLabel.textContent = 'Scale:'
   const scaleIn = document.createElement('input')
   scaleIn.type = 'number'
-  scaleIn.className = 'modal__input-num modal__input-num--5'
+  scaleIn.className = 'modal__input-num modal__input-num--3'
   scaleIn.step = 'any'
-  scaleIn.title = 'controllerScale'
-  scaleIn.setAttribute('aria-label', 'controllerScale')
+  scaleIn.title = 'scale'
   scaleIn.value = String(p.controllerScale)
   scaleIn.addEventListener('change', () => {
     const n = Number(scaleIn.value)
     p.controllerScale = Number.isFinite(n) ? n : 1
     api.onChange()
   })
-  addScale.appendChild(addIn)
-  addScale.appendChild(scaleIn)
-  frag.appendChild(addScale)
+  addWrap.appendChild(addLabel)
+  addWrap.appendChild(addIn)
+  addWrap.appendChild(scaleLabel)
+  addWrap.appendChild(scaleIn)
+  row2.appendChild(addWrap)
+  frag.appendChild(row2)
 
   container.appendChild(frag)
 

@@ -175,58 +175,85 @@ body {
   color: var(--color-danger);
 }
 
-.modal__row {
+.modal__header-row {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: 0.35rem;
   margin-bottom: var(--space-2);
 }
 
-.modal__row--class {
-  margin-bottom: var(--space-3);
-}
-
-.modal__row--velocity {
-  gap: 0.35rem;
-}
-
-.modal__row-label {
-  color: var(--color-muted);
-  flex: 0 0 auto;
-}
-
-.modal__dash {
-  color: var(--color-muted);
-  flex: 0 0 auto;
-}
-
-.modal__select {
-  width: 100%;
-  padding: var(--space-2);
-  border-radius: var(--radius-md);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: var(--color-bg);
-  color: var(--color-text);
-  font: inherit;
-}
-
-.modal__input-num {
-  padding: 0.2rem 0.35rem;
+.modal__select--header {
+  flex: 1 1 auto;
+  padding: 0.35rem 0.5rem;
   border-radius: 4px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: var(--color-bg);
   color: var(--color-text);
   font: inherit;
+  font-size: 0.9rem;
 }
 
-.modal__input-num--vel {
+.modal__row--compact {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.modal__vel-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.modal__vel-label {
+  flex: 0 0 auto;
+  color: var(--color-muted);
+  font-size: 0.75rem;
+}
+
+.modal__ctrl-label {
+  flex: 0 0 auto;
+  color: var(--color-muted);
+  font-size: 0.75rem;
+}
+
+.modal__add-scale {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  margin-left: auto;
+}
+
+.modal__add-scale > span {
+  flex: 0 0 auto;
+  color: var(--color-muted);
+  font-size: 0.75rem;
+}
+
+.modal__input-num--2 {
+  width: 2.5rem;
+}
+
+.modal__input-num--3 {
   width: 3.25rem;
 }
 
-.modal__input-num--5 {
-  width: 5ch;
-  min-width: 0;
+.modal__dash {
+  color: var(--color-muted);
+  flex: 0 0 auto;
+  font-size: 0.8rem;
+}
+
+.modal__input-num {
+  padding: 0.15rem 0.3rem;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.85rem;
 }
 
 .btn--compact {
@@ -237,20 +264,20 @@ body {
 .learn-field-row {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  width: 100%;
-  margin-bottom: var(--space-2);
+  gap: 0.25rem;
+  flex: 0 0 auto;
 }
 
 .learn-field-row__input {
   flex: 0 0 auto;
   padding: 0.2rem 0.35rem;
-  border-radius: 4px;
+  border-radius: 3px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: var(--color-bg);
   color: var(--color-text);
   font: inherit;
   font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
 }
 
 .learn-field-row__input--armed {

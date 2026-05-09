@@ -2,6 +2,7 @@ import { createAssignSession } from './assignSession.js'
 import { createAssignList } from './assignList.js'
 import { createAssignModal } from './assignModal.js'
 import './viewers/noteAndControl.js'
+import './viewers/noteOnOff.js'
 
 const filterParam = new URLSearchParams(window.location.search).get('filter')
 const filterIntentGuid =

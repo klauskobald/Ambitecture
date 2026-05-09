@@ -12,6 +12,7 @@ import {
 } from './GraphReplica';
 import { ReceiverBase } from './receivers/ReceiverBase';
 import { ReceiverNoteAndControl } from './receivers/ReceiverNoteAndControl';
+import { ReceiverNoteOnOff } from './receivers/ReceiverNoteOnOff';
 import { TargetBase } from './targets/TargetBase';
 import { TargetIntent } from './targets/TargetIntent';
 import { PluginServer } from './PluginServer';
@@ -141,6 +142,8 @@ export class MidiController {
     switch (assignment.class) {
       case 'noteAndControl':
         return ReceiverNoteAndControl.build(assignment, targets, this.logger);
+      case 'noteOnOff':
+        return ReceiverNoteOnOff.build(assignment, targets, this.logger);
       default:
         this.logger.warn(`assignment ${assignment.guid}: unknown class "${assignment.class}"`);
         return null;

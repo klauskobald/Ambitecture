@@ -15,6 +15,7 @@ import { initNav, activateDefaultNav } from './nav.js'
 import { initPaneHostResize } from './paneHostResize.js'
 import { initRouter, navigateTo } from './router.js'
 import * as statusDisplay from './statusDisplay.js'
+import { keyboardManager } from '../core/KeyboardManager.js'
 
 async function main () {
   const cfg = await loadConfig()
@@ -261,6 +262,8 @@ async function main () {
   })
 
   activateDefaultNav(paneName => navigateTo(paneName))
+
+  keyboardManager.start()
 
   window.dev = {
     projectState () {

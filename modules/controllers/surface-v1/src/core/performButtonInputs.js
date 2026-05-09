@@ -8,7 +8,8 @@ import { projectGraph } from './projectGraph.js'
 export function collectPerformButtonInputs () {
   return [...projectGraph.getInputs().values()].filter(input => {
     const display = input.display
-    if (!display || typeof display !== 'object' || Array.isArray(display)) return false
+    if (!display || typeof display !== 'object' || Array.isArray(display))
+      return false
     return /** @type {Record<string, unknown>} */ (display).type === 'button'
   })
 }

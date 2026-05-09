@@ -915,6 +915,31 @@
   max-width: 100%;
 }
 
+.perform-input__keyhint {
+  position: absolute;
+  top: 3px;
+  left: 5px;
+  font-size: 0.85rem;
+  line-height: 1.1;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  pointer-events: none;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.perform-input--has-keyhint {
+  padding-top: 0.75rem;
+}
+
+.perform-input--keyboard-active {
+  border-color: var(--color-accent);
+  background: var(--color-accent-dim);
+  color: var(--color-accent);
+}
+
 .perform-input__badge--unassigned {
   position: absolute;
   top: 0px;
@@ -936,6 +961,10 @@
 
 .perform-input--unassigned {
   padding-top: 0.85rem;
+}
+
+.perform-input--unassigned.perform-input--has-keyhint {
+  padding-top: 1rem;
 }
 
 .perform-input--button {

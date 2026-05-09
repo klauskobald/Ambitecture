@@ -202,11 +202,27 @@ export class InputAssignManager {
         row.style.flexWrap = 'nowrap'
         helpers.button.style.flex = '1 1 auto'
         helpers.button.style.width = 'auto'
+        helpers.button.dataset.inputGuid = option.value
         const inputRecord = projectGraph.getInputs().get(option.value)
         const actions = projectGraph.getActions()
         const actionGuid =
           typeof inputRecord?.action === 'string' ? inputRecord.action : ''
         const unassigned = !actionGuid || !actions.has(actionGuid)
+        const rawKey = inputRecord?.keyChar
+        const keyLabel =
+          typeof rawKey === 'string' && rawKey.trim().length > 0
+            ? rawKey.trim()
+            : ''
+        if (unassigned || keyLabel) {
+          helpers.button.style.position = 'relative'
+        }
+        if (keyLabel) {
+          helpers.button.classList.add('modal-choice-list__btn--has-keyhint')
+          const keyHint = document.createElement('span')
+          keyHint.className = 'modal-choice-list__keyhint'
+          keyHint.textContent = keyLabel
+          helpers.button.appendChild(keyHint)
+        }
         if (unassigned) {
           helpers.button.classList.add('modal-choice-list__btn--unassigned')
           const badge = document.createElement('span')

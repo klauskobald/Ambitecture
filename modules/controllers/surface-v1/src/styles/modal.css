@@ -226,6 +226,10 @@ textarea.modal-input.input-assign-modal__json {
   padding-top: calc(0.55rem * var(--modal-scale) + 0.35rem);
 }
 
+.modal-choice-list__btn--has-keyhint:not(.modal-choice-list__btn--unassigned) {
+  padding-top: calc(0.55rem * var(--modal-scale) + 0.35rem);
+}
+
 .modal-choice-list__unassigned-badge {
   position: absolute;
   top: 3px;
@@ -243,6 +247,27 @@ textarea.modal-input.input-assign-modal__json {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.modal-choice-list__keyhint {
+  position: absolute;
+  top: 3px;
+  left: 5px;
+  font-size: 0.85rem;
+  line-height: 1.1;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  pointer-events: none;
+  max-width: 38%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modal-choice-list__btn--keyboard-active {
+  border-color: var(--color-accent);
+  background: var(--color-accent-dim);
+  color: var(--color-accent);
 }
 
 /* ── Perform button sort (Edit pane modal) ─────────────────── */

@@ -7,17 +7,12 @@ import {
   DEFAULT_PERFORM_INPUT_SORT_KEY
 } from '../core/arraySorter.js'
 import { collectPerformButtonInputs } from '../core/performButtonInputs.js'
+import {
+  getPerformInputArgs,
+  performMomentaryPress,
+  performMomentaryRelease
+} from '../core/performMomentaryRegistry.js'
 import { PerformSubnavShell } from './performSubnavShell.js'
-
-/**
- * @param {unknown} value
- * @returns {Record<string, unknown> | undefined}
- */
-function recordOrUndefined (value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value))
-    return undefined
-  return /** @type {Record<string, unknown>} */ (value)
-}
 
 /**
  * Perform pane — shows the shared simulator viewport with performPolicy active.
@@ -39,8 +34,6 @@ export class PerformPane {
     this._buttonByGuid = new Map()
     /** @type {Map<number, { guid: string, actionGuid: string, behavior: string }>} */
     this._activePointers = new Map()
-    /** @type {Map<string, Set<number>>} */
-    this._momentaryPointersByGuid = new Map()
     /** @type {(() => void) | null} */
     this._unsubscribe = null
     /** @type {PerformQuickPanelHud | null} */
@@ -115,24 +108,38 @@ export class PerformPane {
       activeGuids.add(guid)
       const button = this._buttonForInput(guid)
 
-      const { labelEl, badgeEl } = this._ensurePerformButtonChrome(button)
+      const { labelEl, badgeEl, keyHintEl } =
+        this._ensurePerformButtonChrome(button)
       const newText = String(input.name ?? 'Button')
       if (labelEl.textContent !== newText) labelEl.textContent = newText
 
+      const rawKey = input.keyChar
+      const keyLabel =
+        typeof rawKey === 'string' && rawKey.trim().length > 0
+          ? rawKey.trim()
+          : ''
+      if (keyHintEl) {
+        keyHintEl.textContent = keyLabel
+        keyHintEl.hidden = !keyLabel
+      }
+      button.classList.toggle('perform-input--has-keyhint', Boolean(keyLabel))
+
       const newAction = typeof input.action === 'string' ? input.action : ''
-      if (button.dataset.actionGuid !== newAction) button.dataset.actionGuid = newAction
+      if (button.dataset.actionGuid !== newAction)
+        button.dataset.actionGuid = newAction
 
       if (button.dataset.inputGuid !== guid) button.dataset.inputGuid = guid
 
       const newBehavior = typeof input.type === 'string' ? input.type : 'button'
-      if (button.dataset.behavior !== newBehavior) button.dataset.behavior = newBehavior
+      if (button.dataset.behavior !== newBehavior)
+        button.dataset.behavior = newBehavior
 
-      const unassigned =
-        !newAction || !actions.has(newAction)
+      const unassigned = !newAction || !actions.has(newAction)
       button.classList.toggle('perform-input--unassigned', unassigned)
       if (badgeEl) badgeEl.hidden = !unassigned
 
-      const isActive = highlightedInputGuid !== '' && guid === highlightedInputGuid
+      const isActive =
+        highlightedInputGuid !== '' && guid === highlightedInputGuid
       button.classList.toggle('btn--active', isActive)
 
       // Always append in sorted order: appendChild moves an existing child to the end,
@@ -149,31 +156,37 @@ export class PerformPane {
   }
 
   /**
-   * @param {string} guid
-   * @returns {HTMLButtonElement}
-   */
-  /**
    * @param {HTMLButtonElement} button
-   * @returns {{ labelEl: HTMLSpanElement, badgeEl: HTMLSpanElement | null }}
+   * @returns {{
+   *   labelEl: HTMLSpanElement,
+   *   badgeEl: HTMLSpanElement | null,
+   *   keyHintEl: HTMLSpanElement | null
+   * }}
    */
   _ensurePerformButtonChrome (button) {
     let labelEl = button.querySelector('.perform-input__label')
     let badgeEl = button.querySelector('.perform-input__badge--unassigned')
-    if (!labelEl || !badgeEl) {
+    let keyHintEl = button.querySelector('.perform-input__keyhint')
+    if (!labelEl || !badgeEl || !keyHintEl) {
       button.replaceChildren()
       labelEl = document.createElement('span')
       labelEl.className = 'perform-input__label'
+      keyHintEl = document.createElement('span')
+      keyHintEl.className = 'perform-input__keyhint'
+      keyHintEl.hidden = true
       badgeEl = document.createElement('span')
       badgeEl.className =
         'perform-input__badge perform-input__badge--unassigned'
       badgeEl.textContent = 'unassigned'
       badgeEl.hidden = true
       button.appendChild(labelEl)
+      button.appendChild(keyHintEl)
       button.appendChild(badgeEl)
     }
     return {
       labelEl: /** @type {HTMLSpanElement} */ (labelEl),
-      badgeEl: /** @type {HTMLSpanElement | null} */ (badgeEl)
+      badgeEl: /** @type {HTMLSpanElement | null} */ (badgeEl),
+      keyHintEl: /** @type {HTMLSpanElement | null} */ (keyHintEl)
     }
   }
 
@@ -222,7 +235,7 @@ export class PerformPane {
         break
       case 'button':
       default:
-        sendActionTrigger(actionGuid, this._inputArgs(input, 'args'))
+        sendActionTrigger(actionGuid, getPerformInputArgs(input, 'args'))
         break
     }
   }
@@ -263,12 +276,12 @@ export class PerformPane {
   _pressMomentarySwitch (input, pointerId, actionGuid) {
     const guid = String(input.guid ?? '')
     if (!guid) return
-    const pointers = this._momentaryPointersByGuid.get(guid) ?? new Set()
-    const wasInactive = pointers.size === 0
-    pointers.add(pointerId)
-    this._momentaryPointersByGuid.set(guid, pointers)
-    if (wasInactive)
-      sendActionTrigger(actionGuid, this._inputArgs(input, 'argsOn'))
+    performMomentaryPress(
+      guid,
+      `pointer:${pointerId}`,
+      actionGuid,
+      /** @type {Record<string, unknown>} */ (input)
+    )
   }
 
   /**
@@ -277,13 +290,7 @@ export class PerformPane {
    * @param {string} actionGuid
    */
   _releaseMomentarySwitch (guid, pointerId, actionGuid) {
-    const pointers = this._momentaryPointersByGuid.get(guid)
-    if (!pointers) return
-    pointers.delete(pointerId)
-    if (pointers.size > 0) return
-    this._momentaryPointersByGuid.delete(guid)
-    const input = projectGraph.getInputs().get(guid)
-    if (input) sendActionTrigger(actionGuid, this._inputArgs(input, 'argsOff'))
+    performMomentaryRelease(guid, `pointer:${pointerId}`, actionGuid)
   }
 
   /** @param {HTMLButtonElement} button */
@@ -302,16 +309,6 @@ export class PerformPane {
   _inputForButton (button) {
     const guid = button.dataset.inputGuid ?? ''
     return guid ? projectGraph.getInputs().get(guid) : undefined
-  }
-
-  /**
-   * @param {Record<string, unknown>} input
-   * @param {string} key
-   * @returns {Record<string, unknown> | undefined}
-   */
-  _inputArgs (input, key) {
-    const params = recordOrUndefined(input.params)
-    return recordOrUndefined(params?.[key])
   }
 
   /** @returns {Record<string, unknown>[]} */

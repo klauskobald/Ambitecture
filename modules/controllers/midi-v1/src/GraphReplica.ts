@@ -35,6 +35,15 @@ function toTarget(raw: unknown): TargetRecord | null {
   };
 }
 
+export function normalizeAssignmentsInput(raw: unknown[]): AssignmentRecord[] {
+  const list: AssignmentRecord[] = [];
+  for (const item of raw) {
+    const a = toAssignment(item);
+    if (a) list.push(a);
+  }
+  return list;
+}
+
 function toAssignment(raw: unknown): AssignmentRecord | null {
   if (!isRecord(raw)) return null;
   const cls = raw['class'];
@@ -69,6 +78,15 @@ export class GraphReplica {
 
   getAssignments(): AssignmentRecord[] {
     return this.myAssignments;
+  }
+
+  /**
+   * Apply assignments after a local `graph:command` save — the hub does not echo the sender's own
+   * controller delta back on the same socket.
+   */
+  applyLocalAssignments(assignments: AssignmentRecord[]): void {
+    this.myAssignments = assignments;
+    this.onAssignmentsChanged('controller-changed');
   }
 
   apply(message: WsMessage): void {

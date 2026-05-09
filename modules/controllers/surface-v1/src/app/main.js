@@ -1,7 +1,7 @@
 import { loadConfig, applyLayoutCssVars } from '../core/config.js'
 import { applySystemCapabilities } from '../core/systemCapabilities.js'
 import { projectGraph } from '../core/projectGraph.js'
-import { setSocket, setMinInterval, sendSceneActivate } from '../core/outboundQueue.js'
+import { setSocket, setMinInterval, sendSceneActivate, sendDiscoverySubscribe } from '../core/outboundQueue.js'
 import { connect } from '../core/socket.js'
 import { applyIntentLockFromHub } from '../core/intentLockRegistry.js'
 import {
@@ -16,6 +16,7 @@ import { initPaneHostResize } from './paneHostResize.js'
 import { initRouter, navigateTo } from './router.js'
 import * as statusDisplay from './statusDisplay.js'
 import { keyboardManager } from '../core/KeyboardManager.js'
+import { applyDiscoverySnapshot, applyDiscoveryDelta } from '../plugins/discoveryRegistry.js'
 
 async function main () {
   const cfg = await loadConfig()
@@ -152,6 +153,7 @@ async function main () {
         })
       )
       resubscribeAll()
+      sendDiscoverySubscribe()
       statusDisplay.info(
         'registered as controller - waiting for config...',
         'connection'
@@ -245,6 +247,17 @@ async function main () {
         }
         case 'binding:value': {
           applyBindingValue(message.payload)
+          break
+        }
+        case 'discovery:snapshot': {
+          const p = /** @type {Record<string, unknown>} */ (message.payload ?? {})
+          applyDiscoverySnapshot(p.entries)
+          projectGraph.touchDiscovery()
+          break
+        }
+        case 'discovery:delta': {
+          applyDiscoveryDelta(message.payload)
+          projectGraph.touchDiscovery()
           break
         }
       }

@@ -64,6 +64,10 @@ export class HubSocket {
     return this.send('runtime:command', command);
   }
 
+  sendGraphCommand(payload: Record<string, unknown>): boolean {
+    return this.send('graph:command', payload);
+  }
+
   private send(type: string, payload: unknown): boolean {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
     this.ws.send(JSON.stringify({ message: { type, payload } }));
@@ -116,6 +120,7 @@ export class HubSocket {
       role: 'controller',
       guid: this.config.guid,
       scope: [],
+      discovery: this.config.discovery,
     });
     if (ok) this.handlers.onRegistered?.();
   }

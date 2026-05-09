@@ -190,6 +190,13 @@ export function sendAnimationEdit (animationGuid, on) {
  * @param {string} actionGuid
  * @param {Record<string, unknown>=} args
  */
+export function sendDiscoverySubscribe () {
+  if (!activeWs || activeWs.readyState !== WebSocket.OPEN) return
+  activeWs.send(JSON.stringify({
+    message: { type: 'discovery:subscribe', payload: {} }
+  }))
+}
+
 export function sendActionTrigger (actionGuid, args) {
   if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation)
     return

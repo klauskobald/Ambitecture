@@ -6,8 +6,10 @@
 import { projectGraph } from '../core/projectGraph.js'
 import { createPerformControlPanel } from './performControlPanel.js'
 import { createPerformAnimatePanel } from './performAnimatePanel.js'
+import { getResolvedPerformPlugins } from '../plugins/pluginRegistry.js'
+import { postThemeToIframe } from '../plugins/themeToIframe.js'
 
-/** @typedef {'control' | 'animate'} PerformSubpaneId */
+/** @typedef {'control' | 'animate' | string} PerformSubpaneId */
 
 export class PerformSubnavShell {
   constructor () {
@@ -52,11 +54,16 @@ export class PerformSubnavShell {
     this._linkAnimate.dataset.subpane = 'animate'
     this._linkAnimate.textContent = 'Animate'
 
+    this._pluginNavMount = document.createElement('span')
+    this._pluginNavMount.className = 'perform-subnav-plugins'
+    this._pluginNavMount.setAttribute('aria-hidden', 'false')
+
     this._subnav.appendChild(this._subnavToggle)
     this._subnav.appendChild(this._filterChip)
     this._subnav.appendChild(subnavFill)
     this._subnav.appendChild(this._linkControl)
     this._subnav.appendChild(this._linkAnimate)
+    this._subnav.appendChild(this._pluginNavMount)
 
     this._subpanes = document.createElement('div')
     this._subpanes.className = 'perform-subpanes'
@@ -83,11 +90,18 @@ export class PerformSubnavShell {
     this._subpanes.appendChild(this._controlPanel)
     this._subpanes.appendChild(this._animatePanel)
 
+    this._pluginPaneMount = document.createElement('div')
+    this._pluginPaneMount.className = 'perform-subpanes-plugins'
+    this._subpanes.appendChild(this._pluginPaneMount)
+
     this._shell.appendChild(this._subnav)
     this._shell.appendChild(this._subpanes)
 
     /** @type {PerformSubpaneId} */
     this._activeSubpane = 'control'
+
+    /** @type {Map<string, { link: HTMLAnchorElement, panel: HTMLElement, iframe: HTMLIFrameElement | null, offline: HTMLElement }>} */
+    this._pluginSlots = new Map()
 
     this._subnavToggle.addEventListener('click', () => {
       const isOpen = this._subnav.classList.toggle('perform-subnav--open')
@@ -105,6 +119,76 @@ export class PerformSubnavShell {
         this.setSubpane(id)
       })
     }
+
+    this._rebuildPluginSlots()
+  }
+
+  /** Re-read project `plugins` + hub discovery; rebuild perform plugin tabs and panels. */
+  refreshPerformPlugins () {
+    this._rebuildPluginSlots()
+  }
+
+  _rebuildPluginSlots () {
+    const prevActive = this._activeSubpane
+    for (const el of this._pluginNavMount.querySelectorAll('[data-plugin-nav]')) {
+      el.remove()
+    }
+    for (const el of this._pluginPaneMount.querySelectorAll('[data-plugin-panel]')) {
+      el.remove()
+    }
+    this._pluginSlots.clear()
+
+    const plugins = getResolvedPerformPlugins()
+    for (const p of plugins) {
+      const link = document.createElement('a')
+      link.className = 'nav-link'
+      link.href = `#perform-plugin-${p.pluginGuid}`
+      link.dataset.pluginNav = p.pluginGuid
+      link.textContent = p.name
+      if (!p.available) link.classList.add('nav-link--muted')
+      link.addEventListener('click', ev => {
+        ev.preventDefault()
+        this._subnav.classList.remove('perform-subnav--open')
+        this._subnavToggle.setAttribute('aria-expanded', 'false')
+        this.setSubpane(p.pluginGuid)
+      })
+      this._pluginNavMount.appendChild(link)
+
+      const panel = document.createElement('div')
+      panel.className = 'perform-subpane perform-subpane--plugin'
+      panel.dataset.pluginPanel = p.pluginGuid
+      panel.hidden = true
+
+      const offline = document.createElement('div')
+      offline.className = 'perform-plugin-offline'
+      offline.textContent =
+        'Plugin provider is offline — start the controller or check discovery.'
+      offline.hidden = p.available
+
+      let iframe = null
+      if (p.available) {
+        iframe = document.createElement('iframe')
+        iframe.className = 'perform-plugin-iframe'
+        iframe.title = p.name
+        iframe.sandbox.add('allow-scripts')
+        iframe.sandbox.add('allow-same-origin')
+        iframe.addEventListener('load', () => {
+          if (iframe) postThemeToIframe(iframe)
+        })
+      }
+
+      panel.appendChild(offline)
+      if (iframe) panel.appendChild(iframe)
+      this._pluginPaneMount.appendChild(panel)
+      this._pluginSlots.set(p.pluginGuid, { link, panel, iframe, offline })
+    }
+
+    const stillValid =
+      prevActive === 'control' ||
+      prevActive === 'animate' ||
+      this._pluginSlots.has(prevActive)
+    if (!stillValid) this._activeSubpane = 'control'
+    this.setSubpane(this._activeSubpane)
   }
 
   /** @returns {HTMLElement} */
@@ -126,6 +210,16 @@ export class PerformSubnavShell {
     this._linkAnimate.classList.toggle('nav-link--active', id === 'animate')
     this._controlPanel.hidden = id !== 'control'
     this._animatePanel.hidden = id !== 'animate'
+
+    for (const [guid, slot] of this._pluginSlots) {
+      const active = id === guid
+      slot.link.classList.toggle('nav-link--active', active)
+      slot.panel.hidden = !active
+      if (active && slot.iframe && !slot.iframe.src) {
+        const meta = getResolvedPerformPlugins().find(x => x.pluginGuid === guid)
+        if (meta?.iframeUrl) slot.iframe.src = meta.iframeUrl
+      }
+    }
   }
 
   syncSubpaneFromState () {

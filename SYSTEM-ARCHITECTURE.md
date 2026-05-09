@@ -18,7 +18,9 @@ The hub is the **single source of truth** for system-wide configuration and grap
 - **`src/Logger.ts`** — Shared logging.
 - **`src/Server.ts`** — HTTP server + WebSocket server (`perMessageDeflate` enabled, heartbeat ping/pong supervision).
 - **`src/MessageRouter.ts`** — Message dispatch by `message.type`.
-- **`src/handlers/RegisterHandler.ts`** — Accepts `register`, stores module identity/metadata, pushes `config` and `systemCapabilities` to renderers/controllers, and pushes `graph:init` to controllers.
+- **`src/handlers/RegisterHandler.ts`** — Accepts `register`, stores module identity/metadata, pushes `config` and `systemCapabilities` to renderers/controllers, and pushes `graph:init` to controllers. Controllers may include an optional **`discovery`** object on the register payload; see **`DiscoveryService`** below.
+- **`src/DiscoveryService.ts`** — In-memory map of **plugin UI advertisements** keyed by controller `guid`. Upserted when a controller registers with `discovery: { interfaces: { [interfaceId]: { ui?: { kind, url }, ws?: { kind, url } } } } }`, removed when that socket disconnects. Broadcasts **`discovery:delta`** (`op: upsert` with `entry`, or `op: remove` with `controllerGuid`) to all subscribers.
+- **`src/handlers/DiscoveryHandler.ts`** — Handles **`discovery:subscribe`** (controllers only). Replies with **`discovery:snapshot`** `{ entries: DiscoveryEntry[] }` containing the full current map.
 - **`src/GraphProtocol.ts`** — Defines the open graph command/delta/init protocol used by controllers and the hub.
 - **`src/BindingProtocol.ts`** — Defines the `binding:subscribe` / `binding:set` / `binding:value` message shapes used to wire controller UI to live hub-owned values (animation timescale, edit-mode keyframe step, etc.).
 - **`src/dotPath.ts`** — Hub-local dot-key helper for graph patches such as `params.color`. Provides `readAtDotPath` / `setAtDotPath` / `removeAtDotPath` / `applyDotPathPatch` / `diffRecordsToPatch` / `cloneRecord`. Use these for reading, setting, removing, diffing, and applying dot-path patches instead of reimplementing `split('.')` traversal. Supports nested objects only (arrays addressed by stable `guid`, not by index).
@@ -156,10 +158,20 @@ Renderer data authority model:
 **Perform pane subnav (`src/panes/`):**
 
 - **performPane.js** — top-level Perform orchestrator. Mounts the perform HUD, scene buttons, perform buttons, and the **performSubnavShell** for the lower section.
-- **performSubnavShell.js** — nested navigation between **Control** and **Animate** subpanes inside Perform. Lazy-mounts each subpane, lifecycle parallel to the top-level router.
+- **performSubnavShell.js** — nested navigation between **Control**, **Animate**, and optional **plugin** subpanes inside Perform (see **Plugin UI panels** below).
 - **performControlPanel.js** — Control subpane: scene activation buttons, perform buttons, system status.
 - **performAnimatePanel.js** — Animate subpane: list of project animations with play / stop / pause / open-edit controls. Subscribes to `animationPlayRegistry`.
 - **performAnimateEditPane.js** — Per-animation edit overlay. Uses an `AnimatorViewer` for the animation's class and the `bindingRegistry` to mirror timescale and keyframe step state from the hub.
+
+**Plugin UI panels (headless controllers → surface-v1 Perform):**
+
+- **Project YAML** — On the **surface** controller row, optional **`plugins`** array. Each item: **`guid`**, **`name`**, **`provider`: `{ guid, interface }`** (hub-registered controller guid + interface id matching that provider’s discovery map), **`context`: `{ pane: perform, type: panel }`**. URLs are **not** duplicated in YAML; the browser resolves them from the hub discovery feed.
+- **Hub protocol** — After **`register`**, a client sends **`discovery:subscribe`** → **`discovery:snapshot`**. Further changes arrive as **`discovery:delta`**. The hub does not proxy plugin iframe/WebSocket traffic.
+- **`src/plugins/discoveryRegistry.js`** — Client-side map updated from snapshot/delta.
+- **`src/plugins/pluginRegistry.js`** — **`getResolvedPerformPlugins()`** merges `projectGraph.getControllerPlugins()` with discovery for iframe URLs and online/offline.
+- **`src/plugins/themeToIframe.js`** — After iframe `load`, parent posts `{ type: 'theme', vars }` (`--color-*`, `--space-*`, `--radius-*` from `getComputedStyle`) so child UIs can match `theme.css`.
+
+**`controllers/midi-v1/`** — Headless MIDI controller: **`graph:init` / `graph:delta`** drive **`GraphReplica`** assignments → receivers; **`graph:command`** `patch` on its own controller guid persists assignment edits from the plugin UI. Runs a small **HTTP + WebSocket** server (`PluginServer`, static `ui/assign.html`) for the assign editor; **`register`** includes **`discovery`** built from **`PLUGIN_PUBLIC_HOST`** + **`PLUGIN_LISTEN_PORT`**. The iframe connects to **`/ws`** on that server for live state (trusted LAN).
 
 **Animator viewers (`src/panes/animators/`):**
 

@@ -44,6 +44,7 @@ import {
  *   'inputs' |
  *   'animations' |
  *   'controller' |
+ *   'discovery' (hub plugin UI advertisements; no graph mutation) |
  *   'runtimeOverlayHints' |
  *   'project'
  * )} ProjectGraphTopic
@@ -1057,6 +1058,17 @@ class ProjectGraph {
   /** @returns {Array<{ guid: string }>} copy for hub patch */
   getControllerIntentRefs () {
     return this._data.controller.intentRefs.map(r => ({ guid: r.guid }))
+  }
+
+  /** @returns {unknown[]} project `plugins` rows for this controller (from hub `controllerState`). */
+  getControllerPlugins () {
+    const raw = this._data.controller.state.plugins
+    return Array.isArray(raw) ? raw : []
+  }
+
+  /** Wake subscribers after `discovery:*` hub messages (plugins resolve iframe URLs). */
+  touchDiscovery () {
+    this._notify('discovery')
   }
 
   /**

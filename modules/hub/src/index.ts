@@ -26,6 +26,8 @@ import { AnimationManager } from './animation/AnimationManager';
 import { BindingManager } from './BindingManager';
 import { BindingHandler } from './handlers/BindingHandler';
 import { AnimationEditHandler } from './handlers/AnimationEditHandler';
+import { DiscoveryService } from './DiscoveryService';
+import { DiscoveryHandler } from './handlers/DiscoveryHandler';
 
 const serverConfig = new Config('server');
 const systemConfig = new Config('system', true);
@@ -42,6 +44,7 @@ const actionInputManager = new ActionInputManager(
 );
 
 const registry = new ConnectionRegistry();
+const discoveryService = new DiscoveryService();
 const router = new MessageRouter(registry);
 const rateLimitEventsPerSecond = serverConfig.get<number>('rateLimitEventsPerSecond');
 statsTool.setup({});
@@ -261,7 +264,8 @@ const publishGraphMutation = (source: import('ws').WebSocket, result: GraphMutat
   }
 };
 
-router.register('register', new RegisterHandler(registry, graphStore, rateLimitEventsPerSecond, systemConfig));
+router.register('register', new RegisterHandler(registry, graphStore, rateLimitEventsPerSecond, systemConfig, discoveryService));
+router.register('discovery:subscribe', new DiscoveryHandler(discoveryService));
 router.register('graph:command', new GraphCommandHandler(registry, graphStore, publishGraphMutation));
 router.register('runtime:command', new RuntimeCommandHandler(registry, runtimeUpdateDispatcher, rateLimitEventsPerSecond));
 const actionHandler = new ActionHandler(
@@ -291,7 +295,10 @@ graphStore.useProject(serverConfig.get<string>('defaultProject'), () => {
 });
 
 const server = new Server(registry, router);
-server.addDisconnectHook(ws => bindingManager.onSocketClosed(ws));
+server.addDisconnectHook(ws => {
+  discoveryService.onSocketClosed(ws);
+  bindingManager.onSocketClosed(ws);
+});
 server.listen(port, host);
 
 Logger.info(`Hub listening on ${host}:${port}`);

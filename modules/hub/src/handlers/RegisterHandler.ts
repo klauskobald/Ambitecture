@@ -6,6 +6,7 @@ import { MessageHandler, WsMessage } from '../MessageRouter';
 import { ProjectGraphStore } from '../ProjectGraphStore';
 import { KeyframeAnimator } from '../animation/keyframeAnimator';
 import { recordRendererEventDeliveries } from '../hubWebSocketStats';
+import { DiscoveryService, parseDiscoveryFromRegisterPayload } from '../DiscoveryService';
 
 interface RegisterPayload {
   role: 'renderer' | 'controller';
@@ -28,12 +29,20 @@ export class RegisterHandler implements MessageHandler {
   private graphStore: ProjectGraphStore;
   private rateLimitEventsPerSecond: number;
   private systemConfig: Config;
+  private discovery: DiscoveryService;
 
-  constructor(registry: ConnectionRegistry, graphStore: ProjectGraphStore, rateLimitEventsPerSecond: number, systemConfig: Config) {
+  constructor(
+    registry: ConnectionRegistry,
+    graphStore: ProjectGraphStore,
+    rateLimitEventsPerSecond: number,
+    systemConfig: Config,
+    discovery: DiscoveryService,
+  ) {
     this.registry = registry;
     this.graphStore = graphStore;
     this.rateLimitEventsPerSecond = rateLimitEventsPerSecond;
     this.systemConfig = systemConfig;
+    this.discovery = discovery;
   }
 
   handle(ws: WebSocket, message: WsMessage, _registry: ConnectionRegistry): void {
@@ -59,6 +68,13 @@ export class RegisterHandler implements MessageHandler {
 
     this.registry.update(ws, update);
     Logger.info(`[register] ${role} ${guid}`);
+
+    if (role === 'controller') {
+      const discoveryEntry = parseDiscoveryFromRegisterPayload(message.payload);
+      if (discoveryEntry) {
+        this.discovery.onControllerRegistered(ws, discoveryEntry);
+      }
+    }
 
     if (ws.readyState !== ws.OPEN) {
       return;

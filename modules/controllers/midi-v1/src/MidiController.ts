@@ -1,21 +1,33 @@
+import path from 'path';
 import { MidiV1Config } from './Config';
 import { Logger } from './Logger';
 import { MidiManager, MidiCcEvent, MidiNoteEvent } from './MidiManager';
 import { HubSocket, RuntimeCommand, WsMessage } from './HubSocket';
-import { GraphReplica, AssignmentsChangedReason, AssignmentRecord, TargetRecord } from './GraphReplica';
+import {
+  GraphReplica,
+  AssignmentsChangedReason,
+  AssignmentRecord,
+  TargetRecord,
+  normalizeAssignmentsInput,
+} from './GraphReplica';
 import { ReceiverBase } from './receivers/ReceiverBase';
 import { ReceiverNoteAndControl } from './receivers/ReceiverNoteAndControl';
 import { TargetBase } from './targets/TargetBase';
 import { TargetIntent } from './targets/TargetIntent';
+import { PluginServer } from './PluginServer';
 
 export class MidiController {
+  private readonly config: MidiV1Config;
   private readonly logger: Logger;
   private readonly graph: GraphReplica;
   private readonly socket: HubSocket;
   private readonly midi: MidiManager;
+  private readonly pluginServer: PluginServer;
   private receivers: ReceiverBase[] = [];
+  private learn: { assignmentGuid: string; field: string } | null = null;
 
   constructor(config: MidiV1Config, logger: Logger) {
+    this.config = config;
     this.logger = logger;
 
     this.graph = new GraphReplica(config.guid, logger, reason => this.rebuildReceivers(reason));
@@ -36,14 +48,25 @@ export class MidiController {
       onNoteOff:       (_n, e) => this.dispatchNoteOff(e),
       onControlChange: (_n, e) => this.dispatchCc(e),
     });
+
+    this.pluginServer = new PluginServer(config.pluginServer, {
+      getAssignments: () => this.graph.getAssignments(),
+      onSave: arr => this.persistAssignmentsFromUi(arr),
+      onLearnStart: (assignmentGuid, field) => {
+        this.learn = { assignmentGuid, field };
+        this.logger.info(`MIDI learn armed (${field}) for ${assignmentGuid}`);
+      },
+    }, logger);
   }
 
   start(): void {
     this.socket.connect();
     this.midi.start();
+    this.pluginServer.start(path.join(__dirname, '../ui'));
   }
 
   stop(): void {
+    this.pluginServer.stop();
     this.midi.stop();
     this.socket.disconnect();
     this.receivers = [];
@@ -68,6 +91,39 @@ export class MidiController {
     this.receivers = next;
     this.logger.info(`assignments rebuilt (${reason}): ${next.length} receiver(s)`);
     for (const r of next) this.logger.info(`  ${r.describe()}`);
+    this.pluginServer.pushState();
+  }
+
+  private persistAssignmentsFromUi(raw: unknown[]): void {
+    const next = normalizeAssignmentsInput(raw);
+    if (next.length !== raw.length) {
+      this.logger.warn('save rejected: one or more invalid assignments');
+      return;
+    }
+    const patchList = next.map(a => this.assignmentToPatch(a));
+    const sent = this.socket.sendGraphCommand({
+      op: 'patch',
+      entityType: 'controller',
+      guid: this.config.guid,
+      patch: { assignments: patchList },
+      persistence: 'runtimeAndDurable',
+    });
+    if (!sent) {
+      this.logger.warn('graph:command save dropped (hub socket not open)');
+      return;
+    }
+    this.graph.applyLocalAssignments(next);
+    this.pluginServer.pushState();
+  }
+
+  private assignmentToPatch(a: AssignmentRecord): Record<string, unknown> {
+    return {
+      class: a.class,
+      guid: a.guid,
+      channel: a.channel,
+      params: { ...a.params },
+      targets: a.targets.map(t => ({ ...t })),
+    };
   }
 
   private buildReceiver(assignment: AssignmentRecord, targets: TargetBase[]): ReceiverBase | null {
@@ -105,6 +161,12 @@ export class MidiController {
   }
 
   private dispatchNoteOn(e: MidiNoteEvent): void {
+    const pending = this.learn;
+    if (pending !== null && pending.field === 'note') {
+      this.learn = null;
+      this.pluginServer.sendLearnResult(pending.assignmentGuid, 'note', e.note);
+      return;
+    }
     for (const r of this.receivers) r.handleNoteOn(e);
   }
 

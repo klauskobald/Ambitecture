@@ -12,7 +12,7 @@ export class EventQueue {
 
   schedule(entries: ScheduledEvent[], location?: [number, number]): void {
     if (entries.length > 0) {
-      Logger.info(`[queue] ${entries.length} incoming event(s)`);
+      // Logger.info(`[queue] ${entries.length} incoming event(s)`);
     }
 
     const groups = new Map<number, object[]>();

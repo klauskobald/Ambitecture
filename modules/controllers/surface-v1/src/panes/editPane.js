@@ -293,7 +293,7 @@ export class EditPane {
 
       const title = document.createElement('p')
       title.className = 'modal-text'
-      title.textContent = 'Drag rows to set Perform button order'
+      title.textContent = 'Drag the grip on each row to set Perform button order'
 
       const listHost = document.createElement('div')
       listHost.className = 'perform-sort-list'

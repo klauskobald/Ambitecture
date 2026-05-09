@@ -127,7 +127,9 @@ export class PerformPane {
       const isActive = highlightedInputGuid !== '' && guid === highlightedInputGuid
       button.classList.toggle('btn--active', isActive)
 
-      if (button.parentNode !== mount) mount.appendChild(button)
+      // Always append in sorted order: appendChild moves an existing child to the end,
+      // so DOM order tracks _sortIdx after reorder (not only on first mount).
+      mount.appendChild(button)
     }
 
     for (const [guid, button] of this._buttonByGuid) {

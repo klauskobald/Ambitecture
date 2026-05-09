@@ -89,8 +89,61 @@ export class ArraySorter {
     normalizeUndefinedSortKeys(ordered, key)
     renumberSortKeysContiguous(ordered, key)
     onReorder(ordered)
-    /** @type {{ pointerId: number, fromIndex: number, item: Record<string, unknown>, row: HTMLElement, ghost: HTMLElement | null, dx: number, dy: number } | null} */
+    /** @type {{ pointerId: number, fromIndex: number, item: Record<string, unknown>, row: HTMLElement, handle: HTMLButtonElement, ghost: HTMLElement | null, dx: number, dy: number, lastClientX: number, lastClientY: number } | null} */
     let dragState = null
+    /** @type {number} */
+    let edgeScrollRaf = 0
+    /**
+     * Scroll speed per frame when the pointer is past the host's top/bottom edge (px).
+     * Slow near the edge, ramps up with distance (quadratic + small linear term).
+     * @param {number} overPx
+     */
+    const scrollStepForOverhang = (overPx) => {
+      const o = Math.max(0, overPx)
+      const minStep = 0.55
+      const linear = 0.12
+      const quad = 0.038
+      const maxStep = 50
+      return Math.min(maxStep, minStep + linear * o + quad * o * o)
+    }
+    const cancelEdgeScroll = () => {
+      if (edgeScrollRaf !== 0) {
+        cancelAnimationFrame(edgeScrollRaf)
+        edgeScrollRaf = 0
+      }
+    }
+    const edgeScrollLoop = () => {
+      edgeScrollRaf = 0
+      if (!dragState) return
+      const { lastClientX, lastClientY } = dragState
+      const rect = host.getBoundingClientRect()
+      let delta = 0
+      if (lastClientY < rect.top) {
+        delta = -scrollStepForOverhang(rect.top - lastClientY)
+      } else if (lastClientY > rect.bottom) {
+        delta = scrollStepForOverhang(lastClientY - rect.bottom)
+      }
+      if (delta !== 0) {
+        const maxScroll = Math.max(0, host.scrollHeight - host.clientHeight)
+        host.scrollTop = Math.max(0, Math.min(maxScroll, host.scrollTop + delta))
+      }
+      updateGhostPosition(lastClientX, lastClientY)
+      applyDropMarker(lastClientX, lastClientY)
+      const stillOutside = lastClientY < rect.top || lastClientY > rect.bottom
+      if (dragState && stillOutside) {
+        edgeScrollRaf = requestAnimationFrame(edgeScrollLoop)
+      }
+    }
+    const syncEdgeScroll = () => {
+      if (!dragState) return
+      const { lastClientY } = dragState
+      const rect = host.getBoundingClientRect()
+      const outside = lastClientY < rect.top || lastClientY > rect.bottom
+      if (outside && edgeScrollRaf === 0) {
+        edgeScrollRaf = requestAnimationFrame(edgeScrollLoop)
+      }
+      if (!outside) cancelEdgeScroll()
+    }
     const clearDropMarkers = () => {
       for (const node of host.querySelectorAll('.array-sort-row')) {
         node.classList.remove('array-sort-row--drop-before', 'array-sort-row--drop-after')
@@ -127,6 +180,7 @@ export class ArraySorter {
     }
     const finalizeDrag = (clientX, clientY) => {
       if (!dragState) return
+      cancelEdgeScroll()
       const { fromIndex, row, item } = dragState
       const target = resolveDropTarget(clientX, clientY)
       row.classList.remove('array-sort-row--dragging')
@@ -153,7 +207,12 @@ export class ArraySorter {
         row.className = 'array-sort-row'
         row.dataset.index = String(index)
 
-        row.addEventListener('pointerdown', e => {
+        const handle = document.createElement('button')
+        handle.type = 'button'
+        handle.className = 'array-sort-row__handle'
+        handle.setAttribute('aria-label', 'Drag to reorder')
+
+        handle.addEventListener('pointerdown', e => {
           if (e.button !== 0) return
           if (dragState) return
           e.preventDefault()
@@ -167,42 +226,49 @@ export class ArraySorter {
             document.body.appendChild(ghost)
           }
           row.classList.add('array-sort-row--dragging')
-          row.setPointerCapture?.(e.pointerId)
+          handle.setPointerCapture?.(e.pointerId)
           dragState = {
             pointerId: e.pointerId,
             fromIndex: index,
             item,
             row,
+            handle,
             ghost: ghost instanceof HTMLElement ? ghost : null,
             dx: e.clientX - rect.left,
             dy: e.clientY - rect.top,
+            lastClientX: e.clientX,
+            lastClientY: e.clientY,
           }
           updateGhostPosition(e.clientX, e.clientY)
           callbackLifecycle(item, 'willBeDragged')
         })
 
-        row.addEventListener('pointermove', e => {
+        handle.addEventListener('pointermove', e => {
           if (!dragState || dragState.pointerId !== e.pointerId) return
           e.preventDefault()
+          dragState.lastClientX = e.clientX
+          dragState.lastClientY = e.clientY
           updateGhostPosition(e.clientX, e.clientY)
           applyDropMarker(e.clientX, e.clientY)
+          syncEdgeScroll()
         })
 
-        row.addEventListener('pointerup', e => {
+        handle.addEventListener('pointerup', e => {
           if (!dragState || dragState.pointerId !== e.pointerId) return
           e.preventDefault()
-          if (row.hasPointerCapture?.(e.pointerId)) row.releasePointerCapture(e.pointerId)
+          if (handle.hasPointerCapture?.(e.pointerId)) handle.releasePointerCapture(e.pointerId)
           finalizeDrag(e.clientX, e.clientY)
         })
 
-        row.addEventListener('pointercancel', e => {
+        handle.addEventListener('pointercancel', e => {
           if (!dragState || dragState.pointerId !== e.pointerId) return
-          if (row.hasPointerCapture?.(e.pointerId)) row.releasePointerCapture(e.pointerId)
+          if (handle.hasPointerCapture?.(e.pointerId)) handle.releasePointerCapture(e.pointerId)
           finalizeDrag(e.clientX, e.clientY)
         })
 
         const inner = callbackDisplay(item)
         row.appendChild(inner)
+        row.appendChild(handle)
         host.appendChild(row)
       })
     }

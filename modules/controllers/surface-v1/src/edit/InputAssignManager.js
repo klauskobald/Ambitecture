@@ -44,14 +44,15 @@ export class InputAssignManager {
   }
 
   /**
-   * Inline assign toggle + label (target-agnostic). Caller supplies CSS class names for layout.
+   * Inline assign row (target-agnostic): fixed "Input" toggle + assigned input name in grey when set.
+   * Unassigned: no placeholder beside the button (name span hidden / empty).
    * @param {{ rowClass?: string, toggleClass?: string, labelClass?: string }} [opts]
    * @returns {HTMLElement}
    */
   getInlinePane (opts = {}) {
     const rowClass = opts.rowClass ?? 'input-assign-inline-row'
     const toggleClass = opts.toggleClass ?? 'intent-toggle'
-    const labelClass = opts.labelClass ?? 'btn input-assign-inline-label'
+    const extraLabelClass = opts.labelClass ?? ''
 
     const row = document.createElement('div')
     const toggle = document.createElement('button')
@@ -75,8 +76,16 @@ export class InputAssignManager {
         ? `${toggleClass} intent-toggle--enabled`.trim()
         : toggleClass
       toggle.textContent = 'Input'
-      label.className = labelClass
-      label.textContent = String(input?.name ?? this._labelDefault)
+      const rawName = input?.name
+      const name =
+        typeof rawName === 'string' && rawName.trim().length > 0
+          ? rawName.trim()
+          : ''
+      label.className = ['input-assign-inline-assigned-name', extraLabelClass]
+        .filter(Boolean)
+        .join(' ')
+      label.textContent = name
+      label.hidden = !name
     }
 
     sync()
@@ -182,7 +191,11 @@ export class InputAssignManager {
       cancel: 'Cancel',
       selected,
       displayRowFn: (row, option, helpers) => {
-        if (option.value === createChoiceValue || option.value === removeChoiceValue) return
+        if (
+          option.value === createChoiceValue ||
+          option.value === removeChoiceValue
+        )
+          return
         row.style.display = 'flex'
         row.style.alignItems = 'center'
         row.style.gap = '8px'
@@ -191,18 +204,22 @@ export class InputAssignManager {
         helpers.button.style.width = 'auto'
         const editBtn = document.createElement('button')
         editBtn.type = 'button'
-        editBtn.className = 'btn'
+        editBtn.className =
+          'input-assign-inline-icon-btn input-assign-inline-icon-btn--edit'
         editBtn.style.flex = '0 0 auto'
-        editBtn.textContent = 'Edit'
+        editBtn.textContent = '✎'
+        editBtn.setAttribute('aria-label', 'Edit')
         editBtn.addEventListener('click', e => {
           e.stopPropagation()
           helpers.dismiss(`__edit__:${option.value}`)
         })
         const deleteBtn = document.createElement('button')
         deleteBtn.type = 'button'
-        deleteBtn.className = 'btn btn--danger'
+        deleteBtn.className =
+          'input-assign-inline-icon-btn input-assign-inline-icon-btn--delete'
         deleteBtn.style.flex = '0 0 auto'
-        deleteBtn.textContent = 'Delete'
+        deleteBtn.textContent = '❌'
+        deleteBtn.setAttribute('aria-label', 'Delete')
         deleteBtn.addEventListener('click', e => {
           e.stopPropagation()
           helpers.dismiss(`__delete__:${option.value}`)
@@ -296,7 +313,10 @@ export class InputAssignManager {
             : guid
         return { guid, name }
       })
-      .filter(/** @returns {row is { guid: string, name: string }} */ row => row !== null)
+      .filter(
+        /** @returns {row is { guid: string, name: string }} */ row =>
+          row !== null
+      )
       .sort((a, b) => a.name.localeCompare(b.name))
   }
 
@@ -321,7 +341,8 @@ export class InputAssignManager {
     if (!name) return
     const defaults = resolveDefaultPerformTypes()
     const type = defaults?.type ?? inputTypes[0]?.class ?? 'button'
-    const displayType = defaults?.displayType ?? displayTypes[0]?.class ?? 'button'
+    const displayType =
+      defaults?.displayType ?? displayTypes[0]?.class ?? 'button'
     sendActionInputCommand({
       command: 'ensureInputAssignment',
       targetType: this._contextType,

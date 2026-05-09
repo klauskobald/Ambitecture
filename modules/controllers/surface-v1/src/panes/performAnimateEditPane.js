@@ -83,7 +83,7 @@ export function createAnimationEditPane ({ onClose }) {
       iam.getInlinePane({
         rowClass: 'scene-perform-row',
         toggleClass: 'intent-toggle scene-perform-button',
-        labelClass: 'btn scene-perform-label'
+        labelClass: 'scene-perform-label'
       })
     )
   }

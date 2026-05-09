@@ -176,6 +176,24 @@ export interface Zone {
   fixtures: FixtureInstance[];
 }
 
+/**
+ * Runner `action` row shares the animation guid; single execute item runs that animation.
+ * Matches controller `companionAnimationRunnerAction` / hub `ProjectGraphStore.applyAnimationCommand`.
+ */
+function isCompanionAnimationRunnerAction(
+  action: ActionDefinition,
+  animationGuid: string,
+): boolean {
+  const actionGuid = typeof action.guid === 'string' ? action.guid : '';
+  if (actionGuid !== animationGuid) return false;
+  const execute = action.execute;
+  if (!Array.isArray(execute) || execute.length !== 1) return false;
+  const item = execute[0];
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+  const record = item as Record<string, unknown>;
+  return record['type'] === 'animation' && record['guid'] === animationGuid;
+}
+
 interface Project {
   name: string;
   'zone-to-renderer': Record<string, string[]>;
@@ -229,6 +247,7 @@ export class ProjectManager {
 
     this._rebuildIntentDefinitions(this.project.intents ?? []);
     const createdGuids = this._ensureGraphGuids();
+    const ensuredCompanions = this._ensureAnimationCompanionActions();
 
     // Auto-create "untitled" scene if intents exist but no scenes defined
     if ((!this.project.scenes || this.project.scenes.length === 0) && (this.project.intents ?? []).length > 0) {
@@ -252,9 +271,51 @@ export class ProjectManager {
     }));
 
     Logger.info(`[project] loaded "${this.project.name}" with ${this.project.zones.length} zone(s), ${this.intentDefinitions.size} intent(s), ${(this.project.scenes ?? []).length} scene(s)`);
-    if (createdGuids) {
+    if (createdGuids || ensuredCompanions) {
       this._scheduleSave();
     }
+  }
+
+  /**
+   * YAML or hand-edited projects may list `animations` without the paired runner `action` rows
+   * the UI creates via graph commands. Without them, controllers hide animations from the perform list.
+   */
+  private _ensureAnimationCompanionActions(): boolean {
+    if (!this.project) return false;
+    const anims = this.project.animations ?? [];
+    if (anims.length === 0) return false;
+    const actions = [...(this.project.actions ?? [])];
+    let changed = false;
+    for (const anim of anims) {
+      const guid = typeof anim.guid === 'string' ? anim.guid : '';
+      if (!guid) continue;
+      const animName =
+        typeof anim.name === 'string' && anim.name.length > 0 ? anim.name : guid;
+      const idx = actions.findIndex(a => a.guid === guid);
+      const existing = idx >= 0 ? actions[idx] : undefined;
+      if (existing !== undefined && isCompanionAnimationRunnerAction(existing, guid)) {
+        continue;
+      }
+      const existingName =
+        typeof existing?.name === 'string' ? existing.name.trim() : '';
+      const companionName =
+        existingName.length > 0 ? existingName : `Run ${animName}`;
+      const companion: ActionDefinition = {
+        guid,
+        name: companionName,
+        execute: [{ type: 'animation', guid }],
+      };
+      if (idx >= 0) {
+        actions[idx] = companion;
+      } else {
+        actions.push(companion);
+      }
+      changed = true;
+    }
+    if (changed) {
+      this.project.actions = actions;
+    }
+    return changed;
   }
 
   private _ensureGraphGuids(): boolean {

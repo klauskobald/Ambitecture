@@ -5,13 +5,15 @@ export interface StatsToolOptions {
 }
 
 interface KeyState {
+  acc: number;
   value: number;
+  readout: number;
   multiplier: number;
 }
 
 const defaultOptions: Required<StatsToolOptions> = {
   emaK: 1,
-  displayInterval: 1,
+  displayInterval: 5,
   displayFn: (v) => {
     const str = []
     for (const [label, n] of Object.entries(v)) {
@@ -51,15 +53,18 @@ class StatsTool {
   sample(key: string, value: number, multiplier: number = 1): void {
     let state = this.perKey.get(key);
     if (state === undefined) {
-      state = { value: 0, multiplier };
+      state = { value: 0, multiplier, acc: 0, readout: 0 };
       this.perKey.set(key, state);
     }
-    state.value += value;
+    state.acc += value;
   }
 
   private emitMeter(): void {
     for (const [key, state] of this.perKey) {
+      if (state.acc > state.value) state.value = state.acc;
+      state.readout = state.value;
       state.value *= this.meterReleaseFactor;
+      state.acc = 0;
       this.perKey.set(key, state);
     }
   }

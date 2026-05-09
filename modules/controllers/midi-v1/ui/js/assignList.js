@@ -9,8 +9,8 @@
  * }} opts
  */
 export function createAssignList (opts) {
-  /** @type {HTMLButtonElement | null} */
-  let createBtn = null
+  /** @type {HTMLElement | null} */
+  let listFooter = null
 
   function rowSummary (a) {
     const s = typeof a.summary === 'string' ? a.summary.trim() : ''
@@ -68,16 +68,20 @@ export function createAssignList (opts) {
       listEl.appendChild(li)
     }
 
-    if (!createBtn && opts.listWrap) {
-      const footer = document.createElement('div')
-      footer.className = 'list-footer'
-      createBtn = document.createElement('button')
+    const hasFilter = Boolean(opts.filterIntentGuid)
+    if (!hasFilter && listFooter) {
+      listFooter.remove()
+      listFooter = null
+    } else if (hasFilter && opts.listWrap && !listFooter) {
+      listFooter = document.createElement('div')
+      listFooter.className = 'list-footer'
+      const createBtn = document.createElement('button')
       createBtn.type = 'button'
       createBtn.className = 'btn list-footer__create'
       createBtn.textContent = 'Create'
       createBtn.addEventListener('click', () => opts.onCreate())
-      footer.appendChild(createBtn)
-      opts.listWrap.appendChild(footer)
+      listFooter.appendChild(createBtn)
+      opts.listWrap.appendChild(listFooter)
     }
   }
 

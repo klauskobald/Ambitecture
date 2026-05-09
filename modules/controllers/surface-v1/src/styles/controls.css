@@ -460,12 +460,14 @@
 .perform-subnav-filter {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  width: 1.8rem;
-  height: 1.8rem;
+  justify-content: flex-start;
+  gap: 0.35rem;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(12rem, 42vw);
+  min-height: 1.8rem;
   margin: 0 0.25rem;
-  padding: 0;
+  padding: 0 0.4rem 0 0.3rem;
   border: 1px solid var(--color-accent);
   border-radius: 4px;
   background: var(--color-accent-dim);
@@ -488,6 +490,18 @@
   flex: 0 0 auto;
   width: 0.95rem;
   height: 0.95rem;
+}
+
+.perform-subnav-filter__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .perform-controls {

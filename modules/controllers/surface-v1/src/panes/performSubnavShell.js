@@ -57,10 +57,27 @@ export class PerformSubnavShell {
     this._filterChip.className = 'perform-subnav-filter'
     this._filterChip.hidden = true
     this._filterChip.setAttribute('aria-label', 'Clear intent filter')
-    this._filterChip.innerHTML =
-      '<svg class="perform-subnav-filter__icon" viewBox="0 0 16 16" aria-hidden="true">' +
-      '<path d="M2 3h12l-4.5 5.5V13l-3 1.5V8.5z" fill="currentColor"/>' +
-      '</svg>'
+    const filterIcon = document.createElementNS(
+      'http://www.w3.org/2000/svg',
+      'svg'
+    )
+    filterIcon.setAttribute('class', 'perform-subnav-filter__icon')
+    filterIcon.setAttribute('viewBox', '0 0 16 16')
+    filterIcon.setAttribute('aria-hidden', 'true')
+    const filterPath = document.createElementNS(
+      'http://www.w3.org/2000/svg',
+      'path'
+    )
+    filterPath.setAttribute(
+      'd',
+      'M2 3h12l-4.5 5.5V13l-3 1.5V8.5z'
+    )
+    filterPath.setAttribute('fill', 'currentColor')
+    filterIcon.appendChild(filterPath)
+    this._filterChip.appendChild(filterIcon)
+    this._filterChipLabel = document.createElement('span')
+    this._filterChipLabel.className = 'perform-subnav-filter__label'
+    this._filterChip.appendChild(this._filterChipLabel)
 
     const subnavFill = document.createElement('span')
     subnavFill.className = 'perform-subnav-fill'
@@ -311,6 +328,7 @@ export class PerformSubnavShell {
     )
     const name =
       typeof intent?.name === 'string' && intent.name ? intent.name : guid
+    this._filterChipLabel.textContent = name
     this._filterChip.setAttribute(
       'aria-label',
       `Clear intent filter (${name})`

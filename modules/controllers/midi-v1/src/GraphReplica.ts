@@ -64,6 +64,7 @@ export type AssignmentsChangedReason = 'init' | 'controller-changed' | 'controll
 
 export class GraphReplica {
   private intentGuids = new Set<string>();
+  private intentNames = new Map<string, string>();
   private myAssignments: AssignmentRecord[] = [];
 
   constructor(
@@ -74,6 +75,10 @@ export class GraphReplica {
 
   hasIntent(guid: string): boolean {
     return this.intentGuids.has(guid);
+  }
+
+  getIntentName(guid: string): string | undefined {
+    return this.intentNames.get(guid);
   }
 
   getAssignments(): AssignmentRecord[] {
@@ -106,7 +111,14 @@ export class GraphReplica {
     if (!isRecord(payload)) return;
     const entities = isRecord(payload['entities']) ? payload['entities'] : {};
 
-    this.intentGuids = new Set(Object.keys(isRecord(entities['intent']) ? entities['intent'] : {}));
+    const intentMap = isRecord(entities['intent']) ? entities['intent'] : {};
+    this.intentGuids = new Set(Object.keys(intentMap));
+    this.intentNames = new Map();
+    for (const [iguid, raw] of Object.entries(intentMap)) {
+      if (isRecord(raw) && typeof raw['name'] === 'string' && raw['name']) {
+        this.intentNames.set(iguid, raw['name']);
+      }
+    }
 
     const controllers = isRecord(entities['controller']) ? entities['controller'] : {};
     const meRaw = controllers[this.ownGuid];
@@ -127,8 +139,18 @@ export class GraphReplica {
       if (typeof entityType !== 'string' || typeof guid !== 'string' || typeof op !== 'string') continue;
 
       if (entityType === 'intent') {
-        if (op === 'remove') this.intentGuids.delete(guid);
-        else this.intentGuids.add(guid);
+        if (op === 'remove') {
+          this.intentGuids.delete(guid);
+          this.intentNames.delete(guid);
+        } else {
+          this.intentGuids.add(guid);
+          const val = isRecord(raw['value']) ? raw['value'] : null;
+          const patch = isRecord(raw['patch']) ? raw['patch'] : null;
+          let name: string | undefined;
+          if (val && typeof val['name'] === 'string' && val['name']) name = val['name'];
+          else if (patch && typeof patch['name'] === 'string' && patch['name']) name = patch['name'];
+          if (name !== undefined) this.intentNames.set(guid, name);
+        }
         continue;
       }
 

@@ -15,6 +15,7 @@ import { ReceiverNoteAndControl } from './receivers/ReceiverNoteAndControl';
 import { TargetBase } from './targets/TargetBase';
 import { TargetIntent } from './targets/TargetIntent';
 import { PluginServer } from './PluginServer';
+import { summarizeAssignmentForPlugin } from './assignmentSummarize';
 
 export class MidiController {
   private readonly config: MidiV1Config;
@@ -51,6 +52,7 @@ export class MidiController {
 
     this.pluginServer = new PluginServer(config.pluginServer, {
       getAssignments: () => this.graph.getAssignments(),
+      summarizeForPlugin: a => summarizeAssignmentForPlugin(a, this.graph),
       onSave: arr => this.persistAssignmentsFromUi(arr),
       onLearnStart: (assignmentGuid, field) => {
         this.learn = { assignmentGuid, field };

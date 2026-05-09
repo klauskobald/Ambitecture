@@ -8,6 +8,7 @@ import { AssignmentRecord } from './GraphReplica';
 
 export interface PluginServerHandlers {
   getAssignments: () => AssignmentRecord[];
+  summarizeForPlugin: (a: AssignmentRecord) => string;
   onSave: (assignments: unknown[]) => void;
   onLearnStart: (assignmentGuid: string, field: string) => void;
 }
@@ -21,7 +22,7 @@ const MIME: Record<string, string> = {
 export class PluginServer {
   private server: http.Server | null = null;
   private wss: WebSocketServer | null = null;
-  private client: WebSocket | null = null;
+  private readonly clients = new Set<WebSocket>();
 
   constructor(
     private readonly pluginConfig: PluginServerConfig,
@@ -36,18 +37,11 @@ export class PluginServer {
     this.wss = new WebSocketServer({ noServer: true });
 
     this.wss.on('connection', ws => {
-      if (this.client !== null) {
-        try {
-          this.client.close(4000, 'replaced');
-        } catch {
-          /* ignore */
-        }
-      }
-      this.client = ws;
-      this.pushState();
-      ws.on('message', raw => this.onClientMessage(raw));
+      this.clients.add(ws);
+      this.pushStateTo(ws);
+      ws.on('message', raw => this.onClientMessage(ws, raw));
       ws.on('close', () => {
-        if (this.client === ws) this.client = null;
+        this.clients.delete(ws);
       });
     });
 
@@ -98,14 +92,14 @@ export class PluginServer {
   }
 
   stop(): void {
-    if (this.client !== null) {
+    for (const ws of this.clients) {
       try {
-        this.client.close();
+        ws.close();
       } catch {
         /* ignore */
       }
-      this.client = null;
     }
+    this.clients.clear();
     this.wss?.close();
     this.wss = null;
     if (this.server !== null) {
@@ -115,16 +109,26 @@ export class PluginServer {
   }
 
   pushState(): void {
-    const ws = this.client;
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    const assignments = this.handlers.getAssignments().map(a => assignmentToWire(a));
+    const summarize = this.handlers.summarizeForPlugin;
+    const assignments = this.handlers.getAssignments().map(a => assignmentToWire(a, summarize(a)));
+    const payload = JSON.stringify({ type: 'state', assignments });
+    for (const ws of this.clients) {
+      if (ws.readyState === WebSocket.OPEN) ws.send(payload);
+    }
+  }
+
+  private pushStateTo(ws: WebSocket): void {
+    if (ws.readyState !== WebSocket.OPEN) return;
+    const summarize = this.handlers.summarizeForPlugin;
+    const assignments = this.handlers.getAssignments().map(a => assignmentToWire(a, summarize(a)));
     ws.send(JSON.stringify({ type: 'state', assignments }));
   }
 
   sendLearnResult(assignmentGuid: string, field: string, value: number): void {
-    const ws = this.client;
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    ws.send(JSON.stringify({ type: 'learnValue', assignmentGuid, field, value }));
+    const msg = JSON.stringify({ type: 'learnValue', assignmentGuid, field, value });
+    for (const ws of this.clients) {
+      if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+    }
   }
 
   private serveFile(res: http.ServerResponse, filePath: string): void {
@@ -141,7 +145,7 @@ export class PluginServer {
     });
   }
 
-  private onClientMessage(raw: RawData): void {
+  private onClientMessage(sender: WebSocket, raw: RawData): void {
     let msg: Record<string, unknown>;
     try {
       msg = JSON.parse(typeof raw === 'string' ? raw : raw.toString()) as Record<string, unknown>;
@@ -159,21 +163,21 @@ export class PluginServer {
       const field = msg['field'];
       if (typeof guid === 'string' && typeof field === 'string') {
         this.handlers.onLearnStart(guid, field);
-        const ws = this.client;
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'learnWaiting', assignmentGuid: guid, field }));
+        if (sender.readyState === WebSocket.OPEN) {
+          sender.send(JSON.stringify({ type: 'learnWaiting', assignmentGuid: guid, field }));
         }
       }
     }
   }
 }
 
-function assignmentToWire(a: AssignmentRecord): Record<string, unknown> {
+function assignmentToWire(a: AssignmentRecord, summary: string): Record<string, unknown> {
   return {
     class: a.class,
     guid: a.guid,
     channel: a.channel,
     params: { ...a.params },
     targets: a.targets.map(t => ({ ...t })),
+    summary,
   };
 }

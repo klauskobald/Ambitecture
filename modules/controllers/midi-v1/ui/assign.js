@@ -1,6 +1,5 @@
 ;(function () {
   const listEl = document.getElementById('list')
-  const btnSave = document.getElementById('btn-save')
   const bannerOffline = document.getElementById('banner-offline')
   const modal = document.getElementById('modal')
   const modalBody = document.getElementById('modal-body')
@@ -10,6 +9,9 @@
   let assignments = []
   let ws = null
   let reconnectTimer = null
+  /** @type {ReturnType<typeof setTimeout> | null} */
+  let saveTimer = null
+  const SAVE_DEBOUNCE_MS = 280
 
   function wsUrlFromPage () {
     const { protocol, host } = window.location
@@ -30,6 +32,24 @@
     if (d && typeof d === 'object' && d.type === 'theme' && d.vars) applyTheme(d.vars)
   })
 
+  function sendSave () {
+    if (saveTimer) {
+      clearTimeout(saveTimer)
+      saveTimer = null
+    }
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'save', assignments }))
+    }
+  }
+
+  function scheduleSave () {
+    if (saveTimer) clearTimeout(saveTimer)
+    saveTimer = setTimeout(() => {
+      saveTimer = null
+      sendSave()
+    }, SAVE_DEBOUNCE_MS)
+  }
+
   function connect () {
     if (reconnectTimer) {
       clearTimeout(reconnectTimer)
@@ -38,16 +58,13 @@
     const url = wsUrlFromPage()
     ws = new WebSocket(url)
     bannerOffline.hidden = true
-    btnSave.disabled = true
 
     ws.onopen = () => {
       bannerOffline.hidden = true
-      btnSave.disabled = false
     }
 
     ws.onclose = () => {
       bannerOffline.hidden = false
-      btnSave.disabled = true
       ws = null
       reconnectTimer = window.setTimeout(connect, 1500)
     }
@@ -62,7 +79,7 @@
         return
       }
       if (msg.type === 'state' && Array.isArray(msg.assignments)) {
-        assignments = msg.assignments.map(a => structuredClone(a))
+        assignments = msg.assignments.map(a => JSON.parse(JSON.stringify(a)))
         renderList()
       }
       if (msg.type === 'learnValue' && editing && msg.assignmentGuid === editing.guid && msg.field === 'note') {
@@ -76,10 +93,18 @@
           )
           if (idx >= 0) assignments[idx] = JSON.parse(JSON.stringify(editing))
           renderList()
+          sendSave()
         }
         closeModal()
       }
     }
+  }
+
+  function rowSummary (a) {
+    const s = typeof a.summary === 'string' ? a.summary.trim() : ''
+    if (s) return s
+    const cls = typeof a.class === 'string' ? a.class : ''
+    return cls || 'Assignment'
   }
 
   function renderList () {
@@ -89,38 +114,57 @@
       if (!raw || typeof raw !== 'object') continue
       const a = /** @type {Record<string, unknown>} */ (raw)
       const guid = typeof a.guid === 'string' ? a.guid : ''
-      const cls = typeof a.class === 'string' ? a.class : ''
-      const params = a.params && typeof a.params === 'object' && !Array.isArray(a.params)
-        ? /** @type {Record<string, unknown>} */ (a.params)
-        : {}
-      const note = typeof params.note === 'number' ? params.note : '—'
+      if (!guid) continue
       const li = document.createElement('li')
       li.className = 'list__item'
-      const left = document.createElement('div')
-      left.innerHTML = `<strong>${escapeHtml(guid || 'assignment')}</strong><div class="list__meta">${escapeHtml(cls)} · note ${escapeHtml(String(note))}</div>`
+      const summaryEl = document.createElement('div')
+      summaryEl.className = 'list__summary'
+      summaryEl.textContent = rowSummary(a)
+      const actions = document.createElement('div')
+      actions.className = 'list__actions'
       const btn = document.createElement('button')
       btn.type = 'button'
       btn.className = 'btn'
       btn.textContent = 'Edit'
       btn.addEventListener('click', () => openEdit(raw))
-      li.appendChild(left)
-      li.appendChild(btn)
+      const btnDel = document.createElement('button')
+      btnDel.type = 'button'
+      btnDel.className = 'btn btn--danger'
+      btnDel.textContent = 'Delete'
+      btnDel.addEventListener('click', () => deleteAssignment(guid))
+      actions.appendChild(btn)
+      actions.appendChild(btnDel)
+      li.appendChild(summaryEl)
+      li.appendChild(actions)
       listEl.appendChild(li)
     }
   }
 
-  function escapeHtml (s) {
-    return s
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
+  function deleteAssignment (guid) {
+    if (!guid) return
+    if (typeof window !== 'undefined' && !window.confirm('Remove this assignment?')) return
+    assignments = assignments.filter(
+      x => !(x && typeof x === 'object' && /** @type {Record<string, unknown>} */ (x).guid === guid)
+    )
+    renderList()
+    sendSave()
   }
 
   /** @type {Record<string, unknown> | null} */
   let editing = null
   /** @type {HTMLInputElement | null} */
   let noteInput = null
+
+  function mergeEditingIntoAssignments () {
+    if (!editing || !noteInput || !editing.params) return
+    const n = Number(noteInput.value)
+    if (Number.isFinite(n)) editing.params.note = n
+    const g = typeof editing.guid === 'string' ? editing.guid : ''
+    const idx = assignments.findIndex(
+      x => x && typeof x === 'object' && /** @type {Record<string, unknown>} */ (x).guid === g
+    )
+    if (idx >= 0) assignments[idx] = JSON.parse(JSON.stringify(editing))
+  }
 
   function openEdit (row) {
     editing = /** @type {Record<string, unknown>} */ (JSON.parse(JSON.stringify(row)))
@@ -140,6 +184,10 @@
     noteInput.min = '0'
     noteInput.max = '127'
     noteInput.value = String(typeof params.note === 'number' ? params.note : 60)
+    noteInput.addEventListener('input', () => {
+      mergeEditingIntoAssignments()
+      scheduleSave()
+    })
 
     const learnRow = document.createElement('div')
     learnRow.className = 'learn-row'
@@ -168,24 +216,17 @@
   }
 
   modalClose?.addEventListener('click', () => {
-    if (editing && noteInput && editing.params) {
-      const n = Number(noteInput.value)
-      if (Number.isFinite(n)) editing.params.note = n
-      const idx = assignments.findIndex(
-        x => x && typeof x === 'object' && /** @type {Record<string, unknown>} */ (x).guid === editing?.guid
-      )
-      if (idx >= 0 && editing) assignments[idx] = editing
-      renderList()
-    }
+    mergeEditingIntoAssignments()
+    renderList()
+    sendSave()
     closeModal()
   })
 
-  modal?.querySelector('.modal__backdrop')?.addEventListener('click', closeModal)
-
-  btnSave?.addEventListener('click', () => {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'save', assignments }))
-    }
+  modal?.querySelector('.modal__backdrop')?.addEventListener('click', () => {
+    mergeEditingIntoAssignments()
+    renderList()
+    sendSave()
+    closeModal()
   })
 
   connect()

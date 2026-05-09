@@ -165,7 +165,7 @@ Renderer data authority model:
 
 **Plugin UI panels (headless controllers → surface-v1 Perform):**
 
-- **Project YAML** — On the **surface** controller row, optional **`plugins`** array. Each item: **`guid`**, **`name`**, **`provider`: `{ guid, interface }`** (hub-registered controller guid + interface id matching that provider’s discovery map), **`context`: `{ pane: perform, type: panel }`**. URLs are **not** duplicated in YAML; the browser resolves them from the hub discovery feed.
+- **Project YAML** — On the **surface** controller row, optional **`plugins`** array. Each item: **`guid`**, **`provider`: `{ guid, interface, name }`** (`name` is the Perform subnav / iframe title), **`context`: `{ pane: perform, type: panel }`**. URLs are **not** duplicated in YAML; the browser resolves them from the hub discovery feed.
 - **Hub protocol** — After **`register`**, a client sends **`discovery:subscribe`** → **`discovery:snapshot`**. Further changes arrive as **`discovery:delta`**. The hub does not proxy plugin iframe/WebSocket traffic.
 - **`src/plugins/discoveryRegistry.js`** — Client-side map updated from snapshot/delta.
 - **`src/plugins/pluginRegistry.js`** — **`getResolvedPerformPlugins()`** merges `projectGraph.getControllerPlugins()` with discovery for iframe URLs and online/offline.

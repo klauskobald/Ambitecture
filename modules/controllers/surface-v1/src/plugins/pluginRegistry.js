@@ -24,14 +24,14 @@ export function getResolvedPerformPlugins () {
     if (!p || typeof p !== 'object' || Array.isArray(p)) continue
     const row = /** @type {Record<string, unknown>} */ (p)
     const pluginGuid = typeof row.guid === 'string' ? row.guid : ''
-    const name = typeof row.name === 'string' && row.name ? row.name : 'Plugin'
     const provider = row.provider
     const ctx = row.context
     if (!provider || typeof provider !== 'object' || Array.isArray(provider)) continue
     const pr = /** @type {Record<string, unknown>} */ (provider)
     const providerGuid = typeof pr.guid === 'string' ? pr.guid : ''
     const interfaceId = typeof pr.interface === 'string' ? pr.interface : ''
-    if (!pluginGuid || !providerGuid || !interfaceId) continue
+    const name = typeof pr.name === 'string' ? pr.name.trim() : ''
+    if (!pluginGuid || !providerGuid || !interfaceId || !name) continue
     const c = ctx && typeof ctx === 'object' && !Array.isArray(ctx)
       ? /** @type {Record<string, unknown>} */ (ctx)
       : {}

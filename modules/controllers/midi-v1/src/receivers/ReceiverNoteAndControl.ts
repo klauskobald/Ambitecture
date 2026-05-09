@@ -1,7 +1,8 @@
 import { ReceiverBase } from './ReceiverBase';
 import { Logger } from '../Logger';
-import { AssignmentRecord } from '../GraphReplica';
+import { AssignmentRecord, TargetRecord } from '../GraphReplica';
 import { MidiCcEvent, MidiNoteEvent } from '../MidiManager';
+import { midiTools } from '../midiTools';
 import { TargetBase } from '../targets/TargetBase';
 
 interface NoteAndControlParams {
@@ -29,6 +30,20 @@ function readParams(raw: Record<string, unknown>): NoteAndControlParams | null {
   return { note, controller, velocityMin, velocityMax, controllerAdd, controllerScale };
 }
 
+function formatIntentTargetsLine(
+  targets: TargetRecord[],
+  intentName: (guid: string) => string | undefined,
+): string[] {
+  const bits: string[] = [];
+  for (const t of targets) {
+    if (t.type !== 'intent') continue;
+    const n = intentName(t.guid);
+    const label = n !== undefined && n !== '' ? n : '?';
+    bits.push(`${label}.${t.key}`);
+  }
+  return bits;
+}
+
 export class ReceiverNoteAndControl extends ReceiverBase {
   private armedChannel: number | null = null;
 
@@ -39,6 +54,24 @@ export class ReceiverNoteAndControl extends ReceiverBase {
     private readonly params: NoteAndControlParams,
   ) {
     super(assignment, targets, logger);
+  }
+
+  /**
+   * Operator-facing one-line description for plugin UI. Built by this class, not generic UI code.
+   * @param intentName Resolve intent guid → project display name (undefined if unknown).
+   */
+  static formatPluginListLine(
+    a: AssignmentRecord,
+    intentName: (guid: string) => string | undefined,
+  ): string | null {
+    if (a.class !== 'noteAndControl') return null;
+    const params = readParams(a.params);
+    if (params === null) return null;
+    const chLabel = a.channel === 0 ? 'any' : String(a.channel);
+    const targetBits = formatIntentTargetsLine(a.targets, intentName);
+    const targetsJoined = targetBits.length > 0 ? targetBits.join(', ') : '—';
+    const noteLabel = midiTools.noteAsString(params.note);
+    return `noteAndControl: [${chLabel}] ${noteLabel} (${params.velocityMin}–${params.velocityMax}) & ${params.controller} => ${targetsJoined}`;
   }
 
   static build(

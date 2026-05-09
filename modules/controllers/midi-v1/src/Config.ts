@@ -51,7 +51,7 @@ function buildDiscovery(publicHost: string, port: number): MidiV1Config['discove
 export function loadConfig(): MidiV1Config {
   dotenv.config();
   const guid = requiredEnv('GUID');
-  const publicHost = optionalEnv('PLUGIN_PUBLIC_HOST', '127.0.0.1');
+  const publicHost = requiredEnv('PLUGIN_PUBLIC_HOST');
   const listenPort = optionalEnvInt('PLUGIN_LISTEN_PORT', 9870);
   const pluginServer: PluginServerConfig = { listenPort, publicHost };
   return {

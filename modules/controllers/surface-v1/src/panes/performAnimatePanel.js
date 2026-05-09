@@ -134,21 +134,28 @@ export function createPerformAnimatePanel () {
         ? `No animations targeting ${resolveIntentName(intentFilter)}.`
         : 'No animations in project.'
       list.appendChild(empty)
-      if (intentFilter) {
-        const createBtn = document.createElement('button')
-        createBtn.type = 'button'
-        createBtn.className = 'btn perform-animate-empty__create'
-        createBtn.textContent = 'Create'
-        createBtn.addEventListener('click', () => {
-          void createAnimationForFilteredIntent(intentFilter)
-        })
-        list.appendChild(createBtn)
-      }
+      if (intentFilter) list.appendChild(makeFilteredIntentCreateButton(intentFilter))
       return
     }
     for (const row of anims) {
       list.appendChild(makeRow(row))
     }
+    if (intentFilter) list.appendChild(makeFilteredIntentCreateButton(intentFilter))
+  }
+
+  /**
+   * @param {string} targetIntentGuid
+   * @returns {HTMLButtonElement}
+   */
+  function makeFilteredIntentCreateButton (targetIntentGuid) {
+    const createBtn = document.createElement('button')
+    createBtn.type = 'button'
+    createBtn.className = 'btn perform-animate-empty__create'
+    createBtn.textContent = 'Create'
+    createBtn.addEventListener('click', () => {
+      void createAnimationForFilteredIntent(targetIntentGuid)
+    })
+    return createBtn
   }
 
   /**

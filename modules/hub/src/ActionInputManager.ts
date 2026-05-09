@@ -22,7 +22,9 @@ export type InputAssignConfig = {
 export type ActionInputCommand =
   | { command: 'ensureInputAssignment'; targetType: AssignTargetType; targetGuid: string; input: InputAssignConfig }
   | { command: 'removeInputAssignment'; targetType: AssignTargetType; targetGuid: string }
-  | { command: 'renameInput'; inputGuid: string; name: string };
+  | { command: 'renameInput'; inputGuid: string; name: string }
+  | { command: 'assignExistingInput'; targetType: AssignTargetType; targetGuid: string; inputGuid: string }
+  | { command: 'deleteInput'; inputGuid: string; expectedLinkedTargetCount?: number };
 
 export class ActionInputManager {
   constructor(
@@ -38,6 +40,10 @@ export class ActionInputManager {
         return this.removeInputAssignmentCommands(controllerGuid, command.targetType, command.targetGuid);
       case 'renameInput':
         return this.renameInputCommands(controllerGuid, command.inputGuid, command.name);
+      case 'assignExistingInput':
+        return this.assignExistingInputCommands(controllerGuid, command.targetType, command.targetGuid, command.inputGuid);
+      case 'deleteInput':
+        return this.deleteInputCommands(controllerGuid, command.inputGuid, command.expectedLinkedTargetCount);
     }
   }
 
@@ -201,6 +207,79 @@ export class ActionInputManager {
     ];
   }
 
+  private assignExistingInputCommands(
+    controllerGuid: string,
+    targetType: AssignTargetType,
+    targetGuid: string,
+    inputGuid: string,
+  ): GraphCommand[] {
+    if (targetGuid.length === 0 || targetType.length === 0 || inputGuid.length === 0) return [];
+    const input = this.projectManager.getInputByGuid(inputGuid);
+    if (!input?.guid) return [];
+    const actionGuid = typeof input.action === 'string' ? input.action : '';
+    if (!actionGuid) return [];
+    const action = this.projectManager.getActionByGuid(actionGuid);
+    if (!action?.guid) return [];
+
+    const alreadyTargets = this.actionTargets(action, targetType, targetGuid);
+    if (alreadyTargets) return [];
+
+    const execute = Array.isArray(action.execute) ? action.execute : [];
+    const nextExecute = [
+      ...execute,
+      { type: targetType, guid: targetGuid },
+    ];
+
+    const clearPrevious = this.removeInputAssignmentCommands(controllerGuid, targetType, targetGuid);
+    return [
+      ...clearPrevious,
+      this.upsertCommand('action', action.guid, {
+        ...(action as unknown as Record<string, unknown>),
+        execute: nextExecute,
+      }),
+    ];
+  }
+
+  private deleteInputCommands(
+    controllerGuid: string,
+    inputGuid: string,
+    expectedLinkedTargetCount?: number,
+  ): GraphCommand[] {
+    if (inputGuid.length === 0) return [];
+    const input = this.projectManager.getInputByGuid(inputGuid);
+    if (!input?.guid) return [];
+    const actionGuid = typeof input.action === 'string' ? input.action : '';
+    const linkedTargetCount = this.linkedTargetCountForAction(actionGuid);
+    if (
+      expectedLinkedTargetCount !== undefined
+      && Number.isFinite(expectedLinkedTargetCount)
+      && expectedLinkedTargetCount >= 0
+      && linkedTargetCount !== expectedLinkedTargetCount
+    ) {
+      Logger.warn(
+        `[action] deleteInput aborted: stale linked target count for ${inputGuid} (expected ${expectedLinkedTargetCount}, actual ${linkedTargetCount})`,
+      );
+      return [];
+    }
+
+    const commands: GraphCommand[] = [{
+      op: 'remove',
+      entityType: 'input',
+      guid: inputGuid,
+      persistence: 'runtimeAndDurable',
+      parent: { entityType: 'controller', guid: controllerGuid },
+    }];
+    if (!actionGuid) return commands;
+    const keepAction = this.isActionReferencedInGraph(actionGuid, {
+      excludingInputGuids: new Set([inputGuid]),
+      excludingActionGuids: new Set([actionGuid]),
+    });
+    if (!keepAction) {
+      commands.push(this.removeActionCommand(actionGuid));
+    }
+    return commands;
+  }
+
   buildSceneCleanupCommands(sceneGuid: string): GraphCommand[] {
     const actionGuids = this.projectManager.getActionsWirePayload()
       .filter(action => this.actionTargetsScene(action, sceneGuid))
@@ -305,6 +384,21 @@ export class ActionInputManager {
   private actionTargets(action: ActionDefinition, targetType: AssignTargetType, targetGuid: string): boolean {
     if (!Array.isArray(action.execute)) return false;
     return action.execute.some(item => item.type === targetType && item.guid === targetGuid);
+  }
+
+  private linkedTargetCountForAction(actionGuid: string): number {
+    if (actionGuid.length === 0) return 0;
+    const action = this.projectManager.getActionByGuid(actionGuid);
+    if (!action || !Array.isArray(action.execute)) return 0;
+    const seen = new Set<string>();
+    for (const item of action.execute) {
+      if (!item || typeof item !== 'object') continue;
+      const type = typeof item.type === 'string' ? item.type : '';
+      const guid = typeof item.guid === 'string' ? item.guid : '';
+      if (!type || !guid) continue;
+      seen.add(`${type}:${guid}`);
+    }
+    return seen.size;
   }
 
   private getTargetName(targetType: AssignTargetType, targetGuid: string): string {

@@ -202,7 +202,15 @@ function _buildAlert (text) {
  * Stacked action buttons + cancel — domain-agnostic; caller supplies labels and `value` per option.
  * @param {string} message
  * @param {Array<{ value: string, label: string, disabled?: boolean, title?: string }>} options
- * @param {{ cancel?: string, selected?: string | null }} [opts]
+ * @param {{
+ *   cancel?: string,
+ *   selected?: string | null,
+ *   displayRowFn?: (
+ *     row: HTMLElement,
+ *     option: { value: string, label: string, disabled?: boolean, title?: string },
+ *     helpers: { dismiss: (value: string | null) => void, choose: () => void, button: HTMLButtonElement }
+ *   ) => void
+ * }} [opts]
  * @returns {HTMLElement}
  */
 function _buildChoiceListModal (message, options, opts) {
@@ -227,6 +235,8 @@ function _buildChoiceListModal (message, options, opts) {
   /** @type {HTMLButtonElement | null} */
   let selectedBtn = null
   for (const c of options) {
+    const row = document.createElement('div')
+    row.className = 'modal-choice-list__row'
     const btn = document.createElement('button')
     btn.type = 'button'
     btn.className = 'btn modal-choice-list__btn'
@@ -242,7 +252,16 @@ function _buildChoiceListModal (message, options, opts) {
       if (btn.disabled) return
       _dismiss(c.value)
     })
-    list.appendChild(btn)
+    row.appendChild(btn)
+    opts?.displayRowFn?.(row, c, {
+      dismiss: (value) => _dismiss(value),
+      choose: () => {
+        if (btn.disabled) return
+        _dismiss(c.value)
+      },
+      button: btn
+    })
+    list.appendChild(row)
   }
   card.appendChild(list)
 
@@ -406,7 +425,16 @@ export function prompt (text, fields, buttons, callback) {
  * Pass `selected` to highlight (and focus) the currently chosen option.
  * @param {string} message
  * @param {Array<{ value: string, label: string, disabled?: boolean, title?: string }>} options
- * @param {{ cancel?: string, selected?: string | null, callback?: (choice: string | null) => void }} [opts]
+ * @param {{
+ *   cancel?: string,
+ *   selected?: string | null,
+ *   callback?: (choice: string | null) => void,
+ *   displayRowFn?: (
+ *     row: HTMLElement,
+ *     option: { value: string, label: string, disabled?: boolean, title?: string },
+ *     helpers: { dismiss: (value: string | null) => void, choose: () => void, button: HTMLButtonElement }
+ *   ) => void
+ * }} [opts]
  * @returns {Promise<string | null>}
  */
 export function pickChoice (message, options, opts) {

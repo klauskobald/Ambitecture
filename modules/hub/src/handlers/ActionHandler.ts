@@ -36,6 +36,22 @@ function isActionInputCommand(payload: unknown): payload is ActionInputCommand {
       return typeof p['inputGuid'] === 'string'
         && p['inputGuid'].length > 0
         && typeof p['name'] === 'string';
+    case 'assignExistingInput':
+      return typeof p['targetType'] === 'string'
+        && p['targetType'].length > 0
+        && typeof p['targetGuid'] === 'string'
+        && p['targetGuid'].length > 0
+        && typeof p['inputGuid'] === 'string'
+        && p['inputGuid'].length > 0;
+    case 'deleteInput': {
+      const count = p['expectedLinkedTargetCount'];
+      const validCount =
+        count === undefined
+        || (typeof count === 'number' && Number.isFinite(count) && count >= 0);
+      return typeof p['inputGuid'] === 'string'
+        && p['inputGuid'].length > 0
+        && validCount;
+    }
     default:
       return false;
   }

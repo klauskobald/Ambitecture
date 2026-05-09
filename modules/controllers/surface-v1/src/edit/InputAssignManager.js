@@ -1,15 +1,16 @@
 import { projectGraph } from '../core/projectGraph.js'
-import { openModalCard, prompt as modalPrompt } from '../core/Modal.js'
+import {
+  confirm as modalConfirm,
+  openModalCard,
+  pickChoice,
+  prompt as modalPrompt
+} from '../core/Modal.js'
 import { sendActionInputCommand } from '../core/outboundQueue.js'
 import {
   getDisplayTypes,
   getInputTypes,
   resolveDefaultPerformTypes
 } from '../core/systemCapabilities.js'
-import {
-  parseParamFromForm,
-  stringifyJsonStringParam
-} from './inputAssign/paramKindHandlers.js'
 
 export class InputAssignManager {
   /**
@@ -55,7 +56,7 @@ export class InputAssignManager {
     const row = document.createElement('div')
     const toggle = document.createElement('button')
     toggle.type = 'button'
-    const labelBtn = document.createElement('button')
+    const label = document.createElement('span')
 
     const sync = () => {
       const input = projectGraph.getAssignedInput(
@@ -73,55 +74,19 @@ export class InputAssignManager {
       toggle.className = isActive
         ? `${toggleClass} intent-toggle--enabled`.trim()
         : toggleClass
-      const defaults = resolveDefaultPerformTypes()
-      const effType = defaults?.type ?? 'button'
-      const inputTypes = getInputTypes()
-      const typeEntry =
-        inputTypes?.find(t => t.class === effType) ?? inputTypes?.[0]
-      toggle.textContent = typeEntry?.name ?? effType ?? 'Button'
-      labelBtn.className = labelClass
-      labelBtn.textContent = String(input?.name ?? this._labelDefault)
-      const inputGuid = typeof input?.guid === 'string' ? input.guid : ''
-      labelBtn.disabled = !isActive || !inputGuid
+      toggle.textContent = 'Input'
+      label.className = labelClass
+      label.textContent = String(input?.name ?? this._labelDefault)
     }
 
     sync()
 
     toggle.addEventListener('click', () => {
-      const inputNow = projectGraph.getAssignedInput(
-        this._contextType,
-        this._contextGuid
-      )
-      const actionNow = projectGraph.getAssignedAction(
-        this._contextType,
-        this._contextGuid
-      )
-      const active = Boolean(inputNow?.action && actionNow)
-      if (active) {
-        sendActionInputCommand({
-          command: 'removeInputAssignment',
-          targetType: this._contextType,
-          targetGuid: this._contextGuid
-        })
-      } else {
-        const d = resolveDefaultPerformTypes()
-        const type = d?.type ?? 'button'
-        const displayType = d?.displayType ?? 'button'
-        const name = this._labelDefault.trim() || this._contextGuid
-        sendActionInputCommand({
-          command: 'ensureInputAssignment',
-          targetType: this._contextType,
-          targetGuid: this._contextGuid,
-          input: { name, type, displayType }
-        })
-      }
+      void this.showControl()
     })
 
-    labelBtn.type = 'button'
-    labelBtn.addEventListener('click', () => void this._onInlineLabelClick())
-
     row.appendChild(toggle)
-    row.appendChild(labelBtn)
+    row.appendChild(label)
     return row
   }
 
@@ -185,243 +150,102 @@ export class InputAssignManager {
       return
     }
 
+    const createChoiceValue = '__create_new_input__'
+    const removeChoiceValue = '__remove_assignment__'
+    const title = this._labelDefault || this._contextGuid
     const assignedInput = projectGraph.getAssignedInput(
       this._contextType,
       this._contextGuid
     )
-    const isAssigned = Boolean(assignedInput)
-    const action = isAssigned
-      ? projectGraph.getAssignedAction(this._contextType, this._contextGuid)
-      : null
-    const title = this._labelDefault || this._contextGuid
-    const params = this._recordOrUndefined(assignedInput?.params)
-    const existingType =
-      typeof assignedInput?.type === 'string' ? assignedInput.type : ''
-    const currentName =
-      typeof assignedInput?.name === 'string'
-        ? assignedInput.name
-        : typeof action?.name === 'string'
-        ? action.name
-        : title
-    const existingDisplayType = this._displayClassFromInput(assignedInput)
+    const selectedInputGuid =
+      typeof assignedInput?.guid === 'string' ? assignedInput.guid : null
+    const inputRows = this._collectInputRows()
+    /** @type {Array<{ value: string, label: string, disabled?: boolean, title?: string }>} */
+    const options = inputRows.map(row => ({
+      value: row.guid,
+      label: row.name
+    }))
+    options.push({
+      value: createChoiceValue,
+      label: 'Create new input'
+    })
+    options.push({
+      value: removeChoiceValue,
+      label: 'Remove assignment'
+    })
+    const selected =
+      selectedInputGuid && inputRows.some(row => row.guid === selectedInputGuid)
+        ? selectedInputGuid
+        : null
 
-    const initialInputClass = inputTypes.some(t => t.class === existingType)
-      ? existingType
-      : inputTypes[0].class
-    const initialDisplayClass = displayTypes.some(
-      d => d.class === existingDisplayType
-    )
-      ? existingDisplayType
-      : displayTypes[0].class
-
-    const outcome = await openModalCard(dismiss => {
-      const card = document.createElement('div')
-      card.className = 'modal input-assign-modal'
-      card.addEventListener('click', e => e.stopPropagation())
-
-      const heading = document.createElement('p')
-      heading.className = 'modal-text'
-      heading.textContent = `${title}`
-
-      const sub = document.createElement('p')
-      sub.className = 'input-assign-modal__hint'
-      sub.textContent = isAssigned
-        ? 'Edit the perform control for this target, or remove it. Param fields follow system.yml for the selected input type.'
-        : 'Create a perform control: types and param fields are defined in hub systemCapabilities.'
-
-      const errorEl = document.createElement('p')
-      errorEl.className = 'input-assign-modal__error'
-      errorEl.hidden = true
-      errorEl.setAttribute('role', 'alert')
-
-      const fields = document.createElement('div')
-      fields.className = 'modal-fields'
-
-      const typeLabel = document.createElement('label')
-      typeLabel.className = 'input-assign-modal__label'
-      typeLabel.textContent = 'Input type'
-      const typeSelect = document.createElement('select')
-      typeSelect.className = 'modal-input modal-select-capitalize'
-      typeSelect.setAttribute('aria-label', 'Input type')
-      for (const t of inputTypes) {
-        const o = document.createElement('option')
-        o.value = t.class
-        o.textContent = t.hint ? `${t.name} (${t.hint})` : t.name
-        typeSelect.appendChild(o)
-      }
-      typeSelect.value = initialInputClass
-
-      const nameLabel = document.createElement('label')
-      nameLabel.className = 'input-assign-modal__label'
-      nameLabel.textContent = 'Label (shown on controller)'
-      const nameInput = document.createElement('input')
-      nameInput.className = 'modal-input'
-      nameInput.type = 'text'
-      nameInput.placeholder = 'e.g. Flash red'
-      nameInput.value = currentName
-      nameInput.setAttribute('aria-label', 'Label')
-
-      const displayLabel = document.createElement('label')
-      displayLabel.className = 'input-assign-modal__label'
-      displayLabel.textContent = 'Display type'
-      const displaySelect = document.createElement('select')
-      displaySelect.className = 'modal-input modal-select-capitalize'
-      displaySelect.setAttribute('aria-label', 'Display type')
-      for (const d of displayTypes) {
-        const o = document.createElement('option')
-        o.value = d.class
-        o.textContent = d.name
-        displaySelect.appendChild(o)
-      }
-      displaySelect.value = initialDisplayClass
-
-      const paramHost = document.createElement('div')
-      paramHost.className = 'input-assign-modal__param-host'
-
-      const setError = message => {
-        if (!message) {
-          errorEl.textContent = ''
-          errorEl.hidden = true
-          return
-        }
-        errorEl.textContent = message
-        errorEl.hidden = false
-      }
-
-      const rebuildParamFields = () => {
-        paramHost.innerHTML = ''
-        const def = inputTypes.find(t => t.class === typeSelect.value)
-        if (!def) return
-        const keys = Object.keys(def.params)
-        if (keys.length === 0) return
-        for (const paramKey of keys) {
-          const kind = def.params[paramKey]
-          const label = document.createElement('label')
-          label.className = 'input-assign-modal__label'
-          label.textContent = `${paramKey} (${kind})`
-          const ta = document.createElement('textarea')
-          ta.className = 'modal-input input-assign-modal__json'
-          ta.placeholder = '{}'
-          ta.dataset.paramKey = paramKey
-          ta.dataset.paramKind = kind
-          ta.setAttribute('aria-label', paramKey)
-          ta.value = stringifyJsonStringParam(params?.[paramKey])
-          paramHost.appendChild(label)
-          paramHost.appendChild(ta)
-        }
-      }
-
-      typeSelect.addEventListener('change', () => {
-        setError('')
-        rebuildParamFields()
-      })
-
-      fields.appendChild(typeLabel)
-      fields.appendChild(typeSelect)
-      fields.appendChild(nameLabel)
-      fields.appendChild(nameInput)
-      fields.appendChild(displayLabel)
-      fields.appendChild(displaySelect)
-      fields.appendChild(paramHost)
-      rebuildParamFields()
-
-      const actions = document.createElement('div')
-      actions.className = 'modal-actions modal-actions--split'
-
-      const removeBtn = document.createElement('button')
-      removeBtn.type = 'button'
-      removeBtn.className = 'btn btn--danger'
-      removeBtn.textContent = 'Remove'
-      removeBtn.title =
-        'Deletes this controller input and its linked action for this target.'
-      removeBtn.disabled = !isAssigned
-      removeBtn.addEventListener('click', () => {
-        sendActionInputCommand({
-          command: 'removeInputAssignment',
-          targetType: this._contextType,
-          targetGuid: this._contextGuid
+    const outcome = await pickChoice(`Input for ${title}`, options, {
+      cancel: 'Cancel',
+      selected,
+      displayRowFn: (row, option, helpers) => {
+        if (option.value === createChoiceValue || option.value === removeChoiceValue) return
+        row.style.display = 'flex'
+        row.style.alignItems = 'center'
+        row.style.gap = '8px'
+        row.style.flexWrap = 'nowrap'
+        helpers.button.style.flex = '1 1 auto'
+        helpers.button.style.width = 'auto'
+        const editBtn = document.createElement('button')
+        editBtn.type = 'button'
+        editBtn.className = 'btn'
+        editBtn.style.flex = '0 0 auto'
+        editBtn.textContent = 'Edit'
+        editBtn.addEventListener('click', e => {
+          e.stopPropagation()
+          helpers.dismiss(`__edit__:${option.value}`)
         })
-        dismiss('removed')
-      })
-
-      const end = document.createElement('div')
-      end.className = 'modal-actions__end'
-
-      const cancelBtn = document.createElement('button')
-      cancelBtn.type = 'button'
-      cancelBtn.className = 'btn'
-      cancelBtn.textContent = 'Cancel'
-      cancelBtn.addEventListener('click', () => dismiss(null))
-
-      const saveBtn = document.createElement('button')
-      saveBtn.type = 'button'
-      saveBtn.className = 'btn btn--primary'
-      saveBtn.textContent = isAssigned ? 'Save' : 'Create'
-      saveBtn.addEventListener('click', () => {
-        const name = nameInput.value.trim()
-        if (!name) {
-          setError(
-            'Enter a label: this is the text shown on the perform button.'
-          )
-          nameInput.focus()
-          return
-        }
-        const displayType = displaySelect.value
-        const inputType = typeSelect.value
-        const def = inputTypes.find(t => t.class === inputType)
-        if (!def) {
-          setError('Selected input type is not defined in system capabilities.')
-          return
-        }
-
-        /** @type {Record<string, unknown>} */
-        const inputPayload = { name, type: inputType, displayType }
-
-        for (const ta of paramHost.querySelectorAll(
-          'textarea[data-param-key]'
-        )) {
-          const paramKey = ta.getAttribute('data-param-key') ?? ''
-          const kind = ta.getAttribute('data-param-kind') ?? ''
-          if (!paramKey || !kind) continue
-          const r = parseParamFromForm(kind, ta.value, paramKey)
-          if (!r.ok) {
-            setError(r.message)
-            ta.focus()
-            return
-          }
-          if (r.value !== undefined) {
-            inputPayload[paramKey] = r.value
-          }
-        }
-
-        sendActionInputCommand({
-          command: 'ensureInputAssignment',
-          targetType: this._contextType,
-          targetGuid: this._contextGuid,
-          input: inputPayload
+        const deleteBtn = document.createElement('button')
+        deleteBtn.type = 'button'
+        deleteBtn.className = 'btn btn--danger'
+        deleteBtn.style.flex = '0 0 auto'
+        deleteBtn.textContent = 'Delete'
+        deleteBtn.addEventListener('click', e => {
+          e.stopPropagation()
+          helpers.dismiss(`__delete__:${option.value}`)
         })
-        dismiss('saved')
-      })
-
-      end.appendChild(cancelBtn)
-      end.appendChild(saveBtn)
-      actions.appendChild(removeBtn)
-      actions.appendChild(end)
-
-      card.appendChild(heading)
-      card.appendChild(sub)
-      card.appendChild(errorEl)
-      card.appendChild(fields)
-      card.appendChild(actions)
-
-      requestAnimationFrame(() => nameInput.focus())
-
-      return card
+        row.appendChild(editBtn)
+        row.appendChild(deleteBtn)
+      }
     })
 
-    if (outcome === 'saved' || outcome === 'removed') {
+    if (outcome === null) return
+    if (outcome === createChoiceValue) {
+      await this._createInputAndAssign(inputTypes, displayTypes)
       this._refreshInvokeButton()
+      return
     }
+    if (outcome === removeChoiceValue) {
+      sendActionInputCommand({
+        command: 'removeInputAssignment',
+        targetType: this._contextType,
+        targetGuid: this._contextGuid
+      })
+      this._refreshInvokeButton()
+      return
+    }
+    if (outcome.startsWith('__edit__:')) {
+      const inputGuid = outcome.slice('__edit__:'.length)
+      await this._renameInputByGuid(inputGuid)
+      this._refreshInvokeButton()
+      return
+    }
+    if (outcome.startsWith('__delete__:')) {
+      const inputGuid = outcome.slice('__delete__:'.length)
+      await this._confirmAndDeleteInput(inputGuid)
+      this._refreshInvokeButton()
+      return
+    }
+    sendActionInputCommand({
+      command: 'assignExistingInput',
+      targetType: this._contextType,
+      targetGuid: this._contextGuid,
+      inputGuid: outcome
+    })
+    this._refreshInvokeButton()
   }
 
   _refreshInvokeButton () {
@@ -457,5 +281,114 @@ export class InputAssignManager {
     if (!value || typeof value !== 'object' || Array.isArray(value))
       return undefined
     return /** @type {Record<string, unknown>} */ (value)
+  }
+
+  /** @returns {Array<{ guid: string, name: string }>} */
+  _collectInputRows () {
+    const inputs = [...projectGraph.getInputs().values()]
+    return inputs
+      .map(input => {
+        const guid = typeof input?.guid === 'string' ? input.guid : ''
+        if (!guid) return null
+        const name =
+          typeof input?.name === 'string' && input.name.trim().length > 0
+            ? input.name.trim()
+            : guid
+        return { guid, name }
+      })
+      .filter(/** @returns {row is { guid: string, name: string }} */ row => row !== null)
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  /**
+   * @param {Array<{ class: string }>} inputTypes
+   * @param {Array<{ class: string }>} displayTypes
+   */
+  async _createInputAndAssign (inputTypes, displayTypes) {
+    const values = await modalPrompt(
+      '',
+      [
+        {
+          label: 'Name',
+          key: 'name',
+          value: this._labelDefault,
+          placeholder: 'input name'
+        }
+      ],
+      { submit: 'Create' }
+    )
+    const name = values?.name?.trim()
+    if (!name) return
+    const defaults = resolveDefaultPerformTypes()
+    const type = defaults?.type ?? inputTypes[0]?.class ?? 'button'
+    const displayType = defaults?.displayType ?? displayTypes[0]?.class ?? 'button'
+    sendActionInputCommand({
+      command: 'ensureInputAssignment',
+      targetType: this._contextType,
+      targetGuid: this._contextGuid,
+      input: { name, type, displayType }
+    })
+  }
+
+  /** @param {string} inputGuid */
+  async _renameInputByGuid (inputGuid) {
+    const input = projectGraph.getInputs().get(inputGuid)
+    const values = await modalPrompt(
+      '',
+      [
+        {
+          label: 'Name',
+          key: 'name',
+          value: String(input?.name ?? ''),
+          placeholder: 'input name'
+        }
+      ],
+      { submit: 'Rename' }
+    )
+    const nextName = values?.name?.trim()
+    if (!nextName || nextName === input?.name) return
+    sendActionInputCommand({
+      command: 'renameInput',
+      inputGuid,
+      name: nextName
+    })
+  }
+
+  /** @param {string} inputGuid */
+  async _confirmAndDeleteInput (inputGuid) {
+    const linkedTargetCount = this._countLinkedTargetsForInput(inputGuid)
+    const ok = await modalConfirm(
+      `Delete this input? It is linked to ${linkedTargetCount} target(s).`,
+      { yes: 'Delete', no: 'Cancel' }
+    )
+    if (!ok) return
+    sendActionInputCommand({
+      command: 'deleteInput',
+      inputGuid,
+      expectedLinkedTargetCount: linkedTargetCount
+    })
+  }
+
+  /**
+   * @param {string} inputGuid
+   * @returns {number}
+   */
+  _countLinkedTargetsForInput (inputGuid) {
+    const input = projectGraph.getInputs().get(inputGuid)
+    if (!input) return 0
+    const actionGuid = typeof input.action === 'string' ? input.action : ''
+    if (!actionGuid) return 0
+    const action = projectGraph.getActions().get(actionGuid)
+    if (!action || !Array.isArray(action.execute)) return 0
+    const seen = new Set()
+    for (const item of action.execute) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+      const record = /** @type {Record<string, unknown>} */ (item)
+      const type = typeof record.type === 'string' ? record.type : ''
+      const guid = typeof record.guid === 'string' ? record.guid : ''
+      if (!type || !guid) continue
+      seen.add(`${type}:${guid}`)
+    }
+    return seen.size
   }
 }

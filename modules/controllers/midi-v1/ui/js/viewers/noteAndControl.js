@@ -115,6 +115,11 @@ function mountNoteAndControlEditor (container, api) {
   const row1 = document.createElement('div')
   row1.className = 'modal__row modal__row--compact'
 
+  const noteLabel = document.createElement('span')
+  noteLabel.className = 'modal__field-label'
+  noteLabel.textContent = 'Note:'
+  row1.appendChild(noteLabel)
+
   const noteRow = createLearnFieldRow({
     field: 'note',
     capture: 'noteOn',
@@ -136,10 +141,10 @@ function mountNoteAndControlEditor (container, api) {
   row1.appendChild(noteRow.row)
 
   const velWrap = document.createElement('div')
-  velWrap.className = 'modal__vel-wrap'
+  velWrap.className = 'modal__vel-wrap modal__vel-wrap--trail'
   const velLabel = document.createElement('span')
   velLabel.className = 'modal__vel-label'
-  velLabel.textContent = 'V:'
+  velLabel.textContent = 'Velo:'
   const lo = document.createElement('input')
   lo.type = 'number'
   lo.className = 'modal__input-num modal__input-num--2'
@@ -178,7 +183,7 @@ function mountNoteAndControlEditor (container, api) {
   const row2 = document.createElement('div')
   row2.className = 'modal__row modal__row--compact'
   const ctrlLabel = document.createElement('span')
-  ctrlLabel.className = 'modal__ctrl-label'
+  ctrlLabel.className = 'modal__field-label'
   ctrlLabel.textContent = 'Ctrl:'
   row2.appendChild(ctrlLabel)
 

@@ -207,13 +207,17 @@ body {
   gap: 0.15rem;
 }
 
+.modal__vel-wrap--trail {
+  margin-left: auto;
+}
+
 .modal__vel-label {
   flex: 0 0 auto;
   color: var(--color-muted);
   font-size: 0.75rem;
 }
 
-.modal__ctrl-label {
+.modal__field-label {
   flex: 0 0 auto;
   color: var(--color-muted);
   font-size: 0.75rem;

@@ -117,12 +117,11 @@ function lerpPlanEndpoints(
 
 /**
  * Keyframe runner: one renderer event per step by default; optional `content.lerp` adds quantized
- * eased ramps between successive keyframes. Keyframe knobs (`repeat`, `length`, `steps`, `lerp`) live in
- * `definition.content`, or legacy root-level if `content` is omitted.
- *
- * Optional `length` (seconds, stored in config): converted to ms internally; one loop spans `[0, length×1000)` — steps at `time >= length×1000` stay dormant until length is raised.
- * If `length` is omitted, cycle length equals the largest step `time` (legacy).
- * With `content.lerp`, each segment’s substeps are scheduled individually via `pushTimeoutAtFireWall` when that segment’s lerp window starts, not as a single batch for the whole loop.
+ * eased ramps between successive keyframes. Config is **only** read from `definition.content` (required
+ * object): `repeat`, `length`, `steps`, `lerp`. `content.length` (seconds, finite &gt; 0) is required;
+ * at least two steps are stored; the earliest step is pinned to `time: 0` and the latest to `time: length`
+ * (centisecond rounding). With `content.lerp`, each segment’s substeps are scheduled individually via
+ * `pushTimeoutAtFireWall` when that segment’s lerp window starts, not as a single batch for the whole loop.
  * On target intent leaving active scene: pause (clear timers). Re-enter: restart from cycle 0 (v1).
  *
  * Timescale: wall time = `startWall + nominalMs * timescale` ({@link setTimescale}).
@@ -147,22 +146,33 @@ export class KeyframeAnimator {
       curve: 'linear',
     },
     steps: [
-      { time: 0, args: {} },
+      { time: 0 },
+      { time: 10 },
     ],
   };
+
+  private static defaultLengthSeconds(): number {
+    const L = KeyframeAnimator.defaultValues['length'];
+    return typeof L === 'number' && Number.isFinite(L) && L > 0 ? L : 10;
+  }
 
   private static getDefaultStepArgsForNewKeyframe(): Record<string, unknown> {
     const stepsRaw = KeyframeAnimator.defaultValues['steps'];
     if (!Array.isArray(stepsRaw) || stepsRaw.length === 0) {
       return {};
     }
-    const row = stepsRaw[0];
-    if (!row || typeof row !== 'object' || Array.isArray(row)) {
-      return {};
-    }
-    const args = (row as Record<string, unknown>)['args'];
-    if (args !== undefined && typeof args === 'object' && args !== null && !Array.isArray(args)) {
-      return cloneRecord(args as Record<string, unknown>);
+    for (const row of stepsRaw) {
+      if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
+      const args = (row as Record<string, unknown>)['args'];
+      if (
+        args !== undefined &&
+        typeof args === 'object' &&
+        args !== null &&
+        !Array.isArray(args) &&
+        Object.keys(args as Record<string, unknown>).length > 0
+      ) {
+        return cloneRecord(args as Record<string, unknown>);
+      }
     }
     return {};
   }
@@ -272,7 +282,23 @@ export class KeyframeAnimator {
   }): void {
     if (this.editActive) return;
 
-    const { steps, stepSourceIndices } = this.parseSteps();
+    const raw = this.callbacks.getDefinitionRecord();
+    if (!raw) {
+      this.callbacks.onStatus({
+        status: 'stopped',
+        message: { text: 'Animation not in project (edit aborted)' },
+        data: {},
+      });
+      return;
+    }
+    let contentTouched = this.ensureContentObjectOnRecord(raw);
+    const normalized = this.normalizeStoredStepsAndRefresh();
+    contentTouched ||= normalized.changed;
+    if (contentTouched) {
+      this.callbacks.onDefinitionChanged?.();
+    }
+
+    const { steps, stepSourceIndices, parseError } = this.parseSteps();
     const targetGuid = this.targetIntentGuid();
 
     if (!targetGuid) {
@@ -283,10 +309,26 @@ export class KeyframeAnimator {
       });
       return;
     }
-    if (steps.length === 0) {
+    if (parseError === 'no_content') {
       this.callbacks.onStatus({
         status: 'stopped',
-        message: { text: 'No keyframe steps to edit' },
+        message: { text: 'keyframeAnimator requires definition.content object' },
+        data: {},
+      });
+      return;
+    }
+    if (parseError === 'invalid_length') {
+      this.callbacks.onStatus({
+        status: 'stopped',
+        message: { text: 'keyframeAnimator requires finite content.length > 0' },
+        data: {},
+      });
+      return;
+    }
+    if (steps.length < 2) {
+      this.callbacks.onStatus({
+        status: 'stopped',
+        message: { text: 'keyframeAnimator requires at least two keyframe steps' },
         data: {},
       });
       return;
@@ -311,6 +353,29 @@ export class KeyframeAnimator {
       () => this.computeEditState(),
       value => this.applyEditState(value),
     );
+  }
+
+  /**
+   * Call when `definition.content` was updated outside the keyframe edit binding (e.g. graph patch to
+   * `content.length`). Re-runs step normalization, pushes edit-state binding, and re-emits the current
+   * keyframe. Hub uses the return value to fan out a supplemental `content.steps` graph patch.
+   * @returns true if stored `content.steps` were modified.
+   */
+  reconcileStoredStepsAfterGraphMutation(): boolean {
+    if (!this.editActive) return false;
+    const preferred =
+      this.editSteps.length > 0 && typeof this.editSourceIndices[this.editIndex] === 'number'
+        ? this.editSourceIndices[this.editIndex]
+        : undefined;
+    const { changed } = this.normalizeStoredStepsAndRefresh(preferred);
+    if (changed) {
+      this.callbacks.onDefinitionChanged?.();
+    }
+    if (this.editBindingMgr && this.editBindingKey) {
+      this.editBindingMgr.receiveFromMaster(this.editBindingKey, this.computeEditState());
+    }
+    this.emitCurrentEditStep();
+    return changed;
   }
 
   exitEditMode(): void {
@@ -388,8 +453,9 @@ export class KeyframeAnimator {
     }
     const action = incoming['editAction'];
     if (action === 'remove') {
-      this.removeCurrentStep();
-      this.callbacks.onDefinitionChanged?.();
+      if (this.removeCurrentStep()) {
+        this.callbacks.onDefinitionChanged?.();
+      }
       if (this.editBindingMgr && this.editBindingKey) {
         this.editBindingMgr.receiveFromMaster(this.editBindingKey, this.computeEditState());
       }
@@ -470,7 +536,14 @@ export class KeyframeAnimator {
     }
     const indexChanged = clamped !== previousIndex;
     if (Object.prototype.hasOwnProperty.call(incoming, 'currentStepContent') && !indexChanged) {
-      const incomingStep = this.parseIncomingEditStep(incoming['currentStepContent'], this.editSteps[this.editIndex]);
+      const lenMs = this.parseExplicitAnimationLengthMs();
+      const incomingStep = this.parseIncomingEditStep(
+        incoming['currentStepContent'],
+        this.editSteps[this.editIndex],
+        lenMs !== undefined
+          ? { idx: this.editIndex, total, targetLastMs: lenMs }
+          : undefined,
+      );
       if (incomingStep) {
         const sourceIndex = this.editSourceIndices[this.editIndex];
         if (typeof sourceIndex === 'number') {
@@ -491,6 +564,7 @@ export class KeyframeAnimator {
   private parseIncomingEditStep(
     value: unknown,
     fallback?: { time: number; args?: Record<string, unknown> },
+    clampFirstLast?: { idx: number; total: number; targetLastMs: number },
   ): { time: number; args?: Record<string, unknown> } | null {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       Logger.warn('[keyframeAnimator] applyEditState ignored — currentStepContent must be an object');
@@ -499,10 +573,19 @@ export class KeyframeAnimator {
     const row = value as Record<string, unknown>;
     const fallbackTime = fallback?.time ?? 0;
     const rawTime = row['time'];
-    const time =
+    let time =
       typeof rawTime === 'number' && Number.isFinite(rawTime) && rawTime >= 0
         ? this.roundTimeMsToHundredthSecond(rawTime * 1000)
         : fallbackTime;
+
+    if (clampFirstLast && clampFirstLast.total >= 2) {
+      if (clampFirstLast.idx === 0) {
+        time = 0;
+      }
+      if (clampFirstLast.idx === clampFirstLast.total - 1) {
+        time = this.roundTimeMsToHundredthSecond(clampFirstLast.targetLastMs);
+      }
+    }
 
     const rawArgs = row['args'];
     if (rawArgs === undefined) {
@@ -547,7 +630,7 @@ export class KeyframeAnimator {
   }
 
   /**
-   * Explicit `length` from definition only (seconds → ms). When omitted, keyframe timing has no cycle cap in YAML.
+   * `content.length` (seconds → ms). Undefined when `content` is missing or `length` is invalid.
    */
   private parseExplicitAnimationLengthMs(): number | undefined {
     const cfg = this.keyframeConfigBag();
@@ -562,8 +645,7 @@ export class KeyframeAnimator {
   /**
    * Nominal ms for a new keyframe:
    * - non-last step: midpoint between current and next
-   * - last step with explicit `length`: new time = length (rounded); deny if current step already at/over length
-   * - last step without `length`: +1 s after current (no cap)
+   * - last index: new time = `content.length` (rounded); deny if current step already at/over length
    */
   private computeNewKeyframeTimeMs(editIndex: number):
     | { ok: true; timeMs: number }
@@ -577,15 +659,15 @@ export class KeyframeAnimator {
       return { ok: true, timeMs: this.roundTimeMsToHundredthSecond((cur.time + next.time) / 2) };
     }
     const explicitLengthMs = this.parseExplicitAnimationLengthMs();
-    const curR = this.roundTimeMsToHundredthSecond(cur.time);
-    if (explicitLengthMs !== undefined) {
-      const lenR = this.roundTimeMsToHundredthSecond(explicitLengthMs);
-      if (curR >= lenR) {
-        return { ok: false, reason: 'step would be outside animation length' };
-      }
-      return { ok: true, timeMs: lenR };
+    if (explicitLengthMs === undefined) {
+      return { ok: false, reason: 'content.length missing' };
     }
-    return { ok: true, timeMs: this.roundTimeMsToHundredthSecond(cur.time + 1000) };
+    const curR = this.roundTimeMsToHundredthSecond(cur.time);
+    const lenR = this.roundTimeMsToHundredthSecond(explicitLengthMs);
+    if (curR >= lenR) {
+      return { ok: false, reason: 'step would be outside animation length' };
+    }
+    return { ok: true, timeMs: lenR };
   }
 
   private persistEditedStep(
@@ -613,17 +695,18 @@ export class KeyframeAnimator {
     rawSteps[sourceIndex] = nextRow;
   }
 
-  private removeCurrentStep(): void {
-    if (this.editSteps.length <= 1) return;
+  private removeCurrentStep(): boolean {
+    if (this.editSteps.length <= 2) return false;
     const sourceIndex = this.editSourceIndices[this.editIndex];
-    if (typeof sourceIndex !== 'number' || !Number.isFinite(sourceIndex) || sourceIndex < 0) return;
+    if (typeof sourceIndex !== 'number' || !Number.isFinite(sourceIndex) || sourceIndex < 0) return false;
     const cfg = this.keyframeConfigBag();
-    if (!cfg) return;
+    if (!cfg) return false;
     const rawSteps = cfg['steps'];
-    if (!Array.isArray(rawSteps)) return;
-    if (sourceIndex >= rawSteps.length) return;
+    if (!Array.isArray(rawSteps)) return false;
+    if (sourceIndex >= rawSteps.length) return false;
     rawSteps.splice(sourceIndex, 1);
     this.normalizeStoredStepsAndRefresh();
+    return true;
   }
 
   private insertNewStep(step: { time: number; args?: Record<string, unknown> }): number {
@@ -659,57 +742,168 @@ export class KeyframeAnimator {
     this.editIndex = Math.max(0, Math.min(steps.length - 1, previousIndex));
   }
 
+  /** @returns true if `content` was created on the record. */
+  private ensureContentObjectOnRecord(raw: Record<string, unknown>): boolean {
+    const c = raw['content'];
+    if (c !== undefined && typeof c === 'object' && c !== null && !Array.isArray(c)) {
+      return false;
+    }
+    raw['content'] = cloneRecord(KeyframeAnimator.defaultValues as Record<string, unknown>);
+    return true;
+  }
+
+  private ensureValidLengthOnConfig(cfg: Record<string, unknown>): boolean {
+    const lenRaw = cfg['length'];
+    if (typeof lenRaw === 'number' && Number.isFinite(lenRaw) && lenRaw > 0) {
+      return false;
+    }
+    cfg['length'] = KeyframeAnimator.defaultLengthSeconds();
+    return true;
+  }
+
+  private stripEmptyArgsFromRow(row: Record<string, unknown>): boolean {
+    const a = row['args'];
+    if (a === undefined) return false;
+    if (
+      typeof a === 'object' &&
+      a !== null &&
+      !Array.isArray(a) &&
+      Object.keys(a as Record<string, unknown>).length === 0
+    ) {
+      delete row['args'];
+      return true;
+    }
+    return false;
+  }
+
+  private pinFirstLastStable(ordered: Record<string, unknown>[], targetLastMs: number): boolean {
+    let mutated = false;
+    const Lsec = this.toStoredStepTimeSeconds(targetLastMs);
+    const targetRounded = this.roundTimeMsToHundredthSecond(targetLastMs);
+    const n = ordered.length;
+    if (n < 2) return false;
+
+    const stableSort = (): void => {
+      for (let i = 0; i < ordered.length; i++) {
+        ordered[i]!['__kfs'] = i;
+      }
+      ordered.sort((a, b) => {
+        const ta = Number(a['time']) * 1000;
+        const tb = Number(b['time']) * 1000;
+        const ra = Number.isFinite(ta) ? this.roundTimeMsToHundredthSecond(ta) : 0;
+        const rb = Number.isFinite(tb) ? this.roundTimeMsToHundredthSecond(tb) : 0;
+        if (ra !== rb) return ra - rb;
+        return Number(a['__kfs']) - Number(b['__kfs']);
+      });
+      for (const r of ordered) {
+        delete r['__kfs'];
+      }
+    };
+
+    for (let iter = 0; iter < n + 6; iter++) {
+      stableSort();
+      const first = ordered[0];
+      const last = ordered[n - 1];
+      if (!first || !last) return mutated;
+      const prevFirst = first['time'];
+      const prevLast = last['time'];
+      first['time'] = 0;
+      last['time'] = Lsec;
+      if (prevFirst !== 0 || prevLast !== Lsec) {
+        mutated = true;
+      }
+      stableSort();
+      const tail = ordered[n - 1];
+      if (!tail) return mutated;
+      const tailMs = this.roundTimeMsToHundredthSecond(Number(tail['time']) * 1000);
+      if (tailMs === targetRounded) break;
+      mutated = true;
+    }
+    return mutated;
+  }
+
   /**
-   * Canonicalize stored `steps` order in-definition (time asc, stable by previous row index),
-   * then refresh edit caches and remap selected step to the moved row.
+   * Canonicalize stored `steps`: stable sort by time, at least two steps, first `time` 0 and last `time`
+   * = `content.length`, omit empty `args`. Returns whether durable animation content was modified.
    */
-  private normalizeStoredStepsAndRefresh(preferredSourceIndex?: number): void {
+  private normalizeStoredStepsAndRefresh(preferredSourceIndex?: number): { changed: boolean } {
+    let changed = false;
     const cfg = this.keyframeConfigBag();
     if (!cfg) {
       this.refreshEditStepsFromConfig(preferredSourceIndex);
-      return;
+      return { changed };
     }
-    const rawSteps = cfg['steps'];
-    if (!Array.isArray(rawSteps)) {
+    if (this.ensureValidLengthOnConfig(cfg)) {
+      changed = true;
+    }
+    const lenMs = this.parseExplicitAnimationLengthMs();
+    if (lenMs === undefined) {
       this.refreshEditStepsFromConfig(preferredSourceIndex);
-      return;
+      return { changed };
     }
+    const lenSec = this.toStoredStepTimeSeconds(lenMs);
 
-    const rows: {
-      row: Record<string, unknown>;
-      sourceIndex: number;
-      timeMs: number;
-    }[] = [];
+    if (!Array.isArray(cfg['steps'])) {
+      cfg['steps'] = [];
+      changed = true;
+    }
+    const rawSteps = cfg['steps'] as unknown[];
+
+    type RowEntry = { row: Record<string, unknown>; sourceIndex: number; timeMs: number };
+    const entries: RowEntry[] = [];
     for (let index = 0; index < rawSteps.length; index++) {
       const raw = rawSteps[index];
       if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
       const row = raw as Record<string, unknown>;
       const t = Number(row['time']) * 1000;
       if (!Number.isFinite(t)) continue;
-      rows.push({ row, sourceIndex: index, timeMs: t });
+      entries.push({
+        row,
+        sourceIndex: index,
+        timeMs: this.roundTimeMsToHundredthSecond(t),
+      });
     }
-    rows.sort((a, b) => (a.timeMs === b.timeMs ? a.sourceIndex - b.sourceIndex : a.timeMs - b.timeMs));
+    entries.sort((a, b) => (a.timeMs === b.timeMs ? a.sourceIndex - b.sourceIndex : a.timeMs - b.timeMs));
 
-    const indexMap = new Map<number, number>();
-    const ordered: Record<string, unknown>[] = [];
-    for (let i = 0; i < rows.length; i++) {
-      const entry = rows[i];
-      if (!entry) continue;
-      ordered.push(entry.row);
-      indexMap.set(entry.sourceIndex, i);
+    let ordered: Record<string, unknown>[] = entries.map(e => e.row);
+
+    if (ordered.length === 0) {
+      cfg['steps'] = [{ time: 0 }, { time: lenSec }];
+      changed = true;
+      this.refreshEditStepsFromConfig(preferredSourceIndex);
+      return { changed };
     }
+
+    if (ordered.length === 1) {
+      ordered.push({ time: lenSec });
+      changed = true;
+    }
+
+    if (this.pinFirstLastStable(ordered, lenMs)) {
+      changed = true;
+    }
+
+    for (const row of ordered) {
+      if (this.stripEmptyArgsFromRow(row)) {
+        changed = true;
+      }
+    }
+
     cfg['steps'] = ordered;
 
-    const mappedPreferred =
-      typeof preferredSourceIndex === 'number'
-        ? indexMap.get(preferredSourceIndex)
-        : undefined;
+    let mappedPreferred: number | undefined;
+    if (typeof preferredSourceIndex === 'number' && preferredSourceIndex >= 0) {
+      const ref = rawSteps[preferredSourceIndex];
+      if (ref && typeof ref === 'object' && !Array.isArray(ref)) {
+        const idx = ordered.indexOf(ref as Record<string, unknown>);
+        if (idx >= 0) mappedPreferred = idx;
+      }
+    }
     this.refreshEditStepsFromConfig(mappedPreferred);
+    return { changed };
   }
 
-  /**
-   * Keyframe fields live in `content` when present; otherwise root-level repeat/length/steps (legacy).
-   */
+  /** Keyframe config is read only from `definition.content`. */
   private keyframeConfigBag(): Record<string, unknown> | null {
     const raw = this.callbacks.getDefinitionRecord();
     if (!raw) return null;
@@ -722,7 +916,7 @@ export class KeyframeAnimator {
     ) {
       return content as Record<string, unknown>;
     }
-    return raw;
+    return null;
   }
 
   /** Optional `content.lerp`: `minMs` (nominal) lower-bounds spacing between successive lerp `events` (`× timescale` on hub wall clock). Omit or omit `lerp.minMs` → quantization-only cardinality. */
@@ -767,6 +961,7 @@ export class KeyframeAnimator {
     cycleLengthMs: number;
     lengthClampActive: boolean;
     clippedByLength: boolean;
+    parseError?: 'no_content' | 'invalid_length';
   } {
     const cfg = this.keyframeConfigBag();
     if (!cfg) {
@@ -774,9 +969,10 @@ export class KeyframeAnimator {
         steps: [],
         stepSourceIndices: [],
         repeatLoops: 0,
-        cycleLengthMs: 1,
+        cycleLengthMs: 0,
         lengthClampActive: false,
         clippedByLength: false,
+        parseError: 'no_content',
       };
     }
     const stepsRaw = cfg['steps'];
@@ -810,14 +1006,14 @@ export class KeyframeAnimator {
       typeof lenRaw === 'number' && Number.isFinite(lenRaw) && lenRaw > 0 ? lenRaw * 1000 : undefined;
 
     if (lengthMs === undefined) {
-      const fallbackPeriod = sorted.length === 0 ? 1 : Math.max(...sorted.map(s => s.time), 1);
       return {
-        steps: sorted,
-        stepSourceIndices: sortedIndices,
+        steps: [],
+        stepSourceIndices: [],
         repeatLoops,
-        cycleLengthMs: fallbackPeriod,
+        cycleLengthMs: 0,
         lengthClampActive: false,
         clippedByLength: false,
+        parseError: 'invalid_length',
       };
     }
 
@@ -893,7 +1089,16 @@ export class KeyframeAnimator {
 
   start(intentAccess: IntentAccessFn, mutateIntent: MutateIntentFn): void {
     this.cancelled = false;
-    const { steps, repeatLoops, cycleLengthMs, lengthClampActive, clippedByLength } =
+    const rawDef = this.callbacks.getDefinitionRecord();
+    if (rawDef) {
+      let touched = this.ensureContentObjectOnRecord(rawDef);
+      const normalized = this.normalizeStoredStepsAndRefresh();
+      touched ||= normalized.changed;
+      if (touched) {
+        this.callbacks.onDefinitionChanged?.();
+      }
+    }
+    const { steps, repeatLoops, cycleLengthMs, lengthClampActive, clippedByLength, parseError } =
       this.parseSteps();
     const targetGuid = this.targetIntentGuid();
     if (!targetGuid) {
@@ -905,18 +1110,30 @@ export class KeyframeAnimator {
       return;
     }
 
+    if (parseError === 'no_content') {
+      this.callbacks.onStatus({
+        status: 'stopped',
+        message: { text: 'keyframeAnimator requires definition.content object' },
+        data: {},
+      });
+      return;
+    }
+    if (parseError === 'invalid_length') {
+      this.callbacks.onStatus({
+        status: 'stopped',
+        message: { text: 'keyframeAnimator requires finite content.length > 0' },
+        data: {},
+      });
+      return;
+    }
+
     if (steps.length === 0) {
       this.callbacks.onStatus({
         status: 'stopped',
         message: {
-          text: lengthClampActive
-            ? `No steps before length boundary (${cycleLengthMs} ms)`
-            : 'No keyframe steps',
+          text: `No steps before length boundary (${cycleLengthMs} ms)`,
         },
-        data:
-          lengthClampActive
-            ? { lengthMs: cycleLengthMs }
-            : {},
+        data: { lengthMs: cycleLengthMs },
       });
       return;
     }

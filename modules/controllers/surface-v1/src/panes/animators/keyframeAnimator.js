@@ -180,7 +180,7 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
       removeBtn.className =
         'animator-edit-section__nav-btn animator-edit-section__dump-remove'
       removeBtn.textContent = '❌'
-      removeBtn.disabled = total <= 1
+      removeBtn.disabled = total <= 2
       removeBtn.addEventListener('click', e => {
         e.stopPropagation()
         sendBindingSet(bindingKey, {

@@ -112,7 +112,7 @@ export class ReceiverNoteOnOff extends ReceiverBase {
     const targetsJoined = targetBits.length > 0 ? targetBits.join(', ') : '—';
     const noteLabel = midiTools.noteAsString(params.note);
     // const envBit = envelopeSummary(params.envelope);
-    return `[${chLabel}] note ${noteLabel} (${params.velocityMin}–${params.velocityMax}) ${params.velocityOffset > 0 ? '+' + params.velocityOffset : params.velocityOffset}${params.velocityScale > 1 ? '×' + params.velocityScale : ''}${params.velocityScale < 1 ? '/' + params.velocityScale : ''} ⮕ ${targetsJoined}`;
+    return `[${chLabel}] ${noteLabel} (${params.velocityMin}–${params.velocityMax}) ${params.velocityOffset > 0 ? '+' + params.velocityOffset : params.velocityOffset}${params.velocityScale > 1 ? '×' + params.velocityScale : ''}${params.velocityScale < 1 ? '/' + params.velocityScale : ''} ⮕ ${targetsJoined}`;
   }
 
   static build(

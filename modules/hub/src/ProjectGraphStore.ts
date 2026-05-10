@@ -454,9 +454,34 @@ export class ProjectGraphStore {
       persistence,
     });
 
+    const keyframeStepSyncDeltas: GraphDelta[] = [];
+    if (this.animationManager?.reconcileKeyframeEditAfterAnimationGraphMutation(command.guid)) {
+      const syncedAnim = this.projectManager.getAnimationByGuid(command.guid) as unknown as
+        | Record<string, unknown>
+        | undefined;
+      const content = syncedAnim?.['content'];
+      if (
+        content !== undefined &&
+        typeof content === 'object' &&
+        content !== null &&
+        !Array.isArray(content)
+      ) {
+        const steps = (content as Record<string, unknown>)['steps'];
+        keyframeStepSyncDeltas.push(
+          this.makeDelta({
+            op: 'patch',
+            entityType: 'animation',
+            guid: command.guid,
+            patch: { content: { steps } },
+            persistence,
+          }),
+        );
+      }
+    }
+
     return {
       revision: this.revision,
-      controllerDeltas: [animationDelta, actionDelta],
+      controllerDeltas: [animationDelta, actionDelta, ...keyframeStepSyncDeltas],
       rendererEvents: [],
       rendererConfigChangedFor: [],
       durableChanged,

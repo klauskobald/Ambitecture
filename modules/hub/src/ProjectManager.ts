@@ -106,21 +106,21 @@ export interface AnimationDefinition {
   /** Legacy / alias for `targetIntent` (hub accepts either). */
   intent?: string;
   /**
-   * Class-specific payload. For `keyframeAnimator`: `repeat`, `length`, `steps` belong here.
+   * Class-specific payload. For `keyframeAnimator`: `repeat`, `length`, `steps` (≥ 2; first/last times pinned to `0` and `length`), optional `lerp` — all required on the runner side under `content`.
    * Optional `lerp`: `{ quantization, time, curve, minMs? }` enables quantized eased ramps between anchors (`time <= 0` disables). `minMs` (nominal) lowers substep count so consecutive lerp `scheduled` gaps are at least `minMs × playback timescale` on the hub wall clock.
-   * @see KeyframeAnimator — still accepts legacy root-level repeat/length/steps if `content` is absent.
+   * `ProjectGraphStore` may fold historical root-level `repeat` / `length` / `steps` into `content` on upsert; {@link KeyframeAnimator} reads **only** `definition.content` at runtime.
    */
   content?: Record<string, unknown>;
   /**
-   * @deprecated Prefer `content` for `keyframeAnimator`. Hub still reads these when `content` is omitted.
+   * @deprecated For `keyframeAnimator`, use `content.repeat`. Folded into `content` on graph upsert when present at root.
    */
   repeat?: number;
   /**
-   * @deprecated Prefer `content` for `keyframeAnimator`.
+   * @deprecated For `keyframeAnimator`, use `content.length`. Folded into `content` on graph upsert when present at root.
    */
   length?: number;
   /**
-   * @deprecated Prefer `content` for `keyframeAnimator`.
+   * @deprecated For `keyframeAnimator`, use `content.steps`. Folded into `content` on graph upsert when present at root.
    */
   steps?: AnimationStep[];
 }

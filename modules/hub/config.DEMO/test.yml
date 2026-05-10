@@ -429,6 +429,9 @@ testParams:
         - time: 5
           args:
             "position.2": 5
+        - time: 10
+          args:
+            "position.2": 5
 
   # Timescale WebSocket binding stays registered after stop (no null to slaves).
   005-timescale-binding.ts:

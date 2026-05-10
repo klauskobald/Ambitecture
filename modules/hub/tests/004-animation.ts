@@ -144,12 +144,12 @@ function readConfig(testconfig: Record<string, unknown>): AnimationTestConfig {
 }
 
 /**
- * Steps the hub `keyframeAnimator` actually fires: sorted by `time`, then those with `time < length`.
- * Matches hub keyframeAnimator `parseSteps` when `length` is set on the animation.
+ * Steps the hub `keyframeAnimator` actually fires: sorted by `time`, then those with `time <= length` (seconds).
+ * Matches hub keyframeAnimator `parseSteps` when `content.length` is set.
  */
 function effectiveKeyframeSteps(config: AnimationTestConfig): AnimationKeyframeStep[] {
   const sorted = [...config.steps].sort((a, b) => (a.time === b.time ? 0 : a.time - b.time));
-  return sorted.filter(s => s.time < config.length);
+  return sorted.filter(s => s.time <= config.length);
 }
 
 function registerController(ws: WebSocket, location: [number, number]): void {
@@ -261,7 +261,7 @@ export async function main(
   const effectiveStepsForHub = effectiveKeyframeSteps(config);
   if (effectiveStepsForHub.length === 0) {
     throw new Error(
-      '004-animation: no keyframe steps satisfy time < length; increase length or lower step times (same rule as hub keyframeAnimator).',
+      '004-animation: no keyframe steps satisfy time <= length; increase length or lower step times (same rule as hub keyframeAnimator).',
     );
   }
 

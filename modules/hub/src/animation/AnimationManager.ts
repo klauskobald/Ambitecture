@@ -477,4 +477,14 @@ export class AnimationManager {
     this.exitEditMode(animationGuid);
     this.unregisterTimescaleMaster(animationGuid);
   }
+
+  /**
+   * After `graph:command` updates an animation while keyframe edit is open: re-pin steps to
+   * `content.length` and refresh the edit binding. Returns whether `content.steps` changed on disk.
+   */
+  reconcileKeyframeEditAfterAnimationGraphMutation(animationGuid: string): boolean {
+    const plugin = this.edits.get(animationGuid);
+    if (!plugin) return false;
+    return plugin.reconcileStoredStepsAfterGraphMutation();
+  }
 }

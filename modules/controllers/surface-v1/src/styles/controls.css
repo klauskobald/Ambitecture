@@ -1056,6 +1056,10 @@
 
 .quick-panel-knob--engaged .quick-panel-knob__engage-hint:not([hidden]) {
   display: block;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg);
+  padding: 2px 4px;
 }
 
 .quick-panel-knob--hide-inner-title .quick-panel-knob-svg__label {
@@ -1064,6 +1068,16 @@
 
 .quick-panel-knob--hide-inner-title .quick-panel-knob-svg__value {
   transform: translateY(-10px);
+}
+
+.perform-animate-speed-wrap--keyframe-step .quick-panel-knob__dial {
+  width: calc(23px * 1.5);
+  height: calc(23px * 1.5);
+}
+
+.perform-animate-speed-wrap--keyframe-step .quick-panel-knob-svg__value {
+  font-size: 1.9rem;
+  transform: translateY(-5px);
 }
 
 .quick-panel-knob__caption {

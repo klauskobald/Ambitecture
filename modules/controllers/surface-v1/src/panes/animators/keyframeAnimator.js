@@ -389,8 +389,11 @@ function makeStepTimeKnob (state, idx, total, bindingKey, animationGuid) {
   let currentTime = Number.isFinite(currentTimeRaw) ? currentTimeRaw : fallback
   currentTime = Math.max(min, Math.min(max, currentTime))
 
+  const timeKnobHint =
+    'Moves the time between the previous and next step'
   const wrap = document.createElement('div')
-  wrap.className = 'perform-animate-speed-wrap'
+  wrap.className =
+    'perform-animate-speed-wrap perform-animate-speed-wrap--keyframe-step'
   const knob = new ScalarRadialKnobSvg({
     descriptor: {
       name: 'Time',
@@ -400,6 +403,7 @@ function makeStepTimeKnob (state, idx, total, bindingKey, animationGuid) {
     },
     intentGuid: String(animationGuid),
     readValue: () => currentTime,
+    hint: timeKnobHint,
     onCommit: domain => {
       const rounded = roundToHundredths(domain)
       currentTime = Math.max(min, Math.min(max, rounded))
@@ -418,6 +422,8 @@ function makeStepTimeKnob (state, idx, total, bindingKey, animationGuid) {
     showInnerSvgTitle: false
   })
   knob.mount(wrap)
+  const knobRoot = wrap.firstElementChild
+  if (knobRoot instanceof HTMLElement) knobRoot.title = timeKnobHint
   requestAnimationFrame(() => knob.syncFromExternal())
   return wrap
 }

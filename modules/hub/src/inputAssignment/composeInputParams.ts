@@ -56,6 +56,13 @@ export function hasCapabilityInputTypes(capabilities: unknown): boolean {
   return normalizeInputTypes(capabilities).length > 0;
 }
 
+/** Param field names declared for an input type in `systemCapabilities.inputTypes`. */
+export function getParamKeysForInputType(capabilities: unknown, inputTypeClass: string): string[] {
+  const defs = normalizeInputTypes(capabilities);
+  const def = defs.find(t => t.class === inputTypeClass);
+  return def ? Object.keys(def.params) : [];
+}
+
 export function hasCapabilityDisplayTypes(capabilities: unknown): boolean {
   return normalizeDisplayTypes(capabilities).length > 0;
 }

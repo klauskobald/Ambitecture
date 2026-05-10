@@ -36,6 +36,10 @@ function isActionInputCommand(payload: unknown): payload is ActionInputCommand {
       return typeof p['inputGuid'] === 'string'
         && p['inputGuid'].length > 0
         && typeof p['name'] === 'string';
+    case 'updateInput':
+      return typeof p['inputGuid'] === 'string'
+        && p['inputGuid'].length > 0
+        && hasValidInput;
     case 'assignExistingInput':
       return typeof p['targetType'] === 'string'
         && p['targetType'].length > 0

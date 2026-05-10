@@ -6,6 +6,10 @@ import {
   prompt as modalPrompt,
   sampleKey
 } from '../core/Modal.js'
+import {
+  parseParamFromForm,
+  stringifyJsonStringParam
+} from './inputAssign/paramKindHandlers.js'
 import { sendActionInputCommand } from '../core/outboundQueue.js'
 import {
   getDisplayTypes,
@@ -13,6 +17,16 @@ import {
   resolveDefaultPerformTypes
 } from '../core/systemCapabilities.js'
 import { normalizeInputKeyChar } from '../core/performButtonInputs.js'
+
+/** @param {Record<string, unknown> | null | undefined} input */
+function displayClassFromInputRecord (input) {
+  const display = input?.display
+  if (!display || typeof display !== 'object' || Array.isArray(display))
+    return ''
+  return typeof /** @type {Record<string, unknown>} */ (display).type === 'string'
+    ? /** @type {Record<string, unknown>} */ (display).type
+    : ''
+}
 
 export class InputAssignManager {
   /**
@@ -108,25 +122,7 @@ export class InputAssignManager {
     )
     const inputGuid = typeof input?.guid === 'string' ? input.guid : ''
     if (!inputGuid) return
-    const values = await modalPrompt(
-      '',
-      [
-        {
-          label: 'Name',
-          key: 'name',
-          value: String(input?.name ?? ''),
-          placeholder: 'input name'
-        }
-      ],
-      { submit: 'Rename' }
-    )
-    const nextName = values?.name?.trim()
-    if (!nextName || nextName === input?.name) return
-    sendActionInputCommand({
-      command: 'renameInput',
-      inputGuid,
-      name: nextName
-    })
+    await this._editInputByGuid(inputGuid)
   }
 
   async showControl () {
@@ -293,7 +289,7 @@ export class InputAssignManager {
     }
     if (outcome.startsWith('__edit__:')) {
       const inputGuid = outcome.slice('__edit__:'.length)
-      await this._renameInputByGuid(inputGuid)
+      await this._editInputByGuid(inputGuid)
       this._refreshInvokeButton()
       return
     }
@@ -442,26 +438,221 @@ export class InputAssignManager {
   }
 
   /** @param {string} inputGuid */
-  async _renameInputByGuid (inputGuid) {
+  async _editInputByGuid (inputGuid) {
+    const inputTypes = getInputTypes()
+    const displayTypes = getDisplayTypes()
+    if (!inputTypes || !displayTypes) {
+      await openModalCard(dismiss => {
+        const card = document.createElement('div')
+        card.className = 'modal input-assign-modal'
+        card.addEventListener('click', e => e.stopPropagation())
+        const p = document.createElement('p')
+        p.className = 'modal-text'
+        p.textContent = 'System capabilities not loaded'
+        const sub = document.createElement('p')
+        sub.className = 'input-assign-modal__hint'
+        sub.textContent =
+          'Wait for hub registration or reconnect. Input/display types come from system.yml.'
+        const actions = document.createElement('div')
+        actions.className = 'modal-actions'
+        const ok = document.createElement('button')
+        ok.type = 'button'
+        ok.className = 'btn btn--primary'
+        ok.textContent = 'OK'
+        ok.addEventListener('click', () => dismiss(null))
+        actions.appendChild(ok)
+        card.appendChild(p)
+        card.appendChild(sub)
+        card.appendChild(actions)
+        return card
+      })
+      return
+    }
+
     const input = projectGraph.getInputs().get(inputGuid)
-    const values = await modalPrompt(
-      '',
-      [
-        {
-          label: 'Name',
-          key: 'name',
-          value: String(input?.name ?? ''),
-          placeholder: 'input name'
+    if (!input) return
+
+    await openModalCard(dismiss => {
+      const card = document.createElement('div')
+      card.className = 'modal input-assign-modal'
+      card.addEventListener('click', e => e.stopPropagation())
+
+      const title = document.createElement('p')
+      title.className = 'modal-text'
+      title.textContent = 'Edit input'
+
+      const nameLabel = document.createElement('label')
+      nameLabel.className = 'input-assign-modal__label'
+      nameLabel.textContent = 'Name'
+      const nameInput = document.createElement('input')
+      nameInput.type = 'text'
+      nameInput.className = 'modal-input'
+      nameInput.placeholder = 'input name'
+      nameInput.value = String(input?.name ?? '')
+      nameLabel.appendChild(nameInput)
+
+      const typeLabel = document.createElement('label')
+      typeLabel.className = 'input-assign-modal__label'
+      typeLabel.textContent = 'Input type'
+      const typeSelect = document.createElement('select')
+      typeSelect.className = 'modal-input modal-select-capitalize'
+      for (const t of inputTypes) {
+        const opt = document.createElement('option')
+        opt.value = t.class
+        opt.textContent = t.name
+        typeSelect.appendChild(opt)
+      }
+      const curType =
+        typeof input.type === 'string' &&
+        inputTypes.some(t => t.class === input.type)
+          ? input.type
+          : inputTypes[0].class
+      typeSelect.value = curType
+      typeLabel.appendChild(typeSelect)
+
+      const displayLabel = document.createElement('label')
+      displayLabel.className = 'input-assign-modal__label'
+      displayLabel.textContent = 'Display type'
+      const displaySelect = document.createElement('select')
+      displaySelect.className = 'modal-input modal-select-capitalize'
+      for (const d of displayTypes) {
+        const opt = document.createElement('option')
+        opt.value = d.class
+        opt.textContent = d.name
+        displaySelect.appendChild(opt)
+      }
+      const defaults = resolveDefaultPerformTypes()
+      const curDisplayRaw = displayClassFromInputRecord(
+        /** @type {Record<string, unknown>} */ (input)
+      )
+      const curDisplay =
+        curDisplayRaw && displayTypes.some(d => d.class === curDisplayRaw)
+          ? curDisplayRaw
+          : defaults?.displayType ?? displayTypes[0].class
+      displaySelect.value = curDisplay
+      displayLabel.appendChild(displaySelect)
+
+      const paramHost = document.createElement('div')
+      paramHost.className = 'input-assign-modal__param-host'
+
+      const errorEl = document.createElement('p')
+      errorEl.className = 'input-assign-modal__error'
+      errorEl.hidden = true
+
+      const collectDraft = () => {
+        const m = new Map()
+        for (const ta of paramHost.querySelectorAll(
+          'textarea[data-param-key]'
+        )) {
+          if (ta instanceof HTMLTextAreaElement && ta.dataset.paramKey) {
+            m.set(ta.dataset.paramKey, ta.value)
+          }
         }
-      ],
-      { submit: 'Rename' }
-    )
-    const nextName = values?.name?.trim()
-    if (!nextName || nextName === input?.name) return
-    sendActionInputCommand({
-      command: 'renameInput',
-      inputGuid,
-      name: nextName
+        return m
+      }
+
+      const paramsSnapshot = this._recordOrUndefined(input.params)
+
+      const renderParamFields = typeClass => {
+        const draft = collectDraft()
+        const def = inputTypes.find(t => t.class === typeClass)
+        paramHost.replaceChildren()
+        if (!def?.params) return
+        for (const [paramKey, kind] of Object.entries(def.params)) {
+          const lab = document.createElement('label')
+          lab.className = 'input-assign-modal__label'
+          lab.textContent = paramKey
+          const ta = document.createElement('textarea')
+          ta.className = 'modal-input input-assign-modal__json'
+          ta.dataset.paramKey = paramKey
+          ta.spellcheck = false
+          const initial = draft.has(paramKey)
+            ? draft.get(paramKey)
+            : stringifyJsonStringParam(paramsSnapshot?.[paramKey])
+          ta.value = initial ?? ''
+          lab.appendChild(ta)
+          paramHost.appendChild(lab)
+        }
+      }
+
+      renderParamFields(typeSelect.value)
+
+      typeSelect.addEventListener('change', () => {
+        errorEl.hidden = true
+        renderParamFields(typeSelect.value)
+      })
+
+      const actions = document.createElement('div')
+      actions.className = 'modal-actions'
+
+      const cancelBtn = document.createElement('button')
+      cancelBtn.type = 'button'
+      cancelBtn.className = 'btn'
+      cancelBtn.textContent = 'Cancel'
+      cancelBtn.addEventListener('click', () => dismiss(null))
+
+      const saveBtn = document.createElement('button')
+      saveBtn.type = 'button'
+      saveBtn.className = 'btn btn--primary'
+      saveBtn.textContent = 'Save'
+      saveBtn.addEventListener('click', () => {
+        errorEl.hidden = true
+        const name = nameInput.value.trim()
+        if (!name) {
+          errorEl.textContent = 'Name is required.'
+          errorEl.hidden = false
+          return
+        }
+
+        /** @type {Record<string, unknown>} */
+        const payload = {
+          name,
+          type: typeSelect.value,
+          displayType: displaySelect.value
+        }
+
+        const typeClass = typeSelect.value
+        const def = inputTypes.find(t => t.class === typeClass)
+        if (def?.params) {
+          for (const [paramKey, kind] of Object.entries(def.params)) {
+            const ta = paramHost.querySelector(
+              `textarea[data-param-key="${CSS.escape(paramKey)}"]`
+            )
+            const raw = ta instanceof HTMLTextAreaElement ? ta.value : ''
+            const parsed = parseParamFromForm(kind, raw, paramKey)
+            if (!parsed.ok) {
+              errorEl.textContent = parsed.message
+              errorEl.hidden = false
+              return
+            }
+            if (parsed.value !== undefined) {
+              payload[paramKey] = parsed.value
+            }
+          }
+        }
+
+        sendActionInputCommand({
+          command: 'updateInput',
+          inputGuid,
+          input: payload
+        })
+        dismiss(true)
+      })
+
+      actions.appendChild(cancelBtn)
+      actions.appendChild(saveBtn)
+
+      card.appendChild(title)
+      card.appendChild(nameLabel)
+      card.appendChild(typeLabel)
+      card.appendChild(displayLabel)
+      card.appendChild(paramHost)
+      card.appendChild(errorEl)
+      card.appendChild(actions)
+
+      requestAnimationFrame(() => nameInput.focus())
+
+      return card
     })
   }
 

@@ -5,6 +5,7 @@ import { GraphCommand } from './GraphProtocol';
 import { Logger } from './Logger';
 import {
   composeInputParamsFromCapabilities,
+  getParamKeysForInputType,
   hasCapabilityDisplayTypes,
   hasCapabilityInputTypes,
   isKnownDisplayType,
@@ -24,6 +25,7 @@ export type ActionInputCommand =
   | { command: 'ensureInputAssignment'; targetType: AssignTargetType; targetGuid: string; input: InputAssignConfig }
   | { command: 'removeInputAssignment'; targetType: AssignTargetType; targetGuid: string }
   | { command: 'renameInput'; inputGuid: string; name: string }
+  | { command: 'updateInput'; inputGuid: string; input: InputAssignConfig }
   | { command: 'assignExistingInput'; targetType: AssignTargetType; targetGuid: string; inputGuid: string }
   | { command: 'deleteInput'; inputGuid: string; expectedLinkedTargetCount?: number }
   | { command: 'setInputKeyChar'; inputGuid: string; keyChar?: string | null };
@@ -42,6 +44,8 @@ export class ActionInputManager {
         return this.removeInputAssignmentCommands(controllerGuid, command.targetType, command.targetGuid);
       case 'renameInput':
         return this.renameInputCommands(controllerGuid, command.inputGuid, command.name);
+      case 'updateInput':
+        return this.updateInputCommands(controllerGuid, command.inputGuid, command.input);
       case 'assignExistingInput':
         return this.assignExistingInputCommands(controllerGuid, command.targetType, command.targetGuid, command.inputGuid);
       case 'deleteInput':
@@ -257,6 +261,93 @@ export class ActionInputManager {
         },
         { entityType: 'controller', guid: controllerGuid },
       ),
+    ];
+  }
+
+  private updateInputCommands(
+    controllerGuid: string,
+    inputGuid: string,
+    patch: InputAssignConfig,
+  ): GraphCommand[] {
+    if (inputGuid.length === 0) return [];
+    const owner = this.projectManager.findControllerGuidForInput(inputGuid);
+    if (owner !== controllerGuid) {
+      Logger.warn('[action] updateInput: input not owned by this controller');
+      return [];
+    }
+    const existing = this.projectManager.getInputByGuid(inputGuid);
+    if (!existing?.guid) return [];
+
+    const caps = this.getSystemCapabilities();
+    const patchRecord = patch as Record<string, unknown>;
+    const nextNameRaw = typeof patchRecord['name'] === 'string' ? patchRecord['name'].trim() : '';
+    const nextName = nextNameRaw.length > 0 ? nextNameRaw : existing.name;
+    if (!nextName || String(nextName).trim().length === 0) return [];
+
+    const configuredType =
+      typeof patch.type === 'string' && patch.type.length > 0 ? patch.type : existing.type;
+
+    const defaults = resolveDefaultPerformTypes(caps);
+    const fallbackDisplay = defaults?.displayType ?? 'button';
+    const prevDisplay =
+      existing.display && typeof existing.display === 'object' && !Array.isArray(existing.display)
+        ? { ...(existing.display as Record<string, unknown>) }
+        : {};
+    const prevDisplayType = typeof prevDisplay['type'] === 'string' ? prevDisplay['type'] : '';
+    const configuredDisplayType =
+      typeof patch.displayType === 'string' && patch.displayType.length > 0
+        ? patch.displayType
+        : (prevDisplayType || fallbackDisplay);
+
+    if (hasCapabilityInputTypes(caps) && !isKnownInputType(caps, configuredType)) {
+      Logger.warn(`[action] updateInput: unknown input type "${configuredType}"`);
+      return [];
+    }
+    if (hasCapabilityDisplayTypes(caps) && !isKnownDisplayType(caps, configuredDisplayType)) {
+      Logger.warn(`[action] updateInput: unknown display type "${configuredDisplayType}"`);
+      return [];
+    }
+
+    const metaKeys = new Set(['name', 'type', 'displayType']);
+    const cfgRecord: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(patchRecord)) {
+      if (metaKeys.has(k)) continue;
+      cfgRecord[k] = v;
+    }
+
+    const paramKeys = getParamKeysForInputType(caps, configuredType);
+    const existingParams =
+      existing.params && typeof existing.params === 'object' && !Array.isArray(existing.params)
+        ? (existing.params as Record<string, unknown>)
+        : {};
+    for (const pk of paramKeys) {
+      if (!(pk in cfgRecord) && pk in existingParams) {
+        cfgRecord[pk] = existingParams[pk];
+      }
+    }
+
+    const composed = composeInputParamsFromCapabilities(caps, configuredType, cfgRecord);
+    if (!composed.ok) {
+      Logger.warn(`[action] updateInput: ${composed.reason}`);
+      return [];
+    }
+
+    const row = cloneRecord(existing as unknown as Record<string, unknown>);
+    row['name'] = nextName;
+    row['type'] = configuredType;
+    prevDisplay['type'] = configuredDisplayType;
+    row['display'] = prevDisplay;
+
+    if (composed.params !== undefined && Object.keys(composed.params).length > 0) {
+      row['params'] = composed.params;
+    } else {
+      delete row['params'];
+    }
+
+    row['guid'] = existing.guid;
+
+    return [
+      this.upsertCommand('input', inputGuid, row, { entityType: 'controller', guid: controllerGuid }),
     ];
   }
 

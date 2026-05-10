@@ -34,7 +34,7 @@ The hub is the **single source of truth** for system-wide configuration and grap
 - **`src/EventQueue.ts`** — Buckets/schedules generated renderer `events` by execution timestamp and dispatches to connected renderers.
 - **`src/ProjectManager.ts`** — Loads project + referenced fixtures, assigns missing GUIDs to mutable graph entities (including scenes), serializes renderer/controller snapshots, saves durable YAML, and exposes project helper methods used by `ProjectGraphStore`.
 - **`src/RuntimeUpdateDispatcher.ts`** — Extracted dispatch layer for `runtime:command` and action-triggered intent execution: forwards `runtime:update` to all other connected controllers, converts intent runtime updates to renderer events via `RuntimeIntentStore`, and schedules them on `EventQueue`. Used by `RuntimeCommandHandler`, `ActionHandler`, and `AnimationManager`.
-- **`src/ActionInputManager.ts`** — Builds `GraphCommand[]` from `ActionInputCommand` payloads (`ensureInputAssignment`, `removeInputAssignment`, `renameInput`). Validates input/display types against `systemCapabilities`, composes typed params via `composeInputParams.ts`, and wires actions ↔ inputs by target (`{ type, guid }`). Also provides `buildSceneCleanupCommands(sceneGuid)` for orphan removal when a scene is deleted.
+- **`src/ActionInputManager.ts`** — Builds `GraphCommand[]` from `ActionInputCommand` payloads (`ensureInputAssignment`, `removeInputAssignment`, `renameInput`, `updateInput`). Validates input/display types against `systemCapabilities`, composes typed params via `composeInputParams.ts`, and wires actions ↔ inputs by target (`{ type, guid }`). Also provides `buildSceneCleanupCommands(sceneGuid)` for orphan removal when a scene is deleted.
 - **`src/inputAssignment/composeInputParams.ts`** — Pure stateless helpers for reading `systemCapabilities.inputTypes`/`displayTypes`, resolving defaults, validating type class strings, and composing typed `params` from `inputConfig` fields. Extend `applyParamKind()` here when adding new param kinds (currently only `jsonString`).
 - **`src/handlers/ActionHandler.ts`** — Handles `action:input` (delegates to `ActionInputManager` → `ProjectGraphStore`) and `action:trigger`. Trigger execute items resolve to: scene activation, intent runtime updates via `RuntimeUpdateDispatcher`, or animation control via `AnimationManager` (`start` / `stop` / `pause` / `settimescale`). Only registered controllers may send these messages.
 - **`src/animation/AnimationManager.ts`** — Hub-side animation orchestrator. Holds one runner per animation `guid`, drives lifecycle (`trigger` / `stop` / `pause` / `setTimescale`), enters/exits live keyframe edit mode, broadcasts `hub:status` updates and per-target `lock:intent` notifications, and registers timescale + edit-state binding masters with `BindingManager`. Scene-membership changes gracefully restart runners so closures over stale graph state are dropped.
@@ -147,7 +147,7 @@ Renderer data authority model:
 - **performMomentaryRegistry** (`src/core/performMomentaryRegistry.js`): Tracks momentary inputs currently held (touch + keyboard) so that `argsOff` is dispatched exactly once on release regardless of input source.
 - **performButtonInputs** (`src/core/performButtonInputs.js`): `collectPerformButtonInputs()` — the canonical filter for which inputs appear as Perform pane buttons (`display.type === 'button'` + valid linked action). Always call this function instead of filtering inputs inline.
 - **ArraySorter** (`src/core/arraySorter.js`): Generic drag-to-reorder UI for any object array with a numeric sort-key property. `getItemsSorted()` stable-sorts by key then `guid`. `displaySortDialog(host, callbackDisplay, callbackLifecycle, onReorder)` renders pointer-capture draggable rows with ghost and drop markers, writes sort keys in place. Default key: `DEFAULT_PERFORM_INPUT_SORT_KEY` (`'_sortIdx'`). Use for any list that operators need to reorder.
-- **InputAssignManager** (`src/edit/InputAssignManager.js`): Reusable per-target class for assigning/editing/removing a controller input. Constructor: `new InputAssignManager({ context: { type, guid }, labelDefault? })`. Provides `getInvokeButton()` (standalone toggle button), `getInlinePane()` (row with toggle + rename button, used in property panel), and `showControl()` (full modal with type/displayType/name/params/key from `systemCapabilities`). Sends via `sendActionInputCommand()`. Supports any `targetType` — scene, intent, animation, and future entity types.
+- **InputAssignManager** (`src/edit/InputAssignManager.js`): Reusable per-target class for assigning/editing/removing a controller input. Constructor: `new InputAssignManager({ context: { type, guid }, labelDefault? })`. Provides `getInvokeButton()` (standalone toggle button), `getInlinePane()` (row with toggle + assigned name), and `showControl()` (picker: assign/create/remove; per-row key/edit/delete). Edit opens a modal to change name, input type, display type, and typed JSON params (`args` / `argsOn` / `argsOff` per `systemCapabilities.inputTypes`), plus keyboard shortcut sampling. Sends via `sendActionInputCommand()` (`ensureInputAssignment`, `updateInput`, etc.). Supports any `targetType` — scene, intent, animation, and future entity types.
 - **paramKindHandlers** (`src/edit/inputAssign/paramKindHandlers.js`): Form-to-value parse/stringify for each input param `kind` (currently `jsonString`). Add new switch cases here when `system.yml` defines new param kinds.
 - **PropertyPanel** (`src/edit/PropertyPanel.js`): Generic property editor card. Renders descriptor-driven controls (scalars, dropdowns, color, fnCurve, infoText) for one or many selected entities, integrates with `InputAssignManager`'s inline pane, and routes value changes through the project graph (`durable` for committed edits, `runtime` for live drag).
 - **selectPopup** (`src/edit/components/selectPopup.js`): Inline dropdown popup used by `PropertyPanel` and animator viewers (e.g., picking a `functionCurves` value).
@@ -379,10 +379,11 @@ Controller perform buttons are implemented through a three-entity graph structur
 - `params` — typed per-input parameters (e.g. `args`, `argsOn`, `argsOff` as `jsonString` objects)
 - `_sortIdx` — numeric sort index for Perform pane button ordering
 
-**`action:input`** (controller → hub): sends `ActionInputCommand` payloads to create, update, or remove inputs and their linked actions atomically. Three commands:
+**`action:input`** (controller → hub): sends `ActionInputCommand` payloads to create, update, or remove inputs and their linked actions atomically. Commands include:
 - `ensureInputAssignment` — creates or updates the action + input for `{ targetType, targetGuid, input: { name, type, displayType, ...params } }`
 - `removeInputAssignment` — removes matching inputs and their actions (unless referenced elsewhere)
 - `renameInput` — patches the input `name` field by `inputGuid`
+- `updateInput` — patches an existing input by `inputGuid` with `{ input: { name?, type?, displayType?, ...typed params } }` (same param keys as `ensureInputAssignment` / `systemCapabilities.inputTypes`). Omitted param keys keep prior values for that input type; composed `params` replace the stored `params` object.
 
 Hub validates types against `systemCapabilities`, composes params via `composeInputParams.ts`, applies as `graph:command` pairs, and broadcasts `graph:delta`.
 
@@ -391,7 +392,7 @@ Hub validates types against `systemCapabilities`, composes params via `composeIn
 - `type: "intent"` → dispatches a `RuntimeUpdate` via `RuntimeUpdateDispatcher` (transient, no graph write, no `graph:delta`). The action's `execute` item may carry `params`, `patch`, `remove`, or `value`; `args` from the trigger call are merged on top.
 
 **Usage rules:**
-- Use `sendActionInputCommand(command)` from `outboundQueue.js` — never raw `sendGraphCommands` — to create/remove/rename inputs.
+- Use `sendActionInputCommand(command)` from `outboundQueue.js` — never raw `sendGraphCommands` — to create/remove/rename/update inputs.
 - Use `sendActionTrigger(guid, args?)` from `outboundQueue.js` — never a graph command — to fire actions.
 - Collect Perform pane buttons via `collectPerformButtonInputs()` only; do not filter inputs inline in pane code.
 - When deleting a scene on the hub, call `ActionInputManager.buildSceneCleanupCommands(sceneGuid)` and apply the returned commands to remove orphaned inputs and actions.
@@ -625,7 +626,7 @@ Manages controller input assignments and their linked actions. Payload is an `Ac
   "input": { "name": "Flash Red", "type": "button", "displayType": "button", "args": { "params.alpha": 1 } } }
 ```
 
-Also supports `removeInputAssignment` and `renameInput`. Hub validates types against `systemCapabilities`, composes params, and returns `graph:delta` on success.
+Also supports `removeInputAssignment`, `renameInput`, and `updateInput`. Hub validates types against `systemCapabilities`, composes params, and returns `graph:delta` on success.
 
 **`action:trigger`** — controller -> hub:
 

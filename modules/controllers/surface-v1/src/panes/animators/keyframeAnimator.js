@@ -47,6 +47,15 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
     /** @type {(() => void) | null} */
     let destroyStepParamsUi = null
 
+    /** @type {Record<string, unknown>} mutated in place by IntentParamsSelect */
+    let argsDraft = {}
+    /** @type {number | null} */
+    let lastRenderedIdx = null
+    /** @type {number | null} */
+    let lastRenderedTotal = null
+    /** @type {unknown} */
+    let lastRenderedTime = undefined
+
     const section = document.createElement('section')
     section.className = 'animator-edit-section'
 
@@ -67,13 +76,35 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
     body.className = 'animator-edit-section__body'
 
     const renderState = state => {
-      destroyStepParamsUi?.()
-      destroyStepParamsUi = null
-      body.replaceChildren()
       const total = Number(state?.totalSteps) || 0
       const idx = Number.isFinite(state?.currentStepIndex)
         ? Number(state.currentStepIndex)
         : 0
+      const incomingContent =
+        state?.currentStepContent &&
+        typeof state.currentStepContent === 'object' &&
+        !Array.isArray(state.currentStepContent)
+          ? /** @type {Record<string, unknown>} */ (state.currentStepContent)
+          : null
+      const incomingArgs =
+        incomingContent &&
+        incomingContent.args &&
+        typeof incomingContent.args === 'object' &&
+        !Array.isArray(incomingContent.args)
+          ? /** @type {Record<string, unknown>} */ (incomingContent.args)
+          : {}
+      const incomingTime = incomingContent ? incomingContent.time : undefined
+
+      const isEchoOfLocalEdit =
+        lastRenderedIdx === idx &&
+        lastRenderedTotal === total &&
+        lastRenderedTime === incomingTime &&
+        canonicalJson(argsDraft) === canonicalJson(incomingArgs)
+      if (isEchoOfLocalEdit) return
+
+      destroyStepParamsUi?.()
+      destroyStepParamsUi = null
+      body.replaceChildren()
       const nav = document.createElement('div')
       nav.className = 'animator-edit-section__nav'
 
@@ -185,13 +216,7 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
       )
       const descriptors = resolveDescriptorsForClass(intentClass) ?? []
 
-      const argsDraft = cloneArgsRecord(
-        state?.currentStepContent &&
-          typeof state.currentStepContent === 'object' &&
-          !Array.isArray(state.currentStepContent)
-          ? state.currentStepContent.args
-          : undefined
-      )
+      argsDraft = cloneArgsRecord(incomingArgs)
 
       const ips = new IntentParamsSelect(true)
       const built = ips.build({
@@ -233,6 +258,10 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
       topLeft.replaceChildren(header, tools)
       top.replaceChildren(topLeft, nav)
       body.appendChild(dumpWrap)
+
+      lastRenderedIdx = idx
+      lastRenderedTotal = total
+      lastRenderedTime = incomingTime
     }
 
     const onState = value => {
@@ -240,6 +269,10 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
         destroyStepParamsUi?.()
         destroyStepParamsUi = null
         body.replaceChildren()
+        argsDraft = {}
+        lastRenderedIdx = null
+        lastRenderedTotal = null
+        lastRenderedTime = undefined
         const note = document.createElement('div')
         note.className = 'animator-edit-section__note'
         note.textContent = 'Waiting for edit state...'
@@ -276,6 +309,22 @@ function formatStepText (value) {
   } catch {
     return String(value)
   }
+}
+
+/**
+ * @param {unknown} v
+ * @returns {string}
+ */
+function canonicalJson (v) {
+  if (v === null || typeof v !== 'object') return JSON.stringify(v ?? null)
+  if (Array.isArray(v)) return '[' + v.map(canonicalJson).join(',') + ']'
+  const rec = /** @type {Record<string, unknown>} */ (v)
+  const keys = Object.keys(rec).sort()
+  return (
+    '{' +
+    keys.map(k => JSON.stringify(k) + ':' + canonicalJson(rec[k])).join(',') +
+    '}'
+  )
 }
 
 /**

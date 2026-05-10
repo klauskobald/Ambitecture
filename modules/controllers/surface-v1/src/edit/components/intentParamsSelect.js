@@ -1,4 +1,5 @@
 import { AugmentedSelect } from './augmentedSelect.js'
+import { resolveIntentDescriptorUiKind } from '../../core/systemCapabilities.js'
 
 /**
  * @typedef {object} IntentParamsLifecycle
@@ -32,18 +33,19 @@ export function descriptorToAugmentedItem (d) {
   const rec = /** @type {Record<string, unknown>} */ (d)
   const dotKey = String(rec.dotKey ?? '')
   const name = String(rec.name ?? dotKey)
-  const type = String(rec.type ?? '')
+  const uiKind = resolveIntentDescriptorUiKind(rec)
   /** @type {'slider'|'dropdown'|'text'|'json'} */
   let display = 'json'
-  if (type === 'scalar') display = 'slider'
+  if (uiKind === 'scalar') display = 'slider'
   else if (
-    type === 'string' &&
-    Array.isArray(rec.options) &&
-    rec.options.length > 0
+    uiKind === 'pills' ||
+    (uiKind === 'string' &&
+      Array.isArray(rec.options) &&
+      rec.options.length > 0)
   ) {
     display = 'dropdown'
-  } else if (type === 'string') display = 'text'
-  else if (type === 'color') display = 'json'
+  } else if (uiKind === 'string') display = 'text'
+  else if (uiKind === 'color' || uiKind === 'vector3') display = 'json'
 
   const options = Array.isArray(rec.options)
     ? /** @type {unknown[]} */ (rec.options).map(x => String(x))

@@ -10,6 +10,7 @@ import {
   resolveMultiSelectState,
   resolveEnableState
 } from './controlHelpers.js'
+import { resolveIntentDescriptorUiKind } from '../../core/systemCapabilities.js'
 
 /** @param {unknown} value @returns {unknown} */
 function cloneDefaultValue (value) {
@@ -58,7 +59,9 @@ export class PropertyControl {
     header.appendChild(label)
 
     const showQuickPanel =
-      this._descriptor.type === 'scalar' && !!this._descriptor.quickPanel
+      resolveIntentDescriptorUiKind(
+        /** @type {Record<string, unknown>} */ (this._descriptor)
+      ) === 'scalar' && !!this._descriptor.quickPanel
     if (!this._isMandatory) {
       this._toggleBtn = document.createElement('button')
       this._toggleBtn.className = 'prop-row__toggle intent-toggle'

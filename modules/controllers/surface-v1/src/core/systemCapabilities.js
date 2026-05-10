@@ -37,6 +37,29 @@ export function resolveDescriptorsForClass (intentClass) {
 }
 
 /**
+ * Widget/interaction kind for `intentProperties[]` rows: prefer **`display`** (scalar, color,
+ * string, pills, vector3). Legacy YAML used **`type`** for this role (`scalar`, `string`,
+ * `color`, `infoText`); `infoText` maps to **`vector3`** (read-only formatted value).
+ * Datatype lives in **`type`** now (`number`, `string`, `color`, `vector3`, …).
+ *
+ * @param {Record<string, unknown>} d
+ * @returns {string} normalized UI kind, or '' if unknown
+ */
+export function resolveIntentDescriptorUiKind (d) {
+  const disp = d.display
+  if (typeof disp === 'string' && disp.length > 0) {
+    return disp === 'infoText' ? 'vector3' : disp
+  }
+  const t = d.type
+  if (typeof t !== 'string' || t.length === 0) return ''
+  if (t === 'scalar') return 'scalar'
+  if (t === 'color') return 'color'
+  if (t === 'string') return 'string'
+  if (t === 'infoText') return 'vector3'
+  return ''
+}
+
+/**
  * @typedef {{ class: string, name: string, hint: string, params: Record<string, string> }} CapabilityInputType
  * @typedef {{ class: string, name: string }} CapabilityDisplayType
  */

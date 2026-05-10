@@ -47,12 +47,14 @@ systemCapabilities:
       - dotKey: name
         name: Name
         type: string
+        display: string
         noMultiple: true
         isMandatory: true
         ignoreInParamsEditor: true
       - dotKey: params.brightness
         name: Brightness
-        type: scalar
+        type: number
+        display: scalar
         range: [0, 2]
         step: 0.005
         defaultValue: 1
@@ -66,9 +68,11 @@ systemCapabilities:
         noMultiple: true
         isMandatory: true
         ignoreInParamsEditor: true
+        display: string        
       - dotKey: layer
         name: Layer
-        type: scalar
+        type: number
+        display: scalar
         range: [1, 200]
         step: 1
         defaultValue: 100
@@ -79,7 +83,8 @@ systemCapabilities:
       - dotKey: params.alpha
         name: Alpha
         allowOverlay: true
-        type: scalar
+        type: number
+        display: scalar
         range: [0, 1]
         step: 0.01
         defaultValue: 1
@@ -90,6 +95,7 @@ systemCapabilities:
       - dotKey: params.blend
         name: Blend
         type: string
+        display: pills
         allowOverlay: true
         options: [ADD, ALPHA, MULTIPLY]
         defaultValue: ADD
@@ -98,7 +104,8 @@ systemCapabilities:
       - dotKey: radius
         name: Radius
         allowOverlay: true
-        type: scalar
+        type: number
+        display: scalar
         range: [0.1, 20]
         step: 0.1
         stepFunction: quadratic
@@ -111,6 +118,7 @@ systemCapabilities:
         name: Radius Fn
         allowOverlay: true
         type: string
+        display: pills
         optionsRef: functionCurves
         defaultValue: quadratic
         noMultiple: true
@@ -118,6 +126,7 @@ systemCapabilities:
       - dotKey: params.color
         name: Color
         type: color
+        display: color
         allowOverlay: true
         defaultValue:
           x: 0
@@ -131,18 +140,12 @@ systemCapabilities:
           h: { fn: ADD, range: [-180, 180] }
           s: { fn: ADD, range: [-1, 1] }
           l: { fn: ADD, range: [-1, 1] }
-      # THIS IS NOT WORKING AS EXPECTED.
-      # - dotKey: params.brightness
-      #   name: Brightness
-      #   type: scalar
-      #   range: [0, 1]
-      #   defaultValue: 1
-      #   delta:
-      #     value: { fn: ADD, range: [-1, 1] }
+     
       - dotKey: params.strobe
         name: Strobe
         allowOverlay: true
-        type: scalar
+        type: number
+        display: scalar
         range: [0, 1]
         step: 0.01
         defaultValue: 0
@@ -152,7 +155,8 @@ systemCapabilities:
       - dotKey: params.aux.amber
         name: Amber
         allowOverlay: true
-        type: scalar
+        type: number
+        display: scalar
         range: [0, 1]
         step: 0.01
         defaultValue: 0
@@ -161,7 +165,8 @@ systemCapabilities:
       - dotKey: position
         name: Position
         allowOverlay: true
-        type: infoText
+        type: vector3
         noMultiple: true
         isMandatory: true
+        display: vector3
 

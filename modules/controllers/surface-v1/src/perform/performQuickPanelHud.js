@@ -1,7 +1,10 @@
 import { projectGraph } from '../core/projectGraph.js'
 import { performPolicy } from '../viewport/interactionPolicies.js'
 import { worldToCanvas } from '../viewport/spatialMath.js'
-import { resolveDescriptorsForClass } from '../core/systemCapabilities.js'
+import {
+  resolveDescriptorsForClass,
+  resolveIntentDescriptorUiKind
+} from '../core/systemCapabilities.js'
 import { queueIntentUpdate } from '../core/outboundQueue.js'
 import { ScalarRadialKnobSvg } from '../edit/components/ScalarRadialKnobSvg.js'
 import { intentLayer } from '../core/stores.js'
@@ -142,7 +145,13 @@ export class PerformQuickPanelHud {
             continue
           }
           const d = byDot.get(dotKey)
-          if (!d || d.type !== 'scalar') continue
+          if (
+            !d ||
+            resolveIntentDescriptorUiKind(
+              /** @type {Record<string, unknown>} */ (d)
+            ) !== 'scalar'
+          )
+            continue
           wantedDescriptors.push(d)
         }
       }

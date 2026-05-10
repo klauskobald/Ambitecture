@@ -12,6 +12,7 @@ import { InputAssignManager } from './InputAssignManager.js'
 import {
   effectivePerformResetForKey
 } from '../core/intentPerformDefaults.js'
+import { resolveIntentDescriptorUiKind } from '../core/systemCapabilities.js'
 import { PERFORM_RESET_KEY_METAS } from './performResetKeyMetas.js'
 
 export class PropertyPanel {
@@ -228,16 +229,19 @@ export class PropertyPanel {
   _controlForDescriptor (d) {
     const onCommit = () => {}
     const size = this._selectionSize
-    switch (d.type) {
+    const kind = resolveIntentDescriptorUiKind(d)
+    switch (kind) {
       case 'color':
         return new ColorControl(d, onCommit, size)
       case 'scalar':
         return new SliderControl(d, onCommit, size)
+      case 'pills':
+        return new PillControl(d, onCommit, size)
       case 'string':
         return Array.isArray(d.options) && d.options.length > 0
           ? new PillControl(d, onCommit, size)
           : new ModalControl(d, onCommit, size)
-      case 'infoText':
+      case 'vector3':
         return new InfoTextControl(d, onCommit, size)
       default:
         return null

@@ -40,6 +40,14 @@ export function listDotKeysForIntentClass (intentClass, systemCapabilities) {
     if (!dotKey) continue
     const name =
       typeof rec.name === 'string' && rec.name ? rec.name : dotKey
+    const dtype = typeof rec.type === 'string' ? rec.type : ''
+    if (dtype === 'vector3') {
+      const baseLabel = name.trim() || dotKey
+      out.push({ dotKey: `${dotKey}.0`, name: `${baseLabel} X` })
+      out.push({ dotKey: `${dotKey}.1`, name: `${baseLabel} Y` })
+      out.push({ dotKey: `${dotKey}.2`, name: `${baseLabel} Z` })
+      continue
+    }
     out.push({ dotKey, name })
   }
   return out

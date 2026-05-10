@@ -26,6 +26,8 @@ export function createAssignModal (opts) {
     return {
       getAssignment: () => /** @type {Record<string, unknown>} */ (editing),
       intents: opts.session.intents,
+      systemCapabilities: opts.session.systemCapabilities,
+      getIntentClass: guid => opts.session.getIntentClass(guid),
       requestLearn: o => {
         const g =
           editing && typeof editing.guid === 'string' ? editing.guid : ''

@@ -236,6 +236,18 @@ body {
   box-sizing: border-box;
 }
 
+.modal__select--dotkey {
+  flex: 0 1 auto;
+  min-width: 12ch;
+  max-width: min(26ch, 100%);
+  box-sizing: border-box;
+}
+
+.modal__dot-key-mount {
+  display: inline-flex;
+  align-items: center;
+}
+
 .modal__input-text {
   padding: 0.15rem 0.3rem;
   border-radius: 3px;

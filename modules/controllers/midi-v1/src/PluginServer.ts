@@ -14,6 +14,8 @@ export interface PluginIntentRow {
 export interface PluginServerHandlers {
   getAssignments: () => AssignmentRecord[];
   getIntentsForPlugin: () => PluginIntentRow[];
+  getSystemCapabilities: () => unknown | null;
+  getIntentClasses: () => Record<string, string>;
   summarizeForPlugin: (a: AssignmentRecord) => string;
   onSave: (assignments: unknown[]) => void;
   onLearnStart: (
@@ -134,7 +136,15 @@ export class PluginServer {
     const summarize = this.handlers.summarizeForPlugin;
     const assignments = this.handlers.getAssignments().map(a => assignmentToWire(a, summarize(a)));
     const intents = this.handlers.getIntentsForPlugin();
-    return JSON.stringify({ type: 'state', assignments, intents });
+    const systemCapabilities = this.handlers.getSystemCapabilities();
+    const intentClasses = this.handlers.getIntentClasses();
+    return JSON.stringify({
+      type: 'state',
+      assignments,
+      intents,
+      systemCapabilities,
+      intentClasses,
+    });
   }
 
   sendLearnResult(assignmentGuid: string, field: string, value: number): void {

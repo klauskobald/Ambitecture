@@ -25,6 +25,7 @@ export class MidiController {
   private readonly socket: HubSocket;
   private readonly midi: MidiManager;
   private readonly pluginServer: PluginServer;
+  private systemCapabilities: unknown | null = null;
   private receivers: ReceiverBase[] = [];
   private learn: {
     assignmentGuid: string;
@@ -58,6 +59,8 @@ export class MidiController {
     this.pluginServer = new PluginServer(config.pluginServer, {
       getAssignments: () => this.graph.getAssignments(),
       getIntentsForPlugin: () => this.graph.listIntentsForPlugin(),
+      getSystemCapabilities: () => this.systemCapabilities,
+      getIntentClasses: () => this.graph.getIntentClassesWire(),
       summarizeForPlugin: a => summarizeAssignmentForPlugin(a, this.graph),
       onSave: arr => this.persistAssignmentsFromUi(arr),
       onLearnStart: (assignmentGuid, field, capture) => {
@@ -86,6 +89,11 @@ export class MidiController {
   }
 
   private onMessage(message: WsMessage): void {
+    if (message.type === 'systemCapabilities') {
+      this.systemCapabilities = message.payload ?? null;
+      this.pluginServer.pushState();
+      return;
+    }
     this.graph.apply(message);
   }
 

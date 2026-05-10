@@ -1,5 +1,10 @@
 import { registerAssignmentClass } from '../assignmentRegistry.js'
 import { createLearnFieldRow } from '../components/learnFieldRow.js'
+import {
+  readDotKeyFromMount,
+  renderIntentDotKeyControl,
+  setDotKeyMountDisabled
+} from '../intentDotKeyControl.js'
 import { noteAsString, parseNoteInput } from '../midiNote.js'
 
 const CLASS_ID = 'noteAndControl'
@@ -138,6 +143,8 @@ export function createDefaultNoteAndControl (context) {
  * @typedef {{
  *   getAssignment: () => Record<string, unknown>,
  *   intents: import('../assignSession.js').IntentRow[],
+ *   systemCapabilities: unknown,
+ *   getIntentClass: (guid: string) => string | null,
  *   requestLearn: (o: { field: string, capture: 'noteOn' | 'controlChange' }) => void,
  *   onChange: () => void
  * }} NoteAndControlEditorApi
@@ -196,25 +203,13 @@ function mountNoteAndControlEditor (container, api) {
   }
 
   const t0Init = getTarget0()
-  const keyFull =
-    normalizeDotKey(
-      t0Init && typeof t0Init.key === 'string' ? t0Init.key : ''
-    ) || DEFAULT_DOT_KEY
 
   const keyLabel = document.createElement('span')
   keyLabel.className = 'modal__field-label'
   keyLabel.textContent = 'key:'
 
-  const keyInput = document.createElement('input')
-  keyInput.type = 'text'
-  keyInput.className = 'modal__input-text modal__input-text--15'
-  keyInput.maxLength = 15
-  keyInput.size = 15
-  keyInput.value = keyFull
-  keyInput.setAttribute('aria-label', 'Intent parameter dot path')
-  keyInput.setAttribute('autocapitalize', 'none')
-  keyInput.setAttribute('spellcheck', 'false')
-  keyInput.title = 'Dot path (lowercase, e.g. xyy.x)'
+  const keyMount = document.createElement('span')
+  keyMount.className = 'modal__dot-key-mount'
 
   const fnSel = document.createElement('select')
   fnSel.className = 'modal__select modal__select--fn8'
@@ -232,8 +227,27 @@ function mountNoteAndControlEditor (container, api) {
   fnSel.value = FN_CURVE_IDS.includes(fnInit) ? fnInit : 'linear'
 
   function setTargetFieldsDisabled (disabled) {
-    keyInput.disabled = disabled
+    setDotKeyMountDisabled(keyMount, disabled)
     fnSel.disabled = disabled
+  }
+
+  function renderKeyUi () {
+    ensureSingleIntentTarget(a)
+    const t0 = getTarget0()
+    const cur =
+      normalizeDotKey(t0 && typeof t0.key === 'string' ? t0.key : '') ||
+      DEFAULT_DOT_KEY
+    const ig = intentSel.value
+    renderIntentDotKeyControl(keyMount, {
+      intentGuid: ig,
+      getIntentClass: guid => api.getIntentClass(guid),
+      systemCapabilities: api.systemCapabilities,
+      currentKey: cur,
+      defaultDotKey: DEFAULT_DOT_KEY,
+      normalizeDotKey,
+      disabled: !ig,
+      onCommit: commitTarget
+    })
   }
 
   function commitTarget () {
@@ -241,11 +255,12 @@ function mountNoteAndControlEditor (container, api) {
     if (!guid) {
       a.targets = []
       setTargetFieldsDisabled(true)
+      renderKeyUi()
       api.onChange()
       return
     }
     setTargetFieldsDisabled(false)
-    let keyStr = normalizeDotKey(keyInput.value)
+    let keyStr = readDotKeyFromMount(keyMount, normalizeDotKey, DEFAULT_DOT_KEY)
     if (!keyStr) keyStr = DEFAULT_DOT_KEY
     let fn = fnSel.value
     if (!FN_CURVE_IDS.includes(fn)) fn = 'linear'
@@ -260,29 +275,19 @@ function mountNoteAndControlEditor (container, api) {
     api.onChange()
   }
 
-  keyInput.addEventListener('input', () => {
-    const v = keyInput.value
-    const lower = v.toLowerCase()
-    if (v !== lower) {
-      const start = keyInput.selectionStart
-      const end = keyInput.selectionEnd
-      keyInput.value = lower
-      if (start !== null && end !== null) {
-        keyInput.setSelectionRange(start, end)
-      }
-    }
-    commitTarget()
-  })
-  keyInput.addEventListener('change', commitTarget)
   fnSel.addEventListener('change', commitTarget)
-  intentSel.addEventListener('change', commitTarget)
+  intentSel.addEventListener('change', () => {
+    commitTarget()
+    renderKeyUi()
+  })
 
   syncIntentSelect()
+  renderKeyUi()
   setTargetFieldsDisabled(!intentSel.value)
 
   targetRow.appendChild(intentSel)
   targetRow.appendChild(keyLabel)
-  targetRow.appendChild(keyInput)
+  targetRow.appendChild(keyMount)
   targetRow.appendChild(fnSel)
   frag.appendChild(targetRow)
 
@@ -423,12 +428,9 @@ function mountNoteAndControlEditor (container, api) {
   function syncFromModel () {
     ensureNoteAndControlShape(api.getAssignment())
     syncIntentSelect()
+    renderKeyUi()
     setTargetFieldsDisabled(!intentSel.value)
     const t0 = getTarget0()
-    const k =
-      normalizeDotKey(t0 && typeof t0.key === 'string' ? t0.key : '') ||
-      DEFAULT_DOT_KEY
-    keyInput.value = k
     const fn =
       t0 && typeof t0.function === 'string' ? t0.function : 'linear'
     fnSel.value = FN_CURVE_IDS.includes(fn) ? fn : 'linear'

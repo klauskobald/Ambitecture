@@ -13,6 +13,9 @@ const SAVE_DEBOUNCE_MS = 280
  *   assignments: unknown[],
  *   intents: IntentRow[],
  *   filterIntentGuid: string | null,
+ *   systemCapabilities: unknown,
+ *   intentClasses: Record<string, string>,
+ *   getIntentClass: (guid: string) => string | null,
  *   getEditorContext: () => EditorContext,
  *   scheduleSave: () => void,
  *   sendSave: () => void,
@@ -39,6 +42,10 @@ export function createAssignSession (opts) {
   let assignments = []
   /** @type {IntentRow[]} */
   let intents = []
+  /** @type {unknown} */
+  let systemCapabilities = null
+  /** @type {Record<string, string>} */
+  let intentClasses = {}
   let ws = null
   let reconnectTimer = null
   /** @type {ReturnType<typeof setTimeout> | null} */
@@ -113,6 +120,17 @@ export function createAssignSession (opts) {
                 return { guid, name }
               })
           : []
+        if ('systemCapabilities' in msg) {
+          systemCapabilities = msg.systemCapabilities
+        }
+        const ic = msg.intentClasses
+        if (ic && typeof ic === 'object' && !Array.isArray(ic)) {
+          intentClasses = /** @type {Record<string, string>} */ (
+            JSON.parse(JSON.stringify(ic))
+          )
+        } else {
+          intentClasses = {}
+        }
         opts.onState()
       }
       if (msg.type === 'learnValue') {
@@ -134,6 +152,17 @@ export function createAssignSession (opts) {
     },
     get intents () {
       return intents
+    },
+    get systemCapabilities () {
+      return systemCapabilities
+    },
+    get intentClasses () {
+      return intentClasses
+    },
+    getIntentClass (guid) {
+      if (typeof guid !== 'string' || !guid) return null
+      const c = intentClasses[guid]
+      return typeof c === 'string' && c ? c : null
     },
     get filterIntentGuid () {
       return opts.filterIntentGuid

@@ -62,9 +62,16 @@ function toAssignment(raw: unknown): AssignmentRecord | null {
 
 export type AssignmentsChangedReason = 'init' | 'controller-changed' | 'controller-removed';
 
+function extractIntentClass(raw: Record<string, unknown> | null): string | undefined {
+  if (!raw) return undefined;
+  const c = raw['class'];
+  return typeof c === 'string' && c.length > 0 ? c : undefined;
+}
+
 export class GraphReplica {
   private intentGuids = new Set<string>();
   private intentNames = new Map<string, string>();
+  private intentClasses = new Map<string, string>();
   private myAssignments: AssignmentRecord[] = [];
 
   constructor(
@@ -96,6 +103,14 @@ export class GraphReplica {
     return rows;
   }
 
+  getIntentClass(guid: string): string | undefined {
+    return this.intentClasses.get(guid);
+  }
+
+  getIntentClassesWire(): Record<string, string> {
+    return Object.fromEntries(this.intentClasses);
+  }
+
   /**
    * Apply assignments after a local `graph:command` save — the hub does not echo the sender's own
    * controller delta back on the same socket.
@@ -125,9 +140,14 @@ export class GraphReplica {
     const intentMap = isRecord(entities['intent']) ? entities['intent'] : {};
     this.intentGuids = new Set(Object.keys(intentMap));
     this.intentNames = new Map();
+    this.intentClasses = new Map();
     for (const [iguid, raw] of Object.entries(intentMap)) {
-      if (isRecord(raw) && typeof raw['name'] === 'string' && raw['name']) {
-        this.intentNames.set(iguid, raw['name']);
+      if (isRecord(raw)) {
+        if (typeof raw['name'] === 'string' && raw['name']) {
+          this.intentNames.set(iguid, raw['name']);
+        }
+        const cls = extractIntentClass(raw);
+        if (cls !== undefined) this.intentClasses.set(iguid, cls);
       }
     }
 
@@ -153,6 +173,7 @@ export class GraphReplica {
         if (op === 'remove') {
           this.intentGuids.delete(guid);
           this.intentNames.delete(guid);
+          this.intentClasses.delete(guid);
         } else {
           this.intentGuids.add(guid);
           const val = isRecord(raw['value']) ? raw['value'] : null;
@@ -161,6 +182,10 @@ export class GraphReplica {
           if (val && typeof val['name'] === 'string' && val['name']) name = val['name'];
           else if (patch && typeof patch['name'] === 'string' && patch['name']) name = patch['name'];
           if (name !== undefined) this.intentNames.set(guid, name);
+          const clsFromVal = extractIntentClass(val);
+          const clsFromPatch = extractIntentClass(patch);
+          if (clsFromVal !== undefined) this.intentClasses.set(guid, clsFromVal);
+          else if (clsFromPatch !== undefined) this.intentClasses.set(guid, clsFromPatch);
         }
         continue;
       }

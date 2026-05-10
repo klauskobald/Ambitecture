@@ -180,6 +180,67 @@ textarea.modal-input.input-assign-modal__json {
   gap: calc(0.45rem * var(--modal-scale) + 0.2rem);
 }
 
+/* Intent params editor (augmentedSelect + intentParamsSelect) */
+
+.augmented-select__row {
+  display: flex;
+  align-items: center;
+  gap: calc(0.35rem * var(--modal-scale) + 0.25rem);
+  flex-wrap: nowrap;
+}
+
+.augmented-select__key {
+  flex: 0 1 auto;
+  max-width: min(52%, 220px);
+  min-width: 6rem;
+}
+
+.augmented-select__value {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.augmented-select__knob-wrap {
+  max-width: 148px;
+}
+
+.augmented-select__knob-wrap .quick-panel-knob {
+  transform-origin: top left;
+  transform: scale(0.82);
+}
+
+.intent-params-select__wrap {
+  display: block;
+  width: 100%;
+}
+
+.intent-params-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  gap: calc(0.35rem * var(--modal-scale) + 0.25rem);
+  margin-bottom: calc(0.35rem * var(--modal-scale) + 0.15rem);
+  width: 100%;
+}
+
+.intent-params-row > .augmented-select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.intent-params-select__remove {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin-top: calc(0.22rem * var(--modal-scale) + 0.12rem);
+  min-width: calc(2rem * var(--modal-scale) + 0.5rem);
+}
+
+.intent-params-select__add {
+  align-self: flex-start;
+  margin-top: calc(0.15rem * var(--modal-scale));
+}
+
 .modal-actions .btn {
   min-width: calc(4rem * var(--modal-scale) + 1.5rem);
   padding: calc(0.28rem * var(--modal-scale) + 0.22rem) calc(0.75rem * var(--modal-scale) + 0.35rem);

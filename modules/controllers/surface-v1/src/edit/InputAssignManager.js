@@ -6,17 +6,22 @@ import {
   prompt as modalPrompt,
   sampleKey
 } from '../core/Modal.js'
-import {
-  parseParamFromForm,
-  stringifyJsonStringParam
-} from './inputAssign/paramKindHandlers.js'
 import { sendActionInputCommand } from '../core/outboundQueue.js'
 import {
   getDisplayTypes,
   getInputTypes,
-  resolveDefaultPerformTypes
+  resolveDefaultPerformTypes,
+  resolveDescriptorsForClass
 } from '../core/systemCapabilities.js'
+import { getIntentClassForInput } from './inputAssign/intentDescriptorContext.js'
+import { IntentParamsSelect } from './components/intentParamsSelect.js'
 import { normalizeInputKeyChar } from '../core/performButtonInputs.js'
+
+/** @param {unknown} raw */
+function cloneParamSlice (raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  return { .../** @type {Record<string, unknown>} */ (raw) }
+}
 
 /** @param {Record<string, unknown> | null | undefined} input */
 function displayClassFromInputRecord (input) {
@@ -539,46 +544,90 @@ export class InputAssignManager {
       errorEl.className = 'input-assign-modal__error'
       errorEl.hidden = true
 
-      const collectDraft = () => {
-        const m = new Map()
-        for (const ta of paramHost.querySelectorAll(
-          'textarea[data-param-key]'
-        )) {
-          if (ta instanceof HTMLTextAreaElement && ta.dataset.paramKey) {
-            m.set(ta.dataset.paramKey, ta.value)
-          }
-        }
-        return m
-      }
-
       const paramsSnapshot = this._recordOrUndefined(input.params)
 
-      const renderParamFields = typeClass => {
-        const draft = collectDraft()
+      const intentClass = getIntentClassForInput(inputGuid)
+      const descriptorsRaw = intentClass
+        ? resolveDescriptorsForClass(intentClass)
+        : null
+      const descriptors = Array.isArray(descriptorsRaw) ? descriptorsRaw : []
+      const hasIntentDescriptors = descriptors.length > 0
+
+      /** @type {Record<string, Record<string, unknown>>} */
+      let draftBySlot = {}
+      /** @type {Array<{ destroy: () => void }>} */
+      let ipsBuilt = []
+
+      const rebuildDraftFromSnapshot = typeClass => {
         const def = inputTypes.find(t => t.class === typeClass)
-        paramHost.replaceChildren()
+        draftBySlot = {}
         if (!def?.params) return
+        for (const pk of Object.keys(def.params)) {
+          draftBySlot[pk] = cloneParamSlice(paramsSnapshot?.[pk])
+        }
+      }
+
+      const destroyIpsBuilt = () => {
+        for (const x of ipsBuilt) x.destroy()
+        ipsBuilt = []
+      }
+
+      const renderParamFields = typeClass => {
+        destroyIpsBuilt()
+        paramHost.replaceChildren()
+        errorEl.hidden = true
+
+        const def = inputTypes.find(t => t.class === typeClass)
+        if (!def?.params) return
+
+        const needsJsonSlots = Object.values(def.params).some(k => k === 'jsonString')
+        if (needsJsonSlots && !hasIntentDescriptors) {
+          errorEl.textContent =
+            'Structured params require an intent-backed action (link this input to an intent target).'
+          errorEl.hidden = false
+          const hint = document.createElement('p')
+          hint.className = 'input-assign-modal__hint'
+          hint.textContent =
+            'You can still edit name, input type, and display type above. Saving updates those fields; trigger args stay as stored until the action includes an intent.'
+          paramHost.appendChild(hint)
+          return
+        }
+
         for (const [paramKey, kind] of Object.entries(def.params)) {
+          if (kind !== 'jsonString') continue
+
           const lab = document.createElement('label')
           lab.className = 'input-assign-modal__label'
           lab.textContent = paramKey
-          const ta = document.createElement('textarea')
-          ta.className = 'modal-input input-assign-modal__json'
-          ta.dataset.paramKey = paramKey
-          ta.spellcheck = false
-          const initial = draft.has(paramKey)
-            ? draft.get(paramKey)
-            : stringifyJsonStringParam(paramsSnapshot?.[paramKey])
-          ta.value = initial ?? ''
-          lab.appendChild(ta)
+
+          if (!draftBySlot[paramKey]) {
+            draftBySlot[paramKey] = {}
+          }
+          const paramsSlice = draftBySlot[paramKey]
+
+          const ips = new IntentParamsSelect(true)
+          const built = ips.build({
+            id: `${inputGuid}-${paramKey}`,
+            params: paramsSlice,
+            descriptors,
+            onLifecycle: () => {}
+          })
+          ipsBuilt.push(built)
+
+          const holder = document.createElement('div')
+          holder.className = 'intent-params-select__wrap'
+          holder.appendChild(built.root)
+          lab.appendChild(holder)
           paramHost.appendChild(lab)
         }
       }
 
+      rebuildDraftFromSnapshot(typeSelect.value)
       renderParamFields(typeSelect.value)
 
       typeSelect.addEventListener('change', () => {
         errorEl.hidden = true
+        rebuildDraftFromSnapshot(typeSelect.value)
         renderParamFields(typeSelect.value)
       })
 
@@ -613,20 +662,17 @@ export class InputAssignManager {
 
         const typeClass = typeSelect.value
         const def = inputTypes.find(t => t.class === typeClass)
-        if (def?.params) {
+        const needsJsonSlots =
+          !!def?.params &&
+          Object.values(def.params).some(k => k === 'jsonString')
+        const canEmitParams = hasIntentDescriptors && needsJsonSlots
+
+        if (def?.params && canEmitParams) {
           for (const [paramKey, kind] of Object.entries(def.params)) {
-            const ta = paramHost.querySelector(
-              `textarea[data-param-key="${CSS.escape(paramKey)}"]`
-            )
-            const raw = ta instanceof HTMLTextAreaElement ? ta.value : ''
-            const parsed = parseParamFromForm(kind, raw, paramKey)
-            if (!parsed.ok) {
-              errorEl.textContent = parsed.message
-              errorEl.hidden = false
-              return
-            }
-            if (parsed.value !== undefined) {
-              payload[paramKey] = parsed.value
+            if (kind !== 'jsonString') continue
+            const slice = draftBySlot[paramKey]
+            if (slice && typeof slice === 'object') {
+              payload[paramKey] = slice
             }
           }
         }

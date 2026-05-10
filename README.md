@@ -7,6 +7,16 @@ Distributed framework for live orchestration of physical environments (lights, D
 
 Ambitecture is open source and currently focused on production readiness for a live show deadline on **May 20, 2026**.
 
+## Project Status
+
+**Ambitecture is under active development and not yet ready for general use.**
+
+- APIs, message protocols, and config formats change frequently and without backwards-compatibility shims.
+- The `var/` tree (project YAML, fixture profiles, live show assets) is **not included in this repository yet** — code references files like `var/projects/test.yml` and `var/fixtures/rgb_simple.yml`, but you'll need your own copies to run the system end-to-end. A small public demo set will land here once the format stabilizes.
+- Documentation lags behind the code in places. `SYSTEM-ARCHITECTURE.md` is the most up-to-date reference, but the source remains the ground truth.
+
+If you'd like to try Ambitecture, contribute, or talk about a use case, please reach out first: **klaus@kobald.com**. Direct contact saves time on both sides while the system is still stabilizing.
+
 ## Repository Layout
 
 ```text

@@ -1272,6 +1272,26 @@
   position: relative;
 }
 
+.animator-edit-section__step-params {
+  margin: 0;
+  padding: 0.6rem 0.75rem 2.1rem;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  background: #161616;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+.animator-edit-section__dump-advanced {
+  position: absolute;
+  left: 0.5rem;
+  bottom: 0.5rem;
+  z-index: 1;
+  padding: 0.25rem 0.45rem;
+  font-size: 0.75rem;
+  background: rgba(14, 14, 14, 0.9);
+}
+
 .animator-edit-section__dump-remove {
   position: absolute;
   right: 0.5rem;

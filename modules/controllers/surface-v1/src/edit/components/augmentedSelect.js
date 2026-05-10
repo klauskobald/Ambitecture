@@ -43,6 +43,10 @@ export class AugmentedSelect {
     this._userChange = null
     /** @type {Set<string>} */
     this._disabledKeys = new Set()
+    /** @type {AbortController | null} */
+    this._rowAbort = null
+    /** @type {AbortController | null} */
+    this._valueAbort = null
   }
 
   /**
@@ -91,6 +95,9 @@ export class AugmentedSelect {
     this.destroy()
     this._binding = binding
 
+    this._rowAbort = new AbortController()
+    const rowSignal = this._rowAbort.signal
+
     const root = document.createElement('div')
     root.className = 'augmented-select'
     root.dataset.augmentedSelectId = this._id
@@ -110,16 +117,20 @@ export class AugmentedSelect {
     sel.value = this._key
     this._selectEl = sel
 
-    sel.addEventListener('change', () => {
-      const prev = this._key
-      const next = sel.value
-      if (next === prev) return
-      binding.onKeyChange(prev, next)
-      this._key = next
-      this._applyDisabledToOptions()
-      this._rebuildValueWidget()
-      this._emitChange()
-    })
+    sel.addEventListener(
+      'change',
+      () => {
+        const prev = this._key
+        const next = sel.value
+        if (next === prev) return
+        binding.onKeyChange(prev, next)
+        this._key = next
+        this._applyDisabledToOptions()
+        this._rebuildValueWidget()
+        this._emitChange()
+      },
+      { signal: rowSignal }
+    )
 
     row.appendChild(sel)
 
@@ -171,6 +182,8 @@ export class AugmentedSelect {
   _clearValueWidget () {
     this._knob?.destroy()
     this._knob = null
+    this._valueAbort?.abort()
+    this._valueAbort = null
     this._simpleControl = null
     if (this._valueHost) this._valueHost.replaceChildren()
   }
@@ -195,7 +208,9 @@ export class AugmentedSelect {
         readValue: () => {
           const v = binding.readValue()
           const n = Number(v)
-          return Number.isFinite(n) ? n : Number(item.descriptor?.defaultValue ?? 0)
+          return Number.isFinite(n)
+            ? n
+            : Number(item.descriptor?.defaultValue ?? 0)
         },
         onCommit: domain => {
           binding.writeValue(domain)
@@ -212,9 +227,16 @@ export class AugmentedSelect {
       return
     }
 
-    if (item.display === 'dropdown' && item.options && item.options.length > 0) {
+    if (
+      item.display === 'dropdown' &&
+      item.options &&
+      item.options.length > 0
+    ) {
+      this._valueAbort = new AbortController()
+      const signal = this._valueAbort.signal
       const dd = document.createElement('select')
-      dd.className = 'modal-input modal-select-capitalize augmented-select__enum'
+      dd.className =
+        'modal-input modal-select-capitalize augmented-select__enum'
       for (const optLabel of item.options) {
         const opt = document.createElement('option')
         opt.value = optLabel
@@ -223,33 +245,46 @@ export class AugmentedSelect {
       }
       const raw = binding.readValue()
       const s =
-        raw === undefined || raw === null ? String(item.options[0]) : String(raw)
+        raw === undefined || raw === null
+          ? String(item.options[0])
+          : String(raw)
       dd.value = item.options.includes(s) ? s : item.options[0]
-      dd.addEventListener('change', () => {
-        binding.writeValue(dd.value)
-        this._emitChange()
-      })
+      dd.addEventListener(
+        'change',
+        () => {
+          binding.writeValue(dd.value)
+          this._emitChange()
+        },
+        { signal }
+      )
       this._valueHost.appendChild(dd)
       this._simpleControl = dd
       return
     }
 
     if (item.display === 'text') {
+      this._valueAbort = new AbortController()
+      const signal = this._valueAbort.signal
       const inp = document.createElement('input')
       inp.type = 'text'
       inp.className = 'modal-input augmented-select__text'
       const raw = binding.readValue()
-      inp.value =
-        raw === undefined || raw === null ? '' : String(raw)
-      inp.addEventListener('change', () => {
-        binding.writeValue(inp.value)
-        this._emitChange()
-      })
+      inp.value = raw === undefined || raw === null ? '' : String(raw)
+      inp.addEventListener(
+        'change',
+        () => {
+          binding.writeValue(inp.value)
+          this._emitChange()
+        },
+        { signal }
+      )
       this._valueHost.appendChild(inp)
       this._simpleControl = inp
       return
     }
 
+    this._valueAbort = new AbortController()
+    const signal = this._valueAbort.signal
     const ta = document.createElement('textarea')
     ta.className = 'modal-input input-assign-modal__json augmented-select__json'
     ta.spellcheck = false
@@ -261,28 +296,33 @@ export class AugmentedSelect {
         ta.value = ''
       }
     } else {
-      ta.value =
-        raw === undefined || raw === null ? '' : String(raw)
+      ta.value = raw === undefined || raw === null ? '' : String(raw)
     }
-    ta.addEventListener('change', () => {
-      const t = ta.value.trim()
-      if (!t) {
-        binding.writeValue(undefined)
+    ta.addEventListener(
+      'change',
+      () => {
+        const t = ta.value.trim()
+        if (!t) {
+          binding.writeValue(undefined)
+          this._emitChange()
+          return
+        }
+        try {
+          binding.writeValue(JSON.parse(t))
+        } catch {
+          binding.writeValue(t)
+        }
         this._emitChange()
-        return
-      }
-      try {
-        binding.writeValue(JSON.parse(t))
-      } catch {
-        binding.writeValue(t)
-      }
-      this._emitChange()
-    })
+      },
+      { signal }
+    )
     this._valueHost.appendChild(ta)
     this._simpleControl = ta
   }
 
   destroy () {
+    this._rowAbort?.abort()
+    this._rowAbort = null
     this._clearValueWidget()
     this._valueHost = null
     this._selectEl = null

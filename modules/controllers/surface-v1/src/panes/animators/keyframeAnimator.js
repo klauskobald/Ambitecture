@@ -4,6 +4,9 @@ import { sendAnimationEdit, sendBindingSet } from '../../core/outboundQueue.js'
 import { editText, warn as modalWarn } from '../../core/Modal.js'
 import { notification } from '../../app/notification.js'
 import { ScalarRadialKnobSvg } from '../../edit/components/ScalarRadialKnobSvg.js'
+import { IntentParamsSelect } from '../../edit/components/intentParamsSelect.js'
+import { resolveDescriptorsForClass } from '../../core/systemCapabilities.js'
+import { projectGraph } from '../../core/projectGraph.js'
 
 /** Per-animation cleanup so reopening the pane drops the prior callback and edit session. */
 const activeBindings = new Map()
@@ -37,7 +40,12 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
       activeBindings.delete(otherGuid)
     }
 
+    const targetIntentGuid = String(record.targetIntent ?? record.intent ?? '')
+
     const bindingKey = `${guid}-editState`
+
+    /** @type {(() => void) | null} */
+    let destroyStepParamsUi = null
 
     const section = document.createElement('section')
     section.className = 'animator-edit-section'
@@ -59,6 +67,8 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
     body.className = 'animator-edit-section__body'
 
     const renderState = state => {
+      destroyStepParamsUi?.()
+      destroyStepParamsUi = null
       body.replaceChildren()
       const total = Number(state?.totalSteps) || 0
       const idx = Number.isFinite(state?.currentStepIndex)
@@ -161,15 +171,63 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
 
       const dumpWrap = document.createElement('div')
       dumpWrap.className = 'animator-edit-section__dump-wrap'
-      const dump = document.createElement('pre')
-      dump.className = 'animator-edit-section__dump'
-      dump.textContent = formatStepText(state?.currentStepContent)
-      dump.tabIndex = 0
-      dump.title = 'Tap to edit step content'
-      dump.addEventListener('click', () => {
+
+      const paramsHost = document.createElement('div')
+      paramsHost.className = 'animator-edit-section__step-params'
+
+      const intentRow = targetIntentGuid
+        ? projectGraph.getEffectiveIntent(targetIntentGuid)
+        : null
+      const intentClass = String(
+        intentRow && typeof intentRow === 'object' && !Array.isArray(intentRow)
+          ? intentRow.class ?? ''
+          : ''
+      )
+      const descriptors = resolveDescriptorsForClass(intentClass) ?? []
+
+      const argsDraft = cloneArgsRecord(
+        state?.currentStepContent &&
+          typeof state.currentStepContent === 'object' &&
+          !Array.isArray(state.currentStepContent)
+          ? state.currentStepContent.args
+          : undefined
+      )
+
+      const ips = new IntentParamsSelect(true)
+      const built = ips.build({
+        id: `${guid}-keyframe-step-${idx}`,
+        params: argsDraft,
+        descriptors,
+        onLifecycle: ev => {
+          if (
+            ev.phase !== 'change' &&
+            ev.phase !== 'add' &&
+            ev.phase !== 'remove'
+          ) {
+            return
+          }
+          sendBindingSet(bindingKey, {
+            currentStepIndex: idx,
+            currentStepContent: stepContentFromStateAndArgs(state, argsDraft),
+            editAction: 'set'
+          })
+        }
+      })
+      destroyStepParamsUi = built.destroy
+      paramsHost.appendChild(built.root)
+
+      const jsonBtn = document.createElement('button')
+      jsonBtn.type = 'button'
+      jsonBtn.className = 'animator-edit-section__dump-advanced btn'
+      jsonBtn.textContent = 'JSON…'
+      jsonBtn.title = 'Edit full step as JSON (advanced)'
+      jsonBtn.addEventListener('click', e => {
+        e.stopPropagation()
         void openStepContentEditor(state, bindingKey)
       })
-      dumpWrap.appendChild(dump)
+
+      dumpWrap.appendChild(paramsHost)
+      dumpWrap.appendChild(jsonBtn)
       dumpWrap.appendChild(removeBtn)
 
       topLeft.replaceChildren(header, tools)
@@ -179,6 +237,8 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
 
     const onState = value => {
       if (value == null) {
+        destroyStepParamsUi?.()
+        destroyStepParamsUi = null
         body.replaceChildren()
         const note = document.createElement('div')
         note.className = 'animator-edit-section__note'
@@ -192,6 +252,8 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
     const unsub = subscribeBinding(bindingKey, onState)
     sendAnimationEdit(guid, true)
     activeBindings.set(guid, () => {
+      destroyStepParamsUi?.()
+      destroyStepParamsUi = null
       unsub()
       sendAnimationEdit(guid, false)
     })
@@ -214,6 +276,44 @@ function formatStepText (value) {
   } catch {
     return String(value)
   }
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {Record<string, unknown>}
+ */
+function cloneArgsRecord (raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  try {
+    return /** @type {Record<string, unknown>} */ (
+      JSON.parse(JSON.stringify(raw))
+    )
+  } catch {
+    return { .../** @type {Record<string, unknown>} */ (raw) }
+  }
+}
+
+/**
+ * @param {Record<string, unknown>} state
+ * @param {Record<string, unknown>} argsDraft
+ * @returns {Record<string, unknown>}
+ */
+function stepContentFromStateAndArgs (state, argsDraft) {
+  const content = state?.currentStepContent
+  const timeVal =
+    content &&
+    typeof content === 'object' &&
+    !Array.isArray(content) &&
+    typeof content.time === 'number' &&
+    Number.isFinite(content.time)
+      ? content.time
+      : 0
+  /** @type {Record<string, unknown>} */
+  const next = { time: timeVal }
+  if (Object.keys(argsDraft).length > 0) {
+    next.args = { ...argsDraft }
+  }
+  return next
 }
 
 /**

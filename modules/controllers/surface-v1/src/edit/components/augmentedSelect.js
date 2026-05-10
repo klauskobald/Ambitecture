@@ -201,8 +201,7 @@ export class AugmentedSelect {
           binding.writeValue(domain)
           this._emitChange()
         },
-        showInnerSvgTitle: false,
-        hint: item.name
+        showInnerSvgTitle: false
       })
       const host = document.createElement('div')
       host.className = 'augmented-select__knob-wrap'

@@ -8,6 +8,20 @@ import { AugmentedSelect } from './augmentedSelect.js'
  */
 
 /**
+ * When `systemCapabilities.intentProperties[].ignoreInParamsEditor` is true, the property
+ * is omitted from the input assign params editor (still available elsewhere in the UI).
+ *
+ * @param {unknown} d
+ * @returns {boolean}
+ */
+export function isExcludedFromParamsEditor (d) {
+  if (!d || typeof d !== 'object' || Array.isArray(d)) return false
+  return (
+    /** @type {Record<string, unknown>} */ (d).ignoreInParamsEditor === true
+  )
+}
+
+/**
  * @param {unknown} d
  * @returns {import('./augmentedSelect.js').AugmentedItem}
  */
@@ -102,9 +116,21 @@ export class IntentParamsSelect {
     const descriptors = opts.descriptors
     const onLifecycle = opts.onLifecycle
 
+    /** @type {Set<string>} */
+    const excludedDotKeys = new Set()
+    for (const d of descriptors) {
+      if (!isExcludedFromParamsEditor(d)) continue
+      if (!d || typeof d !== 'object' || Array.isArray(d)) continue
+      const dk = String(
+        /** @type {Record<string, unknown>} */ (d).dotKey ?? ''
+      ).trim()
+      if (dk.length > 0) excludedDotKeys.add(dk)
+    }
+
     /** @type {import('./augmentedSelect.js').AugmentedItem[]} */
     const baseItems = []
     for (const d of descriptors) {
+      if (isExcludedFromParamsEditor(d)) continue
       const it = descriptorToAugmentedItem(d)
       if (it.key.length > 0) baseItems.push(it)
     }
@@ -113,6 +139,7 @@ export class IntentParamsSelect {
     const items = [...baseItems]
     const itemByKey = new Map(items.map(it => [it.key, it]))
     for (const k of Object.keys(params)) {
+      if (excludedDotKeys.has(k)) continue
       if (!itemByKey.has(k)) {
         const orphan = {
           key: k,
@@ -230,6 +257,7 @@ export class IntentParamsSelect {
     addBtn.addEventListener('click', () => addRow())
 
     for (const key of Object.keys(params)) {
+      if (excludedDotKeys.has(key)) continue
       appendRow(key)
     }
 

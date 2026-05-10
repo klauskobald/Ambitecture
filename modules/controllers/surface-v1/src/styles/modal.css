@@ -189,6 +189,11 @@ textarea.modal-input.input-assign-modal__json {
   flex-wrap: nowrap;
 }
 
+/* Param editor: hide knob caption (name dupes the key dropdown); inner value stays */
+.augmented-select__knob-wrap .quick-panel-knob__caption {
+  display: none;
+}
+
 .augmented-select__key {
   flex: 0 1 auto;
   max-width: min(52%, 220px);
@@ -201,12 +206,12 @@ textarea.modal-input.input-assign-modal__json {
 }
 
 .augmented-select__knob-wrap {
-  max-width: 148px;
+  max-width: 185px;
 }
 
 .augmented-select__knob-wrap .quick-panel-knob {
-  transform-origin: top left;
-  transform: scale(0.82);
+  transform-origin: center center;
+  transform: scale(calc(0.82 * 1.25));
 }
 
 .intent-params-select__wrap {
@@ -218,7 +223,7 @@ textarea.modal-input.input-assign-modal__json {
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;
-  align-items: flex-start;
+  align-items: center;
   gap: calc(0.35rem * var(--modal-scale) + 0.25rem);
   margin-bottom: calc(0.35rem * var(--modal-scale) + 0.15rem);
   width: 100%;
@@ -231,9 +236,13 @@ textarea.modal-input.input-assign-modal__json {
 
 .intent-params-select__remove {
   flex: 0 0 auto;
-  align-self: flex-start;
-  margin-top: calc(0.22rem * var(--modal-scale) + 0.12rem);
-  min-width: calc(2rem * var(--modal-scale) + 0.5rem);
+  align-self: center;
+  box-sizing: border-box;
+  padding: calc(0.14rem * 0.75) calc(0.35rem * 0.75);
+  font-size: calc((0.82rem * var(--modal-scale) + 0.28rem) * 0.75);
+  line-height: 1;
+  min-width: calc((2rem * var(--modal-scale) + 0.5rem) * 0.75);
+  min-height: calc((2rem * var(--modal-scale) + 0.35rem) * 0.75);
 }
 
 .intent-params-select__add {

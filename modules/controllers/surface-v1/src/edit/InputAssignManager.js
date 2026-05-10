@@ -582,14 +582,6 @@ export class InputAssignManager {
 
         const needsJsonSlots = Object.values(def.params).some(k => k === 'jsonString')
         if (needsJsonSlots && !hasIntentDescriptors) {
-          errorEl.textContent =
-            'Structured params require an intent-backed action (link this input to an intent target).'
-          errorEl.hidden = false
-          const hint = document.createElement('p')
-          hint.className = 'input-assign-modal__hint'
-          hint.textContent =
-            'You can still edit name, input type, and display type above. Saving updates those fields; trigger args stay as stored until the action includes an intent.'
-          paramHost.appendChild(hint)
           return
         }
 

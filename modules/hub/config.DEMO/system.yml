@@ -49,6 +49,7 @@ systemCapabilities:
         type: string
         noMultiple: true
         isMandatory: true
+        ignoreInParamsEditor: true
       - dotKey: params.brightness
         name: Brightness
         type: scalar
@@ -64,6 +65,7 @@ systemCapabilities:
         type: string
         noMultiple: true
         isMandatory: true
+        ignoreInParamsEditor: true
       - dotKey: layer
         name: Layer
         type: scalar
@@ -72,6 +74,8 @@ systemCapabilities:
         defaultValue: 100
         noMultiple: true
         isMandatory: true
+        ignoreInParamsEditor: true
+
       - dotKey: params.alpha
         name: Alpha
         allowOverlay: true

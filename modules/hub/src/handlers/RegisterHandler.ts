@@ -7,6 +7,7 @@ import { ProjectGraphStore } from '../ProjectGraphStore';
 import { KeyframeAnimator } from '../animation/keyframeAnimator';
 import { recordRendererEventDeliveries } from '../hubWebSocketStats';
 import { DiscoveryService, parseDiscoveryFromRegisterPayload } from '../DiscoveryService';
+import { resolveRuntimeReferences } from '../ConfigResolver';
 
 interface RegisterPayload {
   role: 'renderer' | 'controller';
@@ -99,8 +100,9 @@ export class RegisterHandler implements MessageHandler {
       ws.send(JSON.stringify({ message: { type: 'graph:init', payload: graphInit } }));
       Logger.info(`[register] pushed graph:init to controller ${guid}`);
 
-      const capabilities = this.systemConfig.getOrDefault<unknown>('systemCapabilities', null);
-      if (capabilities !== null) {
+      const capabilitiesRaw = this.systemConfig.getOrDefault<unknown>('systemCapabilities', null);
+      if (capabilitiesRaw !== null) {
+        const capabilities = resolveRuntimeReferences(capabilitiesRaw);
         ws.send(JSON.stringify({ message: { type: 'systemCapabilities', payload: mergeAnimatorDescriptors(capabilities) } }));
         Logger.info(`[register] pushed systemCapabilities to controller ${guid}`);
       }

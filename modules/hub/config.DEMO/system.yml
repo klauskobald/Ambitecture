@@ -171,21 +171,21 @@ systemCapabilities:
             name: X
             type: number
             display: scalar
-            range: [0, 1]
+            range: RUNTIME:zones_range:x
             step: 0.01
             defaultValue: 0
           - key: 1
             name: Y
             type: number
             display: scalar
-            range: [0, 1]
+            range: RUNTIME:zones_range:y
             step: 0.01
             defaultValue: 0
           - key: 2
             name: Z
             type: number
             display: scalar
-            range: [0, 1]
+            range: RUNTIME:zones_range:z
             step: 0.01
         noMultiple: true
         isMandatory: true

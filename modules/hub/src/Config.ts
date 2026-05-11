@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import * as dotenv from 'dotenv';
 import { Logger } from './Logger';
+import { configResolver } from './ConfigResolver';
 dotenv.config();
 const CONFIG_PATH = process.env.CONFIG_PATH || 'config';
 Logger.info(`USING CONFIG_PATH: ${CONFIG_PATH}`);
@@ -84,9 +85,8 @@ export class Config {
     }
 
     /**
-     * Recursively traverse config object and replace CONFIG references
-     * @param obj Configuration object or value to process
-     * @returns Processed configuration with CONFIG references resolved
+     * Recursively traverse config object and replace CONFIG references at load time.
+     * RUNTIME references are left untouched here; they resolve lazily in get().
      */
     private processConfigReferences(obj: any): any {
         if (typeof obj === 'string' && obj.startsWith('CONFIG:')) {
@@ -109,29 +109,39 @@ export class Config {
     }
 
     /**
-     * Resolve a CONFIG reference (e.g., "CONFIG:env:EXECUTOR_API_KEY")
-     * @param configRef CONFIG reference string
-     * @returns Resolved value
+     * Resolve a config reference string.
+     *   - "CONFIG:configName:key"             → eager, resolved at load
+     *   - "RUNTIME:resolverName[:param...]"   → lazy, resolved at get()
      */
     private resolveConfigReference(configRef: string): any {
         const parts = configRef.split(':');
-        if (parts.length !== 3 || parts[0] !== 'CONFIG') {
-            throw new Error(`Invalid CONFIG reference format: ${configRef}. Expected: CONFIG:configName:key`);
-        }
-
-        const targetConfigName = parts[1];
-        const targetKey = parts[2];
-        if (!targetConfigName || !targetKey) {
-            throw new Error(`Invalid CONFIG reference format: ${configRef}. Expected: CONFIG:configName:key`);
-        }
-
-        // Always create a fresh config instance to get latest values
-        const targetConfig = targetConfigName === this.configName ? this : new Config(targetConfigName);
-
-        try {
-            return targetConfig.get(targetKey);
-        } catch (error) {
-            throw new Error(`Failed to resolve CONFIG reference ${configRef}: ${error}`);
+        const kind = parts[0];
+        switch (kind) {
+            case 'CONFIG': {
+                if (parts.length !== 3) {
+                    throw new Error(`Invalid CONFIG reference format: ${configRef}. Expected: CONFIG:configName:key`);
+                }
+                const targetConfigName = parts[1];
+                const targetKey = parts[2];
+                if (!targetConfigName || !targetKey) {
+                    throw new Error(`Invalid CONFIG reference format: ${configRef}. Expected: CONFIG:configName:key`);
+                }
+                const targetConfig = targetConfigName === this.configName ? this : new Config(targetConfigName);
+                try {
+                    return targetConfig.get(targetKey);
+                } catch (error) {
+                    throw new Error(`Failed to resolve CONFIG reference ${configRef}: ${error}`);
+                }
+            }
+            case 'RUNTIME': {
+                const name = parts[1];
+                if (!name) {
+                    throw new Error(`Invalid RUNTIME reference format: ${configRef}. Expected: RUNTIME:name[:param...]`);
+                }
+                return configResolver.resolve(name, parts.slice(2));
+            }
+            default:
+                throw new Error(`Unknown config reference kind '${kind}' in ${configRef}`);
         }
     }
 
@@ -150,6 +160,10 @@ export class Config {
             } else {
                 throw new Error(`Config key '${key}' not found in ${this.configName}`);
             }
+        }
+
+        if (typeof value === 'string' && value.startsWith('RUNTIME:')) {
+            return this.resolveConfigReference(value) as T;
         }
 
         return value as T;

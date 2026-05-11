@@ -28,6 +28,8 @@ import { BindingHandler } from './handlers/BindingHandler';
 import { AnimationEditHandler } from './handlers/AnimationEditHandler';
 import { DiscoveryService } from './DiscoveryService';
 import { DiscoveryHandler } from './handlers/DiscoveryHandler';
+import { resolveRuntimeReferences } from './ConfigResolver';
+import { registerZonesRangeResolver } from './resolvers/ZonesRangeResolver';
 
 const serverConfig = new Config('server');
 const systemConfig = new Config('system', true);
@@ -38,9 +40,10 @@ const projectManager = new ProjectManager(
   serverConfig.get<string>('projectsPath'),
   serverConfig.get<string>('fixturesPath'),
 );
+registerZonesRangeResolver(projectManager);
 const actionInputManager = new ActionInputManager(
   projectManager,
-  () => systemConfig.getOrDefault<unknown>('systemCapabilities', {}),
+  () => resolveRuntimeReferences(systemConfig.getOrDefault<unknown>('systemCapabilities', {})),
 );
 
 const registry = new ConnectionRegistry();

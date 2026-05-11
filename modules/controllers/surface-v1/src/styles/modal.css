@@ -222,6 +222,53 @@ textarea.modal-input.input-assign-modal__json {
   transform: scale(calc(0.82 * 1.25));
 }
 
+.augmented-select__components {
+  display: flex;
+  flex-direction: column;
+  gap: calc(0.25rem * var(--modal-scale) + 0.15rem);
+  width: 100%;
+}
+
+.augmented-select__component-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: calc(0.35rem * var(--modal-scale) + 0.25rem);
+  min-width: 0;
+}
+
+.augmented-select__component-check {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.augmented-select__component-label {
+  flex: 0 0 auto;
+  min-width: 1.5rem;
+  font-size: calc(0.78rem * var(--modal-scale) + 0.22rem);
+  user-select: none;
+  cursor: pointer;
+}
+
+.augmented-select__component-knob {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 185px;
+}
+
+.augmented-select__component-knob[hidden] {
+  display: none;
+}
+
+.augmented-select__component-knob .quick-panel-knob {
+  transform-origin: center center;
+  transform: scale(calc(0.82 * 1.25));
+}
+
+.augmented-select__component-knob .quick-panel-knob__caption {
+  display: none;
+}
+
 .intent-params-select__wrap {
   display: block;
   width: 100%;

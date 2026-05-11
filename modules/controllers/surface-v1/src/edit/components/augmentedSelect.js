@@ -4,12 +4,20 @@ import { ScalarRadialKnobSvg } from './ScalarRadialKnobSvg.js'
 const PARAM_EDITOR_INTENT_GUID = '__paramEditor__'
 
 /**
+ * @typedef {object} AugmentedComponent
+ * @property {string} key  component dot suffix (e.g. "0" / "x"); concatenated as `${parent.key}.${key}`
+ * @property {string} name  display label (e.g. "X")
+ * @property {Record<string, unknown>} descriptor  per-component descriptor (range/step/defaultValue/...)
+ */
+
+/**
  * @typedef {object} AugmentedItem
  * @property {string} key  dotKey (e.g. params.alpha)
  * @property {string} name  display label
- * @property {'slider'|'dropdown'|'text'|'json'} display
+ * @property {'slider'|'dropdown'|'text'|'json'|'components'} display
  * @property {Record<string, unknown>} [descriptor]  full hub descriptor (scalar knob)
  * @property {string[]} [options]  enum options
+ * @property {AugmentedComponent[]} [components]  per-component breakdown for vector-style items
  */
 
 /**
@@ -17,6 +25,8 @@ const PARAM_EDITOR_INTENT_GUID = '__paramEditor__'
  * @property {() => unknown} readValue
  * @property {(v: unknown) => void} writeValue
  * @property {(prevKey: string, nextKey: string) => void} onKeyChange
+ * @property {(checkedKeys: string[], values: Record<string, unknown>) => void} [writeComponents]  components mode only; binding decides flat-vs-array shape
+ * @property {() => { checked: Set<string>, values: Record<string, unknown> }} [readComponents]  components mode only
  */
 
 export class AugmentedSelect {
@@ -47,6 +57,12 @@ export class AugmentedSelect {
     this._rowAbort = null
     /** @type {AbortController | null} */
     this._valueAbort = null
+    /** @type {Map<string, ScalarRadialKnobSvg>} */
+    this._componentKnobs = new Map()
+    /** @type {Map<string, HTMLInputElement>} */
+    this._componentChecks = new Map()
+    /** @type {Map<string, HTMLElement>} */
+    this._componentKnobHosts = new Map()
   }
 
   /**
@@ -134,12 +150,10 @@ export class AugmentedSelect {
 
     row.appendChild(sel)
 
-    if (this._requireValue) {
-      this._valueHost = document.createElement('div')
-      this._valueHost.className = 'augmented-select__value'
-      row.appendChild(this._valueHost)
-      this._mountValueWidget()
-    }
+    this._valueHost = document.createElement('div')
+    this._valueHost.className = 'augmented-select__value'
+    row.appendChild(this._valueHost)
+    this._mountValueWidget()
 
     this._root = root
     root.appendChild(row)
@@ -150,6 +164,10 @@ export class AugmentedSelect {
   syncValueFromBinding () {
     if (this._knob) {
       this._knob.syncFromExternal()
+      return
+    }
+    if (this._componentKnobs.size > 0 || this._componentChecks.size > 0) {
+      this._syncComponentsFromBinding()
       return
     }
     if (this._simpleControl && this._binding) {
@@ -182,6 +200,10 @@ export class AugmentedSelect {
   _clearValueWidget () {
     this._knob?.destroy()
     this._knob = null
+    for (const k of this._componentKnobs.values()) k.destroy()
+    this._componentKnobs.clear()
+    this._componentChecks.clear()
+    this._componentKnobHosts.clear()
     this._valueAbort?.abort()
     this._valueAbort = null
     this._simpleControl = null
@@ -189,7 +211,7 @@ export class AugmentedSelect {
   }
 
   _rebuildValueWidget () {
-    if (!this._requireValue || !this._valueHost || !this._binding) return
+    if (!this._valueHost || !this._binding) return
     this._clearValueWidget()
     this._mountValueWidget()
   }
@@ -200,6 +222,17 @@ export class AugmentedSelect {
 
     const item = this._currentItem()
     if (!item) return
+
+    if (
+      item.display === 'components' &&
+      Array.isArray(item.components) &&
+      item.components.length > 0
+    ) {
+      this._mountComponentsWidget(item, binding)
+      return
+    }
+
+    if (!this._requireValue) return
 
     if (item.display === 'slider' && item.descriptor) {
       const knob = new ScalarRadialKnobSvg({
@@ -318,6 +351,194 @@ export class AugmentedSelect {
     )
     this._valueHost.appendChild(ta)
     this._simpleControl = ta
+  }
+
+  /**
+   * @param {AugmentedItem} item
+   * @param {AugmentedSelectBinding} binding
+   */
+  _mountComponentsWidget (item, binding) {
+    if (!this._valueHost) return
+    const comps = item.components
+    if (!Array.isArray(comps) || comps.length === 0) return
+
+    this._valueAbort = new AbortController()
+    const signal = this._valueAbort.signal
+
+    const wrap = document.createElement('div')
+    wrap.className = 'augmented-select__components'
+
+    const initial = binding.readComponents?.() ?? {
+      checked: new Set(),
+      values: {}
+    }
+
+    for (const comp of comps) {
+      const ckey = String(comp.key)
+      const compRow = document.createElement('div')
+      compRow.className = 'augmented-select__component-row'
+
+      const cb = document.createElement('input')
+      cb.type = 'checkbox'
+      cb.id = `${this._id}-${item.key}-${ckey}`
+      cb.className = 'augmented-select__component-check'
+      cb.checked = initial.checked.has(ckey)
+
+      const lab = document.createElement('label')
+      lab.className = 'augmented-select__component-label'
+      lab.setAttribute('for', cb.id)
+      lab.textContent = comp.name
+
+      compRow.appendChild(cb)
+      compRow.appendChild(lab)
+
+      this._componentChecks.set(ckey, cb)
+
+      if (this._requireValue) {
+        const knobHost = document.createElement('div')
+        knobHost.className = 'augmented-select__component-knob'
+        knobHost.hidden = !cb.checked
+        compRow.appendChild(knobHost)
+        this._componentKnobHosts.set(ckey, knobHost)
+        if (cb.checked) {
+          this._mountComponentKnob(item.key, comp, knobHost, binding)
+        }
+      }
+
+      cb.addEventListener(
+        'change',
+        () => this._onComponentCheckbox(item, binding, ckey),
+        { signal }
+      )
+
+      wrap.appendChild(compRow)
+    }
+
+    this._valueHost.appendChild(wrap)
+  }
+
+  /**
+   * @param {string} dotKey
+   * @param {AugmentedComponent} comp
+   * @param {HTMLElement} host
+   * @param {AugmentedSelectBinding} binding
+   */
+  _mountComponentKnob (dotKey, comp, host, binding) {
+    const ckey = String(comp.key)
+    const knobDescriptor = {
+      ...comp.descriptor,
+      dotKey: `${dotKey}.${ckey}`,
+      name: comp.name
+    }
+    const knob = new ScalarRadialKnobSvg({
+      descriptor: knobDescriptor,
+      intentGuid: PARAM_EDITOR_INTENT_GUID,
+      readValue: () => {
+        const snap = binding.readComponents?.() ?? {
+          checked: new Set(),
+          values: {}
+        }
+        const v = snap.values[ckey]
+        const n = Number(v)
+        if (Number.isFinite(n)) return n
+        return Number(comp.descriptor.defaultValue ?? 0)
+      },
+      onCommit: domain => {
+        this._recomputeComponentsWrite(binding, { [ckey]: domain })
+        this._emitChange()
+      },
+      showInnerSvgTitle: false
+    })
+    knob.mount(host)
+    this._componentKnobs.set(ckey, knob)
+    knob.syncFromExternal()
+  }
+
+  /**
+   * @param {AugmentedItem} item
+   * @param {AugmentedSelectBinding} binding
+   * @param {string} ckey
+   */
+  _onComponentCheckbox (item, binding, ckey) {
+    const cb = this._componentChecks.get(ckey)
+    if (!cb) return
+
+    if (this._requireValue) {
+      const host = this._componentKnobHosts.get(ckey)
+      if (host) {
+        if (cb.checked) {
+          host.hidden = false
+          if (!this._componentKnobs.has(ckey)) {
+            const comp = item.components?.find(c => String(c.key) === ckey)
+            if (comp) this._mountComponentKnob(item.key, comp, host, binding)
+          }
+        } else {
+          host.hidden = true
+          const k = this._componentKnobs.get(ckey)
+          if (k) {
+            k.destroy()
+            this._componentKnobs.delete(ckey)
+          }
+        }
+      }
+    }
+
+    this._recomputeComponentsWrite(binding)
+    this._emitChange()
+  }
+
+  /**
+   * @param {AugmentedSelectBinding} binding
+   * @param {Record<string, unknown>} [valueOverrides]  knob-just-committed values not yet in params
+   */
+  _recomputeComponentsWrite (binding, valueOverrides = {}) {
+    const writeComponents = binding.writeComponents
+    const readComponents = binding.readComponents
+    if (!writeComponents || !readComponents) return
+    const item = this._currentItem()
+    const comps = item?.components
+    if (!comps) return
+
+    const snap = readComponents()
+    /** @type {string[]} */
+    const checkedKeys = []
+    /** @type {Record<string, unknown>} */
+    const values = {}
+    for (const comp of comps) {
+      const ck = String(comp.key)
+      const cb = this._componentChecks.get(ck)
+      if (!cb?.checked) continue
+      checkedKeys.push(ck)
+      if (this._requireValue) {
+        if (ck in valueOverrides) values[ck] = valueOverrides[ck]
+        else if (snap.values[ck] !== undefined) values[ck] = snap.values[ck]
+        else values[ck] = Number(comp.descriptor.defaultValue ?? 0)
+      }
+    }
+    writeComponents(checkedKeys, values)
+  }
+
+  _syncComponentsFromBinding () {
+    const binding = this._binding
+    if (!binding?.readComponents) return
+    const snap = binding.readComponents()
+    for (const [ck, cb] of this._componentChecks) {
+      const want = snap.checked.has(ck)
+      if (cb.checked !== want) cb.checked = want
+      const host = this._componentKnobHosts.get(ck)
+      if (host) host.hidden = !want
+      const knob = this._componentKnobs.get(ck)
+      if (want && !knob && this._requireValue && host) {
+        const item = this._currentItem()
+        const comp = item?.components?.find(c => String(c.key) === ck)
+        if (item && comp) this._mountComponentKnob(item.key, comp, host, binding)
+      } else if (!want && knob) {
+        knob.destroy()
+        this._componentKnobs.delete(ck)
+      } else if (knob) {
+        knob.syncFromExternal()
+      }
+    }
   }
 
   destroy () {

@@ -166,6 +166,27 @@ systemCapabilities:
         name: Position
         allowOverlay: true
         type: vector3
+        components:
+          - key: 0
+            name: X
+            type: number
+            display: scalar
+            range: [0, 1]
+            step: 0.01
+            defaultValue: 0
+          - key: 1
+            name: Y
+            type: number
+            display: scalar
+            range: [0, 1]
+            step: 0.01
+            defaultValue: 0
+          - key: 2
+            name: Z
+            type: number
+            display: scalar
+            range: [0, 1]
+            step: 0.01
         noMultiple: true
         isMandatory: true
         display: vector3

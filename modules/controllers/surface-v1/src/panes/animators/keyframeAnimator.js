@@ -2,7 +2,6 @@ import { AnimatorViewer } from './AnimatorViewer.js'
 import { subscribeBinding } from '../../core/bindingRegistry.js'
 import { sendAnimationEdit, sendBindingSet } from '../../core/outboundQueue.js'
 import { editText, warn as modalWarn } from '../../core/Modal.js'
-import { notification } from '../../app/notification.js'
 import { ScalarRadialKnobSvg } from '../../edit/components/ScalarRadialKnobSvg.js'
 import { IntentParamsSelect } from '../../edit/components/intentParamsSelect.js'
 import { resolveDescriptorsForClass } from '../../core/systemCapabilities.js'
@@ -137,25 +136,6 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
       addBtn.textContent = 'Add'
       addBtn.disabled = total <= 0
       addBtn.addEventListener('click', () => {
-        const isLastStep = total > 0 && idx >= total - 1
-        if (isLastStep) {
-          const lengthSeconds = Number(state?.explicitAnimationLengthSec)
-          const currentTimeSeconds = Number(state?.currentStepContent?.time)
-          const hasValidLength = Number.isFinite(lengthSeconds)
-          const hasValidCurrentTime = Number.isFinite(currentTimeSeconds)
-          if (
-            hasValidLength &&
-            hasValidCurrentTime &&
-            roundToHundredths(currentTimeSeconds) >=
-              roundToHundredths(lengthSeconds)
-          ) {
-            notification.warn(
-              'Cannot add: last step is already at or beyond animation length.',
-              `animation-add-denied-${guid}`
-            )
-            return
-          }
-        }
         sendBindingSet(bindingKey, {
           currentStepIndex: idx,
           editAction: 'add'

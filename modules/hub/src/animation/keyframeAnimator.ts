@@ -471,12 +471,20 @@ export class KeyframeAnimator {
         if (Object.keys(patch).length === 0) {
           patch = KeyframeAnimator.getDefaultStepArgsForNewKeyframe();
         }
-        const nextTime = this.computeNewKeyframeTimeMs(this.editIndex);
-        if (!nextTime.ok) {
-          Logger.warn(`[keyframeAnimator] add ignored — ${nextTime.reason}`);
+        const plan = this.planAddKeyframe(this.editIndex);
+        if (!plan.ok) {
+          Logger.warn(`[keyframeAnimator] add ignored — ${plan.reason}`);
         } else {
+          if (plan.shiftLastStep) {
+            const existing = this.editSteps[this.editIndex];
+            const shiftedStep: { time: number; args?: Record<string, unknown> } = {
+              time: plan.shiftLastStep.timeMs,
+              ...(existing?.args !== undefined ? { args: existing.args } : {}),
+            };
+            this.persistEditedStep(plan.shiftLastStep.sourceIndex, shiftedStep);
+          }
           const incomingStep: { time: number; args?: Record<string, unknown> } = {
-            time: nextTime.timeMs,
+            time: plan.timeMs,
             ...(Object.keys(patch).length > 0 ? { args: patch } : {}),
           };
           const sourceIndex = this.insertNewStep(incomingStep);
@@ -643,12 +651,14 @@ export class KeyframeAnimator {
   }
 
   /**
-   * Nominal ms for a new keyframe:
-   * - non-last step: midpoint between current and next
-   * - last index: new time = `content.length` (rounded); deny if current step already at/over length
+   * Plan for inserting a new keyframe relative to {@link editIndex}:
+   * - non-last step: new step takes the midpoint between current and next; no shift.
+   * - last step: new step takes the current last step's time (= `content.length`) and the existing
+   *   last step is moved inward to the midpoint of (prev-of-last, current last) so the animation
+   *   length is preserved.
    */
-  private computeNewKeyframeTimeMs(editIndex: number):
-    | { ok: true; timeMs: number }
+  private planAddKeyframe(editIndex: number):
+    | { ok: true; timeMs: number; shiftLastStep?: { sourceIndex: number; timeMs: number } }
     | { ok: false; reason: string } {
     const cur = this.editSteps[editIndex];
     if (!cur) {
@@ -658,16 +668,25 @@ export class KeyframeAnimator {
     if (next !== undefined) {
       return { ok: true, timeMs: this.roundTimeMsToHundredthSecond((cur.time + next.time) / 2) };
     }
-    const explicitLengthMs = this.parseExplicitAnimationLengthMs();
-    if (explicitLengthMs === undefined) {
-      return { ok: false, reason: 'content.length missing' };
+    const prev = this.editSteps[editIndex - 1];
+    if (!prev) {
+      return { ok: false, reason: 'no previous step to make room for last-step insertion' };
     }
-    const curR = this.roundTimeMsToHundredthSecond(cur.time);
-    const lenR = this.roundTimeMsToHundredthSecond(explicitLengthMs);
-    if (curR >= lenR) {
-      return { ok: false, reason: 'step would be outside animation length' };
+    const curLastSourceIndex = this.editSourceIndices[editIndex];
+    if (typeof curLastSourceIndex !== 'number' || curLastSourceIndex < 0) {
+      return { ok: false, reason: 'invalid source index for existing last step' };
     }
-    return { ok: true, timeMs: lenR };
+    const newStepTimeMs = this.roundTimeMsToHundredthSecond(cur.time);
+    const shiftedTimeMs = this.roundTimeMsToHundredthSecond((prev.time + cur.time) / 2);
+    const prevR = this.roundTimeMsToHundredthSecond(prev.time);
+    if (shiftedTimeMs <= prevR || shiftedTimeMs >= newStepTimeMs) {
+      return { ok: false, reason: 'no room between previous step and animation end' };
+    }
+    return {
+      ok: true,
+      timeMs: newStepTimeMs,
+      shiftLastStep: { sourceIndex: curLastSourceIndex, timeMs: shiftedTimeMs },
+    };
   }
 
   private persistEditedStep(

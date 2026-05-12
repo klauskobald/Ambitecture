@@ -229,6 +229,8 @@ function mountNoteOnOffEditor (container, api) {
       guid && [...intentSel.options].some(o => o.value === guid) ? guid : ''
   }
 
+  const t0Init = getTarget0()
+
   const keyLabel = document.createElement('span')
   keyLabel.className = 'modal__field-label'
   keyLabel.textContent = 'key:'

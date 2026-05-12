@@ -128,10 +128,32 @@ systemCapabilities:
         type: color
         display: color
         allowOverlay: true
+        components:
+          - key: h
+            name: Hue
+            type: number
+            display: scalar
+            range: [0, 360]
+            step: 1
+            defaultValue: 0
+          - key: s
+            name: Saturation
+            type: number
+            display: scalar
+            range: [0, 1]
+            step: 0.01
+            defaultValue: 1
+          - key: l
+            name: Lightness
+            type: number
+            display: scalar
+            range: [0, 1]
+            step: 0.01
+            defaultValue: 1
         defaultValue:
-          x: 0
-          y: 0
-          Y: 1
+          h: [0]
+          s: [1]
+          l: [ 1]
         range:
           h: [0, 360]
           s: [0, 1]

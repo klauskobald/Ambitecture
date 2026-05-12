@@ -159,7 +159,7 @@ function resolveZoneDrafts(drafts: ConfiguredZoneDraft[]): ConfiguredZone[] {
         for (const f of z.fixtures) {
             const fixtureClass = loadFixtureClass(f.fixtureProfile.class);
             if (!fixtureClass) {
-                Logger.warn(`[config] unknown fixture class: ${f.fixtureProfile.class} ("${f.name}" in zone "${z.name}")`);
+                Logger.warn(`[config] will not handle fixture class: ${f.fixtureProfile.class} ("${f.name}" in zone "${z.name}")`);
                 continue;
             }
             fixtures.push({ ...f, fixtureClass });

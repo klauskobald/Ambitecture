@@ -8,11 +8,11 @@ export abstract class ReceiverBase {
     protected readonly assignment: AssignmentRecord,
     protected readonly targets: TargetBase[],
     protected readonly logger: Logger,
-    private readonly onAssignmentActivity?: () => void,
+    private readonly onAssignmentActivity?: (input?: number, result?: number) => void,
   ) {}
 
-  protected signalAssignmentActivity(): void {
-    this.onAssignmentActivity?.();
+  protected signalAssignmentActivity(input?: number, result?: number): void {
+    this.onAssignmentActivity?.(input, result);
   }
 
   describe(): string {

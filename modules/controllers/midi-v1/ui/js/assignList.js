@@ -1,3 +1,5 @@
+import { getAssignmentClass } from './assignmentRegistry.js'
+
 /**
  * @param {{
  *   session: import('./assignSession.js').AssignSessionApi,
@@ -12,11 +14,50 @@ export function createAssignList (opts) {
   /** @type {HTMLElement | null} */
   let listFooter = null
 
+  /** Cache of last-seen (input, result) per assignment guid, so re-renders keep the last value. */
+  /** @type {Map<string, { input: number | null, result: number | null }>} */
+  const lastActivity = new Map()
+
+  /** noteAndControl: armed after matching note-on until note-off (plugin UI orange frame). */
+  /** @type {Set<string>} */
+  const engagedGuids = new Set()
+
   function rowSummary (a) {
     const s = typeof a.summary === 'string' ? a.summary.trim() : ''
     if (s) return s
     const cls = typeof a.class === 'string' ? a.class : ''
     return cls || 'Assignment'
+  }
+
+  /**
+   * @param {Record<string, unknown>} a
+   * @param {number | null} input
+   * @param {number | null} result
+   * @returns {string}
+   */
+  function buildActivityText (a, input, result) {
+    const cls = typeof a.class === 'string' ? a.class : ''
+    const def = cls ? getAssignmentClass(cls) : undefined
+    if (def && typeof def.formatActivity === 'function') {
+      return def.formatActivity(a, input, result)
+    }
+    if (input === null && result === null) return ''
+    const inStr = input !== null ? String(Math.round(input)) : '—'
+    const outStr = result !== null ? String(Math.round(result)) : '—'
+    return `${inStr} ⮕ ${outStr}`
+  }
+
+  /**
+   * @param {string} guid
+   * @returns {Record<string, unknown> | null}
+   */
+  function lookupAssignment (guid) {
+    for (const raw of opts.session.assignments) {
+      if (!raw || typeof raw !== 'object') continue
+      const a = /** @type {Record<string, unknown>} */ (raw)
+      if (a.guid === guid) return a
+    }
+    return null
   }
 
   /**
@@ -43,6 +84,16 @@ export function createAssignList (opts) {
   function render () {
     const listEl = opts.listEl
     if (!listEl) return
+    const knownGuids = new Set()
+    for (const raw of opts.session.assignments) {
+      if (!raw || typeof raw !== 'object') continue
+      const a = /** @type {Record<string, unknown>} */ (raw)
+      const g = typeof a.guid === 'string' ? a.guid : ''
+      if (g) knownGuids.add(g)
+    }
+    for (const g of [...engagedGuids]) {
+      if (!knownGuids.has(g)) engagedGuids.delete(g)
+    }
     listEl.innerHTML = ''
     for (const raw of opts.session.assignments) {
       if (!raw || typeof raw !== 'object') continue
@@ -52,17 +103,26 @@ export function createAssignList (opts) {
       if (!assignmentMatchesIntentFilter(a)) continue
       const li = document.createElement('li')
       li.className = 'list__item'
+      if (engagedGuids.has(guid)) li.classList.add('list__item--engaged')
       li.dataset.assignmentGuid = guid
       const summaryEl = document.createElement('div')
       summaryEl.className = 'list__summary'
       summaryEl.textContent = rowSummary(a)
       const actions = document.createElement('div')
       actions.className = 'list__actions'
+      const activityEl = document.createElement('span')
+      activityEl.className = 'list__activity'
+      const cached = lastActivity.get(guid)
+      if (cached) {
+        const text = buildActivityText(a, cached.input, cached.result)
+        if (text) activityEl.textContent = text
+      }
       const btn = document.createElement('button')
       btn.type = 'button'
       btn.className = 'btn'
       btn.textContent = '✎'
       btn.addEventListener('click', () => opts.onEdit(a))
+      actions.appendChild(activityEl)
       actions.appendChild(btn)
       li.appendChild(summaryEl)
       li.appendChild(actions)
@@ -105,5 +165,47 @@ export function createAssignList (opts) {
     window.setTimeout(done, 550)
   }
 
-  return { render, pulseAssignment }
+  /**
+   * @param {string} assignmentGuid
+   * @param {number | null} input
+   * @param {number | null} result
+   */
+  function updateAssignmentActivity (assignmentGuid, input, result) {
+    if (typeof assignmentGuid !== 'string' || !assignmentGuid) return
+    if (input === null && result === null) return
+    const prev = lastActivity.get(assignmentGuid) ?? { input: null, result: null }
+    const nextInput = input !== null ? input : prev.input
+    const nextResult = result !== null ? result : prev.result
+    lastActivity.set(assignmentGuid, { input: nextInput, result: nextResult })
+    const root = opts.listEl
+    if (!root) return
+    const item = root.querySelector(
+      `li.list__item[data-assignment-guid="${CSS.escape(assignmentGuid)}"]`
+    )
+    if (!item) return
+    const activityEl = item.querySelector('.list__activity')
+    if (!(activityEl instanceof HTMLElement)) return
+    const a = lookupAssignment(assignmentGuid)
+    if (!a) return
+    activityEl.textContent = buildActivityText(a, nextInput, nextResult)
+  }
+
+  /**
+   * @param {string} assignmentGuid
+   * @param {boolean} engaged
+   */
+  function setAssignmentEngaged (assignmentGuid, engaged) {
+    if (typeof assignmentGuid !== 'string' || !assignmentGuid) return
+    if (engaged) engagedGuids.add(assignmentGuid)
+    else engagedGuids.delete(assignmentGuid)
+    const root = opts.listEl
+    if (!root) return
+    const item = root.querySelector(
+      `li.list__item[data-assignment-guid="${CSS.escape(assignmentGuid)}"]`
+    )
+    if (!item) return
+    item.classList.toggle('list__item--engaged', engaged)
+  }
+
+  return { render, pulseAssignment, updateAssignmentActivity, setAssignmentEngaged }
 }

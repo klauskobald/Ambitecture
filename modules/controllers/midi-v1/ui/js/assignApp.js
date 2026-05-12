@@ -54,8 +54,12 @@ const session = createAssignSession({
   onOffline: () => {
     if (bannerOffline) bannerOffline.hidden = false
   },
-  onAssignmentTrigger: assignmentGuid => {
+  onAssignmentTrigger: (assignmentGuid, input, result) => {
     listRef?.pulseAssignment(assignmentGuid)
+    listRef?.updateAssignmentActivity(assignmentGuid, input, result)
+  },
+  onAssignmentEngaged: (assignmentGuid, engaged) => {
+    listRef?.setAssignmentEngaged(assignmentGuid, engaged)
   },
   getModal: () => modalRef
 })

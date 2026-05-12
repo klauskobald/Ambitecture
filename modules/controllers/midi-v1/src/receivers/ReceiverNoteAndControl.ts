@@ -52,9 +52,14 @@ export class ReceiverNoteAndControl extends ReceiverBase {
     targets: TargetBase[],
     logger: Logger,
     private readonly params: NoteAndControlParams,
-    onAssignmentActivity?: () => void,
+    onAssignmentActivity?: (input?: number, result?: number) => void,
+    private readonly onAssignmentEngaged?: (engaged: boolean) => void,
   ) {
     super(assignment, targets, logger, onAssignmentActivity);
+  }
+
+  private signalEngagement(engaged: boolean): void {
+    this.onAssignmentEngaged?.(engaged);
   }
 
   /**
@@ -86,14 +91,29 @@ export class ReceiverNoteAndControl extends ReceiverBase {
     assignment: AssignmentRecord,
     targets: TargetBase[],
     logger: Logger,
-    onAssignmentActivity?: () => void,
+    onAssignmentActivity?: (input?: number, result?: number) => void,
+    onAssignmentEngaged?: (engaged: boolean) => void,
   ): ReceiverNoteAndControl | null {
     const params = readParams(assignment.params);
     if (params === null) {
       logger.warn(`assignment ${assignment.guid} missing required note/controller params`);
       return null;
     }
-    return new ReceiverNoteAndControl(assignment, targets, logger, params, onAssignmentActivity);
+    return new ReceiverNoteAndControl(
+      assignment,
+      targets,
+      logger,
+      params,
+      onAssignmentActivity,
+      onAssignmentEngaged,
+    );
+  }
+
+  dispose(): void {
+    if (this.armedChannel !== null) {
+      this.armedChannel = null;
+      this.signalEngagement(false);
+    }
   }
 
   handleNoteOn(e: MidiNoteEvent): void {
@@ -101,6 +121,7 @@ export class ReceiverNoteAndControl extends ReceiverBase {
     if (e.note !== this.params.note) return;
     if (e.velocity < this.params.velocityMin || e.velocity > this.params.velocityMax) return;
     this.armedChannel = e.channel;
+    this.signalEngagement(true);
     this.logger.info(`${this.assignment.guid} armed (ch=${e.channel + 1} note=${e.note} v=${e.velocity})`);
   }
 
@@ -108,6 +129,7 @@ export class ReceiverNoteAndControl extends ReceiverBase {
     if (e.note !== this.params.note) return;
     if (this.armedChannel === null || e.channel !== this.armedChannel) return;
     this.armedChannel = null;
+    this.signalEngagement(false);
     this.logger.info(`${this.assignment.guid} disarmed`);
   }
 
@@ -116,10 +138,8 @@ export class ReceiverNoteAndControl extends ReceiverBase {
     if (e.channel !== this.armedChannel) return;
     if (e.controller !== this.params.controller) return;
     // Pre-curve transform in raw 0..127 CC space: (cc + add) * scale, clamped, then normalized.
-    const adjusted = (e.value + this.params.controllerAdd) * this.params.controllerScale;
-    this.signalAssignmentActivity();
-    this.fanOut(adjusted / 127);
-    // const clamped = Math.max(0, Math.min(127, adjusted));
-    // this.fanOut(clamped / 127);
+    const adjusted = ((e.value + this.params.controllerAdd) * this.params.controllerScale) / 127;
+    this.signalAssignmentActivity(e.value, adjusted);
+    this.fanOut(adjusted);
   }
 }

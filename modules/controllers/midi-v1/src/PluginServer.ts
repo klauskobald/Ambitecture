@@ -154,8 +154,22 @@ export class PluginServer {
     }
   }
 
-  sendAssignmentTrigger(assignmentGuid: string): void {
-    const msg = JSON.stringify({ type: 'assignmentTrigger', assignmentGuid });
+  sendAssignmentTrigger(assignmentGuid: string, input?: number, result?: number): void {
+    const payload: Record<string, unknown> = { type: 'assignmentTrigger', assignmentGuid };
+    if (typeof input === 'number' && Number.isFinite(input)) payload['input'] = input;
+    if (typeof result === 'number' && Number.isFinite(result)) payload['result'] = result;
+    const msg = JSON.stringify(payload);
+    for (const ws of this.clients) {
+      if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+    }
+  }
+
+  sendAssignmentEngaged(assignmentGuid: string, engaged: boolean): void {
+    const msg = JSON.stringify({
+      type: 'assignmentEngaged',
+      assignmentGuid,
+      engaged,
+    });
     for (const ws of this.clients) {
       if (ws.readyState === WebSocket.OPEN) ws.send(msg);
     }

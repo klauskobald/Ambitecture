@@ -457,11 +457,45 @@ function mountNoteOnOffEditor (container, api) {
   }
 }
 
+/**
+ * @param {number} n
+ * @returns {string}
+ */
+function fmtNum (n) {
+  return Number.isInteger(n) ? String(n) : n.toFixed(1)
+}
+
+/**
+ * Compact live activity line, e.g. "100 +50×2 ⮕ 300". `input` is the incoming
+ * MIDI velocity (0..127); `result` is the velocity-space value sent before
+ * the 0..1 normalization (can over- or undershoot when offset/scale are set).
+ *
+ * @param {Record<string, unknown>} assignment
+ * @param {number | null} input
+ * @param {number | null} result
+ * @returns {string}
+ */
+function formatActivityNoteOnOff (assignment, input, result) {
+  const p =
+    assignment.params && typeof assignment.params === 'object' && !Array.isArray(assignment.params)
+      ? /** @type {Record<string, unknown>} */ (assignment.params)
+      : {}
+  const off = typeof p.velocityOffset === 'number' ? p.velocityOffset : 0
+  const sc = typeof p.velocityScale === 'number' ? p.velocityScale : 1
+  let mid = ''
+  if (off !== 0) mid += off > 0 ? `+${fmtNum(off)}` : fmtNum(off)
+  if (sc !== 1) mid += `×${fmtNum(sc)}`
+  const inStr = input !== null ? fmtNum(input) : '—'
+  const outStr = result !== null ? fmtNum(result) : '—'
+  return mid ? `${inStr} ${mid} ⮕ ${outStr}` : `${inStr} ⮕ ${outStr}`
+}
+
 const def = {
   id: CLASS_ID,
   label: 'Note on/off',
   createDefault: createDefaultNoteOnOff,
-  mountEditor: mountNoteOnOffEditor
+  mountEditor: mountNoteOnOffEditor,
+  formatActivity: formatActivityNoteOnOff
 }
 
 registerAssignmentClass(def)

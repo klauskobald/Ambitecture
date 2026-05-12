@@ -150,10 +150,19 @@ export class MidiController {
   }
 
   private buildReceiver(assignment: AssignmentRecord, targets: TargetBase[]): ReceiverBase | null {
-    const onActivity = () => this.pluginServer.sendAssignmentTrigger(assignment.guid);
+    const onActivity = (input?: number, result?: number) =>
+      this.pluginServer.sendAssignmentTrigger(assignment.guid, input, result);
+    const onEngaged = (engaged: boolean) =>
+      this.pluginServer.sendAssignmentEngaged(assignment.guid, engaged);
     switch (assignment.class) {
       case 'noteAndControl':
-        return ReceiverNoteAndControl.build(assignment, targets, this.logger, onActivity);
+        return ReceiverNoteAndControl.build(
+          assignment,
+          targets,
+          this.logger,
+          onActivity,
+          onEngaged,
+        );
       case 'noteOnOff':
         return ReceiverNoteOnOff.build(assignment, targets, this.logger, onActivity);
       default:

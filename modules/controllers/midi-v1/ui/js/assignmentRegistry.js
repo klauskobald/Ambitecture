@@ -7,7 +7,8 @@
  *   id: string,
  *   label: string,
  *   createDefault: (ctx: import('./assignSession.js').EditorContext) => Record<string, unknown>,
- *   mountEditor: (container: HTMLElement, api: object) => { teardown: () => void, syncFromModel: () => void }
+ *   mountEditor: (container: HTMLElement, api: object) => { teardown: () => void, syncFromModel: () => void },
+ *   formatActivity?: (assignment: Record<string, unknown>, input: number | null, result: number | null) => string
  * }} AssignmentClassDef
  */
 

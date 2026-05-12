@@ -4,6 +4,7 @@
   --color-text: #e8eaed;
   --color-muted: #9aa0a6;
   --color-accent: #8ab4f8;
+  --color-engage: #f59e0b;
   --color-danger: #f28b82;
   --space-2: 4px;
   --space-3: 8px;
@@ -119,6 +120,12 @@ body {
   gap: var(--space-1);
 }
 
+.list__item--engaged {
+  outline: 1px solid var(--color-engage);
+  outline-offset: -1px;
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.2);
+}
+
 .list__item--trigger {
   outline: 1px solid var(--color-accent);
   outline-offset: -1px;
@@ -151,6 +158,20 @@ body {
   flex-wrap: wrap;
   gap: var(--space-2);
   align-items: center;
+}
+
+.list__activity {
+  flex: 0 1 auto;
+  min-height: 1em;
+  color: var(--color-muted);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.list__activity:empty {
+  display: none;
 }
 
 .modal {

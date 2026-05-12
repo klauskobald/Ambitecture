@@ -32,7 +32,8 @@ const SAVE_DEBOUNCE_MS = 280
  *   onState: () => void,
  *   onOnline?: () => void,
  *   onOffline?: () => void,
- *   onAssignmentTrigger?: (assignmentGuid: string) => void,
+ *   onAssignmentTrigger?: (assignmentGuid: string, input: number | null, result: number | null) => void,
+ *   onAssignmentEngaged?: (assignmentGuid: string, engaged: boolean) => void,
  *   getModal: () => { applyLearnValue: (m: Record<string, unknown>) => void } | null
  * }} opts
  * @returns {AssignSessionApi}
@@ -139,7 +140,22 @@ export function createAssignSession (opts) {
       }
       if (msg.type === 'assignmentTrigger') {
         const g = msg.assignmentGuid
-        if (typeof g === 'string' && g) opts.onAssignmentTrigger?.(g)
+        if (typeof g === 'string' && g) {
+          const input =
+            typeof msg.input === 'number' && Number.isFinite(msg.input)
+              ? msg.input
+              : null
+          const result =
+            typeof msg.result === 'number' && Number.isFinite(msg.result)
+              ? msg.result
+              : null
+          opts.onAssignmentTrigger?.(g, input, result)
+        }
+      }
+      if (msg.type === 'assignmentEngaged') {
+        const g = msg.assignmentGuid
+        const engaged = msg.engaged === true
+        if (typeof g === 'string' && g) opts.onAssignmentEngaged?.(g, engaged)
       }
     }
   }

@@ -86,7 +86,7 @@ export class ReceiverNoteOnOff extends ReceiverBase {
     targets: TargetBase[],
     logger: Logger,
     private readonly params: NoteOnOffParams,
-    onAssignmentActivity?: () => void,
+    onAssignmentActivity?: (input?: number, result?: number) => void,
   ) {
     super(assignment, targets, logger, onAssignmentActivity);
   }
@@ -119,7 +119,7 @@ export class ReceiverNoteOnOff extends ReceiverBase {
     assignment: AssignmentRecord,
     targets: TargetBase[],
     logger: Logger,
-    onAssignmentActivity?: () => void,
+    onAssignmentActivity?: (input?: number, result?: number) => void,
   ): ReceiverNoteOnOff | null {
     const params = readParams(assignment.params);
     if (params === null) {
@@ -158,15 +158,18 @@ export class ReceiverNoteOnOff extends ReceiverBase {
     if (e.velocity < this.params.velocityMin || e.velocity > this.params.velocityMax) return;
 
     this.triggerVelocity = e.velocity;
-    this.signalAssignmentActivity();
 
     const envCfg = this.params.envelope;
     if (envCfg === null || !envCfg.enabled) {
-      const adjusted = (e.velocity + this.params.velocityOffset) * this.params.velocityScale;
-      this.fanOut(adjusted / 127);
+      const adjusted = ((e.velocity + this.params.velocityOffset) * this.params.velocityScale) / 127;
+      this.signalAssignmentActivity(e.velocity, adjusted);
+      this.fanOut(adjusted);
       return;
     }
 
+    // Envelope ramps the actual fan-out from 0 → peak; report the peak so the UI shows the target value.
+    const peakAdjusted = (e.velocity + this.params.velocityOffset) * this.params.velocityScale / 127;
+    this.signalAssignmentActivity(e.velocity, peakAdjusted);
     this.ensureEnvelope(e.note).noteOn();
   }
 

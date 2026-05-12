@@ -452,11 +452,47 @@ function mountNoteAndControlEditor (container, api) {
   }
 }
 
+/**
+ * @param {number} n
+ * @returns {string}
+ */
+function fmtNum (n) {
+  return Number.isInteger(n) ? String(n) : n.toFixed(1)
+}
+
+/**
+ * Compact live activity line, e.g. "64 ctrl 1 ⮕ 64". `input` is the raw CC
+ * value (0..127); `result` is the transformed value `(cc + add) * scale`
+ * before the 0..1 normalization. Add/scale are appended only when not at
+ * their defaults so the line stays short.
+ *
+ * @param {Record<string, unknown>} assignment
+ * @param {number | null} input
+ * @param {number | null} result
+ * @returns {string}
+ */
+function formatActivityNoteAndControl (assignment, input, result) {
+  const p =
+    assignment.params && typeof assignment.params === 'object' && !Array.isArray(assignment.params)
+      ? /** @type {Record<string, unknown>} */ (assignment.params)
+      : {}
+  const ctrl = typeof p.controller === 'number' ? p.controller : 0
+  const add = typeof p.controllerAdd === 'number' ? p.controllerAdd : 0
+  const sc = typeof p.controllerScale === 'number' ? p.controllerScale : 1
+  let mid = `ctrl ${ctrl}`
+  if (add !== 0) mid += add > 0 ? ` +${fmtNum(add)}` : ` ${fmtNum(add)}`
+  if (sc !== 1) mid += ` ×${fmtNum(sc)}`
+  const inStr = input !== null ? fmtNum(input) : '—'
+  const outStr = result !== null ? fmtNum(result) : '—'
+  return `${inStr} ${mid} ⮕ ${outStr}`
+}
+
 const def = {
   id: CLASS_ID,
   label: 'Note + control',
   createDefault: createDefaultNoteAndControl,
-  mountEditor: mountNoteAndControlEditor
+  mountEditor: mountNoteAndControlEditor,
+  formatActivity: formatActivityNoteAndControl
 }
 
 registerAssignmentClass(def)

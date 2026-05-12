@@ -103,6 +103,10 @@ Current behavior:
 - Dynamically loads fixture class handlers from `src/fixtures` based on fixture profile `class`.
 - Writes DMX frames continuously at configured frame rate, with DMX recovery/reconnect logic.
 
+**`renderers/screen/`** — Browser fullscreen renderer for fixture class `screen` (plain HTML/JS ES modules). Uses the same `LayerIntentEngine` sampling path as `simulator-2d` for `light.color.xyY` / master controls; fixture `params.algorithm.class` selects a drawing algorithm (e.g. `singlePixel` fills the viewport with the mixed color).
+
+**`renderers/starter-web-app/`** — Minimal log-only renderer scaffold for learning the WebSocket lifecycle (`register`, `config`, `events`, reconnect); no fixture or intent sampling.
+
 Renderers receive configuration over WebSocket from the hub. In the common path this arrives immediately after renderer registration.
 
 Renderer data authority model:

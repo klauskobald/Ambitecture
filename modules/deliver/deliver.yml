@@ -12,3 +12,6 @@ mounts:
 
   starter-web-app:
     root: ../renderers/starter-web-app
+
+  screen:
+    root: ../renderers/screen

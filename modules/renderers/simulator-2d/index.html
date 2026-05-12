@@ -53,7 +53,9 @@
   <script src="src/FnCurve.js"></script>
   <script src="src/layerIntent/LayerIntentEngine.js"></script>
   <script src="src/fixtures/LightBase.js"></script>
+  <script src="src/SimFixtureIcons.js"></script>
   <script src="src/fixtures/dmx_light_static.js"></script>
+  <script src="src/fixtures/screen.js"></script>
   <script src="src/events/EventBase.js"></script>
   <script src="src/events/EventLight.js"></script>
   <script src="src/events/EventMaster.js"></script>
@@ -99,6 +101,14 @@
         fitSimCanvasToStage();
       });
       moCanvas.observe(canvas, { attributes: true, attributeFilter: ['width', 'height'] });
+
+      if (typeof globalThis.simLoadFixtureIconSvgs === 'function') {
+        try {
+          await globalThis.simLoadFixtureIconSvgs();
+        } catch (e) {
+          console.warn('[sim] fixture icon SVG load failed', e);
+        }
+      }
 
       const renderer = new CanvasRenderer(canvas, config);
       renderer.start();

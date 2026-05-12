@@ -12,9 +12,8 @@ export interface FixtureChannelDef {
 export interface FixtureProfile {
   name: string;
   class: string;
-  params: {
-    dmx: Record<string, FixtureChannelDef[]>;
-  };
+  icon?: string;
+  params: Record<string, unknown>;
 }
 
 /** Nested under intent `perform` in project YAML — forward-compatible buckets. */

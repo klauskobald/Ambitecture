@@ -105,6 +105,8 @@ Current behavior:
 
 **`renderers/screen/`** — Browser fullscreen renderer for fixture class `screen` (plain HTML/JS ES modules). Uses the same `LayerIntentEngine` sampling path as `simulator-2d` for `light.color.xyY` / master controls; fixture `params.algorithm.class` selects a drawing algorithm (e.g. `singlePixel` fills the viewport with the mixed color).
 
+**`renderers/simulator-2d/`** — Browser 2D canvas preview of zones and fixtures (top-down XZ). Registers `dmx_light_static` and `screen`; the `screen` footprint shows the mixed RGB from the same sampling path as the `screen` renderer's `singlePixel` algorithm (the simulator does not show which algorithm is selected). Stroke-only class glyphs live under `assets/` (`rgb_simple.svg`, `screen.svg`) and are composited with `drawImage` after canvas fills. `FIXTURE_DRAW.lamp.radius` (meters) sets the lamp circle radius and the `screen` box half-extent so one value scales every fixture glyph.
+
 **`renderers/starter-web-app/`** — Minimal log-only renderer scaffold for learning the WebSocket lifecycle (`register`, `config`, `events`, reconnect); no fixture or intent sampling.
 
 Renderers receive configuration over WebSocket from the hub. In the common path this arrives immediately after renderer registration.
@@ -550,6 +552,8 @@ The repository includes demo fixture/project data under `var/` that the hub can 
   - channel `1` -> `red`
   - channel `2` -> `green`
   - channel `3` -> `blue`
+
+Fixture profile `params` is class-specific (for example `screen` uses `params.algorithm`, not `params.dmx`). Optional `icon` names an SVG filename for tooling; `simulator-2d` ships matching stroke glyphs under `assets/` for canvas overlay.
 
 ### Demo project definition
 

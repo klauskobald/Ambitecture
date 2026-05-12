@@ -38,7 +38,18 @@ class DmxLightStatic extends LightBase {
           c.b * 255
         )})`
       : '#2a2a2a'
-    CanvasDraw.drawCircle(ctx, cx, cy, radius, fillColor, '#444')
+    CanvasDraw.fillCircle(ctx, cx, cy, radius, fillColor)
+    const outline = globalThis.SimFixtureIcons?.rgbSimple
+    if (outline && outline.complete && outline.naturalWidth > 0) {
+      const d = radius * 2
+      ctx.drawImage(outline, cx - radius, cy - radius, d, d)
+    } else {
+      ctx.beginPath()
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2)
+      ctx.strokeStyle = '#444'
+      ctx.lineWidth = 1
+      ctx.stroke()
+    }
     CanvasDraw.drawLabel(ctx, cx, cy, radius, this.name)
   }
 }

@@ -1,4 +1,11 @@
 const CanvasDraw = {
+    fillCircle(ctx, cx, cy, radius, fillColor) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.fillStyle = fillColor;
+        ctx.fill();
+    },
+
     drawCircle(ctx, cx, cy, radius, fillColor, strokeColor) {
         ctx.beginPath();
         ctx.arc(cx, cy, radius, 0, Math.PI * 2);

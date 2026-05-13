@@ -38,6 +38,12 @@ systemCapabilities:
       params:
         argsOn: jsonString
         argsOff: jsonString
+    - class: toggle
+      name: Toggle
+      hint: latch
+      params:
+        argsOn: jsonString
+        argsOff: jsonString
   displayTypes:
     - class: button
       name: Button

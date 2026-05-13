@@ -13,6 +13,10 @@ import {
   setPerformInputKeyboardActive
 } from './performKeyboardVisual.js'
 import { sendActionTrigger } from './outboundQueue.js'
+import {
+  syncPerformToggleChrome,
+  togglePerformToggleAndGetValue
+} from './performToggleLocalState.js'
 
 /**
  * @param {EventTarget | null} el
@@ -47,6 +51,7 @@ function isTypingContext (el) {
 /**
  * Singleton: binds `input.keyChar` (case-sensitive) to perform triggers.
  * `momentarySwitch`: keydown/keyup via {@link performMomentaryPress} / {@link performMomentaryRelease}.
+ * `toggle`: keydown flips in-browser latch and sends `value` on/off (same as Perform click).
  * Other types: keydown only (ignores `repeat`).
  */
 class KeyboardManager {
@@ -148,6 +153,18 @@ class KeyboardManager {
       return
     }
 
+    if (behavior === 'toggle') {
+      if (event.repeat) return
+      event.preventDefault()
+      cancelPerformInputKeyboardPulse(inputGuid)
+      const value = togglePerformToggleAndGetValue(inputGuid)
+      for (const ag of actionGuids) {
+        sendActionTrigger(ag, { value })
+      }
+      syncPerformToggleChrome(inputGuid)
+      return
+    }
+
     if (event.repeat) return
     event.preventDefault()
     pulsePerformInputKeyboard(inputGuid)
@@ -172,7 +189,9 @@ class KeyboardManager {
       typeof input.type === 'string' && input.type.length > 0
         ? input.type
         : 'button'
-    if (behavior !== 'momentarySwitch') return
+    if (behavior !== 'momentarySwitch') {
+      return
+    }
 
     const actionGuids = inputActionGuidList(
       /** @type {Record<string, unknown>} */ (input)

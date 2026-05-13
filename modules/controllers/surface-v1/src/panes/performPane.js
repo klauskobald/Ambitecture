@@ -14,6 +14,12 @@ import {
   performMomentaryPress,
   performMomentaryRelease
 } from '../core/performMomentaryRegistry.js'
+import {
+  clearPerformToggleState,
+  getPerformToggleOn,
+  syncPerformToggleChrome,
+  togglePerformToggleAndGetValue
+} from '../core/performToggleLocalState.js'
 import { PerformSubnavShell } from './performSubnavShell.js'
 
 /**
@@ -138,7 +144,11 @@ export class PerformPane {
 
       if (button.dataset.inputGuid !== guid) button.dataset.inputGuid = guid
 
+      const prevBehavior = button.dataset.behavior ?? ''
       const newBehavior = typeof input.type === 'string' ? input.type : 'button'
+      if (prevBehavior === 'toggle' && newBehavior !== 'toggle') {
+        clearPerformToggleState(guid)
+      }
       if (button.dataset.behavior !== newBehavior)
         button.dataset.behavior = newBehavior
 
@@ -150,6 +160,18 @@ export class PerformPane {
         highlightedInputGuid !== '' && guid === highlightedInputGuid
       button.classList.toggle('btn--active', isActive)
 
+      const isToggle = newBehavior === 'toggle'
+      if (isToggle) {
+        button.setAttribute('role', 'switch')
+        const latched = getPerformToggleOn(guid)
+        button.classList.toggle('perform-input--toggle-on', latched)
+        button.setAttribute('aria-pressed', latched ? 'true' : 'false')
+      } else {
+        button.removeAttribute('role')
+        button.removeAttribute('aria-pressed')
+        button.classList.remove('perform-input--toggle-on')
+      }
+
       // Always append in sorted order: appendChild moves an existing child to the end,
       // so DOM order tracks _sortIdx after reorder (not only on first mount).
       mount.appendChild(button)
@@ -157,6 +179,7 @@ export class PerformPane {
 
     for (const [guid, button] of this._buttonByGuid) {
       if (activeGuids.has(guid)) continue
+      clearPerformToggleState(guid)
       this._releasePointersForButton(button)
       button.remove()
       this._buttonByGuid.delete(guid)
@@ -215,8 +238,36 @@ export class PerformPane {
     button.addEventListener('lostpointercapture', event =>
       this._handlePointerRelease(button, event)
     )
+    button.addEventListener('click', event =>
+      this._handlePerformInputClick(button, event)
+    )
     this._buttonByGuid.set(guid, button)
     return button
+  }
+
+  /**
+   * @param {HTMLButtonElement} button
+   * @param {Event} event
+   */
+  _handlePerformInputClick (button, event) {
+    const input = this._inputForButton(button)
+    const actionGuids = input
+      ? inputActionGuidList(/** @type {Record<string, unknown>} */ (input))
+      : []
+    if (!input || actionGuids.length === 0) return
+
+    const behavior = typeof input.type === 'string' ? input.type : 'button'
+    if (behavior !== 'toggle') return
+
+    event.preventDefault()
+    const guid = String(input.guid ?? button.dataset.inputGuid ?? '')
+    if (!guid) return
+
+    const value = togglePerformToggleAndGetValue(guid)
+    for (const ag of actionGuids) {
+      sendActionTrigger(ag, { value })
+    }
+    syncPerformToggleChrome(guid)
   }
 
   /**
@@ -236,6 +287,8 @@ export class PerformPane {
       return
 
     const behavior = typeof input.type === 'string' ? input.type : 'button'
+    if (behavior === 'toggle') return
+
     this._activePointers.set(event.pointerId, {
       guid: String(input.guid ?? button.dataset.inputGuid ?? ''),
       actionGuids,

@@ -4,6 +4,7 @@ import {
   ActionExecuteItem,
   InputDefinition,
   inputActionGuids,
+  isCompanionAnimationRunnerAction,
   ProjectManager,
   Scene,
 } from './ProjectManager';
@@ -212,7 +213,11 @@ export class ActionInputManager {
       const ag = action.guid;
       if (!ag) continue;
       commands.push(...this.scrubActionGuidFromAllInputs(ag));
-      commands.push(this.removeActionCommand(ag));
+      const keepCompanionRunner =
+        targetType === 'animation' && isCompanionAnimationRunnerAction(action, targetGuid);
+      if (!keepCompanionRunner) {
+        commands.push(this.removeActionCommand(ag));
+      }
     }
     return commands;
   }

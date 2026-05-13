@@ -184,7 +184,7 @@ export interface Zone {
  * Runner `action` row shares the animation guid; single execute item runs that animation.
  * Matches controller `companionAnimationRunnerAction` / hub `ProjectGraphStore.applyAnimationCommand`.
  */
-function isCompanionAnimationRunnerAction(
+export function isCompanionAnimationRunnerAction(
   action: ActionDefinition,
   animationGuid: string,
 ): boolean {

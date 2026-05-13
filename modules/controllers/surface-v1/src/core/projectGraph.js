@@ -92,7 +92,9 @@ class ProjectGraph {
       actions: /** @type {Map<string, Record<string, unknown>>} */ (new Map()),
       inputs: /** @type {Map<string, Record<string, unknown>>} */ (new Map()),
       /** Hub `entities.animation` from `graph:init` + `graph:delta` entityType `animation`. */
-      animations: /** @type {Map<string, Record<string, unknown>>} */ (new Map()),
+      animations: /** @type {Map<string, Record<string, unknown>>} */ (
+        new Map()
+      ),
       activeSceneGuid: /** @type {string | null} */ (null),
       /** Hub hint: perform merge overlaps these scene intent GUIDs — show reset when non-empty. */
       runtimeOverlayGuidsInScene: /** @type {string[]} */ ([]),
@@ -198,7 +200,10 @@ class ProjectGraph {
       if (filter !== null) {
         let intersects = false
         for (const t of topics) {
-          if (filter.has(t)) { intersects = true; break }
+          if (filter.has(t)) {
+            intersects = true
+            break
+          }
         }
         if (!intersects) continue
       }
@@ -299,8 +304,8 @@ class ProjectGraph {
         typeof row.targetIntent === 'string'
           ? row.targetIntent
           : typeof row.intent === 'string'
-            ? row.intent
-            : ''
+          ? row.intent
+          : ''
       out.push({ guid, name, class: cls, targetIntent })
     }
     out.sort((a, b) => a.name.localeCompare(b.name))
@@ -330,7 +335,8 @@ class ProjectGraph {
     for (const input of this._data.inputs.values()) {
       for (const ag of inputActionGuidList(input)) {
         const action = this._data.actions.get(ag)
-        if (action && actionTargets(action, targetType, targetGuid)) return input
+        if (action && actionTargets(action, targetType, targetGuid))
+          return input
       }
     }
     return null
@@ -464,7 +470,8 @@ class ProjectGraph {
    */
   _stripSceneOverlayKeysOverlappedByPatch (sceneName, guid, patch) {
     const ref = this._findSceneIntentRef(sceneName, guid)
-    if (!ref?.overlay || typeof patch !== 'object' || Array.isArray(patch)) return
+    if (!ref?.overlay || typeof patch !== 'object' || Array.isArray(patch))
+      return
     const nextOverlay = { ...ref.overlay }
     let changed = false
     for (const k of Object.keys(patch)) {
@@ -886,9 +893,11 @@ class ProjectGraph {
         }
       }
     }
-    for (const guid of incoming.keys()) {
-      this._trustHubReconciledIntentRow.add(guid)
-    }
+    // Don't mark intents from reconcile as trusted, since they may not have scene overlays applied yet.
+    // Only runtime updates (via _applyRuntimeIntentDelta) and graph deltas (via _applyIntentDelta) mark as trusted.
+    // this._trustHubReconciledIntentRow is now only updated by those two methods when the hub has fully
+    // merged the intent (with scene overlay + runtime patches), ensuring _getSceneEffectiveIntent will not
+    // re-apply stale YAML overlays on top of hub-merged data.
     this._notify('intents:def')
   }
 
@@ -1012,16 +1021,24 @@ class ProjectGraph {
       }
 
       const entitiesRaw = p?.entities
-      if (entitiesRaw && typeof entitiesRaw === 'object' && !Array.isArray(entitiesRaw)) {
+      if (
+        entitiesRaw &&
+        typeof entitiesRaw === 'object' &&
+        !Array.isArray(entitiesRaw)
+      ) {
         this._data.animations.clear()
-        const animationMap = /** @type {Record<string, unknown>} */ (entitiesRaw).animation
+        const animationMap = /** @type {Record<string, unknown>} */ (
+          entitiesRaw
+        ).animation
         if (
           animationMap &&
           typeof animationMap === 'object' &&
           !Array.isArray(animationMap)
         ) {
           this._mergeAnimationsFromEntityMap(
-            /** @type {Record<string, Record<string, unknown>>} */ (animationMap),
+            /** @type {Record<string, Record<string, unknown>>} */ (
+              animationMap
+            )
           )
         }
       }
@@ -1256,14 +1273,7 @@ class ProjectGraph {
       this._spatial = this._computeSpatial()
       this._zoneBoxes = this._computeZoneBoxes()
       this._fixtures = this._computeFixtures()
-    }, [
-      'project',
-      'scenes',
-      'fixtures',
-      'actions',
-      'inputs',
-      'controller'
-    ])
+    }, ['project', 'scenes', 'fixtures', 'actions', 'inputs', 'controller'])
   }
 
   // ─── Serialization ────────────────────────────────────────────────────────────
@@ -1341,10 +1351,10 @@ class ProjectGraph {
     if (activeScene && Object.keys(patch).length > 0) {
       this._stripSceneOverlayKeysOverlappedByPatch(activeScene, guid, patch)
     }
-    const current =
-      this._getSceneEffectiveIntent(guid) ??
-      /** @type {Record<string, unknown>} */ (this._data.intents.get(guid)) ??
-      { guid }
+    const current = this._getSceneEffectiveIntent(guid) ??
+      /** @type {Record<string, unknown>} */ (this._data.intents.get(guid)) ?? {
+        guid
+      }
     const value =
       update.value &&
       typeof update.value === 'object' &&
@@ -1930,7 +1940,10 @@ function normalizeQuickPanelDotKeys (value) {
  */
 function addTopicsToSet (target, topic) {
   if (topic === null || topic === undefined) return
-  if (typeof topic === 'string') { target.add(topic); return }
+  if (typeof topic === 'string') {
+    target.add(topic)
+    return
+  }
   if (Array.isArray(topic)) {
     for (const t of topic) {
       if (typeof t === 'string' && t.length > 0) target.add(t)

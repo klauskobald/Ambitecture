@@ -2,7 +2,6 @@ import { projectGraph, inputActionGuidList } from '../core/projectGraph.js'
 import {
   confirm as modalConfirm,
   openModalCard,
-  pickChoice,
   prompt as modalPrompt,
   sampleKey
 } from '../core/Modal.js'
@@ -84,14 +83,7 @@ export class InputAssignManager {
         this._contextType,
         this._contextGuid
       )
-      const action = projectGraph.getAssignedAction(
-        this._contextType,
-        this._contextGuid
-      )
-      const ags = input
-        ? inputActionGuidList(/** @type {Record<string, unknown>} */ (input))
-        : []
-      const isActive = ags.length > 0 && Boolean(action)
+      const isActive = this._anyInputLinkedToContext()
       row.className = isActive
         ? `${rowClass} ${rowClass}--active`.trim()
         : rowClass
@@ -132,6 +124,304 @@ export class InputAssignManager {
     await this._editInputByGuid(inputGuid)
   }
 
+  /**
+   * @param {unknown} action
+   * @param {string} targetType
+   * @param {string} targetGuid
+   * @returns {boolean}
+   */
+  _actionExecuteTargets (action, targetType, targetGuid) {
+    const raw =
+      action &&
+      typeof action === 'object' &&
+      !Array.isArray(action)
+        ? /** @type {{ execute?: unknown }} */ (action).execute
+        : undefined
+    const ex =
+      raw && typeof raw === 'object' && !Array.isArray(raw)
+        ? /** @type {Record<string, unknown>} */ (raw)
+        : null
+    if (!ex) return false
+    return ex.type === targetType && ex.guid === targetGuid
+  }
+
+  /**
+   * @param {Record<string, unknown>} input
+   * @returns {boolean}
+   */
+  _inputLinksTarget (input) {
+    const actions = projectGraph.getActions()
+    for (const ag of inputActionGuidList(input)) {
+      const action = actions.get(ag)
+      if (this._actionExecuteTargets(action, this._contextType, this._contextGuid)) {
+        return true
+      }
+    }
+    return false
+  }
+
+  _anyInputLinkedToContext () {
+    for (const input of projectGraph.getInputs().values()) {
+      if (
+        input &&
+        typeof input === 'object' &&
+        !Array.isArray(input) &&
+        this._inputLinksTarget(/** @type {Record<string, unknown>} */ (input))
+      ) {
+        return true
+      }
+    }
+    return false
+  }
+
+  /**
+   * @param {Set<string>} initialLinked
+   * @param {Set<string>} pending
+   */
+  _applyAssignmentPendingSets (initialLinked, pending) {
+    const tt = this._contextType
+    const tg = this._contextGuid
+    const toUnlink = [...initialLinked].filter(g => !pending.has(g))
+    const toLink = [...pending].filter(g => !initialLinked.has(g))
+    for (const ig of toUnlink) {
+      sendActionInputCommand({
+        command: 'unlinkInputFromTarget',
+        inputGuid: ig,
+        targetType: tt,
+        targetGuid: tg
+      })
+    }
+    for (const ig of toLink) {
+      sendActionInputCommand({
+        command: 'assignExistingInput',
+        targetType: tt,
+        targetGuid: tg,
+        inputGuid: ig
+      })
+    }
+  }
+
+  /**
+   * @returns {string} e.g. `Animation Explosion` for assign modal title line
+   */
+  _assignTargetHeadline () {
+    const raw = this._contextType.trim().toLowerCase()
+    const name =
+      typeof this._labelDefault === 'string' && this._labelDefault.trim().length > 0
+        ? this._labelDefault.trim()
+        : this._contextGuid
+    /** @type {Record<string, string>} */
+    const map = {
+      animation: 'Animation',
+      intent: 'Intent',
+      scene: 'Scene',
+      sequence: 'Sequence'
+    }
+    const kind =
+      map[raw] ??
+      (raw.length > 0
+        ? raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase()
+        : 'Target')
+    return `${kind} ${name}`.trim()
+  }
+
+  /**
+   * Shorthand for input `type` shown in the assign list, e.g. `(toggle)`.
+   * @param {string} typeRaw
+   * @returns {string}
+   */
+  _inputBehaviorBracketLabel (typeRaw) {
+    const t = String(typeRaw ?? '').trim().toLowerCase()
+    if (t === 'momentaryswitch') return 'momentary'
+    if (t === 'toggle') return 'toggle'
+    if (t === 'button') return 'button'
+    return t.length > 0 ? t : 'button'
+  }
+
+  /**
+   * @param {Array<{ guid: string, name: string }>} inputRows
+   * @returns {Promise<{ kind: string, inputGuid?: string } | null>}
+   */
+  _openAssignInputsModal (inputRows) {
+    return openModalCard(dismiss => {
+      const card = document.createElement('div')
+      card.className =
+        'modal input-assign-modal input-assign-modal--assign-picker'
+      card.addEventListener('click', e => e.stopPropagation())
+
+      const heading = document.createElement('p')
+      heading.className = 'modal-text'
+      heading.textContent = `Input for ${this._assignTargetHeadline()}`
+
+      const list = document.createElement('div')
+      list.className = 'modal-choice-list'
+
+      /** @type {Set<string>} */
+      const initialLinked = new Set()
+      for (const row of inputRows) {
+        const inputRecord = projectGraph.getInputs().get(row.guid)
+        if (
+          inputRecord &&
+          typeof inputRecord === 'object' &&
+          !Array.isArray(inputRecord) &&
+          this._inputLinksTarget(/** @type {Record<string, unknown>} */ (inputRecord))
+        ) {
+          initialLinked.add(row.guid)
+        }
+      }
+      /** @type {Set<string>} */
+      const pending = new Set(initialLinked)
+
+      const actionsWrap = projectGraph.getActions()
+
+      /** @param {HTMLElement} rowEl @param {boolean} isOn */
+      const paintRow = (rowEl, isOn) => {
+        const mainBtn = rowEl.querySelector('.input-assign-toggle-main')
+        if (mainBtn instanceof HTMLElement) {
+          mainBtn.classList.toggle('modal-choice-list__btn--selected', isOn)
+          mainBtn.setAttribute('aria-pressed', isOn ? 'true' : 'false')
+        }
+      }
+
+      for (const row of inputRows) {
+        const wrap = document.createElement('div')
+        wrap.className = 'modal-choice-list__row input-assign-toggle-row'
+        wrap.style.display = 'flex'
+        wrap.style.alignItems = 'center'
+        wrap.style.gap = '8px'
+        wrap.style.flexWrap = 'nowrap'
+
+        const inputRecord = projectGraph.getInputs().get(row.guid)
+
+        const mainBtn = document.createElement('button')
+        mainBtn.type = 'button'
+        mainBtn.className =
+          'btn modal-choice-list__btn input-assign-toggle-main input-assign-toggle-main--rich'
+        mainBtn.style.flex = '1 1 auto'
+        mainBtn.style.width = 'auto'
+        const labelWrap = document.createElement('span')
+        labelWrap.className = 'input-assign-toggle-main__label'
+        const namePart = document.createElement('span')
+        namePart.className = 'input-assign-toggle-main__name'
+        namePart.textContent = row.name
+        const parenPart = document.createElement('span')
+        parenPart.className = 'input-assign-toggle-main__paren'
+        const beh = this._inputBehaviorBracketLabel(
+          inputRecord && typeof inputRecord.type === 'string'
+            ? inputRecord.type
+            : ''
+        )
+        parenPart.textContent = ` (${beh})`
+        labelWrap.appendChild(namePart)
+        labelWrap.appendChild(parenPart)
+        mainBtn.appendChild(labelWrap)
+        mainBtn.addEventListener('click', () => {
+          if (pending.has(row.guid)) pending.delete(row.guid)
+          else pending.add(row.guid)
+          paintRow(wrap, pending.has(row.guid))
+        })
+
+        const ags = inputRecord
+          ? inputActionGuidList(/** @type {Record<string, unknown>} */ (inputRecord))
+          : []
+        const unassigned =
+          ags.length === 0 || !ags.every(ag => actionsWrap.has(ag))
+        const keyLabel = normalizeInputKeyChar(inputRecord?.keyChar)
+        if (unassigned || keyLabel) {
+          mainBtn.style.position = 'relative'
+        }
+        if (keyLabel) {
+          mainBtn.classList.add('modal-choice-list__btn--has-keyhint')
+          const keyHint = document.createElement('span')
+          keyHint.className = 'modal-choice-list__keyhint'
+          keyHint.textContent = keyLabel
+          mainBtn.appendChild(keyHint)
+        }
+        if (unassigned) {
+          mainBtn.classList.add('modal-choice-list__btn--unassigned')
+          const badge = document.createElement('span')
+          badge.className = 'modal-choice-list__unassigned-badge'
+          badge.textContent = 'unassigned'
+          mainBtn.appendChild(badge)
+        }
+
+        const keyShortcutBtn = document.createElement('button')
+        keyShortcutBtn.type = 'button'
+        keyShortcutBtn.className =
+          'input-assign-inline-icon-btn input-assign-inline-icon-btn--key'
+        keyShortcutBtn.style.flex = '0 0 auto'
+        keyShortcutBtn.textContent = 'key'
+        keyShortcutBtn.setAttribute('aria-label', 'Set keyboard shortcut')
+        keyShortcutBtn.addEventListener('click', e => {
+          e.stopPropagation()
+          dismiss({ kind: 'sampleKey', inputGuid: row.guid })
+        })
+
+        const editBtn = document.createElement('button')
+        editBtn.type = 'button'
+        editBtn.className =
+          'input-assign-inline-icon-btn input-assign-inline-icon-btn--edit'
+        editBtn.style.flex = '0 0 auto'
+        editBtn.textContent = '✎'
+        editBtn.setAttribute('aria-label', 'Edit')
+        editBtn.addEventListener('click', e => {
+          e.stopPropagation()
+          dismiss({ kind: 'edit', inputGuid: row.guid })
+        })
+
+        const deleteBtn = document.createElement('button')
+        deleteBtn.type = 'button'
+        deleteBtn.className =
+          'input-assign-inline-icon-btn input-assign-inline-icon-btn--delete'
+        deleteBtn.style.flex = '0 0 auto'
+        deleteBtn.textContent = '❌'
+        deleteBtn.setAttribute('aria-label', 'Delete')
+        deleteBtn.addEventListener('click', e => {
+          e.stopPropagation()
+          dismiss({ kind: 'delete', inputGuid: row.guid })
+        })
+
+        wrap.appendChild(mainBtn)
+        wrap.appendChild(keyShortcutBtn)
+        wrap.appendChild(editBtn)
+        wrap.appendChild(deleteBtn)
+        list.appendChild(wrap)
+        paintRow(wrap, pending.has(row.guid))
+      }
+
+      const createRow = document.createElement('div')
+      createRow.className = 'modal-choice-list__row'
+      const createBtn = document.createElement('button')
+      createBtn.type = 'button'
+      createBtn.className = 'btn modal-choice-list__btn'
+      createBtn.textContent = 'Create new input'
+      createBtn.addEventListener('click', () => dismiss({ kind: 'create' }))
+      createRow.appendChild(createBtn)
+
+      const footer = document.createElement('div')
+      footer.className = 'modal-actions'
+      const okBtn = document.createElement('button')
+      okBtn.type = 'button'
+      okBtn.className = 'btn btn--primary'
+      okBtn.textContent = 'OK'
+      okBtn.addEventListener('click', () => {
+        this._applyAssignmentPendingSets(initialLinked, pending)
+        dismiss({ kind: 'done' })
+      })
+      footer.appendChild(okBtn)
+
+      const scrollBody = document.createElement('div')
+      scrollBody.className = 'input-assign-modal__assign-scroll'
+      scrollBody.appendChild(list)
+      scrollBody.appendChild(createRow)
+
+      card.appendChild(heading)
+      card.appendChild(scrollBody)
+      card.appendChild(footer)
+      return card
+    })
+  }
+
   async showControl () {
     if (!this._contextType || !this._contextGuid) return
     const inputTypes = getInputTypes()
@@ -164,117 +454,24 @@ export class InputAssignManager {
       return
     }
 
-    const createChoiceValue = '__create_new_input__'
-    const removeChoiceValue = '__remove_assignment__'
-    const title = this._labelDefault || this._contextGuid
-    const assignedInput = projectGraph.getAssignedInput(
-      this._contextType,
-      this._contextGuid
-    )
-    const selectedInputGuid =
-      typeof assignedInput?.guid === 'string' ? assignedInput.guid : null
     const inputRows = this._collectInputRows()
-    /** @type {Array<{ value: string, label: string, disabled?: boolean, title?: string }>} */
-    const options = inputRows.map(row => ({
-      value: row.guid,
-      label: row.name
-    }))
-    options.push({
-      value: createChoiceValue,
-      label: 'Create new input'
-    })
-    options.push({
-      value: removeChoiceValue,
-      label: 'Remove assignment'
-    })
-    const selected =
-      selectedInputGuid && inputRows.some(row => row.guid === selectedInputGuid)
-        ? selectedInputGuid
-        : null
-
-    const outcome = await pickChoice(`Input for ${title}`, options, {
-      cancel: 'Cancel',
-      selected,
-      displayRowFn: (row, option, helpers) => {
-        if (
-          option.value === createChoiceValue ||
-          option.value === removeChoiceValue
-        )
-          return
-        row.style.display = 'flex'
-        row.style.alignItems = 'center'
-        row.style.gap = '8px'
-        row.style.flexWrap = 'nowrap'
-        helpers.button.style.flex = '1 1 auto'
-        helpers.button.style.width = 'auto'
-        helpers.button.dataset.inputGuid = option.value
-        const inputRecord = projectGraph.getInputs().get(option.value)
-        const actions = projectGraph.getActions()
-        const ags = inputRecord
-          ? inputActionGuidList(/** @type {Record<string, unknown>} */ (inputRecord))
-          : []
-        const unassigned =
-          ags.length === 0 || !ags.every(ag => actions.has(ag))
-        const keyLabel = normalizeInputKeyChar(inputRecord?.keyChar)
-        if (unassigned || keyLabel) {
-          helpers.button.style.position = 'relative'
-        }
-        if (keyLabel) {
-          helpers.button.classList.add('modal-choice-list__btn--has-keyhint')
-          const keyHint = document.createElement('span')
-          keyHint.className = 'modal-choice-list__keyhint'
-          keyHint.textContent = keyLabel
-          helpers.button.appendChild(keyHint)
-        }
-        if (unassigned) {
-          helpers.button.classList.add('modal-choice-list__btn--unassigned')
-          const badge = document.createElement('span')
-          badge.className = 'modal-choice-list__unassigned-badge'
-          badge.textContent = 'unassigned'
-          helpers.button.appendChild(badge)
-        }
-        const keyShortcutBtn = document.createElement('button')
-        keyShortcutBtn.type = 'button'
-        keyShortcutBtn.className =
-          'input-assign-inline-icon-btn input-assign-inline-icon-btn--key'
-        keyShortcutBtn.style.flex = '0 0 auto'
-        keyShortcutBtn.textContent = 'key'
-        keyShortcutBtn.setAttribute('aria-label', 'Set keyboard shortcut')
-        keyShortcutBtn.addEventListener('click', e => {
-          e.stopPropagation()
-          helpers.dismiss(`__sampleKey__:${option.value}`)
-        })
-        row.insertBefore(keyShortcutBtn, helpers.button)
-        const editBtn = document.createElement('button')
-        editBtn.type = 'button'
-        editBtn.className =
-          'input-assign-inline-icon-btn input-assign-inline-icon-btn--edit'
-        editBtn.style.flex = '0 0 auto'
-        editBtn.textContent = '✎'
-        editBtn.setAttribute('aria-label', 'Edit')
-        editBtn.addEventListener('click', e => {
-          e.stopPropagation()
-          helpers.dismiss(`__edit__:${option.value}`)
-        })
-        const deleteBtn = document.createElement('button')
-        deleteBtn.type = 'button'
-        deleteBtn.className =
-          'input-assign-inline-icon-btn input-assign-inline-icon-btn--delete'
-        deleteBtn.style.flex = '0 0 auto'
-        deleteBtn.textContent = '❌'
-        deleteBtn.setAttribute('aria-label', 'Delete')
-        deleteBtn.addEventListener('click', e => {
-          e.stopPropagation()
-          helpers.dismiss(`__delete__:${option.value}`)
-        })
-        row.appendChild(editBtn)
-        row.appendChild(deleteBtn)
-      }
-    })
-
-    if (outcome === null) return
-    if (typeof outcome === 'string' && outcome.startsWith('__sampleKey__:')) {
-      const inputGuid = outcome.slice('__sampleKey__:'.length)
+    const modalOutcome = await this._openAssignInputsModal(inputRows)
+    if (modalOutcome === null) return
+    if (modalOutcome.kind === 'done') {
+      this._refreshInvokeButton()
+      return
+    }
+    if (modalOutcome.kind === 'create') {
+      await this._createInputAndAssign(inputTypes, displayTypes)
+      this._refreshInvokeButton()
+      await this.showControl()
+      return
+    }
+    if (
+      modalOutcome.kind === 'sampleKey' &&
+      typeof modalOutcome.inputGuid === 'string'
+    ) {
+      const inputGuid = modalOutcome.inputGuid
       const captured = await sampleKey('Press Key', 'No Key')
       if (captured !== null) {
         await this._sendSetInputKeyCharAndSyncToGraph(inputGuid, captured)
@@ -282,42 +479,18 @@ export class InputAssignManager {
       await this.showControl()
       return
     }
-    if (outcome === createChoiceValue) {
-      await this._createInputAndAssign(inputTypes, displayTypes)
+    if (modalOutcome.kind === 'edit' && typeof modalOutcome.inputGuid === 'string') {
+      await this._editInputByGuid(modalOutcome.inputGuid)
       this._refreshInvokeButton()
       await this.showControl()
       return
     }
-    if (outcome === removeChoiceValue) {
-      sendActionInputCommand({
-        command: 'removeInputAssignment',
-        targetType: this._contextType,
-        targetGuid: this._contextGuid
-      })
-      this._refreshInvokeButton()
-      return
-    }
-    if (outcome.startsWith('__edit__:')) {
-      const inputGuid = outcome.slice('__edit__:'.length)
-      await this._editInputByGuid(inputGuid)
+    if (modalOutcome.kind === 'delete' && typeof modalOutcome.inputGuid === 'string') {
+      await this._confirmAndDeleteInput(modalOutcome.inputGuid)
       this._refreshInvokeButton()
       await this.showControl()
       return
     }
-    if (outcome.startsWith('__delete__:')) {
-      const inputGuid = outcome.slice('__delete__:'.length)
-      await this._confirmAndDeleteInput(inputGuid)
-      this._refreshInvokeButton()
-      await this.showControl()
-      return
-    }
-    sendActionInputCommand({
-      command: 'assignExistingInput',
-      targetType: this._contextType,
-      targetGuid: this._contextGuid,
-      inputGuid: outcome
-    })
-    this._refreshInvokeButton()
   }
 
   /**
@@ -365,9 +538,7 @@ export class InputAssignManager {
 
   _refreshInvokeButton () {
     if (!this._invokeButton) return
-    const isAssigned = Boolean(
-      projectGraph.getAssignedInput(this._contextType, this._contextGuid)
-    )
+    const isAssigned = this._anyInputLinkedToContext()
     this._invokeButton.textContent = isAssigned ? 'Assigned' : 'Assign'
     this._invokeButton.classList.toggle('intent-toggle--enabled', isAssigned)
     this._invokeButton.setAttribute(

@@ -391,7 +391,8 @@ Perform parameter payloads for intent (e.g. `argsOn` / `argsOff` / `args` as `js
 - `renameInput` — patches the input `name` field by `inputGuid`
 - `updateInput` — patches an existing input by `inputGuid` with `{ input: { name?, type?, displayType? } }` only (no perform param blobs on the input)
 - **`updateAction`** — patches a top-level action by `actionGuid` with `{ patch: { execute?: …, name?, … } }` (hub merges `patch.execute` as a full replace for that object when provided)
-- `assignExistingInput` — after clearing other assignments to the same target, appends a new action and wires it into the chosen input’s `actions[]`
+- `assignExistingInput` — appends a **new** action (new GUID) with `execute: { type, guid }` to the chosen input’s `actions[]`. Does **not** remove that target from other inputs; several perform inputs may therefore each have their own action row for the same scene/animation/intent. The chosen input must not already list an action for that target (no-op otherwise). To move exclusivity to a single button, use `removeInputAssignment` on other rows first.
+- `unlinkInputFromTarget` — removes **one** input’s link to `{ targetType, targetGuid }` (drops the matching action GUID from that input’s `actions[]` and deletes the action row if nothing else references it). Does not remove the companion animation runner row from the graph.
 - `deleteInput` — removes the input; removes any action that is no longer referenced from any input’s `actions[]`. `expectedLinkedTargetCount` is the number of entries in `actions[]` at delete time (stale-guard).
 
 **`action:trigger`** (controller → hub): `{ actionGuid, args? }` — one message per action. Hub builds `merged = shallowMerge(execute.params ?? {}, args ?? {})` ([`merge.ts`](modules/hub/src/handlers/actionExecute/merge.ts)), then:

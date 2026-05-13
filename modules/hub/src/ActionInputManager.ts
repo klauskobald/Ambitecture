@@ -35,6 +35,7 @@ export type ActionInputCommand =
   | { command: 'updateInput'; inputGuid: string; input: InputAssignConfig }
   | { command: 'updateAction'; actionGuid: string; patch: Record<string, unknown> }
   | { command: 'assignExistingInput'; targetType: AssignTargetType; targetGuid: string; inputGuid: string }
+  | { command: 'unlinkInputFromTarget'; targetType: AssignTargetType; targetGuid: string; inputGuid: string }
   | { command: 'deleteInput'; inputGuid: string; expectedLinkedTargetCount?: number }
   | { command: 'setInputKeyChar'; inputGuid: string; keyChar?: string | null };
 
@@ -68,6 +69,8 @@ export class ActionInputManager {
         return this.updateActionCommands(command.actionGuid, command.patch);
       case 'assignExistingInput':
         return this.assignExistingInputCommands(controllerGuid, command.targetType, command.targetGuid, command.inputGuid);
+      case 'unlinkInputFromTarget':
+        return this.unlinkInputFromTargetCommands(controllerGuid, command.inputGuid, command.targetType, command.targetGuid);
       case 'deleteInput':
         return this.deleteInputCommands(controllerGuid, command.inputGuid, command.expectedLinkedTargetCount);
       case 'setInputKeyChar':
@@ -360,8 +363,6 @@ export class ActionInputManager {
     });
     if (already) return [];
 
-    const clearPrevious = this.removeInputAssignmentCommands(controllerGuid, targetType, targetGuid);
-
     const targetName = this.getTargetName(targetType, targetGuid);
     const newActionGuid = `action-${randomUUID()}`;
     const baseName =
@@ -384,7 +385,6 @@ export class ActionInputManager {
     inputRecord['guid'] = input.guid;
 
     return [
-      ...clearPrevious,
       this.upsertCommand('action', newActionGuid, newAction as unknown as Record<string, unknown>),
       this.upsertCommand(
         'input',
@@ -393,6 +393,58 @@ export class ActionInputManager {
         { entityType: 'controller', guid: controllerGuid },
       ),
     ];
+  }
+
+  private unlinkInputFromTargetCommands(
+    controllerGuid: string,
+    inputGuid: string,
+    targetType: AssignTargetType,
+    targetGuid: string,
+  ): GraphCommand[] {
+    if (targetGuid.length === 0 || targetType.length === 0 || inputGuid.length === 0) return [];
+    const owner = this.projectManager.findControllerGuidForInput(inputGuid);
+    if (owner !== controllerGuid) {
+      Logger.warn('[action] unlinkInputFromTarget: input not owned by this controller');
+      return [];
+    }
+    const input = this.projectManager.getInputByGuid(inputGuid);
+    if (!input?.guid) return [];
+
+    const guids = inputActionGuids(input);
+    let actionGuidToRemove: string | null = null;
+    for (const ag of guids) {
+      const a = this.projectManager.getActionByGuid(ag);
+      if (actionTargets(a, targetType, targetGuid)) {
+        actionGuidToRemove = ag;
+        break;
+      }
+    }
+    if (!actionGuidToRemove) return [];
+
+    const nextGuids = guids.filter(g => g !== actionGuidToRemove);
+    const row = cloneRecord(input as unknown as Record<string, unknown>);
+    row['actions'] = nextGuids;
+    row['guid'] = input.guid;
+
+    const commands: GraphCommand[] = [
+      this.upsertCommand('input', inputGuid, row, { entityType: 'controller', guid: controllerGuid }),
+    ];
+
+    const keep = this.isActionReferencedInGraph(actionGuidToRemove, {
+      excludingInputGuids: new Set([inputGuid]),
+    });
+    if (!keep) {
+      const action = this.projectManager.getActionByGuid(actionGuidToRemove);
+      if (
+        action
+        && targetType === 'animation'
+        && isCompanionAnimationRunnerAction(action, targetGuid)
+      ) {
+        return commands;
+      }
+      commands.push(this.removeActionCommand(actionGuidToRemove));
+    }
+    return commands;
   }
 
   private deleteInputCommands(

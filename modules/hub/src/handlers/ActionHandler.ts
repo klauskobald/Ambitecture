@@ -60,6 +60,13 @@ function isActionInputCommand(payload: unknown): payload is ActionInputCommand {
         && p['targetGuid'].length > 0
         && typeof p['inputGuid'] === 'string'
         && p['inputGuid'].length > 0;
+    case 'unlinkInputFromTarget':
+      return typeof p['targetType'] === 'string'
+        && p['targetType'].length > 0
+        && typeof p['targetGuid'] === 'string'
+        && p['targetGuid'].length > 0
+        && typeof p['inputGuid'] === 'string'
+        && p['inputGuid'].length > 0;
     case 'deleteInput': {
       const count = p['expectedLinkedTargetCount'];
       const validCount =

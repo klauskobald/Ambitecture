@@ -1,4 +1,4 @@
-export { transformIntentToNormalized } from './registry';
+export { transformIntentToNormalized, validateAndFixIntentPosition } from './registry';
 export { LightIntent } from './lightIntent';
 export { MasterIntent } from './masterIntent';
 export { PassthroughIntent } from './passthroughIntent';

@@ -238,8 +238,28 @@ export class ProjectManager {
       if (!intent.guid) {
         intent.guid = randomUUID();
       }
-      this.intentDefinitions.set(intent.guid, intent);
+      // Validate and fix position if invalid
+      const validatedIntent = this._validateIntentPosition(intent);
+      this.intentDefinitions.set(validatedIntent.guid!, validatedIntent);
     }
+  }
+
+  private _validateIntentPosition(intent: ControllerIntent): ControllerIntent {
+    if (!intent.position || !Array.isArray(intent.position) || intent.position.length !== 3) {
+      return { ...intent, position: [0, 0, 0] };
+    }
+    const numericPosition = [
+      Number(intent.position[0]),
+      Number(intent.position[1]),
+      Number(intent.position[2]),
+    ];
+    if (numericPosition.some(n => isNaN(n))) {
+      return { ...intent, position: [0, 0, 0] };
+    }
+    if (numericPosition[0] !== intent.position[0] || numericPosition[1] !== intent.position[1] || numericPosition[2] !== intent.position[2]) {
+      return { ...intent, position: numericPosition as [number, number, number] };
+    }
+    return intent;
   }
 
   private reloadProject(name: string): void {

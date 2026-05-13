@@ -11,7 +11,7 @@ import {
   emptyMutationResult,
 } from './GraphProtocol';
 import { intentRemovalEvent, intentToEvent, effectivePerformResetScene } from './handlers/intentHelpers';
-import { transformIntentToNormalized } from './intents';
+import { transformIntentToNormalized, validateAndFixIntentPosition } from './intents';
 import { Logger } from './Logger';
 import { applyDotPathPatch, cloneRecord } from './dotPath';
 import { ActionInputManager } from './ActionInputManager';
@@ -245,7 +245,8 @@ export class ProjectGraphStore {
     const base = cloneRecord((command.value ?? existing ?? { guid: command.guid }) as Record<string, unknown>);
     const next = command.patch || command.remove ? applyDotPathPatch(base, command.patch ?? {}, command.remove) : base;
     next['guid'] = command.guid;
-    const intent = next as unknown as ControllerIntent;
+    let intent = next as unknown as ControllerIntent;
+    intent = validateAndFixIntentPosition(intent);
     this.projectManager.updateIntents('', [intent]);
 
     const persistence = command.persistence ?? 'runtime';

@@ -10,6 +10,8 @@ export class ScreenRenderer {
     }
     this.ctx = ctx;
     this.fixtures = [];
+    /** @type {string | null} */
+    this._selectedFixtureGuid = null;
     /** @type {number | null} */
     this._rafId = null;
     this._boundFrame = this._frame.bind(this);
@@ -20,6 +22,14 @@ export class ScreenRenderer {
 
   setFixtures(fixtures) {
     this.fixtures = fixtures;
+  }
+
+  /**
+   * @param {string | null} guid
+   */
+  setSelectedFixtureGuid(guid) {
+    this._selectedFixtureGuid =
+      typeof guid === 'string' && guid.trim() !== '' ? guid.trim() : null;
   }
 
   start() {
@@ -65,13 +75,19 @@ export class ScreenRenderer {
     const h = window.innerHeight;
     const { ctx } = this;
 
-    if (this.fixtures.length === 0) {
+    const sel = this._selectedFixtureGuid;
+    const toDraw =
+      sel !== null
+        ? this.fixtures.filter(f => f.guid === sel)
+        : [];
+
+    if (toDraw.length === 0) {
       ctx.fillStyle = '#000';
       ctx.fillRect(0, 0, w, h);
       return;
     }
 
-    for (const fixture of this.fixtures) {
+    for (const fixture of toDraw) {
       fixture.update(nowSec);
       fixture.draw(ctx, w, h, nowSec);
     }

@@ -5,10 +5,12 @@ export class EventsHandler {
   /**
    * @param {import('./ConfigHandler.js').ConfigHandler} configHandler
    * @param {import('../ScreenRenderer.js').ScreenRenderer} screenRenderer
+   * @param {() => string | null} getSelectedScreenFixtureGuid
    */
-  constructor(configHandler, screenRenderer) {
+  constructor(configHandler, screenRenderer, getSelectedScreenFixtureGuid) {
     this.configHandler = configHandler;
     this._screenRenderer = screenRenderer;
+    this._getSelectedScreenFixtureGuid = getSelectedScreenFixtureGuid;
     this._layerIntentEngine = new LayerIntentEngine();
     this.queue = new EventQueue(events => this.processBatch(events));
   }
@@ -26,8 +28,15 @@ export class EventsHandler {
       return;
     }
     const intentsByLayer = this._layerIntentEngine.getActiveIntents();
+    const selectedGuid = this._getSelectedScreenFixtureGuid();
     for (const zone of zones) {
       for (const fixture of zone.fixtures) {
+        const profileClass = fixture.fixtureProfile?.class;
+        if (profileClass === 'screen') {
+          if (!selectedGuid || fixture.guid !== selectedGuid) {
+            continue;
+          }
+        }
         const context = {
           fixture,
           fixtureWorldPos: fixture.location,

@@ -41,9 +41,18 @@ export class ConfigHandler {
           params,
           range,
           target,
-          rotation
+          rotation,
+          guid: guidField
         } = fixtureData;
+        const guidRaw =
+          guidField ??
+          /** @type {{ fixtureGuid?: unknown }} */ (fixtureData).fixtureGuid;
+        const guid =
+          typeof guidRaw === 'string' && guidRaw.trim() !== ''
+            ? guidRaw.trim()
+            : '';
         const instance = createFixture(fixtureProfile.class, fixtureProfile, {
+          ...(guid !== '' ? { guid } : {}),
           name,
           location: [
             bbox[0] + location[0],

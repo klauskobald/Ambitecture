@@ -1,19 +1,57 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Ambitecture — Screen Renderer</title>
-  <link rel="stylesheet" href="./src/style.css">
-</head>
-<body>
-  <canvas id="screen-canvas" aria-hidden="true"></canvas>
 
-  <div id="lifecycle-hud" data-phase="boot" role="status" aria-live="polite" aria-atomic="true" aria-hidden="true">
-    <div class="hud-primary" data-hud-primary></div>
-    <div class="hud-meta" data-hud-meta></div>
-  </div>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1">
+    <title>Ambitecture — Screen Renderer</title>
+    <link rel="stylesheet"
+          href="./src/style.css">
+  </head>
 
-  <script type="module" src="./src/main.js"></script>
-</body>
+  <body>
+    <canvas id="screen-canvas"
+            aria-hidden="true"></canvas>
+
+    <div id="screen-setup-wrap"
+         class="screen-setup-wrap"
+         hidden>
+      <button type="button"
+              id="screen-setup"
+              class="screen-setup"
+              aria-label="Open screen setup">setup</button>
+    </div>
+
+    <div id="fixture-picker"
+         class="fixture-picker"
+         hidden
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="fixture-picker-title">
+      <div class="fixture-picker__panel">
+        <h2 id="fixture-picker-title"
+            class="fixture-picker__title">Select screen</h2>
+        <p class="fixture-picker__hint">This device shows one physical screen. Choose which fixture to drive.</p>
+        <div class="fixture-picker__list"
+             data-fixture-list></div>
+      </div>
+    </div>
+
+    <div id="lifecycle-hud"
+         data-phase="boot"
+         role="status"
+         aria-live="polite"
+         aria-atomic="true"
+         aria-hidden="true">
+      <div class="hud-primary"
+           data-hud-primary></div>
+      <div class="hud-meta"
+           data-hud-meta></div>
+    </div>
+
+    <script type="module"
+            src="./src/main.js"></script>
+  </body>
+
 </html>

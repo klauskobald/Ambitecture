@@ -1,5 +1,9 @@
 export class FixtureBase {
   constructor(profile, instanceConfig) {
+    this.guid =
+      typeof instanceConfig.guid === 'string' && instanceConfig.guid.trim() !== ''
+        ? instanceConfig.guid.trim()
+        : null;
     this.name = instanceConfig.name;
     this.location = instanceConfig.location;
     this.range = instanceConfig.range;

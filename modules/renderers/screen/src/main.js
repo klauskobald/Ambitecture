@@ -2,6 +2,7 @@ import { ConfigHandler } from './handlers/ConfigHandler.js';
 import { EventsHandler } from './handlers/EventsHandler.js';
 import { HubConnection } from './HubConnection.js';
 import { LifecycleHud } from './LifecycleHud.js';
+import { ScreenFixturePicker } from './ScreenFixturePicker.js';
 import { ScreenRenderer } from './ScreenRenderer.js';
 
 async function boot() {
@@ -20,15 +21,13 @@ async function boot() {
 
   const screenRenderer = new ScreenRenderer(canvas);
   const configHandler = new ConfigHandler(screenRenderer);
-  const eventsHandler = new EventsHandler(configHandler, screenRenderer);
-  configHandler.setOnConfigApplied(() => eventsHandler.reapplyCurrentIntents(true));
 
-  const hub = new HubConnection({}, hud, {
-    onConfig: payload => configHandler.handle(payload),
-    onEvents: payload => eventsHandler.handle(payload),
-  });
-
-  hub.onBoot();
+  const selection = { guid: /** @type {string | null} */ (null) };
+  const eventsHandler = new EventsHandler(
+    configHandler,
+    screenRenderer,
+    () => selection.guid
+  );
 
   let config;
   try {
@@ -43,6 +42,30 @@ async function boot() {
     );
     return;
   }
+
+  const rendererGuid = String(config.GUID ?? '').trim() || 'screen-renderer';
+  const picker = new ScreenFixturePicker({
+    rendererGuid,
+    canvas,
+    configHandler,
+    onSelect: guid => {
+      selection.guid = guid;
+      screenRenderer.setSelectedFixtureGuid(guid);
+      eventsHandler.reapplyCurrentIntents(true);
+    }
+  });
+
+  configHandler.setOnConfigApplied(() => {
+    picker.syncAfterConfig();
+    eventsHandler.reapplyCurrentIntents(true);
+  });
+
+  const hub = new HubConnection({}, hud, {
+    onConfig: payload => configHandler.handle(payload),
+    onEvents: payload => eventsHandler.handle(payload),
+  });
+
+  hub.onBoot();
 
   Object.assign(hub._config, config);
   hub.onConfigLoaded(config);

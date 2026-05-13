@@ -285,6 +285,7 @@ export class InputAssignManager {
     if (outcome === createChoiceValue) {
       await this._createInputAndAssign(inputTypes, displayTypes)
       this._refreshInvokeButton()
+      await this.showControl()
       return
     }
     if (outcome === removeChoiceValue) {
@@ -300,12 +301,14 @@ export class InputAssignManager {
       const inputGuid = outcome.slice('__edit__:'.length)
       await this._editInputByGuid(inputGuid)
       this._refreshInvokeButton()
+      await this.showControl()
       return
     }
     if (outcome.startsWith('__delete__:')) {
       const inputGuid = outcome.slice('__delete__:'.length)
       await this._confirmAndDeleteInput(inputGuid)
       this._refreshInvokeButton()
+      await this.showControl()
       return
     }
     sendActionInputCommand({

@@ -397,9 +397,6 @@ textarea.modal-input.input-assign-modal__json {
   font-weight: 600;
 }
 
-.btn--primary:hover {
-  filter: brightness(1.15);
-}
 
 /* ── Intent type picker ───────────────────────────────────── */
 

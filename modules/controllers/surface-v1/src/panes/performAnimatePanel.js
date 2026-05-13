@@ -217,12 +217,24 @@ export function createPerformAnimatePanel () {
     }
 
     syncToggle()
-    toggle.addEventListener('click', () => {
+    toggle.addEventListener('pointerdown', event => {
+      event.preventDefault()
+      toggle.classList.add('perform-input--pressed')
       if (isAnimationPlaying(row.guid)) {
         sendActionTrigger(row.guid, { value: 'off' })
       } else {
         sendActionTrigger(row.guid, { value: 'on' })
       }
+    })
+    toggle.addEventListener('pointerup', () => {
+      toggle.classList.remove('perform-input--pressed')
+    })
+    toggle.addEventListener('pointercancel', () => {
+      toggle.classList.remove('perform-input--pressed')
+    })
+    toggle.addEventListener('click', event => {
+      event.preventDefault()
+      event.stopPropagation()
     })
 
     const speedDial = makeSpeedDial(row.guid)

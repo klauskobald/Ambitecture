@@ -13,9 +13,6 @@
   transition: color 0.1s, border-color 0.1s;
 }
 
-.nav-link:hover {
-  color: var(--color-text);
-}
 
 .nav-link--active {
   color: var(--color-accent);
@@ -54,10 +51,6 @@
   transition: background 0.1s, border-color 0.1s, color 0.1s;
 }
 
-.btn:hover {
-  background: #1e1e1e;
-  border-color: #555;
-}
 
 .btn:disabled {
   opacity: 0.45;
@@ -75,9 +68,6 @@
   color: #c44;
 }
 
-.btn--danger:hover {
-  background: rgba(204, 68, 68, 0.15);
-}
 
 .btn-mode-toggle {
   margin: 0.5rem;
@@ -149,10 +139,6 @@
   color: var(--color-text-muted);
 }
 
-.color-picker-close:hover {
-  color: var(--color-text);
-  background: var(--color-bg-raised);
-}
 
 .color-picker-body {
   padding: 0.75rem;
@@ -227,10 +213,6 @@
   transition: background 0.1s, border-color 0.1s;
 }
 
-.config-manager-item:hover {
-  background: #1e1e1e;
-  border-color: #555;
-}
 
 .config-manager-item--active {
   border-color: var(--color-accent);
@@ -328,10 +310,6 @@
   transition: background 0.1s, border-color 0.1s, color 0.1s;
 }
 
-.scene-list-item:hover {
-  background: #1e1e1e;
-  border-color: #555;
-}
 
 .scene-list-item--active {
   background: var(--color-accent-dim);
@@ -421,19 +399,12 @@
   appearance: none;
 }
 
-.input-assign-inline-icon-btn:hover {
-  color: var(--color-text);
-  background: var(--color-bg-raised);
-}
 
 .input-assign-inline-icon-btn:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 1px;
 }
 
-.input-assign-inline-icon-btn--delete:hover {
-  color: #c44;
-}
 
 .input-assign-inline-icon-btn--key {
   font-size: 0.65rem;
@@ -480,7 +451,6 @@
   display: none;
 }
 
-.perform-subnav-filter:hover,
 .perform-subnav-filter:focus-visible {
   background: transparent;
   outline: none;
@@ -642,6 +612,12 @@
   color: var(--color-accent);
 }
 
+.perform-animate-toggle.perform-input--pressed {
+  background: var(--color-accent-dim);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
 .perform-animate-speed-wrap {
   flex: 0 0 auto;
 }
@@ -691,7 +667,6 @@
   touch-action: manipulation;
 }
 
-.perform-animate-edit-btn:hover,
 .perform-animate-edit-btn:focus-visible {
   color: var(--color-text);
   background: var(--color-bg-raised);
@@ -746,7 +721,6 @@
   touch-action: manipulation;
 }
 
-.perform-animate-edit__back:hover,
 .perform-animate-edit__back:focus-visible {
   color: var(--color-text);
   outline: none;
@@ -771,7 +745,6 @@
   white-space: nowrap;
 }
 
-.perform-animate-edit__name:hover,
 .perform-animate-edit__name:focus-visible {
   color: var(--color-accent);
   outline: none;
@@ -802,7 +775,6 @@
   cursor: pointer;
 }
 
-.perform-animate-edit__delete:hover,
 .perform-animate-edit__delete:focus-visible {
   background: rgba(204, 68, 68, 0.15);
   outline: none;
@@ -992,6 +964,12 @@
 .perform-input--button {
   min-width: 5rem;
   touch-action: none;
+}
+
+.perform-input--pressed {
+  background: var(--color-accent-dim);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
 }
 
 .quick-panel-hud {
@@ -1197,10 +1175,6 @@
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 
-.intent-toggle:hover {
-  border-color: #555;
-  color: var(--color-text);
-}
 
 .intent-toggle--enabled {
   background: var(--color-accent-dim);
@@ -1332,10 +1306,6 @@
   cursor: pointer;
 }
 
-.animator-edit-section__nav-btn:hover:not(:disabled) {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
-}
 
 .animator-edit-section__nav-btn:disabled {
   opacity: 0.4;

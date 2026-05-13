@@ -103,7 +103,7 @@ function applyParamKind(kind: string, value: unknown, paramKey: string): Record<
     case 'jsonString':
       return coerceJsonStringParam(value, paramKey);
     default:
-      Logger.warn(`[action] unknown input param kind "${kind}" for key "${paramKey}" — extend inputAssignment/composeInputParams.ts`);
+      Logger.warn(`[action] unknown input param kind "${kind}" for key "${paramKey}"`);
       return undefined;
   }
 }
@@ -112,22 +112,6 @@ export type ComposeInputParamsResult =
   | { ok: true; params: Record<string, unknown> | undefined }
   | { ok: false; reason: string };
 
-function legacyComposeWhenInputTypesMissing(inputConfig: Record<string, unknown>): ComposeInputParamsResult {
-  Logger.warn('[action] systemCapabilities.inputTypes empty — using legacy param mapping (args / argsOn / argsOff only)');
-  const out: Record<string, unknown> = {};
-  for (const key of ['args', 'argsOn', 'argsOff'] as const) {
-    if (!(key in inputConfig)) continue;
-    const raw = inputConfig[key];
-    if (raw === undefined) continue;
-    const coerced = coerceJsonStringParam(raw, key);
-    if (coerced === undefined && raw !== null) {
-      return { ok: false, reason: `invalid value for param "${key}"` };
-    }
-    if (coerced !== undefined) out[key] = coerced;
-  }
-  return { ok: true, params: Object.keys(out).length > 0 ? out : undefined };
-}
-
 export function composeInputParamsFromCapabilities(
   capabilities: unknown,
   inputTypeClass: string,
@@ -135,7 +119,7 @@ export function composeInputParamsFromCapabilities(
 ): ComposeInputParamsResult {
   const defs = normalizeInputTypes(capabilities);
   if (defs.length === 0) {
-    return legacyComposeWhenInputTypesMissing(inputConfig);
+    return { ok: false, reason: 'systemCapabilities.inputTypes is empty' };
   }
   const def = defs.find(t => t.class === inputTypeClass);
   if (!def) {

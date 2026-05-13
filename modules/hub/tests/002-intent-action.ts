@@ -58,16 +58,14 @@ function upsertIntentAction(ws: WebSocket, location: [number, number], actionGui
     value: {
       guid: actionGuid,
       name: 'Strobe Off',
-      execute: [
-        {
-          type: 'intent',
-          guid: intentGuid,
-          params: {
-            strobe: 0,
-            alpha: 0,
-          },
+      execute: {
+        type: 'intent',
+        guid: intentGuid,
+        params: {
+          strobe: 0,
+          alpha: 0,
         },
-      ],
+      },
     },
     persistence: 'runtimeAndDurable',
   }));

@@ -40,6 +40,12 @@ function isActionInputCommand(payload: unknown): payload is ActionInputCommand {
       return typeof p['inputGuid'] === 'string'
         && p['inputGuid'].length > 0
         && hasValidInput;
+    case 'updateAction':
+      return typeof p['actionGuid'] === 'string'
+        && p['actionGuid'].length > 0
+        && typeof p['patch'] === 'object'
+        && p['patch'] !== null
+        && !Array.isArray(p['patch']);
     case 'assignExistingInput':
       return typeof p['targetType'] === 'string'
         && p['targetType'].length > 0
@@ -142,34 +148,33 @@ export class ActionHandler implements MessageHandler {
       Logger.warn(`[action] action ${message.payload.actionGuid} not found`);
       return;
     }
-    const executeItems = this.actionInputManager.getExecuteItemsForAction(action);
-    if (executeItems.length === 0) {
-      Logger.warn(`[action] action ${message.payload.actionGuid} has no execute targets`);
+    const executeItem = this.actionInputManager.getExecuteItemForAction(action);
+    if (!executeItem) {
+      Logger.warn(`[action] action ${message.payload.actionGuid} has no execute target`);
       return;
     }
 
     let handled = 0;
-    for (const item of executeItems) {
-      switch (item.type) {
-        case 'scene':
-          handled += this.executeSceneItem(ws, item, message);
-          break;
-        case 'intent':
-          handled += this.executeIntentItem(ws, item, sourceGuid, message.payload.args, message.location);
-          break;
-        case 'animation':
-          handled += this.executeAnimationItem(item, message.location, message.payload.args);
-          break;
-        default:
-          Logger.warn(`[action] unsupported execute type "${item.type}" on ${action.guid ?? message.payload.actionGuid}`);
-          break;
-      }
+    const item = executeItem;
+    switch (item.type) {
+      case 'scene':
+        handled += this.executeSceneItem(ws, item, message);
+        break;
+      case 'intent':
+        handled += this.executeIntentItem(ws, item, sourceGuid, message.payload.args, message.location);
+        break;
+      case 'animation':
+        handled += this.executeAnimationItem(item, message.location, message.payload.args);
+        break;
+      default:
+        Logger.warn(`[action] unsupported execute type "${item.type}" on ${action.guid ?? message.payload.actionGuid}`);
+        break;
     }
     if (handled === 0) {
-      Logger.warn(`[action] action ${message.payload.actionGuid} has no supported execute targets`);
+      Logger.warn(`[action] action ${message.payload.actionGuid} has no supported execute target`);
       return;
     }
-    Logger.info(`[action] triggered ${action.guid ?? message.payload.actionGuid} (${handled} execute item(s))`);
+    Logger.info(`[action] triggered ${action.guid ?? message.payload.actionGuid}`);
   }
 
   private executeSceneItem(ws: WebSocket, item: ActionExecuteItem, message: WsMessage): number {

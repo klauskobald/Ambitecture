@@ -188,6 +188,27 @@ textarea.modal-input.input-assign-modal__json {
   gap: calc(0.45rem * var(--modal-scale) + 0.2rem);
 }
 
+.input-assign-modal__action-nav {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: calc(0.35rem * var(--modal-scale) + 0.2rem);
+  margin-bottom: calc(0.35rem * var(--modal-scale) + 0.15rem);
+}
+
+.input-assign-modal__action-summary {
+  flex: 1 1 12rem;
+  margin: 0;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.input-assign-modal__action-counter {
+  font-size: calc(0.72rem * var(--modal-scale) + 0.32rem);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
 /* Intent params editor (augmentedSelect + intentParamsSelect) */
 
 .augmented-select__row {

@@ -1,11 +1,17 @@
 import { randomUUID } from 'crypto';
-import { ActionDefinition, ActionExecuteItem, InputDefinition, ProjectManager, Scene } from './ProjectManager';
+import {
+  ActionDefinition,
+  ActionExecuteItem,
+  InputDefinition,
+  inputActionGuids,
+  ProjectManager,
+  Scene,
+} from './ProjectManager';
 import { cloneRecord } from './dotPath';
 import { GraphCommand } from './GraphProtocol';
 import { Logger } from './Logger';
 import {
   composeInputParamsFromCapabilities,
-  getParamKeysForInputType,
   hasCapabilityDisplayTypes,
   hasCapabilityInputTypes,
   isKnownDisplayType,
@@ -26,9 +32,20 @@ export type ActionInputCommand =
   | { command: 'removeInputAssignment'; targetType: AssignTargetType; targetGuid: string }
   | { command: 'renameInput'; inputGuid: string; name: string }
   | { command: 'updateInput'; inputGuid: string; input: InputAssignConfig }
+  | { command: 'updateAction'; actionGuid: string; patch: Record<string, unknown> }
   | { command: 'assignExistingInput'; targetType: AssignTargetType; targetGuid: string; inputGuid: string }
   | { command: 'deleteInput'; inputGuid: string; expectedLinkedTargetCount?: number }
   | { command: 'setInputKeyChar'; inputGuid: string; keyChar?: string | null };
+
+function actionTargets(
+  action: ActionDefinition | undefined,
+  targetType: AssignTargetType,
+  targetGuid: string,
+): boolean {
+  if (!action?.execute) return false;
+  const ex = action.execute as Record<string, unknown>;
+  return ex['type'] === targetType && ex['guid'] === targetGuid;
+}
 
 export class ActionInputManager {
   constructor(
@@ -46,6 +63,8 @@ export class ActionInputManager {
         return this.renameInputCommands(controllerGuid, command.inputGuid, command.name);
       case 'updateInput':
         return this.updateInputCommands(controllerGuid, command.inputGuid, command.input);
+      case 'updateAction':
+        return this.updateActionCommands(command.actionGuid, command.patch);
       case 'assignExistingInput':
         return this.assignExistingInputCommands(controllerGuid, command.targetType, command.targetGuid, command.inputGuid);
       case 'deleteInput':
@@ -60,14 +79,17 @@ export class ActionInputManager {
   }
 
   getSceneForAction(action: ActionDefinition): Scene | undefined {
-    const execute = Array.isArray(action.execute)
-      ? action.execute.find(item => item.type === 'scene')
-      : undefined;
-    return execute ? this.getSceneForExecuteItem(execute) : undefined;
+    const ex = action.execute;
+    if (ex && typeof ex === 'object' && !Array.isArray(ex) && ex.type === 'scene' && typeof ex.guid === 'string') {
+      return this.projectManager.getSceneByGuid(ex.guid);
+    }
+    return undefined;
   }
 
-  getExecuteItemsForAction(action: ActionDefinition): ActionExecuteItem[] {
-    return Array.isArray(action.execute) ? action.execute : [];
+  getExecuteItemForAction(action: ActionDefinition): ActionExecuteItem | undefined {
+    const ex = action.execute;
+    if (!ex || typeof ex !== 'object' || Array.isArray(ex)) return undefined;
+    return ex;
   }
 
   getSceneForExecuteItem(item: ActionExecuteItem): Scene | undefined {
@@ -120,24 +142,29 @@ export class ActionInputManager {
     const existingInput = this.findInputByTarget(controllerGuid, targetType, targetGuid, existingAction?.guid);
     const actionGuid = existingAction?.guid ?? `action-${randomUUID()}`;
     const inputGuid = existingInput?.guid ?? `input-${randomUUID()}`;
+
+    const executeItem = { type: targetType, guid: targetGuid } as ActionExecuteItem;
+    if (targetType === 'intent' && composed.params !== undefined) {
+      (executeItem as Record<string, unknown>)['params'] = composed.params;
+    }
+
     const action: ActionDefinition = {
       guid: actionGuid,
       name: configuredName || existingAction?.name || targetName,
-      execute: [{ type: targetType, guid: targetGuid }],
+      execute: executeItem,
     };
 
-    const params = composed.params;
+    const nextActions = existingInput ? [...inputActionGuids(existingInput)] : [];
+    if (!nextActions.includes(actionGuid)) {
+      nextActions.push(actionGuid);
+    }
+
     const input: InputDefinition = {
       guid: inputGuid,
       name: configuredName || existingInput?.name || targetName,
       type: configuredType,
-      action: actionGuid,
-      target: { type: targetType, guid: targetGuid },
       display: { type: configuredDisplayType },
-      ...((targetType === 'scene'
-        ? { context: targetGuid }
-        : (typeof existingInput?.context === 'string' ? { context: existingInput.context } : {}))),
-      ...(params !== undefined ? { params } : {}),
+      actions: nextActions,
     };
 
     return [
@@ -151,100 +178,43 @@ export class ActionInputManager {
     ];
   }
 
-  /**
-   * Drops linkage to a target: trims `action.execute`, or orphans inputs + removes action when empty.
-   * Inputs are never removed — they become unassigned (no `target` / `action` / `context`).
-   */
+  private scrubActionGuidFromAllInputs(actionGuid: string): GraphCommand[] {
+    const commands: GraphCommand[] = [];
+    for (const ctrl of this.projectManager.getControllersWirePayload()) {
+      const cg = ctrl.guid;
+      if (!cg) continue;
+      for (const input of this.projectManager.getInputsWirePayload(cg)) {
+        if (!input.guid) continue;
+        const guids = inputActionGuids(input);
+        if (!guids.includes(actionGuid)) continue;
+        const row = cloneRecord(input as unknown as Record<string, unknown>);
+        row['actions'] = guids.filter(g => g !== actionGuid);
+        row['guid'] = input.guid;
+        commands.push(
+          this.upsertCommand('input', input.guid, row, { entityType: 'controller', guid: cg }),
+        );
+      }
+    }
+    return commands;
+  }
+
   private removeInputAssignmentCommands(
     controllerGuid: string,
     targetType: AssignTargetType,
     targetGuid: string,
   ): GraphCommand[] {
     if (targetGuid.length === 0 || targetType.length === 0) return [];
-    const controllerInputs = this.projectManager.getInputsWirePayload(controllerGuid);
     const actionsTouchingTarget = this.projectManager.getActionsWirePayload()
-      .filter(action => this.actionTargets(action, targetType, targetGuid));
+      .filter(action => actionTargets(action, targetType, targetGuid));
 
     const commands: GraphCommand[] = [];
-    const orphanedInputGuids = new Set<string>();
-
     for (const action of actionsTouchingTarget) {
-      if (!action.guid || !Array.isArray(action.execute)) continue;
-      const remainingExecute = action.execute.filter(item => {
-        if (!item || typeof item !== 'object' || Array.isArray(item)) return true;
-        const record = item as Record<string, unknown>;
-        return !(record['type'] === targetType && record['guid'] === targetGuid);
-      });
-
-      if (remainingExecute.length === action.execute.length) {
-        continue;
-      }
-
-      if (remainingExecute.length > 0) {
-        commands.push(
-          this.upsertCommand('action', action.guid, {
-            ...(action as unknown as Record<string, unknown>),
-            execute: remainingExecute,
-          }),
-        );
-        continue;
-      }
-
-      const inputsForAction = controllerInputs.filter(
-        inp => typeof inp.action === 'string' && inp.action === action.guid,
-      );
-      const strippedForThisAction = new Set<string>();
-      for (const input of inputsForAction) {
-        if (!input.guid) continue;
-        strippedForThisAction.add(input.guid);
-        orphanedInputGuids.add(input.guid);
-        commands.push(
-          this.upsertCommand(
-            'input',
-            input.guid,
-            this.inputStrippedOfAssignment(input),
-            { entityType: 'controller', guid: controllerGuid },
-          ),
-        );
-      }
-
-      const referencedElsewhere = this.isActionReferencedInGraph(action.guid, {
-        excludingInputGuids: strippedForThisAction,
-        excludingActionGuids: new Set([action.guid]),
-      });
-      if (!referencedElsewhere) {
-        commands.push(this.removeActionCommand(action.guid));
-      }
+      const ag = action.guid;
+      if (!ag) continue;
+      commands.push(...this.scrubActionGuidFromAllInputs(ag));
+      commands.push(this.removeActionCommand(ag));
     }
-
-    for (const input of controllerInputs) {
-      if (!input.guid || orphanedInputGuids.has(input.guid)) continue;
-      if (!this.inputTargets(input, targetType, targetGuid)) continue;
-      const ag = typeof input.action === 'string' ? input.action : '';
-      if (ag.length > 0) continue;
-      orphanedInputGuids.add(input.guid);
-      commands.push(
-        this.upsertCommand(
-          'input',
-          input.guid,
-          this.inputStrippedOfAssignment(input),
-          { entityType: 'controller', guid: controllerGuid },
-        ),
-      );
-    }
-
     return commands;
-  }
-
-  private inputStrippedOfAssignment(input: InputDefinition): Record<string, unknown> {
-    const row = cloneRecord(input as unknown as Record<string, unknown>);
-    delete row['target'];
-    delete row['action'];
-    delete row['context'];
-    if (typeof input.guid === 'string' && input.guid.length > 0) {
-      row['guid'] = input.guid;
-    }
-    return row;
   }
 
   private renameInputCommands(controllerGuid: string, inputGuid: string, name: string): GraphCommand[] {
@@ -308,47 +278,34 @@ export class ActionInputManager {
       return [];
     }
 
-    const metaKeys = new Set(['name', 'type', 'displayType']);
-    const cfgRecord: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(patchRecord)) {
-      if (metaKeys.has(k)) continue;
-      cfgRecord[k] = v;
-    }
-
-    const paramKeys = getParamKeysForInputType(caps, configuredType);
-    const existingParams =
-      existing.params && typeof existing.params === 'object' && !Array.isArray(existing.params)
-        ? (existing.params as Record<string, unknown>)
-        : {};
-    for (const pk of paramKeys) {
-      if (!(pk in cfgRecord) && pk in existingParams) {
-        cfgRecord[pk] = existingParams[pk];
-      }
-    }
-
-    const composed = composeInputParamsFromCapabilities(caps, configuredType, cfgRecord);
-    if (!composed.ok) {
-      Logger.warn(`[action] updateInput: ${composed.reason}`);
-      return [];
-    }
-
     const row = cloneRecord(existing as unknown as Record<string, unknown>);
     row['name'] = nextName;
     row['type'] = configuredType;
     prevDisplay['type'] = configuredDisplayType;
     row['display'] = prevDisplay;
-
-    if (composed.params !== undefined && Object.keys(composed.params).length > 0) {
-      row['params'] = composed.params;
-    } else {
-      delete row['params'];
-    }
-
+    row['actions'] = inputActionGuids(existing);
     row['guid'] = existing.guid;
 
     return [
       this.upsertCommand('input', inputGuid, row, { entityType: 'controller', guid: controllerGuid }),
     ];
+  }
+
+  private updateActionCommands(actionGuid: string, patch: Record<string, unknown>): GraphCommand[] {
+    if (actionGuid.length === 0) return [];
+    const action = this.projectManager.getActionByGuid(actionGuid);
+    if (!action?.guid) return [];
+    const row = cloneRecord(action as unknown as Record<string, unknown>);
+    for (const [k, v] of Object.entries(patch)) {
+      if (k === 'guid') continue;
+      if (k === 'execute' && v && typeof v === 'object' && !Array.isArray(v)) {
+        row['execute'] = cloneRecord(v as Record<string, unknown>);
+      } else {
+        row[k] = v;
+      }
+    }
+    row['guid'] = action.guid;
+    return [this.upsertCommand('action', action.guid, row)];
   }
 
   private setInputKeyCharCommands(
@@ -371,6 +328,7 @@ export class ActionInputManager {
       row['keyChar'] = nextNorm;
     }
     row['guid'] = input.guid;
+    row['actions'] = inputActionGuids(input);
     return [
       this.upsertCommand(
         'input',
@@ -390,57 +348,45 @@ export class ActionInputManager {
     if (targetGuid.length === 0 || targetType.length === 0 || inputGuid.length === 0) return [];
     const input = this.projectManager.getInputByGuid(inputGuid);
     if (!input?.guid) return [];
-    const actionGuid = typeof input.action === 'string' ? input.action : '';
-    const action = actionGuid ? this.projectManager.getActionByGuid(actionGuid) : undefined;
 
-    if (!actionGuid || !action?.guid) {
-      const targetName = this.getTargetName(targetType, targetGuid);
-      const newActionGuid = `action-${randomUUID()}`;
-      const baseName =
-        typeof input.name === 'string' && input.name.trim().length > 0 ? input.name.trim() : targetName;
-      const newAction: ActionDefinition = {
-        guid: newActionGuid,
-        name: baseName,
-        execute: [{ type: targetType, guid: targetGuid }],
-      };
-      const inputRecord = cloneRecord(input as unknown as Record<string, unknown>);
-      inputRecord['action'] = newActionGuid;
-      inputRecord['target'] = { type: targetType, guid: targetGuid };
-      if (targetType === 'scene') {
-        inputRecord['context'] = targetGuid;
-      } else {
-        delete inputRecord['context'];
-      }
-      inputRecord['guid'] = input.guid;
-      const clearPrevious = this.removeInputAssignmentCommands(controllerGuid, targetType, targetGuid);
-      return [
-        ...clearPrevious,
-        this.upsertCommand('action', newActionGuid, newAction as unknown as Record<string, unknown>),
-        this.upsertCommand(
-          'input',
-          input.guid,
-          inputRecord,
-          { entityType: 'controller', guid: controllerGuid },
-        ),
-      ];
-    }
-
-    const alreadyTargets = this.actionTargets(action, targetType, targetGuid);
-    if (alreadyTargets) return [];
-
-    const execute = Array.isArray(action.execute) ? action.execute : [];
-    const nextExecute = [
-      ...execute,
-      { type: targetType, guid: targetGuid },
-    ];
+    const already = inputActionGuids(input).some(ag => {
+      const a = this.projectManager.getActionByGuid(ag);
+      return actionTargets(a, targetType, targetGuid);
+    });
+    if (already) return [];
 
     const clearPrevious = this.removeInputAssignmentCommands(controllerGuid, targetType, targetGuid);
+
+    const targetName = this.getTargetName(targetType, targetGuid);
+    const newActionGuid = `action-${randomUUID()}`;
+    const baseName =
+      typeof input.name === 'string' && input.name.trim().length > 0 ? input.name.trim() : targetName;
+    const newAction: ActionDefinition = {
+      guid: newActionGuid,
+      name: baseName,
+      execute: { type: targetType, guid: targetGuid } as ActionExecuteItem,
+    };
+
+    const inputRecord = cloneRecord(input as unknown as Record<string, unknown>);
+    const nextGuids = inputActionGuids(input).filter(ag => {
+      const a = this.projectManager.getActionByGuid(ag);
+      return !actionTargets(a, targetType, targetGuid);
+    });
+    if (!nextGuids.includes(newActionGuid)) {
+      nextGuids.push(newActionGuid);
+    }
+    inputRecord['actions'] = nextGuids;
+    inputRecord['guid'] = input.guid;
+
     return [
       ...clearPrevious,
-      this.upsertCommand('action', action.guid, {
-        ...(action as unknown as Record<string, unknown>),
-        execute: nextExecute,
-      }),
+      this.upsertCommand('action', newActionGuid, newAction as unknown as Record<string, unknown>),
+      this.upsertCommand(
+        'input',
+        input.guid,
+        inputRecord,
+        { entityType: 'controller', guid: controllerGuid },
+      ),
     ];
   }
 
@@ -452,20 +398,20 @@ export class ActionInputManager {
     if (inputGuid.length === 0) return [];
     const input = this.projectManager.getInputByGuid(inputGuid);
     if (!input?.guid) return [];
-    const actionGuid = typeof input.action === 'string' ? input.action : '';
-    const linkedTargetCount = this.linkedTargetCountForAction(actionGuid);
+    const linkedCount = inputActionGuids(input).length;
     if (
       expectedLinkedTargetCount !== undefined
       && Number.isFinite(expectedLinkedTargetCount)
       && expectedLinkedTargetCount >= 0
-      && linkedTargetCount !== expectedLinkedTargetCount
+      && linkedCount !== expectedLinkedTargetCount
     ) {
       Logger.warn(
-        `[action] deleteInput aborted: stale linked target count for ${inputGuid} (expected ${expectedLinkedTargetCount}, actual ${linkedTargetCount})`,
+        `[action] deleteInput aborted: stale linked action count for ${inputGuid} (expected ${expectedLinkedTargetCount}, actual ${linkedCount})`,
       );
       return [];
     }
 
+    const actionGuids = inputActionGuids(input);
     const commands: GraphCommand[] = [{
       op: 'remove',
       entityType: 'input',
@@ -473,13 +419,14 @@ export class ActionInputManager {
       persistence: 'runtimeAndDurable',
       parent: { entityType: 'controller', guid: controllerGuid },
     }];
-    if (!actionGuid) return commands;
-    const keepAction = this.isActionReferencedInGraph(actionGuid, {
-      excludingInputGuids: new Set([inputGuid]),
-      excludingActionGuids: new Set([actionGuid]),
-    });
-    if (!keepAction) {
-      commands.push(this.removeActionCommand(actionGuid));
+
+    for (const ag of actionGuids) {
+      const keep = this.isActionReferencedInGraph(ag, {
+        excludingInputGuids: new Set([inputGuid]),
+      });
+      if (!keep) {
+        commands.push(this.removeActionCommand(ag));
+      }
     }
     return commands;
   }
@@ -489,80 +436,12 @@ export class ActionInputManager {
       .filter(action => this.actionTargetsScene(action, sceneGuid));
 
     const commands: GraphCommand[] = [];
-    const orphanedInputGuids = new Set<string>();
-    const controllers = this.projectManager.getControllersWirePayload();
-
     for (const action of actionsTouchingScene) {
-      if (!action.guid || !Array.isArray(action.execute)) continue;
-      const remainingExecute = action.execute.filter(item => {
-        if (!item || typeof item !== 'object' || Array.isArray(item)) return true;
-        const record = item as Record<string, unknown>;
-        return !(record['type'] === 'scene' && record['guid'] === sceneGuid);
-      });
-
-      if (remainingExecute.length === action.execute.length) {
-        continue;
-      }
-
-      if (remainingExecute.length > 0) {
-        commands.push(
-          this.upsertCommand('action', action.guid, {
-            ...(action as unknown as Record<string, unknown>),
-            execute: remainingExecute,
-          }),
-        );
-        continue;
-      }
-
-      const strippedForThisAction = new Set<string>();
-      for (const controller of controllers) {
-        const controllerGuid = controller.guid;
-        if (!controllerGuid) continue;
-        for (const input of this.projectManager.getInputsWirePayload(controllerGuid)) {
-          if (!input.guid) continue;
-          if (typeof input.action !== 'string' || input.action !== action.guid) continue;
-          strippedForThisAction.add(input.guid);
-          orphanedInputGuids.add(input.guid);
-          commands.push(
-            this.upsertCommand(
-              'input',
-              input.guid,
-              this.inputStrippedOfAssignment(input),
-              { entityType: 'controller', guid: controllerGuid },
-            ),
-          );
-        }
-      }
-
-      const referencedElsewhere = this.isActionReferencedInGraph(action.guid, {
-        excludingInputGuids: strippedForThisAction,
-        excludingActionGuids: new Set([action.guid]),
-      });
-      if (!referencedElsewhere) {
-        commands.push(this.removeActionCommand(action.guid));
-      }
+      const ag = action.guid;
+      if (!ag) continue;
+      commands.push(...this.scrubActionGuidFromAllInputs(ag));
+      commands.push(this.removeActionCommand(ag));
     }
-
-    for (const controller of controllers) {
-      const controllerGuid = controller.guid;
-      if (!controllerGuid) continue;
-      for (const input of this.projectManager.getInputsWirePayload(controllerGuid)) {
-        if (!input.guid || orphanedInputGuids.has(input.guid)) continue;
-        if (!this.inputTargetsScene(input, sceneGuid)) continue;
-        const ag = typeof input.action === 'string' ? input.action : '';
-        if (ag.length > 0) continue;
-        orphanedInputGuids.add(input.guid);
-        commands.push(
-          this.upsertCommand(
-            'input',
-            input.guid,
-            this.inputStrippedOfAssignment(input),
-            { entityType: 'controller', guid: controllerGuid },
-          ),
-        );
-      }
-    }
-
     return commands;
   }
 
@@ -576,32 +455,13 @@ export class ActionInputManager {
     return [this.removeActionCommand(animationGuid)];
   }
 
-  private findSceneAction(sceneGuid: string): ActionDefinition | undefined {
-    return this.projectManager.getActionsWirePayload()
-      .find(action => this.actionTargetsScene(action, sceneGuid));
-  }
-
-  private findSceneInput(controllerGuid: string, sceneGuid: string, actionGuid?: string): InputDefinition | undefined {
-    return this.projectManager.getInputsWirePayload(controllerGuid)
-      .find(input => {
-        const hasSceneTarget = this.inputTargetsScene(input, sceneGuid);
-        const pointsAtSceneAction = actionGuid !== undefined && input.action === actionGuid;
-        return hasSceneTarget || pointsAtSceneAction;
-      });
-  }
-
-  private inputTargetsScene(input: InputDefinition, sceneGuid: string): boolean {
-    if (typeof input.context === 'string' && input.context === sceneGuid) return true;
-    return input.target?.type === 'scene' && input.target.guid === sceneGuid;
-  }
-
   private actionTargetsScene(action: ActionDefinition, sceneGuid: string): boolean {
-    return this.actionTargets(action, 'scene', sceneGuid);
+    return actionTargets(action, 'scene', sceneGuid);
   }
 
   private findActionByTarget(targetType: AssignTargetType, targetGuid: string): ActionDefinition | undefined {
     return this.projectManager.getActionsWirePayload()
-      .find(action => this.actionTargets(action, targetType, targetGuid));
+      .find(action => actionTargets(action, targetType, targetGuid));
   }
 
   private findInputByTarget(
@@ -610,38 +470,17 @@ export class ActionInputManager {
     targetGuid: string,
     actionGuid?: string,
   ): InputDefinition | undefined {
-    return this.projectManager.getInputsWirePayload(controllerGuid)
-      .find(input => {
-        const hasTarget = this.inputTargets(input, targetType, targetGuid);
-        const pointsAtAction = actionGuid !== undefined && input.action === actionGuid;
-        return hasTarget || pointsAtAction;
-      });
-  }
-
-  private inputTargets(input: InputDefinition, targetType: AssignTargetType, targetGuid: string): boolean {
-    if (input.target?.type === targetType && input.target.guid === targetGuid) return true;
-    if (targetType === 'scene' && typeof input.context === 'string' && input.context === targetGuid) return true;
-    return false;
-  }
-
-  private actionTargets(action: ActionDefinition, targetType: AssignTargetType, targetGuid: string): boolean {
-    if (!Array.isArray(action.execute)) return false;
-    return action.execute.some(item => item.type === targetType && item.guid === targetGuid);
-  }
-
-  private linkedTargetCountForAction(actionGuid: string): number {
-    if (actionGuid.length === 0) return 0;
-    const action = this.projectManager.getActionByGuid(actionGuid);
-    if (!action || !Array.isArray(action.execute)) return 0;
-    const seen = new Set<string>();
-    for (const item of action.execute) {
-      if (!item || typeof item !== 'object') continue;
-      const type = typeof item.type === 'string' ? item.type : '';
-      const guid = typeof item.guid === 'string' ? item.guid : '';
-      if (!type || !guid) continue;
-      seen.add(`${type}:${guid}`);
+    const inputs = this.projectManager.getInputsWirePayload(controllerGuid);
+    if (actionGuid !== undefined) {
+      const byAction = inputs.find(inp => inputActionGuids(inp).includes(actionGuid));
+      if (byAction) return byAction;
     }
-    return seen.size;
+    return inputs.find(inp =>
+      inputActionGuids(inp).some(ag => {
+        const a = this.projectManager.getActionByGuid(ag);
+        return actionTargets(a, targetType, targetGuid);
+      }),
+    );
   }
 
   private getTargetName(targetType: AssignTargetType, targetGuid: string): string {

@@ -50,6 +50,16 @@ import {
  * )} ProjectGraphTopic
  */
 
+/**
+ * @param {Record<string, unknown>} input
+ * @returns {string[]}
+ */
+export function inputActionGuidList (input) {
+  const a = input.actions
+  if (!Array.isArray(a)) return []
+  return a.filter(g => typeof g === 'string' && g.length > 0)
+}
+
 class ProjectGraph {
   constructor () {
     this._rendererGuid = ''
@@ -318,10 +328,10 @@ class ProjectGraph {
    */
   getAssignedInput (targetType, targetGuid) {
     for (const input of this._data.inputs.values()) {
-      if (inputTargets(input, targetType, targetGuid)) return input
-      const actionGuid = typeof input.action === 'string' ? input.action : ''
-      const action = actionGuid ? this._data.actions.get(actionGuid) : null
-      if (action && actionTargets(action, targetType, targetGuid)) return input
+      for (const ag of inputActionGuidList(input)) {
+        const action = this._data.actions.get(ag)
+        if (action && actionTargets(action, targetType, targetGuid)) return input
+      }
     }
     return null
   }
@@ -1876,13 +1886,9 @@ function normalizeEntityMap (raw) {
  * @returns {boolean}
  */
 function actionTargets (action, targetType, targetGuid) {
-  const execute = action.execute
-  if (!Array.isArray(execute)) return false
-  return execute.some(item => {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) return false
-    const record = /** @type {Record<string, unknown>} */ (item)
-    return record.type === targetType && record.guid === targetGuid
-  })
+  const ex = action.execute
+  if (!ex || typeof ex !== 'object' || Array.isArray(ex)) return false
+  return ex.type === targetType && ex.guid === targetGuid
 }
 
 /**
@@ -1894,31 +1900,9 @@ function actionTargets (action, targetType, targetGuid) {
 function companionAnimationRunnerAction (action, animationGuid) {
   const actionGuid = typeof action.guid === 'string' ? action.guid : ''
   if (actionGuid !== animationGuid) return false
-  const execute = action.execute
-  if (!Array.isArray(execute) || execute.length !== 1) return false
-  const item = execute[0]
-  if (!item || typeof item !== 'object' || Array.isArray(item)) return false
-  const record = /** @type {Record<string, unknown>} */ (item)
-  return record.type === 'animation' && record.guid === animationGuid
-}
-
-/**
- * @param {Record<string, unknown>} input
- * @param {string} targetType
- * @param {string} targetGuid
- * @returns {boolean}
- */
-function inputTargets (input, targetType, targetGuid) {
-  const target = input.target
-  if (target && typeof target === 'object' && !Array.isArray(target)) {
-    const t = /** @type {Record<string, unknown>} */ (target)
-    if (t.type === targetType && t.guid === targetGuid) return true
-  }
-  if (targetType === 'scene') {
-    const context = typeof input.context === 'string' ? input.context : ''
-    if (context && context === targetGuid) return true
-  }
-  return false
+  const ex = action.execute
+  if (!ex || typeof ex !== 'object' || Array.isArray(ex)) return false
+  return ex.type === 'animation' && ex.guid === animationGuid
 }
 
 /**

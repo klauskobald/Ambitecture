@@ -1,5 +1,5 @@
 import { performPolicy } from '../viewport/interactionPolicies.js'
-import { projectGraph } from '../core/projectGraph.js'
+import { projectGraph, inputActionGuidList } from '../core/projectGraph.js'
 import { sendActionTrigger } from '../core/outboundQueue.js'
 import { PerformQuickPanelHud } from '../perform/performQuickPanelHud.js'
 import {
@@ -11,7 +11,7 @@ import {
   normalizeInputKeyChar
 } from '../core/performButtonInputs.js'
 import {
-  getPerformInputArgs,
+  getTriggerSlotArgsFromAction,
   performMomentaryPress,
   performMomentaryRelease
 } from '../core/performMomentaryRegistry.js'
@@ -128,9 +128,12 @@ export class PerformPane {
       }
       button.classList.toggle('perform-input--has-keyhint', Boolean(keyLabel))
 
-      const newAction = typeof input.action === 'string' ? input.action : ''
+      const ags = inputActionGuidList(/** @type {Record<string, unknown>} */ (input))
+      const newAction = ags[0] ?? ''
       if (button.dataset.actionGuid !== newAction)
         button.dataset.actionGuid = newAction
+      if (button.dataset.actionGuids !== ags.join(','))
+        button.dataset.actionGuids = ags.join(',')
 
       if (button.dataset.inputGuid !== guid) button.dataset.inputGuid = guid
 
@@ -138,7 +141,8 @@ export class PerformPane {
       if (button.dataset.behavior !== newBehavior)
         button.dataset.behavior = newBehavior
 
-      const unassigned = !newAction || !actions.has(newAction)
+      const unassigned =
+        ags.length === 0 || !ags.every(ag => actions.has(ag))
       button.classList.toggle('perform-input--unassigned', unassigned)
       if (badgeEl) badgeEl.hidden = !unassigned
 
@@ -221,25 +225,29 @@ export class PerformPane {
    */
   _handlePointerDown (button, event) {
     const input = this._inputForButton(button)
-    const actionGuid = typeof input?.action === 'string' ? input.action : ''
-    if (!input || !actionGuid || this._activePointers.has(event.pointerId))
+    const actionGuids = input
+      ? inputActionGuidList(/** @type {Record<string, unknown>} */ (input))
+      : []
+    if (!input || actionGuids.length === 0 || this._activePointers.has(event.pointerId))
       return
 
     const behavior = typeof input.type === 'string' ? input.type : 'button'
     this._activePointers.set(event.pointerId, {
       guid: String(input.guid ?? button.dataset.inputGuid ?? ''),
-      actionGuid,
+      actionGuids,
       behavior
     })
     if (button.setPointerCapture) button.setPointerCapture(event.pointerId)
 
     switch (behavior) {
       case 'momentarySwitch':
-        this._pressMomentarySwitch(input, event.pointerId, actionGuid)
+        this._pressMomentarySwitch(input, event.pointerId, actionGuids)
         break
       case 'button':
       default:
-        sendActionTrigger(actionGuid, getPerformInputArgs(input, 'args'))
+        for (const ag of actionGuids) {
+          sendActionTrigger(ag, getTriggerSlotArgsFromAction(ag, 'args'))
+        }
         break
     }
   }
@@ -265,7 +273,7 @@ export class PerformPane {
 
     switch (active.behavior) {
       case 'momentarySwitch':
-        this._releaseMomentarySwitch(active.guid, pointerId, active.actionGuid)
+        this._releaseMomentarySwitch(active.guid, pointerId, active.actionGuids)
         break
       default:
         break
@@ -275,26 +283,25 @@ export class PerformPane {
   /**
    * @param {Record<string, unknown>} input
    * @param {number} pointerId
-   * @param {string} actionGuid
+   * @param {string[]} actionGuids
    */
-  _pressMomentarySwitch (input, pointerId, actionGuid) {
+  _pressMomentarySwitch (input, pointerId, actionGuids) {
     const guid = String(input.guid ?? '')
     if (!guid) return
     performMomentaryPress(
       guid,
       `pointer:${pointerId}`,
-      actionGuid,
-      /** @type {Record<string, unknown>} */ (input)
+      actionGuids
     )
   }
 
   /**
    * @param {string} guid
    * @param {number} pointerId
-   * @param {string} actionGuid
+   * @param {string[]} actionGuids
    */
-  _releaseMomentarySwitch (guid, pointerId, actionGuid) {
-    performMomentaryRelease(guid, `pointer:${pointerId}`, actionGuid)
+  _releaseMomentarySwitch (guid, pointerId, actionGuids) {
+    performMomentaryRelease(guid, `pointer:${pointerId}`, actionGuids)
   }
 
   /** @param {HTMLButtonElement} button */

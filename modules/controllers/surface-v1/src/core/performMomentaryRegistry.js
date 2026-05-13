@@ -12,13 +12,16 @@ function recordOrUndefined (value) {
 }
 
 /**
- * @param {Record<string, unknown>} input
- * @param {string} key
+ * @param {string} actionGuid
+ * @param {'argsOn' | 'argsOff' | 'args'} slot
  * @returns {Record<string, unknown> | undefined}
  */
-export function getPerformInputArgs (input, key) {
-  const params = recordOrUndefined(input.params)
-  return recordOrUndefined(params?.[key])
+export function getTriggerSlotArgsFromAction (actionGuid, slot) {
+  const action = projectGraph.getActions().get(actionGuid)
+  const ex = action?.execute
+  if (!ex || typeof ex !== 'object' || Array.isArray(ex)) return undefined
+  const params = recordOrUndefined(ex.params)
+  return recordOrUndefined(params?.[slot])
 }
 
 /** @type {Map<string, Set<string>>} inputGuid -> source ids (pointer:N, kbd:char, …) */
@@ -27,39 +30,34 @@ const sourcesByInputGuid = new Map()
 /**
  * @param {string} inputGuid
  * @param {string} sourceId
- * @param {string} actionGuid
- * @param {Record<string, unknown>} inputSnapshot row at press time (argsOn)
+ * @param {string[]} actionGuids
  */
-export function performMomentaryPress (
-  inputGuid,
-  sourceId,
-  actionGuid,
-  inputSnapshot
-) {
-  if (!inputGuid || !sourceId || !actionGuid) return
+export function performMomentaryPress (inputGuid, sourceId, actionGuids) {
+  if (!inputGuid || !sourceId || !Array.isArray(actionGuids) || actionGuids.length === 0) return
   const set = sourcesByInputGuid.get(inputGuid) ?? new Set()
   const wasInactive = set.size === 0
   set.add(sourceId)
   sourcesByInputGuid.set(inputGuid, set)
   if (wasInactive) {
-    sendActionTrigger(actionGuid, getPerformInputArgs(inputSnapshot, 'argsOn'))
+    for (const ag of actionGuids) {
+      sendActionTrigger(ag, getTriggerSlotArgsFromAction(ag, 'argsOn'))
+    }
   }
 }
 
 /**
  * @param {string} inputGuid
  * @param {string} sourceId
- * @param {string} actionGuid
+ * @param {string[]} actionGuids
  */
-export function performMomentaryRelease (inputGuid, sourceId, actionGuid) {
-  if (!inputGuid || !sourceId) return
+export function performMomentaryRelease (inputGuid, sourceId, actionGuids) {
+  if (!inputGuid || !sourceId || !Array.isArray(actionGuids) || actionGuids.length === 0) return
   const set = sourcesByInputGuid.get(inputGuid)
   if (!set) return
   set.delete(sourceId)
   if (set.size > 0) return
   sourcesByInputGuid.delete(inputGuid)
-  const input = projectGraph.getInputs().get(inputGuid)
-  if (input) {
-    sendActionTrigger(actionGuid, getPerformInputArgs(input, 'argsOff'))
+  for (const ag of actionGuids) {
+    sendActionTrigger(ag, getTriggerSlotArgsFromAction(ag, 'argsOff'))
   }
 }

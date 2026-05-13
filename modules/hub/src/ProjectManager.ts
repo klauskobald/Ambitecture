@@ -87,7 +87,8 @@ export type ActionExecuteItem =
 export interface ActionDefinition {
   guid?: string;
   name: string;
-  execute: ActionExecuteItem[];
+  /** Single target per action (`scene` | `intent` | `animation`). */
+  execute: ActionExecuteItem;
 }
 
 export interface AnimationStep {
@@ -128,16 +129,18 @@ export interface InputDefinition {
   guid?: string;
   name: string;
   type: string;
-  params?: Record<string, unknown>;
-  action?: string;
-  context?: string;
-  target?: {
-    type: string;
-    guid: string;
-  };
   display?: Record<string, unknown>;
+  /** Action GUIDs this perform input fires (order preserved). */
+  actions: string[];
+  keyChar?: string;
   /** Perform pane / controller: explicit button order (lower first). */
   _sortIdx?: number;
+}
+
+/** Action GUIDs referenced by a controller input (empty when unassigned). */
+export function inputActionGuids(input: InputDefinition): string[] {
+  if (!Array.isArray(input.actions)) return [];
+  return input.actions.filter((g): g is string => typeof g === 'string' && g.length > 0);
 }
 
 interface ControllerDef {
@@ -185,11 +188,9 @@ function isCompanionAnimationRunnerAction(
 ): boolean {
   const actionGuid = typeof action.guid === 'string' ? action.guid : '';
   if (actionGuid !== animationGuid) return false;
-  const execute = action.execute;
-  if (!Array.isArray(execute) || execute.length !== 1) return false;
-  const item = execute[0];
-  if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
-  const record = item as Record<string, unknown>;
+  const ex = action.execute;
+  if (!ex || typeof ex !== 'object' || Array.isArray(ex)) return false;
+  const record = ex as Record<string, unknown>;
   return record['type'] === 'animation' && record['guid'] === animationGuid;
 }
 
@@ -244,6 +245,7 @@ export class ProjectManager {
     this._projectConfig = new Config(filePath);
     this.project = this._projectConfig.getAll() as Project;
 
+    const normalizedGraph = this._normalizeActionsAndInputsAfterLoad();
     this._rebuildIntentDefinitions(this.project.intents ?? []);
     const createdGuids = this._ensureGraphGuids();
     const ensuredCompanions = this._ensureAnimationCompanionActions();
@@ -270,9 +272,94 @@ export class ProjectManager {
     }));
 
     Logger.info(`[project] loaded "${this.project.name}" with ${this.project.zones.length} zone(s), ${this.intentDefinitions.size} intent(s), ${(this.project.scenes ?? []).length} scene(s)`);
-    if (createdGuids || ensuredCompanions) {
+    if (createdGuids || ensuredCompanions || normalizedGraph) {
       this._scheduleSave();
     }
+  }
+
+  /**
+   * One-time in-memory migration: `action.execute[]` → single `execute`;
+   * `input.action` / `target` / `context` → `input.actions[]`; move `input.params` onto first linked intent action.
+   */
+  private _normalizeActionsAndInputsAfterLoad(): boolean {
+    if (!this.project) return false;
+    let changed = false;
+    const rawActions = [...(this.project.actions ?? [])];
+    const nextActions: ActionDefinition[] = [];
+    const droppedActionGuids = new Set<string>();
+
+    for (const raw of rawActions) {
+      const rec = raw as unknown as Record<string, unknown>;
+      let ex: unknown = rec['execute'];
+      if (Array.isArray(ex)) {
+        const first = ex.length > 0 ? ex[0] : undefined;
+        if (first && typeof first === 'object' && !Array.isArray(first)) {
+          rec['execute'] = first;
+          changed = true;
+          ex = first;
+        } else {
+          const g = typeof rec['guid'] === 'string' ? rec['guid'] : '';
+          if (g.length > 0) droppedActionGuids.add(g);
+          changed = true;
+          continue;
+        }
+      }
+      if (!ex || typeof ex !== 'object' || Array.isArray(ex)) {
+        const g = typeof rec['guid'] === 'string' ? rec['guid'] : '';
+        if (g.length > 0) droppedActionGuids.add(g);
+        changed = true;
+        continue;
+      }
+      nextActions.push(raw as ActionDefinition);
+    }
+
+    for (const ctrl of this.project.controller ?? []) {
+      for (const inp of ctrl.inputs ?? []) {
+        const r = inp as unknown as Record<string, unknown>;
+        const legacyA = r['action'];
+        let list: string[] = Array.isArray(r['actions'])
+          ? (r['actions'] as unknown[]).filter((x): x is string => typeof x === 'string' && x.length > 0)
+          : [];
+        if (typeof legacyA === 'string' && legacyA.length > 0 && !list.includes(legacyA)) {
+          list.push(legacyA);
+          delete r['action'];
+          changed = true;
+        }
+        list = list.filter(g => !droppedActionGuids.has(g));
+        r['actions'] = list;
+        if (r['target'] !== undefined) {
+          delete r['target'];
+          changed = true;
+        }
+        if (r['context'] !== undefined) {
+          delete r['context'];
+          changed = true;
+        }
+        const p = r['params'];
+        if (p && typeof p === 'object' && !Array.isArray(p) && list.length > 0) {
+          const act = nextActions.find(a => a.guid === list[0]);
+          const exec = act?.execute as unknown as Record<string, unknown> | undefined;
+          if (exec && exec['type'] === 'intent') {
+            const prevP =
+              typeof exec['params'] === 'object' && exec['params'] !== null && !Array.isArray(exec['params'])
+                ? (exec['params'] as Record<string, unknown>)
+                : {};
+            exec['params'] = { ...prevP, ...(p as Record<string, unknown>) };
+            delete r['params'];
+            changed = true;
+          } else {
+            delete r['params'];
+            changed = true;
+          }
+        }
+      }
+    }
+
+    if (nextActions.length !== rawActions.length) {
+      changed = true;
+    }
+    this.project.actions = nextActions;
+    return changed;
   }
 
   /**
@@ -302,7 +389,7 @@ export class ProjectManager {
       const companion: ActionDefinition = {
         guid,
         name: companionName,
-        execute: [{ type: 'animation', guid }],
+        execute: { type: 'animation', guid },
       };
       if (idx >= 0) {
         actions[idx] = companion;

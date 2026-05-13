@@ -1,10 +1,10 @@
-import { projectGraph } from './projectGraph.js'
+import { projectGraph, inputActionGuidList } from './projectGraph.js'
 import {
   collectPerformButtonInputs,
   normalizeInputKeyChar
 } from './performButtonInputs.js'
 import {
-  getPerformInputArgs,
+  getTriggerSlotArgsFromAction,
   performMomentaryPress,
   performMomentaryRelease
 } from './performMomentaryRegistry.js'
@@ -92,8 +92,8 @@ class KeyboardManager {
     for (const input of candidates) {
       const guid = typeof input.guid === 'string' ? input.guid : ''
       if (!guid) continue
-      const actionGuid = typeof input.action === 'string' ? input.action : ''
-      if (!actionGuid || !actions.has(actionGuid)) continue
+      const ags = inputActionGuidList(/** @type {Record<string, unknown>} */ (input))
+      if (ags.length === 0 || !ags.every(ag => actions.has(ag))) continue
 
       const keyChar = normalizeInputKeyChar(input.keyChar)
       if (!keyChar) continue
@@ -124,8 +124,8 @@ class KeyboardManager {
 
     const input = projectGraph.getInputs().get(inputGuid)
     if (!input) return
-    const actionGuid = typeof input.action === 'string' ? input.action : ''
-    if (!actionGuid || !projectGraph.getActions().has(actionGuid)) return
+    const actionGuids = inputActionGuidList(/** @type {Record<string, unknown>} */ (input))
+    if (actionGuids.length === 0 || !actionGuids.every(ag => projectGraph.getActions().has(ag))) return
 
     const behavior =
       typeof input.type === 'string' && input.type.length > 0
@@ -140,8 +140,7 @@ class KeyboardManager {
       performMomentaryPress(
         inputGuid,
         `kbd:${keyChar}`,
-        actionGuid,
-        /** @type {Record<string, unknown>} */ (input)
+        actionGuids
       )
       return
     }
@@ -149,7 +148,9 @@ class KeyboardManager {
     if (event.repeat) return
     event.preventDefault()
     pulsePerformInputKeyboard(inputGuid)
-    sendActionTrigger(actionGuid, getPerformInputArgs(input, 'args'))
+    for (const ag of actionGuids) {
+      sendActionTrigger(ag, getTriggerSlotArgsFromAction(ag, 'args'))
+    }
   }
 
   /**
@@ -170,10 +171,10 @@ class KeyboardManager {
         : 'button'
     if (behavior !== 'momentarySwitch') return
 
-    const actionGuid = typeof input.action === 'string' ? input.action : ''
-    if (!actionGuid) return
+    const actionGuids = inputActionGuidList(/** @type {Record<string, unknown>} */ (input))
+    if (actionGuids.length === 0) return
 
-    performMomentaryRelease(inputGuid, `kbd:${keyChar}`, actionGuid)
+    performMomentaryRelease(inputGuid, `kbd:${keyChar}`, actionGuids)
     setPerformInputKeyboardActive(inputGuid, false)
   }
 }

@@ -374,34 +374,32 @@ A generic interactive bubble overlay (`surface-v1/src/viewport/selectionManager.
 
 Controller perform buttons are implemented through a three-entity graph structure: **Action** → **Input** → **UI control**.
 
-**Action** (`entityType: "action"`) — a named, executable graph entity stored at the top level of the project graph. Fields: `guid`, `name`, `execute[]`. Each execute item is `{ type, guid }` — current supported types: `scene` and `intent`.
+**Action** (`entityType: "action"`) — a named, executable graph entity stored at the top level of the project graph. Fields: `guid`, `name`, **`execute`** — a **single** object `{ type, guid, ... }`. Supported `type` values: `scene`, `intent`, `animation`. Intent rows may include `params`, `patch`, `remove`, `value`, `scheduled` on `execute` (same shape as before, but not wrapped in an array).
 
 **Input** (`entityType: "input"`) — a controller-owned UI binding stored **inside the controller entity** (`parent: { entityType: "controller", guid }`). Key fields:
 - `type` — input class from `systemCapabilities.inputTypes` (e.g. `button`, `momentarySwitch`)
 - `display.type` — display class from `systemCapabilities.displayTypes` (e.g. `button`)
-- `action` — linked action GUID
-- `target` — `{ type, guid }` of the entity this input targets
-- `context` — scene GUID (legacy path for scene inputs; prefer `target` for new entity types)
-- `params` — typed per-input parameters (e.g. `args`, `argsOn`, `argsOff` as `jsonString` objects)
-- `_sortIdx` — numeric sort index for Perform pane button ordering
+- **`actions`** — string array of action GUIDs this input triggers (Perform / keyboard send **one `action:trigger` per GUID** with optional `args` merged by the hub into that action’s intent/animation path)
+- `keyChar`, `_sortIdx` — optional keyboard hint and Perform ordering
 
-**`action:input`** (controller → hub): sends `ActionInputCommand` payloads to create, update, or remove inputs and their linked actions atomically. Commands include:
-- `ensureInputAssignment` — creates or updates the action + input for `{ targetType, targetGuid, input: { name, type, displayType, ...params } }`
-- `removeInputAssignment` — removes matching inputs and their actions (unless referenced elsewhere)
+Perform parameter payloads for intent (e.g. `argsOn` / `argsOff` / `args` as `jsonString` slots from `systemCapabilities.inputTypes`) are stored on the **action** under `execute.params` for `type: "intent"`, not on the input.
+
+**`action:input`** (controller → hub): sends `ActionInputCommand` payloads. Commands include:
+- `ensureInputAssignment` — creates or updates the action + input for `{ targetType, targetGuid, input: { name, type, displayType, ...typed slots for composeInputParams } }` (typed slots apply when building intent `execute.params`)
+- `removeInputAssignment` — removes actions that target the given entity and scrubs their GUIDs from every input’s `actions[]`
 - `renameInput` — patches the input `name` field by `inputGuid`
-- `updateInput` — patches an existing input by `inputGuid` with `{ input: { name?, type?, displayType?, ...typed params } }` (same param keys as `ensureInputAssignment` / `systemCapabilities.inputTypes`). Omitted param keys keep prior values for that input type; composed `params` replace the stored `params` object.
+- `updateInput` — patches an existing input by `inputGuid` with `{ input: { name?, type?, displayType? } }` only (no perform param blobs on the input)
+- **`updateAction`** — patches a top-level action by `actionGuid` with `{ patch: { execute?: …, name?, … } }` (hub merges `patch.execute` as a full replace for that object when provided)
+- `assignExistingInput` — after clearing other assignments to the same target, appends a new action and wires it into the chosen input’s `actions[]`
+- `deleteInput` — removes the input; removes any action that is no longer referenced from any input’s `actions[]`. `expectedLinkedTargetCount` is the number of entries in `actions[]` at delete time (stale-guard).
 
-Hub validates types against `systemCapabilities`, composes params via `composeInputParams.ts`, applies as `graph:command` pairs, and broadcasts `graph:delta`.
-
-**`action:trigger`** (controller → hub): `{ actionGuid, args? }`. Hub resolves the action's `execute` items:
-- `type: "scene"` → activates scene via `ProjectGraphStore` (emits `graph:delta`)
-- `type: "intent"` → dispatches a `RuntimeUpdate` via `RuntimeUpdateDispatcher` (transient, no graph write, no `graph:delta`). The action's `execute` item may carry `params`, `patch`, `remove`, or `value`; `args` from the trigger call are merged on top.
+**`action:trigger`** (controller → hub): `{ actionGuid, args? }` — one message per action. Hub resolves that action’s single `execute` item the same way as before (`scene` / `intent` / `animation`).
 
 **Usage rules:**
-- Use `sendActionInputCommand(command)` from `outboundQueue.js` — never raw `sendGraphCommands` — to create/remove/rename/update inputs.
-- Use `sendActionTrigger(guid, args?)` from `outboundQueue.js` — never a graph command — to fire actions.
+- Use `sendActionInputCommand(command)` from `outboundQueue.js` — never raw `sendGraphCommands` — to create/remove/rename/update inputs and actions.
+- Use `sendActionTrigger(guid, args?)` from `outboundQueue.js` — once per `actionGuid` when an input lists multiple actions.
 - Collect Perform pane buttons via `collectPerformButtonInputs()` only; do not filter inputs inline in pane code.
-- When deleting a scene on the hub, call `ActionInputManager.buildSceneCleanupCommands(sceneGuid)` and apply the returned commands to remove orphaned inputs and actions.
+- When deleting a scene on the hub, call `ActionInputManager.buildSceneCleanupCommands(sceneGuid)` and apply the returned commands to remove matching actions and scrub `actions[]` references.
 
 ### Animations
 

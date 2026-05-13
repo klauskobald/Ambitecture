@@ -1,4 +1,12 @@
 systemCapabilities:
+
+  animationActionProperties:
+    - key: command
+      name: Command
+      type: string
+      display: pills
+      options: [run, stop, pause]
+      defaultValue: run
   
   animations:
     - class: keyframeAnimator

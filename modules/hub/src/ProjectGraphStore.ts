@@ -440,7 +440,7 @@ export class ProjectGraphStore {
     const companionAction: ActionDefinition = {
       guid: sharedAnimationAndActionGuid,
       name: companionName,
-      execute: [{ type: 'animation', guid: command.guid }],
+      execute: { type: 'animation', guid: command.guid },
     };
     const actions = this.projectManager.getActionsWirePayload().filter(a => a.guid !== sharedAnimationAndActionGuid);
     actions.push(companionAction);

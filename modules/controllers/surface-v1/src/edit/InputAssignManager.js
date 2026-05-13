@@ -1,4 +1,4 @@
-import { projectGraph } from '../core/projectGraph.js'
+import { projectGraph, inputActionGuidList } from '../core/projectGraph.js'
 import {
   confirm as modalConfirm,
   openModalCard,
@@ -13,7 +13,6 @@ import {
   resolveDefaultPerformTypes,
   resolveDescriptorsForClass
 } from '../core/systemCapabilities.js'
-import { getIntentClassForInput } from './inputAssign/intentDescriptorContext.js'
 import { IntentParamsSelect } from './components/intentParamsSelect.js'
 import { normalizeInputKeyChar } from '../core/performButtonInputs.js'
 
@@ -89,7 +88,10 @@ export class InputAssignManager {
         this._contextType,
         this._contextGuid
       )
-      const isActive = Boolean(input?.action && action)
+      const ags = input
+        ? inputActionGuidList(/** @type {Record<string, unknown>} */ (input))
+        : []
+      const isActive = ags.length > 0 && Boolean(action)
       row.className = isActive
         ? `${rowClass} ${rowClass}--active`.trim()
         : rowClass
@@ -208,9 +210,11 @@ export class InputAssignManager {
         helpers.button.dataset.inputGuid = option.value
         const inputRecord = projectGraph.getInputs().get(option.value)
         const actions = projectGraph.getActions()
-        const actionGuid =
-          typeof inputRecord?.action === 'string' ? inputRecord.action : ''
-        const unassigned = !actionGuid || !actions.has(actionGuid)
+        const ags = inputRecord
+          ? inputActionGuidList(/** @type {Record<string, unknown>} */ (inputRecord))
+          : []
+        const unassigned =
+          ags.length === 0 || !ags.every(ag => actions.has(ag))
         const keyLabel = normalizeInputKeyChar(inputRecord?.keyChar)
         if (unassigned || keyLabel) {
           helpers.button.style.position = 'relative'
@@ -391,6 +395,57 @@ export class InputAssignManager {
     return /** @type {Record<string, unknown>} */ (value)
   }
 
+  /**
+   * Human-readable line for an action `execute` row (intent / scene / animation / other).
+   * @param {Record<string, unknown> | undefined} ex
+   * @returns {string}
+   */
+  _executeTargetSummary (ex) {
+    if (!ex || typeof ex !== 'object' || Array.isArray(ex)) return '—'
+    const t = typeof ex.type === 'string' ? ex.type : ''
+    const guid = typeof ex.guid === 'string' ? ex.guid : ''
+    if (!t || !guid) return '—'
+    switch (t) {
+      case 'intent': {
+        const row = projectGraph.getEffectiveIntent(guid)
+        const rec =
+          row && typeof row === 'object' && !Array.isArray(row)
+            ? /** @type {Record<string, unknown>} */ (row)
+            : null
+        const name = typeof rec?.name === 'string' ? rec.name.trim() : ''
+        return `Intent · ${name.length > 0 ? name : guid}`
+      }
+      case 'scene': {
+        const scenes = projectGraph.getScenesData()
+        const hit = Array.isArray(scenes)
+          ? scenes.find(
+              s =>
+                s &&
+                typeof s === 'object' &&
+                !Array.isArray(s) &&
+                /** @type {{ guid?: string }} */ (s).guid === guid
+            )
+          : undefined
+        const name =
+          hit && typeof hit === 'object' && !Array.isArray(hit) && typeof hit.name === 'string'
+            ? hit.name.trim()
+            : ''
+        return `Scene · ${name.length > 0 ? name : guid}`
+      }
+      case 'animation': {
+        const row = projectGraph.getAnimations().get(guid)
+        const rec =
+          row && typeof row === 'object' && !Array.isArray(row)
+            ? /** @type {Record<string, unknown>} */ (row)
+            : null
+        const name = typeof rec?.name === 'string' ? rec.name.trim() : ''
+        return `Animation · ${name.length > 0 ? name : guid}`
+      }
+      default:
+        return `${t} · ${guid}`
+    }
+  }
+
   /** @returns {Array<{ guid: string, name: string }>} */
   _collectInputRows () {
     const inputs = [...projectGraph.getInputs().values()]
@@ -544,14 +599,143 @@ export class InputAssignManager {
       errorEl.className = 'input-assign-modal__error'
       errorEl.hidden = true
 
-      const paramsSnapshot = this._recordOrUndefined(input.params)
+      const actionGuidsList = inputActionGuidList(
+        /** @type {Record<string, unknown>} */ (input)
+      )
+      let actionIndex = 0
+      let intentActionGuidForParams = ''
+      let intentExecuteGuidForParams = ''
+      /** @type {Record<string, unknown>} */
+      let paramsSnapshot = {}
+      /** @type {string | null} */
+      let intentClass = null
+      /** @type {unknown[]} */
+      let descriptors = []
+      let hasIntentDescriptors = false
 
-      const intentClass = getIntentClassForInput(inputGuid)
-      const descriptorsRaw = intentClass
-        ? resolveDescriptorsForClass(intentClass)
-        : null
-      const descriptors = Array.isArray(descriptorsRaw) ? descriptorsRaw : []
-      const hasIntentDescriptors = descriptors.length > 0
+      const recomputeIntentDescriptors = () => {
+        const g = intentExecuteGuidForParams
+        if (!g) {
+          intentClass = null
+          descriptors = []
+          hasIntentDescriptors = false
+          return
+        }
+        const intent = projectGraph.getEffectiveIntent(g)
+        const rec =
+          intent && typeof intent === 'object' && !Array.isArray(intent)
+            ? /** @type {Record<string, unknown>} */ (intent)
+            : null
+        const cls = typeof rec?.class === 'string' && rec.class.length > 0 ? rec.class : null
+        intentClass = cls
+        const descriptorsRaw = intentClass
+          ? resolveDescriptorsForClass(intentClass)
+          : null
+        descriptors = Array.isArray(descriptorsRaw) ? descriptorsRaw : []
+        hasIntentDescriptors = descriptors.length > 0
+      }
+
+      const assignedTitle = document.createElement('p')
+      assignedTitle.className = 'modal-text'
+      assignedTitle.textContent = 'Assigned actions'
+
+      const actionNav = document.createElement('div')
+      actionNav.className = 'input-assign-modal__action-nav'
+      const prevBtn = document.createElement('button')
+      prevBtn.type = 'button'
+      prevBtn.className = 'btn'
+      prevBtn.textContent = 'Prev'
+      const summaryEl = document.createElement('p')
+      summaryEl.className = 'modal-text input-assign-modal__action-summary'
+      summaryEl.textContent = '—'
+      const nextBtn = document.createElement('button')
+      nextBtn.type = 'button'
+      nextBtn.className = 'btn'
+      nextBtn.textContent = 'Next'
+      const counterEl = document.createElement('span')
+      counterEl.className = 'input-assign-modal__action-counter'
+      actionNav.appendChild(prevBtn)
+      actionNav.appendChild(summaryEl)
+      actionNav.appendChild(nextBtn)
+      actionNav.appendChild(counterEl)
+
+      const syncActionStepper = () => {
+        const n = actionGuidsList.length
+        if (n === 0) {
+          summaryEl.textContent = 'No actions assigned'
+          counterEl.textContent = ''
+          prevBtn.disabled = true
+          nextBtn.disabled = true
+          return
+        }
+        actionIndex = Math.max(0, Math.min(n - 1, actionIndex))
+        const ag = actionGuidsList[actionIndex]
+        const act = ag ? projectGraph.getActions().get(ag) : undefined
+        const ex =
+          act && typeof act.execute === 'object' && !Array.isArray(act.execute)
+            ? /** @type {Record<string, unknown>} */ (act.execute)
+            : undefined
+        summaryEl.textContent = this._executeTargetSummary(ex)
+        counterEl.textContent = `${actionIndex + 1} / ${n}`
+        prevBtn.disabled = n <= 1 || actionIndex === 0
+        nextBtn.disabled = n <= 1 || actionIndex >= n - 1
+      }
+
+      const applyActionSelection = () => {
+        const n = actionGuidsList.length
+        if (n === 0) {
+          intentActionGuidForParams = ''
+          intentExecuteGuidForParams = ''
+          paramsSnapshot = {}
+          recomputeIntentDescriptors()
+          syncActionStepper()
+          return
+        }
+        actionIndex = Math.max(0, Math.min(n - 1, actionIndex))
+        const ag = actionGuidsList[actionIndex]
+        intentActionGuidForParams = ''
+        intentExecuteGuidForParams = ''
+        if (ag) {
+          const a = projectGraph.getActions().get(ag)
+          const ex = a?.execute
+          if (
+            ex &&
+            typeof ex === 'object' &&
+            !Array.isArray(ex) &&
+            ex.type === 'intent' &&
+            typeof ex.guid === 'string'
+          ) {
+            intentActionGuidForParams = ag
+            intentExecuteGuidForParams = ex.guid
+          }
+        }
+        const rawStoredParams =
+          intentActionGuidForParams.length > 0
+            ? (() => {
+                const a = projectGraph.getActions().get(intentActionGuidForParams)
+                const x = a?.execute
+                return x && typeof x === 'object' && !Array.isArray(x) ? x.params : undefined
+              })()
+            : undefined
+        paramsSnapshot = this._recordOrUndefined(rawStoredParams) ?? {}
+        recomputeIntentDescriptors()
+        syncActionStepper()
+      }
+
+      prevBtn.addEventListener('click', () => {
+        if (actionGuidsList.length <= 1) return
+        actionIndex = Math.max(0, actionIndex - 1)
+        applyActionSelection()
+        rebuildDraftFromSnapshot(typeSelect.value)
+        renderParamFields(typeSelect.value)
+      })
+      nextBtn.addEventListener('click', () => {
+        if (actionGuidsList.length <= 1) return
+        actionIndex = Math.min(actionGuidsList.length - 1, actionIndex + 1)
+        applyActionSelection()
+        rebuildDraftFromSnapshot(typeSelect.value)
+        renderParamFields(typeSelect.value)
+      })
 
       /** @type {Record<string, Record<string, unknown>>} */
       let draftBySlot = {}
@@ -599,7 +783,7 @@ export class InputAssignManager {
 
           const ips = new IntentParamsSelect(true)
           const built = ips.build({
-            id: `${inputGuid}-${paramKey}`,
+            id: `${inputGuid}-${paramKey}-${actionIndex}`,
             params: paramsSlice,
             descriptors,
             onLifecycle: () => {}
@@ -614,6 +798,7 @@ export class InputAssignManager {
         }
       }
 
+      applyActionSelection()
       rebuildDraftFromSnapshot(typeSelect.value)
       renderParamFields(typeSelect.value)
 
@@ -645,13 +830,6 @@ export class InputAssignManager {
           return
         }
 
-        /** @type {Record<string, unknown>} */
-        const payload = {
-          name,
-          type: typeSelect.value,
-          displayType: displaySelect.value
-        }
-
         const typeClass = typeSelect.value
         const def = inputTypes.find(t => t.class === typeClass)
         const needsJsonSlots =
@@ -659,21 +837,36 @@ export class InputAssignManager {
           Object.values(def.params).some(k => k === 'jsonString')
         const canEmitParams = hasIntentDescriptors && needsJsonSlots
 
-        if (def?.params && canEmitParams) {
+        sendActionInputCommand({
+          command: 'updateInput',
+          inputGuid,
+          input: {
+            name,
+            type: typeSelect.value,
+            displayType: displaySelect.value
+          }
+        })
+        if (canEmitParams && intentActionGuidForParams.length > 0 && intentExecuteGuidForParams.length > 0 && def?.params) {
+          const nextParams = {}
           for (const [paramKey, kind] of Object.entries(def.params)) {
             if (kind !== 'jsonString') continue
             const slice = draftBySlot[paramKey]
             if (slice && typeof slice === 'object') {
-              payload[paramKey] = slice
+              nextParams[paramKey] = slice
             }
           }
+          sendActionInputCommand({
+            command: 'updateAction',
+            actionGuid: intentActionGuidForParams,
+            patch: {
+              execute: {
+                type: 'intent',
+                guid: intentExecuteGuidForParams,
+                params: nextParams
+              }
+            }
+          })
         }
-
-        sendActionInputCommand({
-          command: 'updateInput',
-          inputGuid,
-          input: payload
-        })
         dismiss(true)
       })
 
@@ -684,6 +877,8 @@ export class InputAssignManager {
       card.appendChild(nameLabel)
       card.appendChild(typeLabel)
       card.appendChild(displayLabel)
+      card.appendChild(assignedTitle)
+      card.appendChild(actionNav)
       card.appendChild(paramHost)
       card.appendChild(errorEl)
       card.appendChild(actions)
@@ -698,7 +893,7 @@ export class InputAssignManager {
   async _confirmAndDeleteInput (inputGuid) {
     const linkedTargetCount = this._countLinkedTargetsForInput(inputGuid)
     const ok = await modalConfirm(
-      `Delete this input? It is linked to ${linkedTargetCount} target(s).`,
+      `Delete this input? It is linked to ${linkedTargetCount} action(s).`,
       { yes: 'Delete', no: 'Cancel' }
     )
     if (!ok) return
@@ -716,19 +911,6 @@ export class InputAssignManager {
   _countLinkedTargetsForInput (inputGuid) {
     const input = projectGraph.getInputs().get(inputGuid)
     if (!input) return 0
-    const actionGuid = typeof input.action === 'string' ? input.action : ''
-    if (!actionGuid) return 0
-    const action = projectGraph.getActions().get(actionGuid)
-    if (!action || !Array.isArray(action.execute)) return 0
-    const seen = new Set()
-    for (const item of action.execute) {
-      if (!item || typeof item !== 'object' || Array.isArray(item)) continue
-      const record = /** @type {Record<string, unknown>} */ (item)
-      const type = typeof record.type === 'string' ? record.type : ''
-      const guid = typeof record.guid === 'string' ? record.guid : ''
-      if (!type || !guid) continue
-      seen.add(`${type}:${guid}`)
-    }
-    return seen.size
+    return inputActionGuidList(/** @type {Record<string, unknown>} */ (input)).length
   }
 }

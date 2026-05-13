@@ -22,7 +22,7 @@ interface AnimationKeyframeContentRead {
 interface AnimationTestConfig {
   location: [number, number];
   sceneGuid: string;
-  /** `action:trigger` payload `args.command` (default START). start | stop | pause | setTimescale */
+  /** `action:trigger` payload: `args.args.command` (default start). start | stop | pause | setTimescale; nest under `args.args` so the hub merge resolver sees `merged.args.command`. */
   triggerCommand: string;
   /** Passed as `args.timescale` — used by start (initial factor) and setTimescale. */
   timescale: number;
@@ -204,11 +204,13 @@ function triggerAction (
   const trimmed = opts.command.trim();
   /** @type {Record<string, unknown>} */
   const args: Record<string, unknown> = {
-    command: trimmed.length > 0 ? trimmed : 'start',
+    args: {
+      command: trimmed.length > 0 ? trimmed : 'start',
+    },
   };
   const ts = opts.timescale;
   if (typeof ts === 'number' && Number.isFinite(ts) && ts > 0) {
-    args.timescale = ts;
+    (args.args as Record<string, unknown>).timescale = ts;
   }
   ws.send(buildEnvelope('action:trigger', location, {
     actionGuid,

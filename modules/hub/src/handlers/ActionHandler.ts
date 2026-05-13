@@ -9,6 +9,12 @@ import { RuntimeUpdate } from '../RuntimeProtocol';
 import { RuntimeUpdateDispatcher } from '../RuntimeUpdateDispatcher';
 import { ActionExecuteItem } from '../ProjectManager';
 import type { AnimationManager } from '../animation/AnimationManager';
+import {
+  executeParamsFromItem,
+  isActiveTriggerValue,
+  resolveIntentOrAnimationBranches,
+  shallowMergeActionParams,
+} from './actionExecute/resolveActionTrigger';
 
 type ActionTriggerPayload = {
   actionGuid: string;
@@ -85,13 +91,16 @@ function isActionTriggerPayload(payload: unknown): payload is ActionTriggerPaylo
   return typeof p['actionGuid'] === 'string' && hasValidArgs;
 }
 
-/** `action:trigger` → animation execute {@code payload.args.command} — default {@code start}. */
+/** `action:trigger` → animation: flat `command` from merge resolver — default {@code start}; {@code run} maps to start. */
 function normalizedAnimationTriggerCommand(triggerArgs?: Record<string, unknown>): string {
   const raw = triggerArgs?.['command'];
   if (typeof raw !== 'string') {
     return 'start';
   }
   const t = raw.trim().toLowerCase();
+  if (t === 'run') {
+    return 'start';
+  }
   return t.length > 0 ? t : 'start';
 }
 
@@ -183,9 +192,33 @@ export class ActionHandler implements MessageHandler {
       Logger.warn(`[action] scene target ${item.guid ?? 'unknown'} not found`);
       return 0;
     }
+    const p = message.payload as Record<string, unknown> | undefined;
+    const triggerArgs =
+      p && typeof p['args'] === 'object' && p['args'] !== null && !Array.isArray(p['args'])
+        ? (p['args'] as Record<string, unknown>)
+        : undefined;
+    const merged = shallowMergeActionParams(executeParamsFromItem(item), triggerArgs);
     const result = this.graphStore.activateScene(scene.guid, message.location, 'runtime');
     this.sendResultToSource(ws, result);
     this.publishMutation(ws, result, message.location);
+
+    const animGuid =
+      typeof merged['animationGuid'] === 'string' && merged['animationGuid'].length > 0
+        ? merged['animationGuid']
+        : undefined;
+    if (animGuid && this.animationManager && Object.prototype.hasOwnProperty.call(merged, 'value')) {
+      const loc = message.location;
+      const stopLikeOpts = loc !== undefined ? { location: loc } : undefined;
+      if (isActiveTriggerValue(merged['value'])) {
+        const opts: { location?: [number, number]; timescale?: number } = {};
+        if (loc !== undefined) {
+          opts.location = loc;
+        }
+        this.animationManager.trigger(animGuid, opts);
+      } else {
+        this.animationManager.stop(animGuid, stopLikeOpts);
+      }
+    }
     return 1;
   }
 
@@ -203,7 +236,15 @@ export class ActionHandler implements MessageHandler {
       return 0;
     }
 
-    const cmd = normalizedAnimationTriggerCommand(triggerArgs);
+    const merged = shallowMergeActionParams(executeParamsFromItem(item), triggerArgs);
+    const branch = resolveIntentOrAnimationBranches(merged);
+    if (!branch.ok) {
+      Logger.warn(`[action] animation trigger: ${branch.reason}`);
+      return 0;
+    }
+    const resolved = branch.resolved;
+
+    const cmd = normalizedAnimationTriggerCommand(resolved);
     const stopLikeOpts = location !== undefined ? { location } : undefined;
 
     switch (cmd) {
@@ -214,7 +255,7 @@ export class ActionHandler implements MessageHandler {
         this.animationManager.pause(item.guid, stopLikeOpts);
         return 1;
       case 'settimescale': {
-        const ts = triggerArgs?.['timescale'];
+        const ts = resolved['timescale'];
         if (typeof ts !== 'number' || !Number.isFinite(ts) || ts <= 0) {
           Logger.warn('[action] animation setTimescale requires args.timescale (finite number > 0)');
           return 0;
@@ -231,7 +272,7 @@ export class ActionHandler implements MessageHandler {
         if (location !== undefined) {
           opts.location = location;
         }
-        const ts = triggerArgs?.['timescale'];
+        const ts = resolved['timescale'];
         if (typeof ts === 'number' && Number.isFinite(ts) && ts > 0) {
           opts.timescale = ts;
         }
@@ -245,10 +286,16 @@ export class ActionHandler implements MessageHandler {
     ws: WebSocket,
     item: ActionExecuteItem,
     sourceGuid: string,
-    args: Record<string, unknown> | undefined,
+    triggerArgs: Record<string, unknown> | undefined,
     location?: [number, number]
   ): number {
-    const update = this.intentExecuteItemToRuntimeUpdate(item, sourceGuid, args);
+    const merged = shallowMergeActionParams(executeParamsFromItem(item), triggerArgs);
+    const branch = resolveIntentOrAnimationBranches(merged);
+    if (!branch.ok) {
+      Logger.warn(`[action] intent trigger: ${branch.reason}`);
+      return 0;
+    }
+    const update = this.intentExecuteItemToRuntimeUpdate(item, sourceGuid, branch.resolved);
     if (!update) return 0;
     this.runtimeUpdateDispatcher.dispatch([update], location, Date.now(), new Set([ws]));
     return 1;
@@ -257,19 +304,17 @@ export class ActionHandler implements MessageHandler {
   private intentExecuteItemToRuntimeUpdate(
     item: ActionExecuteItem,
     sourceGuid: string,
-    args: Record<string, unknown> | undefined
+    resolvedPatch: Record<string, unknown>,
   ): RuntimeUpdate | null {
     if (item.type !== 'intent' || typeof item.guid !== 'string' || item.guid.length === 0) {
       Logger.warn('[action] invalid intent execute item');
       return null;
     }
     const itemRecord = item as Record<string, unknown>;
-    const paramsPatch = this.paramsToRuntimePatch(itemRecord['params']);
     const explicitPatch = this.recordOrUndefined(itemRecord['patch']);
     const patch = {
-      ...paramsPatch,
+      ...resolvedPatch,
       ...(explicitPatch ?? {}),
-      ...(args ?? {}),
     };
     const remove = Array.isArray(itemRecord['remove'])
       ? itemRecord['remove'].filter((entry): entry is string => typeof entry === 'string')
@@ -286,16 +331,6 @@ export class ActionHandler implements MessageHandler {
       ...(value !== undefined ? { value } : {}),
       ...(scheduled !== undefined ? { scheduled } : {}),
     };
-  }
-
-  private paramsToRuntimePatch(params: unknown): Record<string, unknown> {
-    const record = this.recordOrUndefined(params);
-    if (!record) return {};
-    const patch: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(record)) {
-      patch[`params.${key}`] = value;
-    }
-    return patch;
   }
 
   private recordOrUndefined(value: unknown): Record<string, unknown> | undefined {

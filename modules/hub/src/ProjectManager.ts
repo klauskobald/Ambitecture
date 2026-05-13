@@ -54,6 +54,8 @@ export interface SceneIntentRef {
 export interface ActionSceneExecuteItem {
   type: 'scene';
   guid: string;
+  /** Optional; merged with trigger `args`. Use `animationGuid` + trigger `value` for start/stop side effects on that animation after scene activation. */
+  params?: Record<string, unknown>;
 }
 
 export interface ActionIntentExecuteItem {

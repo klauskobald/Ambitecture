@@ -200,9 +200,10 @@ export function sendDiscoverySubscribe () {
 export function sendActionTrigger (actionGuid, args) {
   if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation)
     return
-  const payload = args && typeof args === 'object' && !Array.isArray(args)
-    ? { actionGuid, args }
-    : { actionGuid }
+  /** @type {Record<string, unknown>} */
+  const payload = { actionGuid }
+  if (args && typeof args === 'object' && !Array.isArray(args))
+    payload.args = args
   activeWs.send(JSON.stringify({
     message: {
       type: 'action:trigger',

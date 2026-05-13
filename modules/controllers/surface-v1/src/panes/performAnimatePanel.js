@@ -1,5 +1,5 @@
 /**
- * Perform → Animate subpane: list project animations with play / stop (hub `action:trigger` + `args.command`).
+ * Perform → Animate subpane: list project animations with play / stop (hub `action:trigger` with `args: { args: { command } }`).
  */
 
 import { projectGraph } from '../core/projectGraph.js'
@@ -219,9 +219,9 @@ export function createPerformAnimatePanel () {
     syncToggle()
     toggle.addEventListener('click', () => {
       if (isAnimationPlaying(row.guid)) {
-        sendActionTrigger(row.guid, { command: 'stop' })
+        sendActionTrigger(row.guid, { args: { command: 'stop' } })
       } else {
-        sendActionTrigger(row.guid, { command: 'start' })
+        sendActionTrigger(row.guid, { args: { command: 'start' } })
       }
     })
 

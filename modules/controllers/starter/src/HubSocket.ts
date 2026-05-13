@@ -39,7 +39,7 @@ export class HubSocket {
     private readonly config: ControllerConfig,
     private readonly handlers: HubSocketHandlers,
     private readonly logger: Logger,
-  ) {}
+  ) { }
 
   connect(): void {
     this.stopped = false;

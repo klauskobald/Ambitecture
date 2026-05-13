@@ -84,13 +84,14 @@ function triggerAction(
   opts: { command: string; timescale?: number },
 ): void {
   const trimmed = opts.command.trim();
-  const args: Record<string, unknown> = {
+  const inner: Record<string, unknown> = {
     command: trimmed.length > 0 ? trimmed : 'start',
   };
   const ts = opts.timescale;
   if (typeof ts === 'number' && Number.isFinite(ts) && ts > 0) {
-    args.timescale = ts;
+    inner.timescale = ts;
   }
+  const args: Record<string, unknown> = { args: inner };
   ws.send(buildEnvelope('action:trigger', location, {
     actionGuid,
     args,

@@ -62,8 +62,10 @@ function upsertIntentAction(ws: WebSocket, location: [number, number], actionGui
         type: 'intent',
         guid: intentGuid,
         params: {
-          strobe: 0,
-          alpha: 0,
+          args: {
+            'params.strobe': 0,
+            'params.alpha': 0,
+          },
         },
       },
     },

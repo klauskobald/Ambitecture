@@ -11,7 +11,6 @@ import {
   normalizeInputKeyChar
 } from '../core/performButtonInputs.js'
 import {
-  getTriggerSlotArgsFromAction,
   performMomentaryPress,
   performMomentaryRelease
 } from '../core/performMomentaryRegistry.js'
@@ -128,7 +127,9 @@ export class PerformPane {
       }
       button.classList.toggle('perform-input--has-keyhint', Boolean(keyLabel))
 
-      const ags = inputActionGuidList(/** @type {Record<string, unknown>} */ (input))
+      const ags = inputActionGuidList(
+        /** @type {Record<string, unknown>} */ (input)
+      )
       const newAction = ags[0] ?? ''
       if (button.dataset.actionGuid !== newAction)
         button.dataset.actionGuid = newAction
@@ -141,8 +142,7 @@ export class PerformPane {
       if (button.dataset.behavior !== newBehavior)
         button.dataset.behavior = newBehavior
 
-      const unassigned =
-        ags.length === 0 || !ags.every(ag => actions.has(ag))
+      const unassigned = ags.length === 0 || !ags.every(ag => actions.has(ag))
       button.classList.toggle('perform-input--unassigned', unassigned)
       if (badgeEl) badgeEl.hidden = !unassigned
 
@@ -228,7 +228,11 @@ export class PerformPane {
     const actionGuids = input
       ? inputActionGuidList(/** @type {Record<string, unknown>} */ (input))
       : []
-    if (!input || actionGuids.length === 0 || this._activePointers.has(event.pointerId))
+    if (
+      !input ||
+      actionGuids.length === 0 ||
+      this._activePointers.has(event.pointerId)
+    )
       return
 
     const behavior = typeof input.type === 'string' ? input.type : 'button'
@@ -246,7 +250,7 @@ export class PerformPane {
       case 'button':
       default:
         for (const ag of actionGuids) {
-          sendActionTrigger(ag, getTriggerSlotArgsFromAction(ag, 'args'))
+          sendActionTrigger(ag, { value: 'on' })
         }
         break
     }
@@ -288,11 +292,7 @@ export class PerformPane {
   _pressMomentarySwitch (input, pointerId, actionGuids) {
     const guid = String(input.guid ?? '')
     if (!guid) return
-    performMomentaryPress(
-      guid,
-      `pointer:${pointerId}`,
-      actionGuids
-    )
+    performMomentaryPress(guid, `pointer:${pointerId}`, actionGuids)
   }
 
   /**

@@ -9,12 +9,13 @@ import { RuntimeUpdate } from '../RuntimeProtocol';
 import { RuntimeUpdateDispatcher } from '../RuntimeUpdateDispatcher';
 import { ActionExecuteItem } from '../ProjectManager';
 import type { AnimationManager } from '../animation/AnimationManager';
+import { planAnimationTrigger } from './actionExecute/animationTriggerExecutor';
 import {
   executeParamsFromItem,
-  isActiveTriggerValue,
-  resolveIntentOrAnimationBranches,
   shallowMergeActionParams,
-} from './actionExecute/resolveActionTrigger';
+} from './actionExecute/merge';
+import { resolveIntentMergedToPatch } from './actionExecute/intentTriggerExecutor';
+import { applySceneTriggerSideEffects } from './actionExecute/sceneTriggerExecutor';
 
 type ActionTriggerPayload = {
   actionGuid: string;
@@ -89,19 +90,6 @@ function isActionTriggerPayload(payload: unknown): payload is ActionTriggerPaylo
   const args = p['args'];
   const hasValidArgs = args === undefined || (typeof args === 'object' && args !== null && !Array.isArray(args));
   return typeof p['actionGuid'] === 'string' && hasValidArgs;
-}
-
-/** `action:trigger` → animation: flat `command` from merge resolver — default {@code start}; {@code run} maps to start. */
-function normalizedAnimationTriggerCommand(triggerArgs?: Record<string, unknown>): string {
-  const raw = triggerArgs?.['command'];
-  if (typeof raw !== 'string') {
-    return 'start';
-  }
-  const t = raw.trim().toLowerCase();
-  if (t === 'run') {
-    return 'start';
-  }
-  return t.length > 0 ? t : 'start';
 }
 
 export class ActionHandler implements MessageHandler {
@@ -201,24 +189,7 @@ export class ActionHandler implements MessageHandler {
     const result = this.graphStore.activateScene(scene.guid, message.location, 'runtime');
     this.sendResultToSource(ws, result);
     this.publishMutation(ws, result, message.location);
-
-    const animGuid =
-      typeof merged['animationGuid'] === 'string' && merged['animationGuid'].length > 0
-        ? merged['animationGuid']
-        : undefined;
-    if (animGuid && this.animationManager && Object.prototype.hasOwnProperty.call(merged, 'value')) {
-      const loc = message.location;
-      const stopLikeOpts = loc !== undefined ? { location: loc } : undefined;
-      if (isActiveTriggerValue(merged['value'])) {
-        const opts: { location?: [number, number]; timescale?: number } = {};
-        if (loc !== undefined) {
-          opts.location = loc;
-        }
-        this.animationManager.trigger(animGuid, opts);
-      } else {
-        this.animationManager.stop(animGuid, stopLikeOpts);
-      }
-    }
+    applySceneTriggerSideEffects(merged, this.animationManager, message.location);
     return 1;
   }
 
@@ -237,42 +208,29 @@ export class ActionHandler implements MessageHandler {
     }
 
     const merged = shallowMergeActionParams(executeParamsFromItem(item), triggerArgs);
-    const branch = resolveIntentOrAnimationBranches(merged);
-    if (!branch.ok) {
-      Logger.warn(`[action] animation trigger: ${branch.reason}`);
+    const plan = planAnimationTrigger(merged);
+    if (!plan.ok) {
+      Logger.warn(`[action] animation trigger: ${plan.reason}`);
       return 0;
     }
-    const resolved = branch.resolved;
-
-    const cmd = normalizedAnimationTriggerCommand(resolved);
     const stopLikeOpts = location !== undefined ? { location } : undefined;
 
-    switch (cmd) {
+    switch (plan.kind) {
       case 'stop':
         this.animationManager.stop(item.guid, stopLikeOpts);
         return 1;
       case 'pause':
         this.animationManager.pause(item.guid, stopLikeOpts);
         return 1;
-      case 'settimescale': {
-        const ts = resolved['timescale'];
-        if (typeof ts !== 'number' || !Number.isFinite(ts) || ts <= 0) {
-          Logger.warn('[action] animation setTimescale requires args.timescale (finite number > 0)');
-          return 0;
-        }
-        this.animationManager.setTimescale(item.guid, ts);
+      case 'settimescale':
+        this.animationManager.setTimescale(item.guid, plan.timescale);
         return 1;
-      }
-      case 'start':
-      default: {
-        if (cmd !== 'start') {
-          Logger.warn(`[action] unknown animation args.command "${cmd}" — treating as start`);
-        }
+      case 'trigger': {
         const opts: { location?: [number, number]; timescale?: number } = {};
         if (location !== undefined) {
           opts.location = location;
         }
-        const ts = resolved['timescale'];
+        const ts = plan.timescale;
         if (typeof ts === 'number' && Number.isFinite(ts) && ts > 0) {
           opts.timescale = ts;
         }
@@ -290,7 +248,7 @@ export class ActionHandler implements MessageHandler {
     location?: [number, number]
   ): number {
     const merged = shallowMergeActionParams(executeParamsFromItem(item), triggerArgs);
-    const branch = resolveIntentOrAnimationBranches(merged);
+    const branch = resolveIntentMergedToPatch(merged);
     if (!branch.ok) {
       Logger.warn(`[action] intent trigger: ${branch.reason}`);
       return 0;

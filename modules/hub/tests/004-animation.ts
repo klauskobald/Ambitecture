@@ -22,9 +22,9 @@ interface AnimationKeyframeContentRead {
 interface AnimationTestConfig {
   location: [number, number];
   sceneGuid: string;
-  /** `action:trigger` payload: `args.args.command` (default start). start | stop | pause | setTimescale; nest under `args.args` so the hub merge resolver sees `merged.args.command`. */
+  /** `action:trigger`: primary path `args.value` (`on`/`off`) + optional `args.timescale`; headless tests may send `args.command` when `value` is omitted. */
   triggerCommand: string;
-  /** Passed as `args.timescale` — used by start (initial factor) and setTimescale. */
+  /** Passed with `value: on` — initial playback timescale when starting. */
   timescale: number;
   intentGuid: string;
   class: string;
@@ -195,27 +195,37 @@ function activateScene(ws: WebSocket, location: [number, number], sceneGuid: str
   }));
 }
 
-function triggerAction (
+function triggerAction(
   ws: WebSocket,
   location: [number, number],
   actionGuid: string,
-  opts: { command: string; timescale?: number }
+  opts: { command: string; timescale?: number },
 ): void {
-  const trimmed = opts.command.trim();
-  /** @type {Record<string, unknown>} */
-  const args: Record<string, unknown> = {
-    args: {
-      command: trimmed.length > 0 ? trimmed : 'start',
-    },
-  };
+  const trimmed = opts.command.trim().toLowerCase();
   const ts = opts.timescale;
-  if (typeof ts === 'number' && Number.isFinite(ts) && ts > 0) {
-    (args.args as Record<string, unknown>).timescale = ts;
+
+  if (trimmed === 'start' || trimmed === 'run') {
+    const args: Record<string, unknown> = { value: 'on' };
+    if (typeof ts === 'number' && Number.isFinite(ts) && ts > 0) {
+      args.timescale = ts;
+    }
+    ws.send(buildEnvelope('action:trigger', location, { actionGuid, args }));
+    return;
   }
-  ws.send(buildEnvelope('action:trigger', location, {
-    actionGuid,
-    args,
-  }));
+
+  if (trimmed === 'stop') {
+    ws.send(buildEnvelope('action:trigger', location, {
+      actionGuid,
+      args: { value: 'off' },
+    }));
+    return;
+  }
+
+  const args: Record<string, unknown> = { command: trimmed.length > 0 ? trimmed : 'start' };
+  if (trimmed === 'settimescale' && typeof ts === 'number' && Number.isFinite(ts) && ts > 0) {
+    args.timescale = ts;
+  }
+  ws.send(buildEnvelope('action:trigger', location, { actionGuid, args }));
 }
 
 const numericTolerance = 0.02;

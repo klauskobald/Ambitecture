@@ -83,19 +83,28 @@ function triggerAction(
   actionGuid: string,
   opts: { command: string; timescale?: number },
 ): void {
-  const trimmed = opts.command.trim();
-  const inner: Record<string, unknown> = {
-    command: trimmed.length > 0 ? trimmed : 'start',
-  };
+  const trimmed = opts.command.trim().toLowerCase();
   const ts = opts.timescale;
-  if (typeof ts === 'number' && Number.isFinite(ts) && ts > 0) {
-    inner.timescale = ts;
+  if (trimmed === 'start' || trimmed === 'run') {
+    const args: Record<string, unknown> = { value: 'on' };
+    if (typeof ts === 'number' && Number.isFinite(ts) && ts > 0) {
+      args.timescale = ts;
+    }
+    ws.send(buildEnvelope('action:trigger', location, { actionGuid, args }));
+    return;
   }
-  const args: Record<string, unknown> = { args: inner };
-  ws.send(buildEnvelope('action:trigger', location, {
-    actionGuid,
-    args,
-  }));
+  if (trimmed === 'stop') {
+    ws.send(buildEnvelope('action:trigger', location, {
+      actionGuid,
+      args: { value: 'off' },
+    }));
+    return;
+  }
+  const args: Record<string, unknown> = { command: trimmed.length > 0 ? trimmed : 'start' };
+  if (trimmed === 'settimescale' && typeof ts === 'number' && Number.isFinite(ts) && ts > 0) {
+    args.timescale = ts;
+  }
+  ws.send(buildEnvelope('action:trigger', location, { actionGuid, args }));
 }
 
 function subscribeBinding(ws: WebSocket, location: [number, number], key: string): void {

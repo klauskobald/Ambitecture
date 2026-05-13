@@ -36,7 +36,7 @@ The hub is the **single source of truth** for system-wide configuration and grap
 - **`src/RuntimeUpdateDispatcher.ts`** — Extracted dispatch layer for `runtime:command` and action-triggered intent execution: forwards `runtime:update` to all other connected controllers, converts intent runtime updates to renderer events via `RuntimeIntentStore`, and schedules them on `EventQueue`. Used by `RuntimeCommandHandler`, `ActionHandler`, and `AnimationManager`.
 - **`src/ActionInputManager.ts`** — Builds `GraphCommand[]` from `ActionInputCommand` payloads (`ensureInputAssignment`, `removeInputAssignment`, `renameInput`, `updateInput`). Validates input/display types against `systemCapabilities`, composes typed params via `composeInputParams.ts`, and wires actions ↔ inputs by target (`{ type, guid }`). Also provides `buildSceneCleanupCommands(sceneGuid)` for orphan removal when a scene is deleted.
 - **`src/inputAssignment/composeInputParams.ts`** — Pure stateless helpers for reading `systemCapabilities.inputTypes`/`displayTypes`, resolving defaults, validating type class strings, and composing typed `params` from `inputConfig` fields. Extend `applyParamKind()` here when adding new param kinds (currently only `jsonString`).
-- **`src/handlers/ActionHandler.ts`** — Handles `action:input` (delegates to `ActionInputManager` → `ProjectGraphStore`) and `action:trigger`. Trigger execute items resolve to: scene activation, intent runtime updates via `RuntimeUpdateDispatcher`, or animation control via `AnimationManager` (`start` / `stop` / `pause` / `settimescale`). Only registered controllers may send these messages.
+- **`src/handlers/ActionHandler.ts`** — Handles `action:input` and `action:trigger`. Triggers shallow-merge `execute.params` with payload `args`, then type-specific executors under [`src/handlers/actionExecute/`](modules/hub/src/handlers/actionExecute/): [`intentTriggerExecutor.ts`](modules/hub/src/handlers/actionExecute/intentTriggerExecutor.ts) (`argsOn`/`argsOff`/`args` + `value` → intent patch), [`animationTriggerExecutor.ts`](modules/hub/src/handlers/actionExecute/animationTriggerExecutor.ts) (`value` on/off for start/stop, optional `timescale`; or `command` when `value` omitted for tests), [`sceneTriggerExecutor.ts`](modules/hub/src/handlers/actionExecute/sceneTriggerExecutor.ts) (post-activation animation side effect from `animationGuid` + `value`). Shared merge helpers: [`merge.ts`](modules/hub/src/handlers/actionExecute/merge.ts). Only registered controllers may send these messages.
 - **`src/animation/AnimationManager.ts`** — Hub-side animation orchestrator. Holds one runner per animation `guid`, drives lifecycle (`trigger` / `stop` / `pause` / `setTimescale`), enters/exits live keyframe edit mode, broadcasts `hub:status` updates and per-target `lock:intent` notifications, and registers timescale + edit-state binding masters with `BindingManager`. Scene-membership changes gracefully restart runners so closures over stale graph state are dropped.
 - **`src/animation/keyframeAnimator.ts`** — Keyframe animation runner. Config is read **only** from `definition.content` (required object). `content.length` (seconds, finite > 0) is required; at least **two** steps are stored, with the earliest pinned to `time: 0` and the latest to `time: length` (centisecond rounding). Endpoint rows omit `args` when empty. Plays time-ordered steps against `targetIntent`, dispatches mutations through `RuntimeUpdateDispatcher`, and supports live edit mode (Add uses `diffRecordsToPatch`). The only animation class with built-in edit support today; new classes plug in via `intents/registry.ts`-style registration.
 - **`src/animation/paramLerpSchedule.ts`** — Plans quantized intermediate patches between two keyframe anchors using `content.lerp` (quantization step, min interval, total time, named curve). Pure planning code; the runner schedules the resulting patches.
@@ -379,10 +379,10 @@ Controller perform buttons are implemented through a three-entity graph structur
 **Input** (`entityType: "input"`) — a controller-owned UI binding stored **inside the controller entity** (`parent: { entityType: "controller", guid }`). Key fields:
 - `type` — input class from `systemCapabilities.inputTypes` (e.g. `button`, `momentarySwitch`)
 - `display.type` — display class from `systemCapabilities.displayTypes` (e.g. `button`)
-- **`actions`** — string array of action GUIDs this input triggers (Perform / keyboard send **one `action:trigger` per GUID** with optional `args` merged by the hub into that action’s intent/animation path)
+- **`actions`** — string array of action GUIDs this input triggers (Perform / keyboard send **one `action:trigger` per GUID**; payload `args` is shallow-merged with that action’s `execute.params` on the hub — see `action:trigger` below)
 - `keyChar`, `_sortIdx` — optional keyboard hint and Perform ordering
 
-Perform parameter payloads for intent (e.g. `argsOn` / `argsOff` / `args` as `jsonString` slots from `systemCapabilities.inputTypes`) are stored on the **action** under `execute.params` for `type: "intent"`, not on the input.
+Perform parameter payloads for intent (e.g. `argsOn` / `argsOff` / `args` as `jsonString` slots from `systemCapabilities.inputTypes`) are stored on the **action** under `execute.params` for `type: "intent"`, not on the input. **Intent `execute.params`** must use the reserved branch shape: either **`args`** (single plain object; keys are runtime patch dot paths) **or** **`argsOn` / `argsOff`** (plain objects; trigger `args` must include **`value`** to pick the branch). **Animation** companion actions usually omit `execute.params`; controllers drive playback with **`action:trigger` `args.value`** (`on` → start, `off` → stop) and optional **`args.timescale`**. Arbitrary flat keys on `execute.params` are not used for intent triggers.
 
 **`action:input`** (controller → hub): sends `ActionInputCommand` payloads. Commands include:
 - `ensureInputAssignment` — creates or updates the action + input for `{ targetType, targetGuid, input: { name, type, displayType, ...typed slots for composeInputParams } }` (typed slots apply when building intent `execute.params`)
@@ -393,11 +393,15 @@ Perform parameter payloads for intent (e.g. `argsOn` / `argsOff` / `args` as `js
 - `assignExistingInput` — after clearing other assignments to the same target, appends a new action and wires it into the chosen input’s `actions[]`
 - `deleteInput` — removes the input; removes any action that is no longer referenced from any input’s `actions[]`. `expectedLinkedTargetCount` is the number of entries in `actions[]` at delete time (stale-guard).
 
-**`action:trigger`** (controller → hub): `{ actionGuid, args? }` — one message per action. Hub resolves that action’s single `execute` item the same way as before (`scene` / `intent` / `animation`).
+**`action:trigger`** (controller → hub): `{ actionGuid, args? }` — one message per action. Hub builds `merged = shallowMerge(execute.params ?? {}, args ?? {})` ([`merge.ts`](modules/hub/src/handlers/actionExecute/merge.ts)), then:
+
+- **Intent** — [`resolveIntentMergedToPatch`](modules/hub/src/handlers/actionExecute/intentTriggerExecutor.ts): `argsOn`/`argsOff` + `value`, or `args` (+ optional `value` → `params.value`).
+- **Animation** — [`planAnimationTrigger`](modules/hub/src/handlers/actionExecute/animationTriggerExecutor.ts): **`args.value`** active → start (trigger), inactive → stop; optional **`args.timescale`** when starting. If **`value`** is omitted, **`command`** (+ optional `timescale`) on the merged bag is used for integration tests (`pause`, `setTimescale`, explicit start/stop).
+- **Scene** — activate scene; optional side effects via [`applySceneTriggerSideEffects`](modules/hub/src/handlers/actionExecute/sceneTriggerExecutor.ts) when `merged.animationGuid` and `merged.value` are set.
 
 **Usage rules:**
 - Use `sendActionInputCommand(command)` from `outboundQueue.js` — never raw `sendGraphCommands` — to create/remove/rename/update inputs and actions.
-- Use `sendActionTrigger(guid, args?)` from `outboundQueue.js` — once per `actionGuid` when an input lists multiple actions.
+- Use `sendActionTrigger(guid, args?)` from `outboundQueue.js` — once per `actionGuid` when an input lists multiple actions. Momentary inputs send `args: { value: "on" }` / `{ value: "off" }`; discrete buttons send `args: { value: "on" }`; animation play/stop in the Animate pane sends **`value` only** (`on` / `off`).
 - Collect Perform pane buttons via `collectPerformButtonInputs()` only; do not filter inputs inline in pane code.
 - When deleting a scene on the hub, call `ActionInputManager.buildSceneCleanupCommands(sceneGuid)` and apply the returned commands to remove matching actions and scrub `actions[]` references.
 
@@ -412,7 +416,7 @@ The hub runs animations as authoritative time-driven mutators of intents. The fu
 - **`paramLerpSchedule`** — pure planning of eased intermediate patches between two keyframe anchors.
 - **`AnimationEditHandler`** — routes controller `animation:edit` (`{ animationGuid, on }`) into `AnimationManager`. Live edit mode is hub-owned so multiple controllers stay in sync via `binding:value`.
 - Scene membership changes gracefully restart runners so closures over stale graph state are dropped.
-- Companion action GUID = animation GUID; `action:trigger` with that GUID maps through `ActionHandler` to `AnimationManager` (`start` default, or `stop` / `pause` / `settimescale` per execute item).
+- Companion action GUID = animation GUID; `action:trigger` with that GUID maps through `ActionHandler` to [`planAnimationTrigger`](modules/hub/src/handlers/actionExecute/animationTriggerExecutor.ts), then `AnimationManager`.
 
 **Controller side (`surface-v1/src/panes/animators/`):**
 
@@ -637,13 +641,17 @@ Also supports `removeInputAssignment`, `renameInput`, and `updateInput`. Hub val
 
 **`action:trigger`** — controller -> hub:
 
-Fires a named action by GUID. Optional `args` are merged into intent execute patches.
+Fires a named action by GUID. Payload `args` is shallow-merged with the action’s `execute.params`. Intent resolution: [`intentTriggerExecutor.ts`](modules/hub/src/handlers/actionExecute/intentTriggerExecutor.ts). Animation: [`animationTriggerExecutor.ts`](modules/hub/src/handlers/actionExecute/animationTriggerExecutor.ts) (primary: **`value`**; optional **`timescale`**; headless **`command`** when `value` omitted). Scene side effects: [`sceneTriggerExecutor.ts`](modules/hub/src/handlers/actionExecute/sceneTriggerExecutor.ts).
 
 ```json
-{ "actionGuid": "action-abc123", "args": { "params.alpha": 0.5 } }
+{ "actionGuid": "action-abc123", "args": { "value": "on" } }
 ```
 
-Hub resolves execute items: scene → activates scene; intent → dispatches as `RuntimeUpdate` (transient, no YAML write).
+```json
+{ "actionGuid": "anim-guid-same-as-action", "args": { "value": "on", "timescale": 2 } }
+```
+
+Hub resolves execute items: scene → activates scene (optional animation side effect); intent → `RuntimeUpdate` patch from resolver + `execute.patch`; animation → `AnimationManager`.
 
 **`intents`** — legacy controller -> hub:
 
@@ -780,7 +788,7 @@ Mandatory animation / binding / intent-registry rules:
 Mandatory actions/inputs rules:
 
 - Do not use `sendGraphCommands` directly to create or remove inputs or actions. Use `sendActionInputCommand(command)` from `outboundQueue.js`. This ensures types are validated against `systemCapabilities` and action/input graph entries are kept in sync.
-- Do not trigger actions via a graph command patch. Use `sendActionTrigger(guid, args?)` from `outboundQueue.js`. The hub's `ActionHandler` resolves execute items and routes to the correct runtime path.
+- Do not trigger actions via a graph command patch. Use `sendActionTrigger(guid, args?)` from `outboundQueue.js` with the merge contract above. The hub’s `ActionHandler` routes to `actionExecute/*TriggerExecutor` modules.
 - Do not collect Perform pane buttons by filtering inputs inline. Call `collectPerformButtonInputs()` from `performButtonInputs.js` — it is the canonical filter.
 - Do not reorder list items with hand-rolled index logic. Use `ArraySorter` from `arraySorter.js`. The default sort key is `DEFAULT_PERFORM_INPUT_SORT_KEY`.
 - Do not show dialogs with `window.alert/confirm/prompt`. Use `Modal.*` or `openModalCard` from `surface-v1/src/core/Modal.js`.

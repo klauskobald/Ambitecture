@@ -2,7 +2,30 @@ class Screen extends LightBase {
   constructor (profile, instanceConfig, drawConfig) {
     super(profile, instanceConfig, drawConfig)
     this._drawConfig = drawConfig
+    this._strobe = 0
     this._rgb = { r: 0, g: 0, b: 0 }
+    const py = profile.params?.strobe
+    if (py && typeof py === 'object' && !Array.isArray(py)) {
+      const c = this._strobeConfig
+      const low =
+        typeof py.lowFrequency === 'number' && Number.isFinite(py.lowFrequency)
+          ? py.lowFrequency
+          : c.lowFrequency
+      const high =
+        typeof py.highFrequency === 'number' &&
+        Number.isFinite(py.highFrequency)
+          ? py.highFrequency
+          : c.highFrequency
+      const onTime =
+        typeof py.onTime === 'number' && Number.isFinite(py.onTime)
+          ? py.onTime
+          : c.onTime
+      this._strobeConfig = {
+        lowFrequency: low,
+        highFrequency: high,
+        onTime
+      }
+    }
   }
 
   static _innerFromScreenSvg (cx, cy, w, h) {
@@ -27,6 +50,10 @@ class Screen extends LightBase {
     const masterBrightness = snapshot.sample('master.brightness') ?? 1
     const boostBrightness = masterBrightness > 1 ? masterBrightness : 1
     const masterBlackout = snapshot.sample('master.blackout') ?? false
+    const spatialStrobe = snapshot.sample('light.strobe') ?? 0
+    const aux = snapshot.sample('light.aux') ?? {}
+    this._strobe =
+      aux.strobe !== undefined ? aux.strobe : spatialStrobe
 
     const { r, g, b } = color.toRGB()
     const f =
@@ -50,10 +77,12 @@ class Screen extends LightBase {
     const h = halfH * 2
     const { innerX, innerY, innerW, innerH, innerCorner } =
       Screen._innerFromScreenSvg(cx, cy, w, h)
-    const c = this._rgb
-    const fillColor = `rgb(${Math.round(c.r * 255)},${Math.round(
-      c.g * 255
-    )},${Math.round(c.b * 255)})`
+    const c = this._isStrobeOn(this._strobe) ? this._rgb : null
+    const fillColor = c
+      ? `rgb(${Math.round(c.r * 255)},${Math.round(c.g * 255)},${Math.round(
+          c.b * 255
+        )})`
+      : '#000'
 
     ctx.fillStyle = fillColor
     if (typeof ctx.roundRect === 'function') {

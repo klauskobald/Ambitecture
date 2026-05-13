@@ -4,6 +4,28 @@ class DmxLightStatic extends LightBase {
     this._drawConfig = drawConfig
     this._strobe = 0
     this.currentColor = null
+    const py = profile.params?.strobe
+    if (py && typeof py === 'object' && !Array.isArray(py)) {
+      const c = this._strobeConfig
+      const low =
+        typeof py.lowFrequency === 'number' && Number.isFinite(py.lowFrequency)
+          ? py.lowFrequency
+          : c.lowFrequency
+      const high =
+        typeof py.highFrequency === 'number' &&
+        Number.isFinite(py.highFrequency)
+          ? py.highFrequency
+          : c.highFrequency
+      const onTime =
+        typeof py.onTime === 'number' && Number.isFinite(py.onTime)
+          ? py.onTime
+          : c.onTime
+      this._strobeConfig = {
+        lowFrequency: low,
+        highFrequency: high,
+        onTime
+      }
+    }
   }
 
   applyIntentSnapshot (_context, snapshot) {
@@ -37,7 +59,7 @@ class DmxLightStatic extends LightBase {
       ? `rgb(${Math.round(c.r * 255)},${Math.round(c.g * 255)},${Math.round(
           c.b * 255
         )})`
-      : '#2a2a2a'
+      : '#000'
     CanvasDraw.fillCircle(ctx, cx, cy, radius, fillColor)
     const outline = globalThis.SimFixtureIcons?.rgbSimple
     if (outline && outline.complete && outline.naturalWidth > 0) {

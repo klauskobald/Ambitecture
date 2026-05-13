@@ -96,7 +96,7 @@ export class LayerIntentEngine {
             sample: (context, intents, withSpatialFactor = true) => this.sampleLightColor(context, intents, withSpatialFactor),
         });
         this.registerResolver<number>('light.strobe', {
-            sample: (context, intents) => this.sampleSpatialAdditive(context, intents, 'light', 'strobe'),
+            sample: (context, intents) => this.sampleSpatialAdditive(context, intents, 'light', 'strobe', true),
         });
         this.registerResolver<number>('light.brightness', {
             sample: (context, intents) => this.sampleSpatialAdditive(context, intents, 'light', 'brightness'),
@@ -190,7 +190,8 @@ export class LayerIntentEngine {
         context: FixtureSampleContext,
         intentsByLayer: ReadonlyMap<string, IntentRecord>,
         intentType: string,
-        paramKey: string
+        paramKey: string,
+        omitIntentAlpha = false,
     ): number {
         const layers = this.lightLayersSorted(intentsByLayer, intentType);
         let result = 0;
@@ -199,7 +200,8 @@ export class LayerIntentEngine {
             if (typeof value !== 'number' || !Number.isFinite(value) || value === 0) continue;
             const f = this.computeSpatialFactor(context.fixture, context.fixtureWorldPos,
                 intent.position, context.fixture.range, intent.radius, intent.radiusFunction);
-            result = Math.min(1, result + value * f * (intent.alpha ?? 1));
+            const alphaScale = omitIntentAlpha ? 1 : (intent.alpha ?? 1);
+            result = Math.min(1, result + value * f * alphaScale);
         }
         return result;
     }

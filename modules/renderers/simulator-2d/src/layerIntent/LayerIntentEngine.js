@@ -48,7 +48,13 @@ class LayerIntentEngine {
     })
 
     this.registerResolver('light.strobe', (context, intentsByLayer) =>
-      this._sampleSpatialAdditive(context, intentsByLayer, 'light', 'strobe')
+      this._sampleSpatialAdditive(
+        context,
+        intentsByLayer,
+        'light',
+        'strobe',
+        true
+      )
     )
     this.registerResolver('light.brightness', (context, intentsByLayer) =>
       this._sampleSpatialAdditive(
@@ -200,7 +206,13 @@ class LayerIntentEngine {
   }
 
   // Accumulates from 0. Zero-state = 0. Use for additive effects (strobe).
-  _sampleSpatialAdditive (context, intentsByLayer, intentType, paramKey) {
+  _sampleSpatialAdditive (
+    context,
+    intentsByLayer,
+    intentType,
+    paramKey,
+    omitIntentAlpha = false
+  ) {
     const layers = this._layersSorted(intentsByLayer, intentType)
     let result = 0
     for (const intent of layers) {
@@ -215,7 +227,8 @@ class LayerIntentEngine {
         intent.radius,
         intent.radiusFunction
       )
-      result = Math.min(1, result + value * f * (intent.alpha ?? 1))
+      const alphaScale = omitIntentAlpha ? 1 : intent.alpha ?? 1
+      result = Math.min(1, result + value * f * alphaScale)
     }
     return result
   }

@@ -29,3 +29,22 @@ export function collectPerformButtonInputs () {
     return /** @type {Record<string, unknown>} */ (display).type === 'button'
   })
 }
+
+/**
+ * True when this input is the active scene's linked perform button (strip highlight).
+ * @param {string} inputGuid
+ * @returns {boolean}
+ */
+export function isPerformInputSceneHighlighted (inputGuid) {
+  if (!inputGuid) return false
+  const activeSceneName = projectGraph.getActiveSceneName()
+  const activeSceneGuid = activeSceneName
+    ? projectGraph.getSceneGuid(activeSceneName)
+    : null
+  const scenePerformInput =
+    activeSceneGuid && projectGraph.getSceneButtonInput(activeSceneGuid)
+  const highlightedGuid = scenePerformInput
+    ? String(scenePerformInput.guid ?? '')
+    : ''
+  return highlightedGuid !== '' && highlightedGuid === inputGuid
+}

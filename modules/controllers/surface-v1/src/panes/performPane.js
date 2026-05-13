@@ -8,6 +8,7 @@ import {
 } from '../core/arraySorter.js'
 import {
   collectPerformButtonInputs,
+  isPerformInputSceneHighlighted,
   normalizeInputKeyChar
 } from '../core/performButtonInputs.js'
 import {
@@ -101,16 +102,6 @@ export class PerformPane {
     const activeInputs = this._activeDisplayInputs()
     const activeGuids = new Set()
 
-    const activeSceneName = projectGraph.getActiveSceneName()
-    const activeSceneGuid = activeSceneName
-      ? projectGraph.getSceneGuid(activeSceneName)
-      : null
-    const scenePerformInput =
-      activeSceneGuid && projectGraph.getSceneButtonInput(activeSceneGuid)
-    const highlightedInputGuid = scenePerformInput
-      ? String(scenePerformInput.guid ?? '')
-      : ''
-
     const mount = this._subnavShell.controlsMount
 
     const actions = projectGraph.getActions()
@@ -156,20 +147,18 @@ export class PerformPane {
       button.classList.toggle('perform-input--unassigned', unassigned)
       if (badgeEl) badgeEl.hidden = !unassigned
 
-      const isActive =
-        highlightedInputGuid !== '' && guid === highlightedInputGuid
-      button.classList.toggle('btn--active', isActive)
+      const sceneHighlighted = isPerformInputSceneHighlighted(guid)
+      const toggleLatched =
+        newBehavior === 'toggle' && getPerformToggleOn(guid)
+      button.classList.toggle('btn--active', sceneHighlighted || toggleLatched)
 
       const isToggle = newBehavior === 'toggle'
       if (isToggle) {
         button.setAttribute('role', 'switch')
-        const latched = getPerformToggleOn(guid)
-        button.classList.toggle('perform-input--toggle-on', latched)
-        button.setAttribute('aria-pressed', latched ? 'true' : 'false')
+        button.setAttribute('aria-pressed', toggleLatched ? 'true' : 'false')
       } else {
         button.removeAttribute('role')
         button.removeAttribute('aria-pressed')
-        button.classList.remove('perform-input--toggle-on')
       }
 
       // Always append in sorted order: appendChild moves an existing child to the end,

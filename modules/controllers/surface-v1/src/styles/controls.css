@@ -994,15 +994,6 @@
   touch-action: none;
 }
 
-button.perform-input[data-behavior='toggle'] {
-  touch-action: manipulation;
-}
-
-.perform-input--toggle-on {
-  box-shadow: inset 0 0 0 2px var(--color-accent);
-  background: var(--color-accent-bright);
-}
-
 .quick-panel-hud {
   display: flex;
   flex-direction: column;

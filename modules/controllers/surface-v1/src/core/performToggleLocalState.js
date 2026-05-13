@@ -2,6 +2,8 @@
  * Latched on/off for `toggle` perform inputs — browser memory only (not project graph).
  */
 
+import { isPerformInputSceneHighlighted } from './performButtonInputs.js'
+
 /** @type {Map<string, boolean>} */
 const onByInputGuid = new Map()
 
@@ -45,19 +47,20 @@ function escapeAttr (s) {
 }
 
 /**
- * Sync `.perform-input--toggle-on` + `aria-pressed` for strip buttons (and modal rows share data-input-guid).
+ * Sync `btn--active` (same as scene-highlighted perform buttons) + `aria-pressed` for strip toggles.
  * @param {string} inputGuid
  */
 export function syncPerformToggleChrome (inputGuid) {
   if (!inputGuid) return
-  const on = getPerformToggleOn(inputGuid)
+  const latched = getPerformToggleOn(inputGuid)
+  const sceneHl = isPerformInputSceneHighlighted(inputGuid)
   const g = escapeAttr(inputGuid)
   const nodes = document.querySelectorAll(
     `button.perform-input[data-input-guid="${g}"][data-behavior="toggle"]`
   )
   for (const el of nodes) {
     if (!(el instanceof HTMLButtonElement)) continue
-    el.classList.toggle('perform-input--toggle-on', on)
-    el.setAttribute('aria-pressed', on ? 'true' : 'false')
+    el.classList.toggle('btn--active', latched || sceneHl)
+    el.setAttribute('aria-pressed', latched ? 'true' : 'false')
   }
 }

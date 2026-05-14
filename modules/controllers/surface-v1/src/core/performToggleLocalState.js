@@ -2,7 +2,8 @@
  * Latched on/off for `toggle` perform inputs — browser memory only (not project graph).
  */
 
-import { projectGraph } from './projectGraph.js'
+import { projectGraph, inputActionGuidList } from './projectGraph.js'
+import { isAnimationPlaying } from './animationPlayRegistry.js'
 
 /** @type {Map<string, boolean>} */
 const onByInputGuid = new Map()
@@ -47,39 +48,64 @@ function escapeAttr (s) {
 }
 
 /**
- * True when this input is the active scene's linked perform button.
+ * Check if input is highlighted by its action target type (scene, animation, intent, etc).
+ * Generic check that works for any button type assigned to any entity type.
  * @param {string} inputGuid
  * @returns {boolean}
  */
-function isPerformInputSceneHighlighted (inputGuid) {
+function isPerformInputHighlighted (inputGuid) {
   if (!inputGuid) return false
-  const activeSceneName = projectGraph.getActiveSceneName()
-  const activeSceneGuid = activeSceneName
-    ? projectGraph.getSceneGuid(activeSceneName)
-    : null
-  const scenePerformInput =
-    activeSceneGuid && projectGraph.getSceneButtonInput(activeSceneGuid)
-  const highlightedGuid = scenePerformInput
-    ? String(scenePerformInput.guid ?? '')
-    : ''
-  return highlightedGuid !== '' && highlightedGuid === inputGuid
+  const input = projectGraph.getInputs().get(inputGuid)
+  if (!input) return false
+
+  const ags = inputActionGuidList(
+    /** @type {Record<string, unknown>} */ (input)
+  )
+  for (const actionGuid of ags) {
+    const action = projectGraph.getActions().get(actionGuid)
+    if (!action) continue
+
+    const ex = action.execute
+    if (!ex || typeof ex !== 'object' || Array.isArray(ex)) continue
+
+    switch (ex.type) {
+      case 'scene': {
+        const activeSceneName = projectGraph.getActiveSceneName()
+        const activeSceneGuid = activeSceneName
+          ? projectGraph.getSceneGuid(activeSceneName)
+          : null
+        if (ex.guid === activeSceneGuid) return true
+        break
+      }
+      case 'animation': {
+        const animationGuid = typeof ex.guid === 'string' ? ex.guid : ''
+        if (animationGuid && isAnimationPlaying(animationGuid)) return true
+        break
+      }
+      case 'intent':
+        return false
+    }
+  }
+  return false
 }
 
 /**
- * Sync `btn--active` (same as scene-highlighted perform buttons) + `aria-pressed` for strip toggles.
+ * Sync `btn--active` + `aria-pressed` for toggle buttons based on latched state and highlighting.
+ * Works for buttons assigned to any action type (scene, animation, intent, etc).
  * @param {string} inputGuid
  */
 export function syncPerformToggleChrome (inputGuid) {
   if (!inputGuid) return
   const latched = getPerformToggleOn(inputGuid)
-  const sceneHl = isPerformInputSceneHighlighted(inputGuid)
+  const highlighted = isPerformInputHighlighted(inputGuid)
   const g = escapeAttr(inputGuid)
   const nodes = document.querySelectorAll(
     `button.perform-input[data-input-guid="${g}"][data-behavior="toggle"]`
   )
   for (const el of nodes) {
     if (!(el instanceof HTMLButtonElement)) continue
-    el.classList.toggle('btn--active', latched || sceneHl)
+    el.classList.toggle('btn--active', latched || highlighted)
     el.setAttribute('aria-pressed', latched ? 'true' : 'false')
   }
 }
+

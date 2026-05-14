@@ -19,6 +19,7 @@ import {
   syncPerformToggleChrome,
   togglePerformToggleAndGetValue
 } from '../core/performToggleLocalState.js'
+import { subscribeAnimationPlayState } from '../core/animationPlayRegistry.js'
 import { createButtonForInput } from '../core/performButtons/performButtonFactory.js'
 import { PerformSubnavShell } from './performSubnavShell.js'
 
@@ -46,6 +47,8 @@ export class PerformPane {
     this._pressedMomentarySwitches = new Set()
     /** @type {(() => void) | null} */
     this._unsubscribe = null
+    /** @type {(() => void) | null} */
+    this._unsubscribeAnimationPlayState = null
     /** @type {PerformQuickPanelHud | null} */
     this._quickHud = null
   }
@@ -83,6 +86,10 @@ export class PerformPane {
         this._subnavShell.refreshPerformPlugins()
       }
     )
+    // Subscribe to animation play state changes for animation button highlighting
+    this._unsubscribeAnimationPlayState = subscribeAnimationPlayState(() => {
+      this._render()
+    })
     this._subnavShell.refreshPerformPlugins()
   }
 
@@ -91,6 +98,8 @@ export class PerformPane {
     this._subnavShell.closeMobileNav()
     this._unsubscribe?.()
     this._unsubscribe = null
+    this._unsubscribeAnimationPlayState?.()
+    this._unsubscribeAnimationPlayState = null
     this._overlay.setCoactivityCallback(null)
     this._overlay.setSingleTapIntentCallback(null)
     if (this._quickHud) {

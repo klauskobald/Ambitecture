@@ -2,7 +2,7 @@
  * Latched on/off for `toggle` perform inputs — browser memory only (not project graph).
  */
 
-import { isPerformInputSceneHighlighted } from './performButtonInputs.js'
+import { projectGraph } from './projectGraph.js'
 
 /** @type {Map<string, boolean>} */
 const onByInputGuid = new Map()
@@ -44,6 +44,25 @@ function escapeAttr (s) {
     return CSS.escape(s)
   }
   return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
+/**
+ * True when this input is the active scene's linked perform button.
+ * @param {string} inputGuid
+ * @returns {boolean}
+ */
+function isPerformInputSceneHighlighted (inputGuid) {
+  if (!inputGuid) return false
+  const activeSceneName = projectGraph.getActiveSceneName()
+  const activeSceneGuid = activeSceneName
+    ? projectGraph.getSceneGuid(activeSceneName)
+    : null
+  const scenePerformInput =
+    activeSceneGuid && projectGraph.getSceneButtonInput(activeSceneGuid)
+  const highlightedGuid = scenePerformInput
+    ? String(scenePerformInput.guid ?? '')
+    : ''
+  return highlightedGuid !== '' && highlightedGuid === inputGuid
 }
 
 /**

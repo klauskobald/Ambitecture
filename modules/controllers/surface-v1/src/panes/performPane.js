@@ -7,9 +7,7 @@ import {
   DEFAULT_PERFORM_INPUT_SORT_KEY
 } from '../core/arraySorter.js'
 import {
-  collectPerformButtonInputs,
-  isPerformInputSceneHighlighted,
-  normalizeInputKeyChar
+  collectPerformButtonInputs
 } from '../core/performButtonInputs.js'
 import {
   performMomentaryPress,
@@ -21,6 +19,7 @@ import {
   syncPerformToggleChrome,
   togglePerformToggleAndGetValue
 } from '../core/performToggleLocalState.js'
+import { createButtonForInput } from '../core/performButtons/performButtonFactory.js'
 import { PerformSubnavShell } from './performSubnavShell.js'
 
 /**
@@ -106,65 +105,15 @@ export class PerformPane {
 
     const mount = this._subnavShell.controlsMount
 
-    const actions = projectGraph.getActions()
-
     for (const input of activeInputs) {
       const guid = String(input.guid ?? '')
       if (!guid) continue
       activeGuids.add(guid)
       const button = this._buttonForInput(guid)
 
-      const { labelEl, badgeEl, keyHintEl } =
-        this._ensurePerformButtonChrome(button)
-      const newText = String(input.name ?? 'Button')
-      if (labelEl.textContent !== newText) labelEl.textContent = newText
+      const performButton = createButtonForInput(guid, input, button)
+      performButton.render()
 
-      const keyLabel = normalizeInputKeyChar(input.keyChar)
-      if (keyHintEl) {
-        keyHintEl.textContent = keyLabel
-        keyHintEl.hidden = !keyLabel
-      }
-      button.classList.toggle('perform-input--has-keyhint', Boolean(keyLabel))
-
-      const ags = inputActionGuidList(
-        /** @type {Record<string, unknown>} */ (input)
-      )
-      const newAction = ags[0] ?? ''
-      if (button.dataset.actionGuid !== newAction)
-        button.dataset.actionGuid = newAction
-      if (button.dataset.actionGuids !== ags.join(','))
-        button.dataset.actionGuids = ags.join(',')
-
-      if (button.dataset.inputGuid !== guid) button.dataset.inputGuid = guid
-
-      const prevBehavior = button.dataset.behavior ?? ''
-      const newBehavior = typeof input.type === 'string' ? input.type : 'button'
-      if (prevBehavior === 'toggle' && newBehavior !== 'toggle') {
-        clearPerformToggleState(guid)
-      }
-      if (button.dataset.behavior !== newBehavior)
-        button.dataset.behavior = newBehavior
-
-      const unassigned = ags.length === 0 || !ags.every(ag => actions.has(ag))
-      button.classList.toggle('perform-input--unassigned', unassigned)
-      if (badgeEl) badgeEl.hidden = !unassigned
-
-      const sceneHighlighted = isPerformInputSceneHighlighted(guid)
-      const toggleLatched =
-        newBehavior === 'toggle' && getPerformToggleOn(guid)
-      button.classList.toggle('btn--active', sceneHighlighted || toggleLatched)
-
-      const isToggle = newBehavior === 'toggle'
-      if (isToggle) {
-        button.setAttribute('role', 'switch')
-        button.setAttribute('aria-pressed', toggleLatched ? 'true' : 'false')
-      } else {
-        button.removeAttribute('role')
-        button.removeAttribute('aria-pressed')
-      }
-
-      // Always append in sorted order: appendChild moves an existing child to the end,
-      // so DOM order tracks _sortIdx after reorder (not only on first mount).
       mount.appendChild(button)
     }
 
@@ -174,41 +123,6 @@ export class PerformPane {
       this._releasePointersForButton(button)
       button.remove()
       this._buttonByGuid.delete(guid)
-    }
-  }
-
-  /**
-   * @param {HTMLButtonElement} button
-   * @returns {{
-   *   labelEl: HTMLSpanElement,
-   *   badgeEl: HTMLSpanElement | null,
-   *   keyHintEl: HTMLSpanElement | null
-   * }}
-   */
-  _ensurePerformButtonChrome (button) {
-    let labelEl = button.querySelector('.perform-input__label')
-    let badgeEl = button.querySelector('.perform-input__badge--unassigned')
-    let keyHintEl = button.querySelector('.perform-input__keyhint')
-    if (!labelEl || !badgeEl || !keyHintEl) {
-      button.replaceChildren()
-      labelEl = document.createElement('span')
-      labelEl.className = 'perform-input__label'
-      keyHintEl = document.createElement('span')
-      keyHintEl.className = 'perform-input__keyhint'
-      keyHintEl.hidden = true
-      badgeEl = document.createElement('span')
-      badgeEl.className =
-        'perform-input__badge perform-input__badge--unassigned'
-      badgeEl.textContent = 'unassigned'
-      badgeEl.hidden = true
-      button.appendChild(labelEl)
-      button.appendChild(keyHintEl)
-      button.appendChild(badgeEl)
-    }
-    return {
-      labelEl: /** @type {HTMLSpanElement} */ (labelEl),
-      badgeEl: /** @type {HTMLSpanElement | null} */ (badgeEl),
-      keyHintEl: /** @type {HTMLSpanElement | null} */ (keyHintEl)
     }
   }
 

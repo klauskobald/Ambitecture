@@ -272,13 +272,16 @@ export class ProjectManager {
     const createdGuids = this._ensureGraphGuids();
     const ensuredCompanions = this._ensureAnimationCompanionActions();
 
-    // Auto-create "untitled" scene if intents exist but no scenes defined
-    if ((!this.project.scenes || this.project.scenes.length === 0) && (this.project.intents ?? []).length > 0) {
+    // Auto-create "untitled" scene if no scenes defined
+    let createdEmptyScene = false;
+    if (!this.project.scenes || this.project.scenes.length === 0) {
       this.project.scenes = [{
+        guid: `scene-${randomUUID()}`,
         name: 'untitled',
         intents: (this.project.intents ?? []).map(i => ({ guid: i.guid! })),
       }];
-      Logger.info('[project] auto-created "untitled" scene with all project intents');
+      Logger.info('[project] auto-created empty "untitled" scene');
+      createdEmptyScene = true;
     }
 
     const scenes = this.project.scenes ?? [];
@@ -294,7 +297,7 @@ export class ProjectManager {
     }));
 
     Logger.info(`[project] loaded "${this.project.name}" with ${this.project.zones.length} zone(s), ${this.intentDefinitions.size} intent(s), ${(this.project.scenes ?? []).length} scene(s)`);
-    if (createdGuids || ensuredCompanions || normalizedGraph) {
+    if (createdGuids || ensuredCompanions || normalizedGraph || createdEmptyScene) {
       this._scheduleSave();
     }
   }

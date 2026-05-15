@@ -7,6 +7,13 @@ systemCapabilities:
       display: pills
       options: [run, stop, pause]
       defaultValue: run
+
+  animationCommonProperties:
+    runmode:
+      type: string
+      display: pills
+      options: [auto, manual]
+      defaultValue: auto
   
   animations:
     - class: keyframeAnimator

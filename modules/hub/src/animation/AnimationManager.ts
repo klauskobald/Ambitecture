@@ -184,8 +184,23 @@ export class AnimationManager {
       Logger.warn(`[animation] missing targetIntent for ${animationGuid}`);
       return;
     }
+    let runmode = typeof record['runmode'] === 'string' ? record['runmode'] : undefined;
+    if (!runmode) runmode = 'auto';
 
-    this.stopRunner(animationGuid, 'replaced');
+    // Manual mode: re-use existing runner — just apply setRunMode again.
+    switch (runmode) {
+      case 'manual': {
+        const existingRunner = this.runners.get(animationGuid);
+        if (existingRunner) {
+          existingRunner.plugin.setRunMode(runmode);
+          return;
+        }
+        break;
+      }
+      default:
+        this.stopRunner(animationGuid, 'replaced');
+        break;
+    }
 
     const inScene = this.projectManager.isIntentInActiveScene(target);
     let effectiveTimescale = 1;
@@ -237,6 +252,7 @@ export class AnimationManager {
     };
 
     plugin.start(g => this.intentAccessFn(g), mutateIntent);
+    plugin.setRunMode(runmode);
   }
 
   /** Mid-run playback factor; timeouts already queued keep old delays until they fire (V1). */
@@ -464,7 +480,7 @@ export class AnimationManager {
       const def = this.projectManager.getAnimationByGuid(guid) as Record<string, unknown> | undefined;
       const target = typeof def?.['targetIntent'] === 'string' ? def['targetIntent']
         : typeof def?.['intent'] === 'string' ? def['intent']
-        : undefined;
+          : undefined;
       if (target === intentGuid) {
         this.exitEditMode(guid);
       }

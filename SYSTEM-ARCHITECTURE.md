@@ -1,3 +1,7 @@
+# FIRST RULE:
+If you run into something that you have to change outside the scope of a taks then first ask the user wether the behaviour of tht other system is correct or not before trying to work arround the problem
+
+
 # System layout (`modules/`)
 
 The `modules/` tree holds **runnable components** grouped by role: one central **hub**, many **renderers** (hardware or protocol outputs), **controllers** (operator UIs), and optionally **`deliver`** (static HTTP only for browser assets). Each folder is meant to be developed and run somewhat independently. For the product vision (Hub as conductor, spatial intent, CIE color), see the main [README.md](README.md).

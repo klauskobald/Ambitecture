@@ -189,6 +189,10 @@ export class KeyframeAnimator {
   private _lastFiredStepIdx = -1;
   /** Re-enters the cycle scheduler from a given cycle + step; set in start(). */
   private _resumeFn?: (cIdx: number, startStepIdx: number) => void;
+  /** Stored by start() so activateManualMode() can re-emit step 0. */
+  private _intentAccess?: IntentAccessFn;
+  private _mutateIntent?: MutateIntentFn;
+  private _manualModeActive = false;
 
   // ── edit mode (controller-driven keyframe stepping) ───────────────────────
   private editActive = false;
@@ -250,6 +254,42 @@ export class KeyframeAnimator {
       message: { text: reason },
       data: {},
     });
+  }
+
+  /**
+   * Apply run mode after start(). Must be called after start() has stored intent access.
+   * `auto` (default): no-op — the runner plays normally.
+   * `manual`: emit step 0, clear all pending timers, pause. Runner stays alive.
+   * New modes are added as cases here.
+   */
+  setRunMode(mode: string): void {
+    switch (mode) {
+      case 'manual': {
+        this._manualModeActive = true;
+
+        const { steps } = this.parseSteps();
+        const targetGuid = this.targetIntentGuid();
+        if (targetGuid && steps.length > 0 && steps[0] && this._intentAccess && this._mutateIntent) {
+          this.emitOneKeyframe(targetGuid, this._intentAccess, this._mutateIntent, steps[0].args);
+        }
+
+        for (const t of this.timers) {
+          clearTimeout(t);
+        }
+        this.timers = [];
+
+        this.callbacks.onStatus({
+          status: 'paused',
+          message: { text: 'Manual mode — paused at first step' },
+          data: { manualMode: true },
+        });
+        break;
+      }
+      case 'auto':
+      default:
+        // Already playing — nothing to do.
+        break;
+    }
   }
 
   onSceneMembershipChanged(inScene: boolean): void {
@@ -1108,6 +1148,9 @@ export class KeyframeAnimator {
 
   start(intentAccess: IntentAccessFn, mutateIntent: MutateIntentFn): void {
     this.cancelled = false;
+    this._manualModeActive = false;
+    this._intentAccess = intentAccess;
+    this._mutateIntent = mutateIntent;
     const rawDef = this.callbacks.getDefinitionRecord();
     if (rawDef) {
       let touched = this.ensureContentObjectOnRecord(rawDef);

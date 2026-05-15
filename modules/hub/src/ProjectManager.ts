@@ -103,6 +103,8 @@ export interface AnimationDefinition {
   guid?: string;
   name?: string;
   class: string;
+  /** Common to all animator classes: `auto` (default) plays on trigger; `manual` pauses at first step. */
+  runmode?: 'auto' | 'manual';
   /** Intent GUID to drive (preferred). */
   targetIntent?: string;
   /** Legacy / alias for `targetIntent` (hub accepts either). */

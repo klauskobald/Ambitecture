@@ -44,6 +44,27 @@ export function createAnimationEditPane ({ onClose }) {
   const assignHost = document.createElement('div')
   assignHost.className = 'perform-animate-edit__assign'
 
+  const caps = getCapabilities()
+  const commonCaps = caps && !Array.isArray(caps.animationCommonProperties) ? caps.animationCommonProperties : null
+  const runmodeDescriptor = commonCaps && typeof commonCaps === 'object' ? commonCaps.runmode : null
+  const runmodeOptions = Array.isArray(runmodeDescriptor?.options) ? runmodeDescriptor.options : []
+  const runmodeDefault = typeof runmodeDescriptor?.defaultValue === 'string' ? runmodeDescriptor.defaultValue : runmodeOptions[0]
+
+  const runmodeGroup = document.createElement('div')
+  runmodeGroup.className = 'prop-pills'
+
+  /** @type {Map<string, HTMLButtonElement>} */
+  const runmodePillBtns = new Map()
+  for (const opt of runmodeOptions) {
+    const btn = document.createElement('button')
+    btn.type = 'button'
+    btn.className = 'prop-pill intent-toggle'
+    btn.textContent = opt.charAt(0).toUpperCase() + opt.slice(1)
+    btn.dataset.value = opt
+    runmodeGroup.appendChild(btn)
+    runmodePillBtns.set(opt, btn)
+  }
+
   const intentSpan = document.createElement('span')
   intentSpan.className = 'perform-animate-edit__intent'
 
@@ -55,6 +76,7 @@ export function createAnimationEditPane ({ onClose }) {
   topRow.appendChild(backBtn)
   topRow.appendChild(nameLabel)
   topRow.appendChild(assignHost)
+  topRow.appendChild(runmodeGroup)
   topRow.appendChild(intentSpan)
   topRow.appendChild(deleteBtn)
 
@@ -112,6 +134,23 @@ export function createAnimationEditPane ({ onClose }) {
       record.name = nextName
       renderAssignRow()
     }
+
+    const applyRunmodePills = () => {
+      const rm = runmodeOptions.includes(String(record.runmode)) ? String(record.runmode) : runmodeDefault
+      for (const [opt, btn] of runmodePillBtns) {
+        const active = opt === rm
+        btn.classList.toggle('prop-pill--active', active)
+        btn.classList.toggle('intent-toggle--enabled', active)
+      }
+    }
+    for (const [opt, btn] of runmodePillBtns) {
+      btn.onclick = () => {
+        sendAnimationPatch(currentGuid, { runmode: opt })
+        record.runmode = opt
+        applyRunmodePills()
+      }
+    }
+    applyRunmodePills()
 
     const intentGuid = String(record.targetIntent ?? record.intent ?? '')
     intentSpan.textContent = resolveIntentName(intentGuid)

@@ -6,19 +6,11 @@ import {
   ArraySorter,
   DEFAULT_PERFORM_INPUT_SORT_KEY
 } from '../core/arraySorter.js'
-import {
-  collectPerformButtonInputs
-} from '../core/performButtonInputs.js'
+import { collectPerformButtonInputs } from '../core/performButtonInputs.js'
 import {
   performMomentaryPress,
   performMomentaryRelease
 } from '../core/performMomentaryRegistry.js'
-import {
-  clearPerformToggleState,
-  getPerformToggleOn,
-  syncPerformToggleChrome,
-  togglePerformToggleAndGetValue
-} from '../core/performToggleLocalState.js'
 import { subscribeAnimationPlayState } from '../core/animationPlayRegistry.js'
 import { createButtonForInput } from '../core/performButtons/performButtonFactory.js'
 import { PerformSubnavShell } from './performSubnavShell.js'
@@ -43,8 +35,6 @@ export class PerformPane {
     this._buttonByGuid = new Map()
     /** @type {Map<number, { guid: string, actionGuid: string, behavior: string }>} */
     this._activePointers = new Map()
-    /** @type {Set<string>} pointers pressed for momentary switches: pointer:N */
-    this._pressedMomentarySwitches = new Set()
     /** @type {(() => void) | null} */
     this._unsubscribe = null
     /** @type {(() => void) | null} */
@@ -128,7 +118,6 @@ export class PerformPane {
 
     for (const [guid, button] of this._buttonByGuid) {
       if (activeGuids.has(guid)) continue
-      clearPerformToggleState(guid)
       this._releasePointersForButton(button)
       button.remove()
       this._buttonByGuid.delete(guid)
@@ -178,11 +167,14 @@ export class PerformPane {
     const guid = String(input.guid ?? button.dataset.inputGuid ?? '')
     if (!guid) return
 
-    const value = togglePerformToggleAndGetValue(guid)
+    // Determine toggle value based on current state
+    const performButton = createButtonForInput(guid, input, button)
+    const isCurrentlyActive = performButton._isHighlighted()
+    const value = isCurrentlyActive ? 'off' : 'on'
+
     for (const ag of actionGuids) {
       sendActionTrigger(ag, { value })
     }
-    syncPerformToggleChrome(guid)
   }
 
   /**
@@ -194,8 +186,7 @@ export class PerformPane {
     const actionGuids = input
       ? inputActionGuidList(/** @type {Record<string, unknown>} */ (input))
       : []
-    if (!input || actionGuids.length === 0)
-      return
+    if (!input || actionGuids.length === 0) return
 
     const behavior = typeof input.type === 'string' ? input.type : 'button'
 
@@ -204,16 +195,19 @@ export class PerformPane {
       const guid = String(input.guid ?? button.dataset.inputGuid ?? '')
       if (!guid) return
       button.classList.add('perform-input--pressed')
-      const value = togglePerformToggleAndGetValue(guid)
+      
+      // Determine toggle value based on current state
+      const performButton = createButtonForInput(guid, input, button)
+      const isCurrentlyActive = performButton._isHighlighted()
+      const value = isCurrentlyActive ? 'off' : 'on'
+
       for (const ag of actionGuids) {
         sendActionTrigger(ag, { value })
       }
-      syncPerformToggleChrome(guid)
       return
     }
 
-    if (this._activePointers.has(event.pointerId))
-      return
+    if (this._activePointers.has(event.pointerId)) return
 
     this._activePointers.set(event.pointerId, {
       guid: String(input.guid ?? button.dataset.inputGuid ?? ''),
@@ -243,7 +237,11 @@ export class PerformPane {
    */
   _handlePointerRelease (button, event) {
     const input = this._inputForButton(button)
-    const behavior = input ? (typeof input.type === 'string' ? input.type : 'button') : 'button'
+    const behavior = input
+      ? typeof input.type === 'string'
+        ? input.type
+        : 'button'
+      : 'button'
     if (behavior === 'toggle') {
       button.classList.remove('perform-input--pressed')
       return
@@ -281,8 +279,6 @@ export class PerformPane {
     const guid = String(input.guid ?? '')
     if (!guid) return
     const sourceId = `pointer:${pointerId}`
-    this._pressedMomentarySwitches.add(sourceId)
-    this._updateMomentarySwitchHighlight(guid)
     performMomentaryPress(guid, sourceId, actionGuids)
   }
 
@@ -293,8 +289,6 @@ export class PerformPane {
    */
   _releaseMomentarySwitch (guid, pointerId, actionGuids) {
     const sourceId = `pointer:${pointerId}`
-    this._pressedMomentarySwitches.delete(sourceId)
-    this._updateMomentarySwitchHighlight(guid)
     performMomentaryRelease(guid, sourceId, actionGuids)
   }
 
@@ -305,15 +299,6 @@ export class PerformPane {
       if (active.guid !== guid) continue
       this._releasePointer(button, pointerId)
     }
-  }
-
-  /** @param {string} guid */
-  _updateMomentarySwitchHighlight (guid) {
-    const button = this._buttonByGuid.get(guid)
-    if (!button) return
-    const isPressed = this._pressedMomentarySwitches.size > 0 &&
-      Array.from(this._activePointers.values()).some(active => active.guid === guid)
-    button.classList.toggle('perform-input--pressed', isPressed)
   }
 
   /**

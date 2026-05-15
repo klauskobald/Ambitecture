@@ -4,6 +4,17 @@ import { sendActionTrigger } from './outboundQueue.js'
 const sourcesByInputGuid = new Map()
 
 /**
+ * Check if a momentary switch is currently pressed by any source.
+ * @param {string} inputGuid
+ * @returns {boolean}
+ */
+export function isMomentaryPressed (inputGuid) {
+  if (!inputGuid) return false
+  const sources = sourcesByInputGuid.get(inputGuid)
+  return sources ? sources.size > 0 : false
+}
+
+/**
  * @param {string} inputGuid
  * @param {string} sourceId
  * @param {string[]} actionGuids
@@ -49,3 +60,4 @@ export function performMomentaryRelease (inputGuid, sourceId, actionGuids) {
     sendActionTrigger(ag, { value: 'off' })
   }
 }
+

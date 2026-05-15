@@ -13,10 +13,6 @@ import {
   setPerformInputKeyboardActive
 } from './performKeyboardVisual.js'
 import { sendActionTrigger } from './outboundQueue.js'
-import {
-  syncPerformToggleChrome,
-  togglePerformToggleAndGetValue
-} from './performToggleLocalState.js'
 
 /**
  * @param {EventTarget | null} el
@@ -157,11 +153,9 @@ class KeyboardManager {
       if (event.repeat) return
       event.preventDefault()
       cancelPerformInputKeyboardPulse(inputGuid)
-      const value = togglePerformToggleAndGetValue(inputGuid)
       for (const ag of actionGuids) {
-        sendActionTrigger(ag, { value })
+        sendActionTrigger(ag, { value: 'toggle' })
       }
-      syncPerformToggleChrome(inputGuid)
       return
     }
 

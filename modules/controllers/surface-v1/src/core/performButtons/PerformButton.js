@@ -1,5 +1,4 @@
 import { normalizeInputKeyChar } from '../performButtonInputs.js'
-import { getPerformToggleOn, clearPerformToggleState } from '../performToggleLocalState.js'
 import { projectGraph, inputActionGuidList } from '../projectGraph.js'
 
 export class PerformButton {
@@ -111,9 +110,6 @@ export class PerformButton {
   _updateBehaviorDataset () {
     const prevBehavior = this._buttonElement.dataset.behavior ?? ''
     const newBehavior = typeof this._inputData.type === 'string' ? this._inputData.type : 'button'
-    if (prevBehavior === 'toggle' && newBehavior !== 'toggle') {
-      clearPerformToggleState(this._inputGuid)
-    }
     if (this._buttonElement.dataset.behavior !== newBehavior)
       this._buttonElement.dataset.behavior = newBehavior
     return newBehavior
@@ -134,13 +130,11 @@ export class PerformButton {
   }
 
   /**
-   * Update active/highlighted state based on highlighting + toggle state.
+   * Update active/highlighted state based on highlighting.
    */
   _updateHighlightClass () {
     const highlighted = this._isHighlighted()
-    const newBehavior = typeof this._inputData.type === 'string' ? this._inputData.type : 'button'
-    const toggleLatched = newBehavior === 'toggle' && getPerformToggleOn(this._inputGuid)
-    this._buttonElement.classList.toggle('btn--active', highlighted || toggleLatched)
+    this._buttonElement.classList.toggle('btn--active', highlighted)
   }
 
   /**
@@ -150,9 +144,9 @@ export class PerformButton {
     const newBehavior = typeof this._inputData.type === 'string' ? this._inputData.type : 'button'
     const isToggle = newBehavior === 'toggle'
     if (isToggle) {
-      const toggleLatched = getPerformToggleOn(this._inputGuid)
+      const highlighted = this._isHighlighted()
       this._buttonElement.setAttribute('role', 'switch')
-      this._buttonElement.setAttribute('aria-pressed', toggleLatched ? 'true' : 'false')
+      this._buttonElement.setAttribute('aria-pressed', highlighted ? 'true' : 'false')
     } else {
       this._buttonElement.removeAttribute('role')
       this._buttonElement.removeAttribute('aria-pressed')

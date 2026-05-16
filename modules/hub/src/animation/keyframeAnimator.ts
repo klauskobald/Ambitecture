@@ -384,6 +384,26 @@ export class KeyframeAnimator {
         }
         break;
       }
+      case 'random': {
+        const { steps } = this.parseSteps();
+        const targetGuid = this.targetIntentGuid();
+        if (!targetGuid || steps.length === 0 || !this._intentAccess || !this._mutateIntent) return;
+        const L = steps.length;
+        if (L === 1) {
+          this.emitOneKeyframe(targetGuid, this._intentAccess, this._mutateIntent, steps[0]!.args);
+          break;
+        }
+        let idx: number;
+        do {
+          idx = Math.floor(Math.random() * L);
+        } while (idx === this._lastFiredStepIdx);
+        this._lastFiredStepIdx = idx;
+        const step = steps[idx];
+        if (step) {
+          this.emitOneKeyframe(targetGuid, this._intentAccess, this._mutateIntent, step.args);
+        }
+        break;
+      }
       default:
         Logger.warn(`[keyframeAnimator] unknown command "${cmd}"`);
         break;

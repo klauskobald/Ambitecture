@@ -812,6 +812,13 @@ export class InputAssignManager {
           anim && typeof anim === 'object' && !Array.isArray(anim)
             ? /** @type {Record<string, unknown>} */ (anim)
             : null
+        const runmode = typeof rec?.runmode === 'string' ? rec.runmode : 'auto'
+        if (runmode !== 'manual') {
+          animationClass = null
+          animationCommands = null
+          hasAnimationCommands = false
+          return
+        }
         const cls = typeof rec?.class === 'string' && rec.class.length > 0 ? rec.class : null
         animationClass = cls
         const cmds = animationClass

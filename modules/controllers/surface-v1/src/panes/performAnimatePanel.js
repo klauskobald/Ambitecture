@@ -6,6 +6,7 @@ import { projectGraph } from '../core/projectGraph.js'
 import { sendActionTrigger, sendBindingSet } from '../core/outboundQueue.js'
 import {
   isAnimationPlaying,
+  isAnimationPaused,
   getAnimationStatusMessage,
   subscribeAnimationPlayState
 } from '../core/animationPlayRegistry.js'
@@ -92,17 +93,27 @@ export function createPerformAnimatePanel () {
     const toggle = rowEl.querySelector('.perform-animate-toggle')
     if (!toggle) return
     const playing = isAnimationPlaying(guid)
-    rowEl.classList.toggle('perform-animate-row--playing', playing)
+    const paused = isAnimationPaused(guid)
     const name =
       rowEl.querySelector('.perform-animate-row__name')?.textContent ?? guid
+    rowEl.classList.toggle('perform-animate-row--playing', playing)
+    rowEl.classList.toggle('perform-animate-row--paused', paused)
     toggle.classList.toggle('perform-animate-toggle--stop', playing)
-    toggle.classList.toggle('perform-animate-toggle--play', !playing)
-    toggle.setAttribute(
-      'aria-label',
-      playing ? `Stop animation ${name}` : `Play animation ${name}`
-    )
-    toggle.setAttribute('aria-pressed', playing ? 'true' : 'false')
-    toggle.textContent = playing ? '■' : '▶'
+    toggle.classList.toggle('perform-animate-toggle--paused', paused)
+    toggle.classList.toggle('perform-animate-toggle--play', !playing && !paused)
+    if (playing) {
+      toggle.setAttribute('aria-label', `Stop animation ${name}`)
+      toggle.setAttribute('aria-pressed', 'true')
+      toggle.textContent = '■'
+    } else if (paused) {
+      toggle.setAttribute('aria-label', `Resume animation ${name}`)
+      toggle.setAttribute('aria-pressed', 'mixed')
+      toggle.textContent = '⏸'
+    } else {
+      toggle.setAttribute('aria-label', `Play animation ${name}`)
+      toggle.setAttribute('aria-pressed', 'false')
+      toggle.textContent = '▶'
+    }
   }
 
   function syncAllRowPlayStates () {
@@ -205,15 +216,25 @@ export function createPerformAnimatePanel () {
 
     function syncToggle () {
       const playing = isAnimationPlaying(row.guid)
+      const paused = isAnimationPaused(row.guid)
       el.classList.toggle('perform-animate-row--playing', playing)
+      el.classList.toggle('perform-animate-row--paused', paused)
       toggle.classList.toggle('perform-animate-toggle--stop', playing)
-      toggle.classList.toggle('perform-animate-toggle--play', !playing)
-      toggle.setAttribute(
-        'aria-label',
-        playing ? `Stop animation ${row.name}` : `Play animation ${row.name}`
-      )
-      toggle.setAttribute('aria-pressed', playing ? 'true' : 'false')
-      toggle.textContent = playing ? '■' : '▶'
+      toggle.classList.toggle('perform-animate-toggle--paused', paused)
+      toggle.classList.toggle('perform-animate-toggle--play', !playing && !paused)
+      if (playing) {
+        toggle.setAttribute('aria-label', `Stop animation ${row.name}`)
+        toggle.setAttribute('aria-pressed', 'true')
+        toggle.textContent = '■'
+      } else if (paused) {
+        toggle.setAttribute('aria-label', `Resume animation ${row.name}`)
+        toggle.setAttribute('aria-pressed', 'mixed')
+        toggle.textContent = '⏸'
+      } else {
+        toggle.setAttribute('aria-label', `Play animation ${row.name}`)
+        toggle.setAttribute('aria-pressed', 'false')
+        toggle.textContent = '▶'
+      }
     }
 
     syncToggle()
@@ -222,6 +243,8 @@ export function createPerformAnimatePanel () {
       toggle.classList.add('perform-input--pressed')
       if (isAnimationPlaying(row.guid)) {
         sendActionTrigger(row.guid, { value: 'off' })
+      } else if (isAnimationPaused(row.guid)) {
+        sendActionTrigger(row.guid, { value: 'on' })
       } else {
         sendActionTrigger(row.guid, { value: 'on' })
       }

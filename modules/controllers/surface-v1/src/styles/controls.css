@@ -534,6 +534,11 @@
   border-color: var(--color-accent);
 }
 
+.perform-animate-row--paused {
+  background: var(--color-paused-dim);
+  border-color: var(--color-paused);
+}
+
 .perform-animate-row__label {
   flex: 1 1 auto;
   min-width: 0;
@@ -610,6 +615,12 @@
   background: var(--color-accent-dim);
   border-color: var(--color-accent);
   color: var(--color-accent);
+}
+
+.perform-animate-toggle--paused {
+  background: var(--color-paused-dim);
+  border-color: var(--color-paused);
+  color: var(--color-paused);
 }
 
 .perform-animate-toggle.perform-input--pressed {

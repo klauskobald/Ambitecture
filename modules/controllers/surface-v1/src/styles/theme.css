@@ -11,6 +11,8 @@
   --color-border: #333;
   --color-accent: #5af;
   --color-accent-dim: rgba(85, 170, 255, 0.15);
+  --color-paused: #f80;
+  --color-paused-dim: rgba(255, 136, 0, 0.15);
 
   /* layout dimensions — overridden per-config by applyLayoutCssVars() */
   --page-padding: 8px;

@@ -6,6 +6,9 @@
 /** @type {Set<string>} */
 const playingAnimationGuids = new Set()
 
+/** @type {Set<string>} */
+const pausedAnimationGuids = new Set()
+
 /** @type {Map<string, string>} */
 const statusMessages = new Map()
 
@@ -24,8 +27,9 @@ function notify () {
 
 /** Drop local playback hints (e.g. after `graph:init` / reconnect). */
 export function resetAnimationPlayState () {
-  if (playingAnimationGuids.size === 0 && statusMessages.size === 0) return
+  if (playingAnimationGuids.size === 0 && pausedAnimationGuids.size === 0 && statusMessages.size === 0) return
   playingAnimationGuids.clear()
+  pausedAnimationGuids.clear()
   statusMessages.clear()
   notify()
 }
@@ -42,8 +46,13 @@ export function applyHubAnimationStatus (payload) {
   const status = typeof p.status === 'string' ? p.status : ''
   if (status === 'started') {
     playingAnimationGuids.add(guid)
-  } else if (status === 'stopped' || status === 'paused') {
+    pausedAnimationGuids.delete(guid)
+  } else if (status === 'stopped') {
     playingAnimationGuids.delete(guid)
+    pausedAnimationGuids.delete(guid)
+  } else if (status === 'paused') {
+    playingAnimationGuids.delete(guid)
+    pausedAnimationGuids.add(guid)
   }
   const msg = p.message
   if (msg && typeof msg === 'object' && !Array.isArray(msg)) {
@@ -63,4 +72,9 @@ export function getAnimationStatusMessage (animationGuid) {
 /** @param {string} animationGuid */
 export function isAnimationPlaying (animationGuid) {
   return playingAnimationGuids.has(animationGuid)
+}
+
+/** @param {string} animationGuid */
+export function isAnimationPaused (animationGuid) {
+  return pausedAnimationGuids.has(animationGuid)
 }

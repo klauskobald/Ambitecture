@@ -198,6 +198,18 @@ export function isCompanionAnimationRunnerAction(
   return record['type'] === 'animation' && record['guid'] === animationGuid;
 }
 
+export interface PulseSlot {
+  actions: string[];
+}
+
+export interface PulseSetup {
+  guid?: string;
+  name: string;
+  bpm: number;
+  meter: number;
+  slots: PulseSlot[];
+}
+
 interface Project {
   name: string;
   'zone-to-renderer': Record<string, string[]>;
@@ -205,7 +217,9 @@ interface Project {
   scenes?: Scene[];
   actions?: ActionDefinition[];
   animations?: AnimationDefinition[];
+  pulses?: PulseSetup[];
   activeSceneGuid?: string;
+  activePulseGuid?: string;
   zones: Zone[];
   controller?: ControllerDef[];
   graphEntities?: Record<string, Record<string, unknown>>;
@@ -993,6 +1007,25 @@ export class ProjectManager {
 
   getAnimationByGuid(guid: string): AnimationDefinition | undefined {
     return (this.project?.animations ?? []).find(a => a.guid === guid);
+  }
+
+  getPulseSetup(guid: string): PulseSetup | undefined {
+    return (this.project?.pulses ?? []).find(p => p.guid === guid);
+  }
+
+  getActivePulseGuid(): string | undefined {
+    return this.project?.activePulseGuid;
+  }
+
+  setActivePulseGuid(guid: string | undefined): void {
+    if (!this.project) return;
+    if (guid === this.project.activePulseGuid) return;
+    if (guid === undefined) {
+      delete this.project.activePulseGuid;
+    } else {
+      this.project.activePulseGuid = guid;
+    }
+    this._scheduleSave();
   }
 
   /**

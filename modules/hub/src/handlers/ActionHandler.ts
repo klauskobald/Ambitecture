@@ -129,6 +129,56 @@ export class ActionHandler implements MessageHandler {
     }
   }
 
+  /**
+   * Public entry point for triggering an action by GUID (e.g., from PulseManager).
+   * No WebSocket context; executes without mutation publishing.
+   */
+  triggerAction(actionGuid: string, location?: [number, number]): void {
+    const action = this.actionInputManager.getAction(actionGuid);
+    if (!action) {
+      Logger.warn(`[action] action ${actionGuid} not found`);
+      return;
+    }
+    const executeItem = this.actionInputManager.getExecuteItemForAction(action);
+    if (!executeItem) {
+      Logger.warn(`[action] action ${actionGuid} has no execute target`);
+      return;
+    }
+
+    let handled = 0;
+    const item = executeItem;
+    switch (item.type) {
+      case 'scene': {
+        const sceneGuid = typeof item.guid === 'string' ? item.guid : undefined;
+        if (sceneGuid) {
+          this.graphStore.activateScene(sceneGuid, location, 'runtime');
+          handled = 1;
+        }
+        break;
+      }
+      case 'animation': {
+        handled += this.executeAnimationItem(item, location, undefined);
+        break;
+      }
+      case 'intent': {
+        const update = this.intentExecuteItemToRuntimeUpdate(item, actionGuid, {});
+        if (update) {
+          this.runtimeUpdateDispatcher.dispatch([update], location, Date.now(), new Set());
+          handled = 1;
+        }
+        break;
+      }
+      default:
+        Logger.warn(`[action] unsupported execute type "${item.type}" on ${actionGuid}`);
+        break;
+    }
+    if (handled === 0) {
+      Logger.warn(`[action] action ${actionGuid} has no supported execute target`);
+      return;
+    }
+    Logger.info(`[action] triggered ${actionGuid}`);
+  }
+
   private handleInputCommand(ws: WebSocket, message: WsMessage, controllerGuid: string): void {
     if (!isActionInputCommand(message.payload)) {
       Logger.warn('[action] invalid action:input payload');

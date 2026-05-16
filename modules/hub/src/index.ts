@@ -30,6 +30,7 @@ import { DiscoveryService } from './DiscoveryService';
 import { DiscoveryHandler } from './handlers/DiscoveryHandler';
 import { resolveRuntimeReferences } from './ConfigResolver';
 import { registerZonesRangeResolver } from './resolvers/ZonesRangeResolver';
+import { PulseManager } from './pulse/PulseManager';
 
 const serverConfig = new Config('server');
 const systemConfig = new Config('system', true);
@@ -64,6 +65,7 @@ const animationManager = new AnimationManager(
   runtimeUpdateDispatcher,
   bindingManager,
 );
+const pulseManager = new PulseManager(projectManager);
 const graphStore = new ProjectGraphStore(
   projectManager,
   actionInputManager,
@@ -281,6 +283,9 @@ const actionHandler = new ActionHandler(
 );
 router.register('action:input', actionHandler);
 router.register('action:trigger', actionHandler);
+pulseManager.setActionTriggerCallback(actionGuid => {
+  actionHandler.triggerAction(actionGuid);
+});
 router.register('events', new EventsHandler(registry));
 router.register('intents', new IntentsHandler(registry, projectManager, eventQueue, runtimeUpdateDispatcher));
 router.register(
@@ -294,6 +299,7 @@ router.register('binding:set', bindingHandler);
 router.register('animation:edit', new AnimationEditHandler(registry, animationManager));
 
 graphStore.useProject(serverConfig.get<string>('defaultProject'), () => {
+  pulseManager.initializeFromProject();
   pushConfigsToModules();
 });
 

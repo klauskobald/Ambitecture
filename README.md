@@ -7,6 +7,8 @@ Distributed framework for live orchestration of physical environments (lights, D
 
 Ambitecture is open source and currently focused on production readiness for a live show deadline on **May 20, 2026**.
 
+
+
 ## Project Status
 
 **Ambitecture is under active development and not yet ready for general use.**

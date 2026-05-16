@@ -433,10 +433,18 @@ export class ProjectGraphStore {
         companionName = existingName;
       }
     }
+    const existingExecuteParams =
+      existingCompanion?.execute &&
+      typeof existingCompanion.execute === 'object' &&
+      !Array.isArray(existingCompanion.execute)
+        ? (existingCompanion.execute as Record<string, unknown>).params
+        : undefined;
     const companionAction: ActionDefinition = {
       guid: sharedAnimationAndActionGuid,
       name: companionName,
-      execute: { type: 'animation', guid: command.guid },
+      execute: existingExecuteParams !== undefined && typeof existingExecuteParams === 'object' && !Array.isArray(existingExecuteParams)
+        ? { type: 'animation', guid: command.guid, params: existingExecuteParams as Record<string, unknown> }
+        : { type: 'animation', guid: command.guid },
     };
     const actions = this.projectManager.getActionsWirePayload().filter(a => a.guid !== sharedAnimationAndActionGuid);
     actions.push(companionAction);

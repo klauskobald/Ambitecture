@@ -159,6 +159,51 @@ export class KeyframeAnimator {
     ],
   };
 
+  /**
+   * Normalize an incoming animation record for storage: apply class defaults, ensure
+   * content shape is canonical, and migrate legacy root-level keys into `content`.
+   * Called by AnimationManager — never by graph-store or project manager directly.
+   */
+  static normalizeRecord(value: Record<string, unknown>, guid: string): Record<string, unknown> {
+    const out = cloneRecord(value);
+    out['guid'] = guid;
+
+    const keyframeDefaults = cloneRecord(KeyframeAnimator.defaultValues as Record<string, unknown>);
+    const existingContent =
+      out['content'] && typeof out['content'] === 'object' && !Array.isArray(out['content'])
+        ? cloneRecord(out['content'] as Record<string, unknown>)
+        : {};
+
+    const rootPatch: Record<string, unknown> = {};
+    const rootKeys = ['repeat', 'length', 'lerp', 'steps'];
+    for (const k of rootKeys) {
+      if (Object.prototype.hasOwnProperty.call(out, k)) {
+        rootPatch[k] = out[k];
+        delete out[k];
+      }
+    }
+
+    const mergedContent = applyDotPathPatch(keyframeDefaults, existingContent, []);
+    out['content'] = applyDotPathPatch(mergedContent, rootPatch, []);
+
+    const merged = applyDotPathPatch(keyframeDefaults, out, []);
+    merged['guid'] = guid;
+    if (typeof merged['class'] !== 'string' || merged['class'].length === 0) {
+      merged['class'] = 'keyframeAnimator';
+    }
+    const content =
+      merged['content'] && typeof merged['content'] === 'object' && !Array.isArray(merged['content'])
+        ? (merged['content'] as Record<string, unknown>)
+        : {};
+    merged['content'] = content;
+    delete merged['repeat'];
+    delete merged['length'];
+    delete merged['lerp'];
+    delete merged['steps'];
+
+    return merged;
+  }
+
   private static defaultLengthSeconds(): number {
     const L = KeyframeAnimator.defaultValues['length'];
     return typeof L === 'number' && Number.isFinite(L) && L > 0 ? L : 10;

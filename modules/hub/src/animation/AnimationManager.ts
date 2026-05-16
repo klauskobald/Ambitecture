@@ -2,7 +2,8 @@ import type { ProjectManager, ControllerIntent } from '../ProjectManager';
 import type { RuntimeIntentStore } from '../RuntimeIntentStore';
 import type { RuntimeUpdateDispatcher } from '../RuntimeUpdateDispatcher';
 import { HubStatusDispatcher, type HubStatusAnimationPayload } from '../hubStatusTypes';
-import { KeyframeAnimator, type MutateIntentFn } from './keyframeAnimator';
+import type { MutateIntentFn } from './keyframeAnimator';
+import { getAnimatorClass, type AnimatorPlugin } from './animatorRegistry';
 import { Logger } from '../Logger';
 import type { RuntimeUpdate } from '../RuntimeProtocol';
 import type { BindingManager } from '../BindingManager';
@@ -15,7 +16,7 @@ export function companionActionGuid(animationGuid: string): string {
 }
 
 type ActiveRunner = {
-  plugin: KeyframeAnimator;
+  plugin: AnimatorPlugin;
   targetIntentGuid: string;
   lastInScene: boolean;
   timescale: number;
@@ -36,12 +37,10 @@ export type AnimationStatusPayload = {
 export class AnimationManager {
   private runners = new Map<string, ActiveRunner>();
   /**
-   * Animations currently in keyframe-stepping edit mode. Disjoint from {@link runners} —
+   * Animations currently in edit mode. Disjoint from {@link runners} —
    * `enterEditMode` always stops the runner first; `trigger` always exits edit first.
-   * Type narrowed to KeyframeAnimator since it is currently the only class with edit support;
-   * widen if/when another animator class implements its own edit lifecycle.
    */
-  private edits = new Map<string, KeyframeAnimator>();
+  private edits = new Map<string, AnimatorPlugin>();
   /**
    * Baseline intent snapshot per animation in keyframe edit mode (authoritative stepped state).
    * Manual runtime edits do not update this; {@link diffRecordsToPatch} vs effective intent builds new keyframe args on Add.
@@ -172,9 +171,11 @@ export class AnimationManager {
     }
 
     const record = def as unknown as Record<string, unknown>;
+
     const animClass = typeof record['class'] === 'string' ? record['class'] : '';
-    if (animClass !== 'keyframeAnimator') {
-      Logger.warn(`[animation] unsupported class "${animClass}" for ${animationGuid}`);
+    const AnimatorCtor = getAnimatorClass(animClass);
+    if (!AnimatorCtor) {
+      Logger.warn(`[animation] unknown class "${animClass}" for ${animationGuid}`);
       return;
     }
 
@@ -222,7 +223,7 @@ export class AnimationManager {
       }
     }
 
-    const plugin = new KeyframeAnimator(animationGuid, {
+    const plugin = new AnimatorCtor(animationGuid, {
       onStatus: p => {
         this.emitAnimatorStatus(animationGuid, p, opts.location ?? this.runners.get(animationGuid)?.lastLocation);
       },
@@ -354,9 +355,11 @@ export class AnimationManager {
       return;
     }
     const record = def as unknown as Record<string, unknown>;
+
     const animClass = typeof record['class'] === 'string' ? record['class'] : '';
-    if (animClass !== 'keyframeAnimator') {
-      Logger.warn(`[animation] enterEditMode unsupported class "${animClass}" for ${animationGuid}`);
+    const AnimatorCtor = getAnimatorClass(animClass);
+    if (!AnimatorCtor) {
+      Logger.warn(`[animation] enterEditMode unknown class "${animClass}" for ${animationGuid}`);
       return;
     }
 
@@ -364,7 +367,7 @@ export class AnimationManager {
       this.stopRunner(animationGuid, 'replaced by edit');
     }
 
-    const plugin = new KeyframeAnimator(animationGuid, {
+    const plugin = new AnimatorCtor(animationGuid, {
       onStatus: p => {
         this.emitAnimatorStatus(animationGuid, p, opts.location);
       },
@@ -476,6 +479,23 @@ export class AnimationManager {
     this.stopRunner(animationGuid, 'animation removed');
     this.exitEditMode(animationGuid);
     this.unregisterTimescaleMaster(animationGuid);
+  }
+
+  /**
+   * Apply class-specific defaults and normalize shape on an incoming animation record before
+   * it is persisted. Delegates to the animator class's static {@code normalizeRecord} if one
+   * exists; otherwise returns a shallow clone with {@code guid} set.
+   */
+  normalizeAnimationRecord(value: Record<string, unknown>, guid: string): Record<string, unknown> {
+    const cls = typeof value['class'] === 'string' ? value['class'] : '';
+    const Ctor = cls ? getAnimatorClass(cls) : undefined;
+    const staticNormalize = (Ctor as unknown as { normalizeRecord?: (v: Record<string, unknown>, g: string) => Record<string, unknown> } | undefined)?.normalizeRecord;
+    if (staticNormalize) {
+      return staticNormalize(value, guid);
+    }
+    const out = cloneRecord(value);
+    out['guid'] = guid;
+    return out;
   }
 
   /**

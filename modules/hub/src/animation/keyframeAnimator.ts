@@ -325,6 +325,7 @@ export class KeyframeAnimator {
         const targetGuid = this.targetIntentGuid();
         if (targetGuid && steps.length > 0 && steps[0] && this._intentAccess && this._mutateIntent) {
           this.emitOneKeyframe(targetGuid, this._intentAccess, this._mutateIntent, steps[0].args);
+          this._lastFiredStepIdx = 0;
         }
 
         for (const t of this.timers) {
@@ -332,11 +333,7 @@ export class KeyframeAnimator {
         }
         this.timers = [];
 
-        this.callbacks.onStatus({
-          status: 'paused',
-          message: { text: 'Manual mode — paused at first step' },
-          data: { manualMode: true },
-        });
+        this._emitManualPausedStatus();
         break;
       }
       case 'auto':
@@ -369,6 +366,7 @@ export class KeyframeAnimator {
         if (step) {
           this.emitOneKeyframe(targetGuid, this._intentAccess, this._mutateIntent, step.args);
         }
+        this._emitManualPausedStatus();
         break;
       }
       case 'goto': {
@@ -382,6 +380,7 @@ export class KeyframeAnimator {
         if (step) {
           this.emitOneKeyframe(targetGuid, this._intentAccess, this._mutateIntent, step.args);
         }
+        this._emitManualPausedStatus();
         break;
       }
       case 'random': {
@@ -391,6 +390,7 @@ export class KeyframeAnimator {
         const L = steps.length;
         if (L === 1) {
           this.emitOneKeyframe(targetGuid, this._intentAccess, this._mutateIntent, steps[0]!.args);
+          this._emitManualPausedStatus();
           break;
         }
         let idx: number;
@@ -402,12 +402,23 @@ export class KeyframeAnimator {
         if (step) {
           this.emitOneKeyframe(targetGuid, this._intentAccess, this._mutateIntent, step.args);
         }
+        this._emitManualPausedStatus();
         break;
       }
       default:
         Logger.warn(`[keyframeAnimator] unknown command "${cmd}"`);
         break;
     }
+  }
+
+  private _emitManualPausedStatus(): void {
+    const { steps } = this.parseSteps();
+    const displayIdx = Math.max(0, this._lastFiredStepIdx) + 1;
+    this.callbacks.onStatus({
+      status: 'paused',
+      message: { text: `Manual mode — paused at step ${displayIdx}` },
+      data: { manualMode: true, step: this._lastFiredStepIdx, total: steps.length },
+    });
   }
 
   onSceneMembershipChanged(inScene: boolean): void {

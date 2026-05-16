@@ -9,6 +9,7 @@ import { sendActionInputCommand } from '../core/outboundQueue.js'
 import {
   getDisplayTypes,
   getInputTypes,
+  resolveAnimationCommandsForClass,
   resolveDefaultPerformTypes,
   resolveDescriptorsForClass
 } from '../core/systemCapabilities.js'
@@ -787,6 +788,39 @@ export class InputAssignManager {
       let descriptors = []
       let hasIntentDescriptors = false
 
+      // ── animation action tracking (parallel to intent, read from systemCapabilities) ─────
+      let animationActionGuidForParams = ''
+      let animationGuidForParams = ''
+      /** @type {string | null} */
+      let animationClass = null
+      /** @type {{ command: string, hint: string, params: Record<string, unknown> }[] | null} */
+      let animationCommands = null
+      let hasAnimationCommands = false
+      /** @type {{ command?: string, [key: string]: unknown }} */
+      let animationParamsDraft = {}
+
+      const recomputeAnimationCommands = () => {
+        const g = animationGuidForParams
+        if (!g) {
+          animationClass = null
+          animationCommands = null
+          hasAnimationCommands = false
+          return
+        }
+        const anim = projectGraph.getAnimations().get(g)
+        const rec =
+          anim && typeof anim === 'object' && !Array.isArray(anim)
+            ? /** @type {Record<string, unknown>} */ (anim)
+            : null
+        const cls = typeof rec?.class === 'string' && rec.class.length > 0 ? rec.class : null
+        animationClass = cls
+        const cmds = animationClass
+          ? resolveAnimationCommandsForClass(animationClass)
+          : null
+        animationCommands = cmds
+        hasAnimationCommands = Array.isArray(cmds) && cmds.length > 0
+      }
+
       const recomputeIntentDescriptors = () => {
         const g = intentExecuteGuidForParams
         if (!g) {
@@ -860,8 +894,12 @@ export class InputAssignManager {
         if (n === 0) {
           intentActionGuidForParams = ''
           intentExecuteGuidForParams = ''
+          animationActionGuidForParams = ''
+          animationGuidForParams = ''
           paramsSnapshot = {}
+          animationParamsDraft = {}
           recomputeIntentDescriptors()
+          recomputeAnimationCommands()
           syncActionStepper()
           return
         }
@@ -869,6 +907,8 @@ export class InputAssignManager {
         const ag = actionGuidsList[actionIndex]
         intentActionGuidForParams = ''
         intentExecuteGuidForParams = ''
+        animationActionGuidForParams = ''
+        animationGuidForParams = ''
         if (ag) {
           const a = projectGraph.getActions().get(ag)
           const ex = a?.execute
@@ -876,23 +916,33 @@ export class InputAssignManager {
             ex &&
             typeof ex === 'object' &&
             !Array.isArray(ex) &&
-            ex.type === 'intent' &&
             typeof ex.guid === 'string'
           ) {
-            intentActionGuidForParams = ag
-            intentExecuteGuidForParams = ex.guid
+            if (ex.type === 'intent') {
+              intentActionGuidForParams = ag
+              intentExecuteGuidForParams = ex.guid
+            } else if (ex.type === 'animation') {
+              animationActionGuidForParams = ag
+              animationGuidForParams = ex.guid
+            }
           }
         }
+        const activeActionGuid =
+          intentActionGuidForParams || animationActionGuidForParams
         const rawStoredParams =
-          intentActionGuidForParams.length > 0
+          activeActionGuid.length > 0
             ? (() => {
-                const a = projectGraph.getActions().get(intentActionGuidForParams)
+                const a = projectGraph.getActions().get(activeActionGuid)
                 const x = a?.execute
                 return x && typeof x === 'object' && !Array.isArray(x) ? x.params : undefined
               })()
             : undefined
         paramsSnapshot = this._recordOrUndefined(rawStoredParams) ?? {}
+        animationParamsDraft = animationActionGuidForParams.length > 0
+          ? { ...paramsSnapshot }
+          : {}
         recomputeIntentDescriptors()
+        recomputeAnimationCommands()
         syncActionStepper()
       }
 
@@ -919,6 +969,10 @@ export class InputAssignManager {
       const rebuildDraftFromSnapshot = typeClass => {
         const def = inputTypes.find(t => t.class === typeClass)
         draftBySlot = {}
+        if (animationActionGuidForParams.length > 0) {
+          animationParamsDraft = { ...paramsSnapshot }
+          return
+        }
         if (!def?.params) return
         for (const pk of Object.keys(def.params)) {
           draftBySlot[pk] = cloneParamSlice(paramsSnapshot?.[pk])
@@ -934,6 +988,12 @@ export class InputAssignManager {
         destroyIpsBuilt()
         paramHost.replaceChildren()
         errorEl.hidden = true
+
+        // ── animation action params (flat command args, no input-type slots) ───
+        if (animationActionGuidForParams.length > 0 && hasAnimationCommands && animationCommands) {
+          renderAnimationCommandFields()
+          return
+        }
 
         const def = inputTypes.find(t => t.class === typeClass)
         if (!def?.params) return
@@ -970,6 +1030,98 @@ export class InputAssignManager {
           lab.appendChild(holder)
           paramHost.appendChild(lab)
         }
+      }
+
+      /**
+       * Render animation command selector + param fields from
+       * `animationCommands` (systemCapabilities). No hardcoded command names.
+       */
+      const renderAnimationCommandFields = () => {
+        if (!animationCommands) return
+
+        const curCmd = typeof animationParamsDraft.command === 'string'
+          ? animationParamsDraft.command
+          : (animationCommands[0]?.command ?? '')
+        const curEntry = animationCommands.find(c => c.command === curCmd)
+
+        // Command selector
+        const cmdLabel = document.createElement('label')
+        cmdLabel.className = 'input-assign-modal__label'
+        cmdLabel.textContent = 'Command'
+        const cmdSelect = document.createElement('select')
+        cmdSelect.className = 'modal-input modal-select-capitalize'
+        for (const c of animationCommands) {
+          const opt = document.createElement('option')
+          opt.value = c.command
+          opt.textContent = c.hint
+            ? `${c.command} — ${c.hint}`
+            : c.command
+          cmdSelect.appendChild(opt)
+        }
+        cmdSelect.value = curCmd
+        cmdLabel.appendChild(cmdSelect)
+        paramHost.appendChild(cmdLabel)
+
+        // Per-command param fields
+        const paramsHost = document.createElement('div')
+        paramsHost.className = 'input-assign-modal__anim-params'
+
+        const renderCmdParams = () => {
+          paramsHost.replaceChildren()
+          const selected = animationCommands.find(c => c.command === cmdSelect.value)
+          const cmdParams = selected?.params
+          if (!cmdParams || typeof cmdParams !== 'object' || Array.isArray(cmdParams)) return
+
+          for (const [pk, pd] of Object.entries(cmdParams)) {
+            if (!pd || typeof pd !== 'object' || Array.isArray(pd)) continue
+            const pdef = /** @type {Record<string, unknown>} */ (pd)
+            const ptype = typeof pdef.type === 'string' ? pdef.type : 'string'
+
+            const lab = document.createElement('label')
+            lab.className = 'input-assign-modal__label'
+            lab.textContent = pk
+
+            if (ptype === 'number') {
+              const inp = document.createElement('input')
+              inp.type = 'number'
+              inp.className = 'modal-input'
+              const step = typeof pdef.step === 'number' ? pdef.step : 1
+              const defVal = typeof pdef.default === 'number' ? pdef.default : 0
+              inp.step = String(step)
+              inp.value = String(
+                typeof animationParamsDraft[pk] === 'number'
+                  ? animationParamsDraft[pk]
+                  : defVal
+              )
+              inp.addEventListener('input', () => {
+                const n = Number(inp.value)
+                animationParamsDraft[pk] = Number.isFinite(n) ? n : defVal
+              })
+              lab.appendChild(inp)
+            } else {
+              const inp = document.createElement('input')
+              inp.type = 'text'
+              inp.className = 'modal-input'
+              const defVal = typeof pdef.default === 'string' ? pdef.default : ''
+              inp.value = String(animationParamsDraft[pk] ?? defVal)
+              inp.addEventListener('input', () => {
+                animationParamsDraft[pk] = inp.value
+              })
+              lab.appendChild(inp)
+            }
+            paramsHost.appendChild(lab)
+          }
+        }
+
+        cmdSelect.addEventListener('change', () => {
+          const fresh = { command: cmdSelect.value }
+          animationParamsDraft = fresh
+          animationParamsDraft.command = cmdSelect.value
+          renderCmdParams()
+        })
+
+        paramHost.appendChild(paramsHost)
+        renderCmdParams()
       }
 
       applyActionSelection()
@@ -1040,6 +1192,24 @@ export class InputAssignManager {
               }
             }
           })
+        }
+
+        if (animationActionGuidForParams.length > 0 && animationGuidForParams.length > 0 && hasAnimationCommands) {
+          const cmd = animationParamsDraft.command
+          if (typeof cmd === 'string' && cmd.length > 0) {
+            const flatParams = { ...animationParamsDraft }
+            sendActionInputCommand({
+              command: 'updateAction',
+              actionGuid: animationActionGuidForParams,
+              patch: {
+                execute: {
+                  type: 'animation',
+                  guid: animationGuidForParams,
+                  params: flatParams
+                }
+              }
+            })
+          }
         }
         dismiss(true)
       })

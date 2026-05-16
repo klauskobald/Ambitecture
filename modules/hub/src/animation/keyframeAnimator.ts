@@ -141,6 +141,7 @@ export class KeyframeAnimator {
     return [
       { command: 'step', hint: 'Step to keyframe', params: { offset: { type: 'number', default: 1 } } },
       { command: 'goto', hint: 'Go to given keyframe', params: { idx: { type: 'number', default: 0 } } },
+      { command: 'random', hint: 'Go to a random keyframe', params: {} },
     ];
   }
 

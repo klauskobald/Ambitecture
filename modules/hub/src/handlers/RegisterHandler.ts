@@ -4,7 +4,7 @@ import { Config } from '../Config';
 import { ConnectionRegistry } from '../ConnectionRegistry';
 import { MessageHandler, WsMessage } from '../MessageRouter';
 import { ProjectGraphStore } from '../ProjectGraphStore';
-import { KeyframeAnimator } from '../animation/keyframeAnimator';
+import { getAllAnimatorDescriptors, getAllAnimatorCommandDescriptors } from '../animation/animatorRegistry';
 import { recordRendererEventDeliveries } from '../hubWebSocketStats';
 import { DiscoveryService, parseDiscoveryFromRegisterPayload } from '../DiscoveryService';
 import { resolveRuntimeReferences } from '../ConfigResolver';
@@ -110,21 +110,13 @@ export class RegisterHandler implements MessageHandler {
   }
 }
 
-/** Class name → static uiDescriptor. Add new animator classes here as they are introduced. */
-const animatorDescriptors: Record<string, Record<string, unknown>> = {
-  keyframeAnimator: KeyframeAnimator.uiDescriptor,
-};
-
-/** Class name → static commandDescriptors(). Add new animator classes here as they are introduced. */
-const animatorCommandDescriptors: Record<string, ReturnType<typeof KeyframeAnimator.commandDescriptors>> = {
-  keyframeAnimator: KeyframeAnimator.commandDescriptors(),
-};
-
 /**
  * Merges each registered animator's `uiDescriptor` into the matching
  * `systemCapabilities.animations[]` entry as a `descriptor` map, and
  * each animator's `commandDescriptors()` as a `commands` array.
  * The descriptor keys use the content-relative form (no `content.` prefix).
+ * Class→descriptor mappings come from {@link getAllAnimatorDescriptors} /
+ * {@link getAllAnimatorCommandDescriptors} — never hardcoded here.
  */
 function mergeAnimatorDescriptors(caps: unknown): unknown {
   if (!caps || typeof caps !== 'object' || Array.isArray(caps)) return caps;
@@ -137,8 +129,10 @@ function mergeAnimatorDescriptors(caps: unknown): unknown {
       if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return entry;
       const e = entry as Record<string, unknown>;
       const cls = typeof e['class'] === 'string' ? e['class'] : '';
-      const descriptor = cls ? animatorDescriptors[cls] : undefined;
-      const commands = cls ? animatorCommandDescriptors[cls] : undefined;
+      const descriptors = getAllAnimatorDescriptors();
+      const commandDescriptors = getAllAnimatorCommandDescriptors();
+      const descriptor = cls ? descriptors[cls] : undefined;
+      const commands = cls ? commandDescriptors[cls] : undefined;
       const out = descriptor ? { ...e, descriptor } : e;
       return commands ? { ...out, commands } : out;
     }),

@@ -118,6 +118,27 @@ export function getInputTypes () {
 }
 
 /**
+ * Resolve animation command descriptors for a given animator class from
+ * `systemCapabilities.animations[class].commands` (merged by hub RegisterHandler).
+ * @param {string} animClass
+ * @returns {{ command: string, hint: string, params: Record<string, unknown> }[] | null}
+ */
+export function resolveAnimationCommandsForClass (animClass) {
+  if (!_caps) return null
+  const animations = /** @type {unknown[] | undefined} */ (_caps.animations)
+  if (!Array.isArray(animations)) return null
+  for (const entry of animations) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue
+    const e = /** @type {Record<string, unknown>} */ (entry)
+    if (e.class !== animClass) continue
+    const commands = e.commands
+    if (!Array.isArray(commands)) return null
+    return /** @type {{ command: string, hint: string, params: Record<string, unknown> }[]} */ (commands)
+  }
+  return null
+}
+
+/**
  * Perform display kinds from hub `systemCapabilities.displayTypes`.
  * @returns {CapabilityDisplayType[] | null}
  */

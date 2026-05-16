@@ -42,3 +42,38 @@ const ANIMATOR_REGISTRY: Record<string, AnimatorConstructor> = {
 export function getAnimatorClass(name: string): AnimatorConstructor | undefined {
   return ANIMATOR_REGISTRY[name];
 }
+
+/**
+ * Collect {@code static uiDescriptor} from every registered animator class.
+ * Used by {@link RegisterHandler} to merge into {@code systemCapabilities.animations[]}
+ * without hardcoding class names.
+ */
+export function getAllAnimatorDescriptors(): Record<string, Record<string, unknown>> {
+  const out: Record<string, Record<string, unknown>> = {};
+  for (const [cls, Ctor] of Object.entries(ANIMATOR_REGISTRY)) {
+    const staticDesc = (Ctor as unknown as { uiDescriptor?: Record<string, unknown> }).uiDescriptor;
+    if (staticDesc && typeof staticDesc === 'object' && !Array.isArray(staticDesc)) {
+      out[cls] = staticDesc as Record<string, unknown>;
+    }
+  }
+  return out;
+}
+
+/**
+ * Collect {@code static commandDescriptors()} from every registered animator class.
+ * Used by {@link RegisterHandler} to merge into {@code systemCapabilities.animations[].commands}
+ * without hardcoding class names.
+ */
+export function getAllAnimatorCommandDescriptors(): Record<string, { command: string; hint: string; params: Record<string, unknown> }[]> {
+  const out: Record<string, { command: string; hint: string; params: Record<string, unknown> }[]> = {};
+  for (const [cls, Ctor] of Object.entries(ANIMATOR_REGISTRY)) {
+    const staticFn = (Ctor as unknown as { commandDescriptors?: () => { command: string; hint: string; params: Record<string, unknown> }[] }).commandDescriptors;
+    if (typeof staticFn === 'function') {
+      const result = staticFn();
+      if (Array.isArray(result)) {
+        out[cls] = result;
+      }
+    }
+  }
+  return out;
+}

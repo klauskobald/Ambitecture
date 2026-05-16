@@ -233,7 +233,7 @@ export class ActionHandler implements MessageHandler {
         this.animationManager.setTimescale(item.guid, plan.timescale);
         return 1;
       case 'trigger': {
-        const opts: { location?: [number, number]; timescale?: number } = {};
+        const opts: { location?: [number, number]; timescale?: number; commandArgs?: Record<string, unknown> } = {};
         if (location !== undefined) {
           opts.location = location;
         }
@@ -241,6 +241,7 @@ export class ActionHandler implements MessageHandler {
         if (typeof ts === 'number' && Number.isFinite(ts) && ts > 0) {
           opts.timescale = ts;
         }
+        opts.commandArgs = merged;
         this.animationManager.trigger(item.guid, opts);
         return 1;
       }

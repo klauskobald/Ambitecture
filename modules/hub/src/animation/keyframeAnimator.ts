@@ -136,6 +136,14 @@ export class KeyframeAnimator {
     'lerp.curve': { name: 'Lerp curve', type: 'string', optionsRef: 'functionCurves', default: 'linear' },
   };
 
+  /** Action trigger commands exposed to controller UIs via systemCapabilities. */
+  static commandDescriptors(): { command: string; hint: string; params: Record<string, unknown> }[] {
+    return [
+      { command: 'step', hint: 'Step to keyframe', params: { offset: { type: 'number', default: 1 } } },
+      { command: 'goto', hint: 'Go to given keyframe', params: { idx: { type: 'number', default: 0 } } },
+    ];
+  }
+
   static readonly defaultValues: Record<string, unknown> = {
     repeat: 0,
     length: 10,
@@ -288,6 +296,50 @@ export class KeyframeAnimator {
       case 'auto':
       default:
         // Already playing — nothing to do.
+        break;
+    }
+  }
+
+  /**
+   * Execute an action trigger command on a running (manual-mode) animator.
+   * Each animator class implements its own command set via switch/case.
+   * Called by {@link AnimationManager.trigger} when a runner already exists.
+   */
+  executeCommand(args: Record<string, unknown>): void {
+    const cmd = typeof args['command'] === 'string' ? args['command'] : '';
+    switch (cmd) {
+      case 'step': {
+        const offset = typeof args['offset'] === 'number' && Number.isFinite(args['offset']) ? Math.round(args['offset']) : 1;
+        const { steps } = this.parseSteps();
+        const targetGuid = this.targetIntentGuid();
+        if (!targetGuid || steps.length === 0 || !this._intentAccess || !this._mutateIntent) return;
+        if (this._lastFiredStepIdx < 0) {
+          this._lastFiredStepIdx = 0;
+        }
+        const L = steps.length;
+        const nextIdx = ((this._lastFiredStepIdx + offset) % L + L) % L;
+        this._lastFiredStepIdx = nextIdx;
+        const step = steps[nextIdx];
+        if (step) {
+          this.emitOneKeyframe(targetGuid, this._intentAccess, this._mutateIntent, step.args);
+        }
+        break;
+      }
+      case 'goto': {
+        const idx = typeof args['idx'] === 'number' && Number.isFinite(args['idx']) ? Math.round(args['idx']) : 0;
+        const { steps } = this.parseSteps();
+        const targetGuid = this.targetIntentGuid();
+        if (!targetGuid || steps.length === 0 || !this._intentAccess || !this._mutateIntent) return;
+        const clamped = Math.max(0, Math.min(steps.length - 1, idx));
+        this._lastFiredStepIdx = clamped;
+        const step = steps[clamped];
+        if (step) {
+          this.emitOneKeyframe(targetGuid, this._intentAccess, this._mutateIntent, step.args);
+        }
+        break;
+      }
+      default:
+        Logger.warn(`[keyframeAnimator] unknown command "${cmd}"`);
         break;
     }
   }

@@ -158,8 +158,10 @@ export class AnimationManager {
   /**
    * Start or restart animation. Kills any existing runner for the same guid.
    * If the animation is in edit mode, that mode exits first.
+   * {@link commandArgs} (from action trigger merged params) are forwarded to the animator's
+   * {@code executeCommand} when the runner exists and is in manual mode.
    */
-  trigger(animationGuid: string, opts: { location?: [number, number]; timescale?: number } = {}): void {
+  trigger(animationGuid: string, opts: { location?: [number, number]; timescale?: number; commandArgs?: Record<string, unknown> } = {}): void {
     if (this.edits.has(animationGuid)) {
       this.exitEditMode(animationGuid);
     }
@@ -184,15 +186,18 @@ export class AnimationManager {
       Logger.warn(`[animation] missing targetIntent for ${animationGuid}`);
       return;
     }
-    let runmode = typeof record['runmode'] === 'string' ? record['runmode'] : undefined;
-    if (!runmode) runmode = 'auto';
 
-    // Manual mode: re-use existing runner — just apply setRunMode again.
+    let runmode: string = typeof record['runmode'] === 'string' ? record['runmode'] : 'auto';
+
+    const hasCommand = opts.commandArgs !== undefined && typeof opts.commandArgs['command'] === 'string';
+
     switch (runmode) {
       case 'manual': {
         const existingRunner = this.runners.get(animationGuid);
         if (existingRunner) {
-          existingRunner.plugin.setRunMode(runmode);
+          if (hasCommand) {
+            existingRunner.plugin.executeCommand(opts.commandArgs!);
+          }
           return;
         }
         break;
@@ -253,6 +258,10 @@ export class AnimationManager {
 
     plugin.start(g => this.intentAccessFn(g), mutateIntent);
     plugin.setRunMode(runmode);
+
+    if (hasCommand) {
+      plugin.executeCommand(opts.commandArgs!);
+    }
   }
 
   /** Mid-run playback factor; timeouts already queued keep old delays until they fire (V1). */
@@ -440,32 +449,7 @@ export class AnimationManager {
         continue;
       }
 
-      runner.plugin.stripTimers();
-      const fresh = new KeyframeAnimator(guid, {
-        onStatus: p =>
-          this.emitAnimatorStatus(guid, p, location ?? this.runners.get(guid)?.lastLocation),
-        getDefinitionRecord: () =>
-          this.projectManager.getAnimationByGuid(guid) as unknown as Record<string, unknown> | undefined,
-      });
-      fresh.setTimescale(runner.timescale);
-
-      const nextLocation = location ?? runner.lastLocation;
-      const next: ActiveRunner = {
-        plugin: fresh,
-        targetIntentGuid: runner.targetIntentGuid,
-        lastInScene: true,
-        timescale: runner.timescale,
-        ...(nextLocation !== undefined ? { lastLocation: nextLocation } : {}),
-      };
-      this.runners.set(guid, next);
-
-      const reenterMutateIntent: MutateIntentFn = (intentGuid, patch) => {
-        if (Object.keys(patch).length === 0) return;
-        const update: RuntimeUpdate = { entityType: 'intent', guid: intentGuid, patch, source: 'hub:animation' };
-        this.runtimeUpdateDispatcher.dispatch([update], next.lastLocation ?? location, Date.now());
-      };
-
-      fresh.start(g => this.intentAccessFn(g), reenterMutateIntent);
+      runner.plugin.onSceneMembershipChanged(true);
     }
   }
 

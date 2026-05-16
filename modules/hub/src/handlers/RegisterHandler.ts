@@ -115,9 +115,15 @@ const animatorDescriptors: Record<string, Record<string, unknown>> = {
   keyframeAnimator: KeyframeAnimator.uiDescriptor,
 };
 
+/** Class name → static commandDescriptors(). Add new animator classes here as they are introduced. */
+const animatorCommandDescriptors: Record<string, ReturnType<typeof KeyframeAnimator.commandDescriptors>> = {
+  keyframeAnimator: KeyframeAnimator.commandDescriptors(),
+};
+
 /**
  * Merges each registered animator's `uiDescriptor` into the matching
- * `systemCapabilities.animations[]` entry as a `descriptor` map.
+ * `systemCapabilities.animations[]` entry as a `descriptor` map, and
+ * each animator's `commandDescriptors()` as a `commands` array.
  * The descriptor keys use the content-relative form (no `content.` prefix).
  */
 function mergeAnimatorDescriptors(caps: unknown): unknown {
@@ -132,7 +138,9 @@ function mergeAnimatorDescriptors(caps: unknown): unknown {
       const e = entry as Record<string, unknown>;
       const cls = typeof e['class'] === 'string' ? e['class'] : '';
       const descriptor = cls ? animatorDescriptors[cls] : undefined;
-      return descriptor ? { ...e, descriptor } : entry;
+      const commands = cls ? animatorCommandDescriptors[cls] : undefined;
+      const out = descriptor ? { ...e, descriptor } : e;
+      return commands ? { ...out, commands } : out;
     }),
   };
 }

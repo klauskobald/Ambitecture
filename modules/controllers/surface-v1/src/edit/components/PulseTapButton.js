@@ -91,8 +91,8 @@ export function createPulseTapButton ({
 
   const btn = document.createElement('button')
   btn.type = 'button'
-  btn.className = className
-  btn.textContent = 'T'
+  btn.className = `btn ${className}`.trim()
+  btn.textContent = 'tap'
   btn.setAttribute('aria-label', label)
   btn.title = label
 

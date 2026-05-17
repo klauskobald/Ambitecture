@@ -928,12 +928,10 @@
 
 .perform-subnav-tap {
   flex: 0 0 auto;
-  width: 2rem;
-  height: 2rem;
-  min-width: 2rem;
   margin-right: 0.15rem;
-  font-size: 0.75rem;
-  font-weight: 700;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.78rem;
+  touch-action: manipulation;
 }
 
 .perform-pulse-edit__bpm-cluster {
@@ -943,8 +941,19 @@
   gap: 0.5rem;
 }
 
+.perform-pulse-edit__tempo-label {
+  flex: 0 0 3.5rem;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
 .perform-pulse-edit__bpm-knob {
   flex: 0 0 auto;
+}
+
+.perform-pulse-tap-btn {
+  flex: 0 0 auto;
+  touch-action: manipulation;
 }
 
 .perform-pulse-row__status {

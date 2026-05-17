@@ -92,6 +92,10 @@ export function createPulseEditPane ({ onClose }) {
     const bpmCluster = document.createElement('div')
     bpmCluster.className = 'perform-pulse-edit__bpm-cluster'
 
+    const tempoLabel = document.createElement('span')
+    tempoLabel.className = 'perform-pulse-edit__tempo-label'
+    tempoLabel.textContent = 'Tempo'
+
     const tapBtn = createPulseTapButton({
       resolveSetupGuid: () => currentGuid,
       className: 'perform-pulse-tap-btn'
@@ -125,8 +129,9 @@ export function createPulseEditPane ({ onClose }) {
     })
     bpmKnob.mount(knobWrap)
 
-    bpmCluster.appendChild(tapBtn)
+    bpmCluster.appendChild(tempoLabel)
     bpmCluster.appendChild(knobWrap)
+    bpmCluster.appendChild(tapBtn)
     body.appendChild(bpmCluster)
 
     const slotsField = document.createElement('label')

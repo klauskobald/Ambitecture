@@ -4,6 +4,9 @@
   --color-text: #e8eaed;
   --color-muted: #9aa0a6;
   --color-accent: #8ab4f8;
+  --color-accent-dim: rgba(138, 180, 248, 0.15);
+  --color-text-warning: #f7bd42;
+  --color-text-warning-dim: rgba(242, 139, 130, 0.15);
   --color-engage: #f59e0b;
   --color-danger: #f28b82;
   --space-2: 4px;

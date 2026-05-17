@@ -41,6 +41,9 @@ The hub is the **single source of truth** for system-wide configuration and grap
 - **`src/ActionInputManager.ts`** — Builds `GraphCommand[]` from `ActionInputCommand` payloads (`ensureInputAssignment`, `removeInputAssignment`, `renameInput`, `updateInput`). Validates input/display types against `systemCapabilities`, composes typed params via `composeInputParams.ts`, and wires actions ↔ inputs by target (`{ type, guid }`). Also provides `buildSceneCleanupCommands(sceneGuid)` for orphan removal when a scene is deleted.
 - **`src/inputAssignment/composeInputParams.ts`** — Pure stateless helpers for reading `systemCapabilities.inputTypes`/`displayTypes`, resolving defaults, validating type class strings, and composing typed `params` from `inputConfig` fields. Extend `applyParamKind()` here when adding new param kinds (currently only `jsonString`).
 - **`src/handlers/ActionHandler.ts`** — Handles `action:input` and `action:trigger`. Triggers shallow-merge `execute.params` with payload `args`, then type-specific executors under [`src/handlers/actionExecute/`](modules/hub/src/handlers/actionExecute/): [`intentTriggerExecutor.ts`](modules/hub/src/handlers/actionExecute/intentTriggerExecutor.ts) (`argsOn`/`argsOff`/`args` + `value` → intent patch), [`animationTriggerExecutor.ts`](modules/hub/src/handlers/actionExecute/animationTriggerExecutor.ts) (`value` on/off for start/stop, optional `timescale`; or `command` when `value` omitted for tests), [`sceneTriggerExecutor.ts`](modules/hub/src/handlers/actionExecute/sceneTriggerExecutor.ts) (post-activation animation side effect from `animationGuid` + `value`). Shared merge helpers: [`merge.ts`](modules/hub/src/handlers/actionExecute/merge.ts). Only registered controllers may send these messages.
+- **`src/pulse/PulseManager.ts`** — Hub-side pulse orchestration: selects an active pulse setup, ticks slots, and fires bucket actions via `action:trigger`. Does not mutate project YAML.
+- **`src/pulse/PulseBucketAssignManager.ts`** — Builds `GraphCommand[]` for pulse-bucket action rows plus in-memory `pulses.buckets` updates from `PulseAssignCommand` payloads (link/unlink animation to bucket, bucket CRUD).
+- **`src/handlers/PulseAssignHandler.ts`** — Handles controller `pulse:assign`; applies action graph commands, then broadcasts `projectPatch` key `pulses` when buckets change.
 - **`src/animation/AnimationManager.ts`** — Hub-side animation orchestrator. Holds one runner per animation `guid`, drives lifecycle (`trigger` / `stop` / `pause` / `setTimescale`), enters/exits live keyframe edit mode, broadcasts `hub:status` updates and per-target `lock:intent` notifications, and registers timescale + edit-state binding masters with `BindingManager`. Scene-membership changes gracefully restart runners so closures over stale graph state are dropped.
 - **`src/animation/keyframeAnimator.ts`** — Keyframe animation runner. Config is read **only** from `definition.content` (required object). `content.length` (seconds, finite > 0) is required; at least **two** steps are stored, with the earliest pinned to `time: 0` and the latest to `time: length` (centisecond rounding). Endpoint rows omit `args` when empty. Plays time-ordered steps against `targetIntent`, dispatches mutations through `RuntimeUpdateDispatcher`, and supports live edit mode (Add uses `diffRecordsToPatch`). The only animation class with built-in edit support today; new classes plug in via `intents/registry.ts`-style registration.
 - **`src/animation/paramLerpSchedule.ts`** — Plans quantized intermediate patches between two keyframe anchors using `content.lerp` (quantization step, min interval, total time, named curve). Pure planning code; the runner schedules the resulting patches.
@@ -399,6 +402,18 @@ Perform parameter payloads for intent (e.g. `argsOn` / `argsOff` / `args` as `js
 - `unlinkInputFromTarget` — removes **one** input’s link to `{ targetType, targetGuid }` (drops the matching action GUID from that input’s `actions[]` and deletes the action row if nothing else references it). Does not remove the companion animation runner row from the graph.
 - `deleteInput` — removes the input; removes any action that is no longer referenced from any input’s `actions[]`. `expectedLinkedTargetCount` is the number of entries in `actions[]` at delete time (stale-guard).
 
+**Pulse buckets** (project YAML `pulses.setups` + `pulses.buckets`): reusable action lists referenced by pulse setup slots (`slot.bucket` → bucket GUID). Linking an animation to a bucket means the bucket’s `actions[]` includes at least one row whose `execute` is `{ type: "animation", guid }` (not a separate execute type). [`PulseManager`](modules/hub/src/pulse/PulseManager.ts) only dispatches those actions at runtime; durable bucket membership is edited via assign UI / `pulse:assign`.
+
+**`pulse:assign`** (controller → hub): sends `PulseAssignCommand` payloads. Commands include:
+- `linkAnimationToBucket` — `{ bucketGuid, animationGuid }`; appends a new action row to the bucket when none targets that animation (default manual `execute.params` when applicable)
+- `unlinkAnimationFromBucket` — removes matching action GUIDs from the bucket and deletes orphaned action rows
+- `createBucket` — `{ name? }`; new `bucket-{uuid}` in `pulses.buckets`
+- `createBucketAssignment` — `{ animationGuid, name? }`; `createBucket` + link in one step
+- `renameBucket` — `{ bucketGuid, name }`
+- `deleteBucket` — removes the bucket, clears `slot.bucket` on setups that referenced it, scrubs unreferenced actions
+
+Hub applies action changes via `graph:delta` and pushes **`projectPatch`** `{ key: "pulses", data: PulsesConfig }` to all controllers when buckets change. On controller register, hub sends an initial `pulses` patch after `graph:init`. Surface: `sendPulseAssignCommand(command)` in `outboundQueue.js`; `projectGraph` topic `pulses`.
+
 **`action:trigger`** (controller → hub): `{ actionGuid, args? }` — one message per action. Hub builds `merged = shallowMerge(execute.params ?? {}, args ?? {})` ([`merge.ts`](modules/hub/src/handlers/actionExecute/merge.ts)), then:
 
 - **Intent** — [`resolveIntentMergedToPatch`](modules/hub/src/handlers/actionExecute/intentTriggerExecutor.ts): `argsOn`/`argsOff` + `value`, or `args` (+ optional `value` → `params.value`).
@@ -644,6 +659,10 @@ Manages controller input assignments and their linked actions. Payload is an `Ac
 ```
 
 Also supports `removeInputAssignment`, `renameInput`, and `updateInput`. Hub validates types against `systemCapabilities`, composes params, and returns `graph:delta` on success.
+
+**`pulse:assign`** — controller -> hub:
+
+Manages pulse bucket membership and bucket CRUD. Payload is a `PulseAssignCommand` (`linkAnimationToBucket`, `unlinkAnimationFromBucket`, `createBucket`, `createBucketAssignment`, `renameBucket`, `deleteBucket`). Action rows are applied via `graph:delta`; bucket list changes are pushed as `projectPatch` key `pulses`.
 
 **`action:trigger`** — controller -> hub:
 

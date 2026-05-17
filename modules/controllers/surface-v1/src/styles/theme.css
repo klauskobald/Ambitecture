@@ -6,11 +6,13 @@
   --color-text: #ccc;
   --color-text-muted: #666;
   --color-text-warning: rgb(142, 134, 64);
+  --color-text-warning-dim: rgba(142, 134, 64, 0.15);
   --color-text-meta: #8a8;
   --color-text-error: #f66;
   --color-border: #333;
   --color-accent: #5af;
   --color-accent-dim: rgba(85, 170, 255, 0.15);
+
   --color-paused: #f80;
   --color-paused-dim: rgba(255, 136, 0, 0.15);
 

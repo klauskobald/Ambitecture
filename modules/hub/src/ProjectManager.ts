@@ -1087,6 +1087,24 @@ export class ProjectManager {
     return (this.project?.pulses?.buckets ?? []).find(b => b.guid === guid);
   }
 
+  ensurePulsesConfig(): PulsesConfig {
+    if (!this.project) {
+      throw new Error('[project] No project loaded — call useProject() first');
+    }
+    if (!this.project.pulses) {
+      this.project.pulses = { setups: [], buckets: [] };
+    }
+    return this.project.pulses;
+  }
+
+  getPulsesWirePayload(): PulsesConfig {
+    const raw = this.project?.pulses;
+    if (!raw) {
+      return { setups: [], buckets: [] };
+    }
+    return cloneRecord(raw as unknown as Record<string, unknown>) as unknown as PulsesConfig;
+  }
+
   getPulseSlotActionGuids(setup: PulseSetup, slotIdx: number): string[] {
     const slot = setup.slots[slotIdx];
     if (!slot?.bucket) return [];

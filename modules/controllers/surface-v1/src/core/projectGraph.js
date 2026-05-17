@@ -91,6 +91,10 @@ class ProjectGraph {
         /** @type {Array<{ guid?: string, name: string, intents: SceneIntentRef[] }>} */ ([]),
       actions: /** @type {Map<string, Record<string, unknown>>} */ (new Map()),
       inputs: /** @type {Map<string, Record<string, unknown>>} */ (new Map()),
+      pulses: /** @type {{ setups: unknown[], buckets: Array<Record<string, unknown>> }} */ ({
+        setups: [],
+        buckets: []
+      }),
       /** Hub `entities.animation` from `graph:init` + `graph:delta` entityType `animation`. */
       animations: /** @type {Map<string, Record<string, unknown>>} */ (
         new Map()
@@ -275,6 +279,42 @@ class ProjectGraph {
   /** @returns {Map<string, Record<string, unknown>>} */
   getActions () {
     return this._data.actions
+  }
+
+  getPulses () {
+    return this._data.pulses
+  }
+
+  /** @returns {Iterable<Record<string, unknown>>} */
+  getPulseBuckets () {
+    return this._data.pulses.buckets
+  }
+
+  /**
+   * @param {Record<string, unknown>} bucket
+   * @param {string} animationGuid
+   * @returns {boolean}
+   */
+  bucketLinksAnimation (bucket, animationGuid) {
+    const actions = this._data.actions
+    const guids = Array.isArray(bucket.actions) ? bucket.actions : []
+    for (const ag of guids) {
+      if (typeof ag !== 'string') continue
+      const action = actions.get(ag)
+      if (actionExecuteTargetsAnimation(action, animationGuid)) return true
+    }
+    return false
+  }
+
+  /**
+   * @param {string} animationGuid
+   * @returns {Record<string, unknown>[]}
+   */
+  getBucketsLinkedToAnimation (animationGuid) {
+    if (!animationGuid) return []
+    return this._data.pulses.buckets.filter(b =>
+      this.bucketLinksAnimation(b, animationGuid)
+    )
   }
 
   /** @returns {Map<string, Record<string, unknown>>} */
@@ -978,6 +1018,11 @@ class ProjectGraph {
         topics.push('inputs')
         break
       }
+      case 'pulses': {
+        this._data.pulses = normalizePulsesConfig(data)
+        topics.push('pulses')
+        break
+      }
       case 'runtimeOverlayGuidsInScene': {
         this._data.runtimeOverlayGuidsInScene = Array.isArray(data)
           ? /** @type {unknown[]} */ (data).filter(d => typeof d === 'string')
@@ -1049,6 +1094,7 @@ class ProjectGraph {
       'fixtures',
       'actions',
       'inputs',
+      'pulses',
       'animations',
       'controller',
       'runtimeOverlayHints'
@@ -1223,6 +1269,9 @@ class ProjectGraph {
       this._data.scenes = rawScenes.map(normalizeScene).filter(s => s.name)
       this._data.actions = normalizeEntityMap(p.actions)
       this._data.inputs = normalizeEntityMap(p.inputs)
+      if (p.pulses !== undefined) {
+        this._data.pulses = normalizePulsesConfig(p.pulses)
+      }
 
       const hubActive =
         typeof p.activeSceneGuid === 'string' && p.activeSceneGuid
@@ -1273,7 +1322,7 @@ class ProjectGraph {
       this._spatial = this._computeSpatial()
       this._zoneBoxes = this._computeZoneBoxes()
       this._fixtures = this._computeFixtures()
-    }, ['project', 'scenes', 'fixtures', 'actions', 'inputs', 'controller'])
+    }, ['project', 'scenes', 'fixtures', 'actions', 'inputs', 'pulses', 'controller'])
   }
 
   // ─── Serialization ────────────────────────────────────────────────────────────
@@ -1938,6 +1987,54 @@ function normalizeQuickPanelDotKeys (value) {
  * @param {Set<string>} target
  * @param {string | string[] | null | undefined} topic
  */
+/**
+ * @param {unknown} data
+ * @returns {{ setups: unknown[], buckets: Array<Record<string, unknown>> }}
+ */
+function normalizePulsesConfig (data) {
+  const raw =
+    data && typeof data === 'object' && !Array.isArray(data)
+      ? /** @type {Record<string, unknown>} */ (data)
+      : {}
+  const setups = Array.isArray(raw.setups) ? raw.setups : []
+  const buckets = Array.isArray(raw.buckets)
+    ? /** @type {unknown[]} */ (raw.buckets)
+        .map(b => {
+          if (!b || typeof b !== 'object' || Array.isArray(b)) return null
+          const row = /** @type {Record<string, unknown>} */ (b)
+          const guid = typeof row.guid === 'string' ? row.guid : ''
+          if (!guid) return null
+          const actions = Array.isArray(row.actions)
+            ? row.actions.filter(ag => typeof ag === 'string')
+            : []
+          const name = typeof row.name === 'string' ? row.name : guid
+          return { guid, name, actions }
+        })
+        .filter(
+          /** @returns {row is Record<string, unknown>} */ row => row !== null
+        )
+    : []
+  return { setups, buckets }
+}
+
+/**
+ * @param {unknown} action
+ * @param {string} animationGuid
+ * @returns {boolean}
+ */
+function actionExecuteTargetsAnimation (action, animationGuid) {
+  const raw =
+    action && typeof action === 'object' && !Array.isArray(action)
+      ? /** @type {{ execute?: unknown }} */ (action).execute
+      : undefined
+  const ex =
+    raw && typeof raw === 'object' && !Array.isArray(raw)
+      ? /** @type {Record<string, unknown>} */ (raw)
+      : null
+  if (!ex) return false
+  return ex.type === 'animation' && ex.guid === animationGuid
+}
+
 function addTopicsToSet (target, topic) {
   if (topic === null || topic === undefined) return
   if (typeof topic === 'string') {

@@ -31,6 +31,8 @@ import { DiscoveryHandler } from './handlers/DiscoveryHandler';
 import { resolveRuntimeReferences } from './ConfigResolver';
 import { registerZonesRangeResolver } from './resolvers/ZonesRangeResolver';
 import { PulseManager } from './pulse/PulseManager';
+import { PulseBucketAssignManager } from './pulse/PulseBucketAssignManager';
+import { PulseAssignHandler } from './handlers/PulseAssignHandler';
 
 const serverConfig = new Config('server');
 const systemConfig = new Config('system', true);
@@ -66,6 +68,10 @@ const animationManager = new AnimationManager(
   bindingManager,
 );
 const pulseManager = new PulseManager(projectManager);
+const pulseBucketAssignManager = new PulseBucketAssignManager(
+  projectManager,
+  () => resolveRuntimeReferences(systemConfig.getOrDefault<unknown>('systemCapabilities', {})),
+);
 const graphStore = new ProjectGraphStore(
   projectManager,
   actionInputManager,
@@ -269,7 +275,14 @@ const publishGraphMutation = (source: import('ws').WebSocket, result: GraphMutat
   }
 };
 
-router.register('register', new RegisterHandler(registry, graphStore, rateLimitEventsPerSecond, systemConfig, discoveryService));
+router.register('register', new RegisterHandler(
+  registry,
+  graphStore,
+  projectManager,
+  rateLimitEventsPerSecond,
+  systemConfig,
+  discoveryService,
+));
 router.register('discovery:subscribe', new DiscoveryHandler(discoveryService));
 router.register('graph:command', new GraphCommandHandler(registry, graphStore, publishGraphMutation));
 router.register('runtime:command', new RuntimeCommandHandler(registry, runtimeUpdateDispatcher, rateLimitEventsPerSecond));
@@ -283,6 +296,13 @@ const actionHandler = new ActionHandler(
 );
 router.register('action:input', actionHandler);
 router.register('action:trigger', actionHandler);
+router.register('pulse:assign', new PulseAssignHandler(
+  registry,
+  graphStore,
+  pulseBucketAssignManager,
+  projectManager,
+  publishGraphMutation,
+));
 pulseManager.setActionTriggerCallback(actionGuid => {
   actionHandler.triggerAction(actionGuid);
 });

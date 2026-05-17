@@ -7,6 +7,7 @@ import { ScalarRadialKnobSvg } from '../edit/components/ScalarRadialKnobSvg.js'
 import { SelectPopup } from '../edit/components/selectPopup.js'
 import * as Modal from '../core/Modal.js'
 import { InputAssignManager } from '../edit/InputAssignManager.js'
+import { PulseAssignManager } from '../edit/PulseAssignManager.js'
 
 /**
  * Edit pane for a single animation record.
@@ -42,8 +43,15 @@ export function createAnimationEditPane ({ onClose }) {
   const caps = getCapabilities()
   const commonCaps = caps && !Array.isArray(caps.animationCommonProperties) ? caps.animationCommonProperties : null
   const runmodeDescriptor = commonCaps && typeof commonCaps === 'object' ? commonCaps.runmode : null
-  const runmodeOptions = Array.isArray(runmodeDescriptor?.options) ? runmodeDescriptor.options : []
-  const runmodeDefault = typeof runmodeDescriptor?.defaultValue === 'string' ? runmodeDescriptor.defaultValue : runmodeOptions[0]
+  const runmodeOptions = Array.isArray(runmodeDescriptor?.options)
+    ? runmodeDescriptor.options.filter(opt => typeof opt === 'string' && opt.length > 0)
+    : []
+  const runmodeDefault =
+    typeof runmodeDescriptor?.defaultValue === 'string' && runmodeDescriptor.defaultValue.length > 0
+      ? runmodeDescriptor.defaultValue
+      : typeof runmodeOptions[0] === 'string'
+        ? runmodeOptions[0]
+        : 'auto'
 
   const runmodeBtn = document.createElement('button')
   runmodeBtn.type = 'button'
@@ -89,16 +97,23 @@ export function createAnimationEditPane ({ onClose }) {
   /** @type {Record<string, unknown> | null} */
   let lastOpenRecord = null
 
-  /** @param {string} opt */
+  /** @param {unknown} opt */
   function runmodeDisplayLabel (opt) {
-    return opt.charAt(0).toUpperCase() + opt.slice(1)
+    const s = typeof opt === 'string' && opt.length > 0 ? opt : runmodeDefault
+    return s.charAt(0).toUpperCase() + s.slice(1)
+  }
+
+  /** @param {Record<string, unknown> | null | undefined} record */
+  function resolveRunmode (record) {
+    const raw = record?.runmode
+    const fromRecord = typeof raw === 'string' && raw.length > 0 ? raw : ''
+    if (fromRecord && runmodeOptions.includes(fromRecord)) return fromRecord
+    return runmodeDefault
   }
 
   function applyRunmodeLabel () {
     if (!lastOpenRecord) return
-    const rm = runmodeOptions.includes(String(lastOpenRecord.runmode))
-      ? String(lastOpenRecord.runmode)
-      : runmodeDefault
+    const rm = resolveRunmode(lastOpenRecord)
     runmodeBtn.textContent = runmodeDisplayLabel(rm)
     runmodeBtn.className = `perform-animate-edit__runmode perform-animate-edit__runmode--${rm}`
     runmodeBtn.title = `Run mode: ${runmodeDisplayLabel(rm)}`
@@ -117,9 +132,19 @@ export function createAnimationEditPane ({ onClose }) {
         toggleClass: 'intent-toggle scene-perform-button'
       })
     )
+    const pam = new PulseAssignManager({
+      context: { type: 'animation', guid: currentGuid },
+      labelDefault: String(lastOpenRecord.name ?? currentGuid)
+    })
+    assignHost.appendChild(
+      pam.getInlinePane({
+        rowClass: 'scene-perform-row',
+        toggleClass: 'intent-toggle scene-perform-button'
+      })
+    )
   }
 
-  projectGraph.subscribe(['actions', 'inputs', 'animations'], () => {
+  projectGraph.subscribe(['actions', 'inputs', 'pulses', 'animations'], () => {
     if (!el.hidden && currentGuid && lastOpenRecord) {
       const row = projectGraph.getAnimations().get(currentGuid)
       if (row && typeof row === 'object' && !Array.isArray(row)) {
@@ -151,9 +176,7 @@ export function createAnimationEditPane ({ onClose }) {
 
     applyRunmodeLabel()
     runmodeBtn.onclick = async () => {
-      const current = runmodeOptions.includes(String(record.runmode))
-        ? String(record.runmode)
-        : runmodeDefault
+      const current = resolveRunmode(record)
       const choice = await Modal.pickChoice(
         'Run mode',
         runmodeOptions.map(opt => ({

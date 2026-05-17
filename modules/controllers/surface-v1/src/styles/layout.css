@@ -406,9 +406,11 @@ body.nav-open .app-nav .nav-link {
 }
 
 .status-notification--warn {
-  border-left-color: #f7bd42;
+  border-left-color: var(--color-text-warning);
+  background: var(--color-text-warning-dim);
 }
 
 .status-notification--error {
   border-left-color: var(--color-text-error);
+  background: var(--color-text-error-dim);
 }

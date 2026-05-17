@@ -13,6 +13,7 @@ import {
 } from '../core/systemCapabilities.js'
 import { normalizeInputKeyChar } from '../core/performButtonInputs.js'
 import { AssignedActionsEditor } from './actionEdit/AssignedActionsEditor.js'
+import { formatLinkedAssignLabel } from './assign/assignInlineLabel.js'
 
 /** @param {Record<string, unknown> | null | undefined} input */
 function displayClassFromInputRecord (input) {
@@ -78,7 +79,7 @@ export class InputAssignManager {
         : toggleClass
       if (isActive) {
         const fullLabel = linkedNames.join(', ')
-        toggle.textContent = this._formatInlineInputLabel(linkedNames)
+        toggle.textContent = formatLinkedAssignLabel(linkedNames)
         toggle.title = `Inputs: ${fullLabel}`
       } else {
         toggle.textContent = 'Input'
@@ -167,19 +168,6 @@ export class InputAssignManager {
       if (name.length > 0) names.push(name)
     }
     return names.sort((a, b) => a.localeCompare(b))
-  }
-
-  /**
-   * @param {string[]} names
-   * @param {number} [maxLen]
-   * @returns {string}
-   */
-  _formatInlineInputLabel (names, maxLen = 25) {
-    if (names.length === 0) return ''
-    const joined = names.join(', ')
-    if (joined.length <= maxLen) return joined
-    if (maxLen <= 1) return joined.slice(0, maxLen)
-    return `${joined.slice(0, maxLen - 1)}…`
   }
 
   /**

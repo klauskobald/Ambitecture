@@ -4,6 +4,7 @@ import { Config } from '../Config';
 import { ConnectionRegistry } from '../ConnectionRegistry';
 import { MessageHandler, WsMessage } from '../MessageRouter';
 import { ProjectGraphStore } from '../ProjectGraphStore';
+import { ProjectManager } from '../ProjectManager';
 import { getAllAnimatorDescriptors, getAllAnimatorCommandDescriptors } from '../animation/animatorRegistry';
 import { recordRendererEventDeliveries } from '../hubWebSocketStats';
 import { DiscoveryService, parseDiscoveryFromRegisterPayload } from '../DiscoveryService';
@@ -28,6 +29,7 @@ function isRegisterPayload(payload: unknown): payload is RegisterPayload {
 export class RegisterHandler implements MessageHandler {
   private registry: ConnectionRegistry;
   private graphStore: ProjectGraphStore;
+  private projectManager: ProjectManager;
   private rateLimitEventsPerSecond: number;
   private systemConfig: Config;
   private discovery: DiscoveryService;
@@ -35,12 +37,14 @@ export class RegisterHandler implements MessageHandler {
   constructor(
     registry: ConnectionRegistry,
     graphStore: ProjectGraphStore,
+    projectManager: ProjectManager,
     rateLimitEventsPerSecond: number,
     systemConfig: Config,
     discovery: DiscoveryService,
   ) {
     this.registry = registry;
     this.graphStore = graphStore;
+    this.projectManager = projectManager;
     this.rateLimitEventsPerSecond = rateLimitEventsPerSecond;
     this.systemConfig = systemConfig;
     this.discovery = discovery;
@@ -99,6 +103,12 @@ export class RegisterHandler implements MessageHandler {
       };
       ws.send(JSON.stringify({ message: { type: 'graph:init', payload: graphInit } }));
       Logger.info(`[register] pushed graph:init to controller ${guid}`);
+
+      const pulses = this.projectManager.getPulsesWirePayload();
+      ws.send(JSON.stringify({
+        message: { type: 'projectPatch', payload: { key: 'pulses', data: pulses } },
+      }));
+      Logger.info(`[register] pushed projectPatch pulses to controller ${guid}`);
 
       const capabilitiesRaw = this.systemConfig.getOrDefault<unknown>('systemCapabilities', null);
       if (capabilitiesRaw !== null) {

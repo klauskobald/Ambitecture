@@ -716,9 +716,19 @@
 }
 
 .perform-animate-edit__assign {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  max-width: min(28rem, 100%);
+}
+
+.pulse-assign-inline-row,
+.input-assign-inline-row {
   flex: 0 1 auto;
   min-width: 0;
-  max-width: min(14rem, 100%);
+  max-width: min(14rem, 50%);
 }
 
 .perform-animate-edit__back {

@@ -154,6 +154,19 @@ export function sendActionInputCommand (command) {
   }))
 }
 
+/** @param {Record<string, unknown>} command */
+export function sendPulseAssignCommand (command) {
+  if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation)
+    return
+  activeWs.send(JSON.stringify({
+    message: {
+      type: 'pulse:assign',
+      location: activeLocation,
+      payload: command
+    }
+  }))
+}
+
 /** @param {string} key */
 export function sendBindingSubscribe (key) {
   if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation) return

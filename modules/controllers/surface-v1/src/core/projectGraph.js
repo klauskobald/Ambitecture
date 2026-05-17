@@ -377,6 +377,44 @@ class ProjectGraph {
     )
   }
 
+  /**
+   * Other scene actions already in a bucket (not animation actions).
+   *
+   * @param {string} bucketGuid
+   * @param {string} exceptSceneGuid scene being linked — excluded from the list
+   * @returns {string[]} display names of scenes that would be removed
+   */
+  getOtherSceneDisplayNamesInBucket (bucketGuid, exceptSceneGuid) {
+    const bucket = this._data.pulses.buckets.find(
+      b => typeof b.guid === 'string' && b.guid === bucketGuid
+    )
+    if (!bucket) return []
+    const names = []
+    const guids = Array.isArray(bucket.actions) ? bucket.actions : []
+    for (const ag of guids) {
+      if (typeof ag !== 'string') continue
+      const action = this._data.actions.get(ag)
+      const raw =
+        action && typeof action === 'object' && !Array.isArray(action)
+          ? /** @type {{ execute?: unknown }} */ (action).execute
+          : undefined
+      const ex =
+        raw && typeof raw === 'object' && !Array.isArray(raw)
+          ? /** @type {Record<string, unknown>} */ (raw)
+          : null
+      if (!ex || ex.type !== 'scene') continue
+      const sg = typeof ex.guid === 'string' ? ex.guid : ''
+      if (!sg || sg === exceptSceneGuid) continue
+      const scene = this._data.scenes.find(s => s.guid === sg)
+      const label =
+        typeof scene?.name === 'string' && scene.name.length > 0
+          ? scene.name
+          : sg
+      names.push(label)
+    }
+    return names
+  }
+
   /** @returns {Map<string, Record<string, unknown>>} */
   getInputs () {
     return this._data.inputs

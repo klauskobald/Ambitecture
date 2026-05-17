@@ -44,6 +44,19 @@ function actionTargetsScene(
   return ex['type'] === 'scene' && ex['guid'] === sceneGuid;
 }
 
+function actionIsSceneExecute(action: ActionDefinition | undefined): boolean {
+  if (!action?.execute) return false;
+  const ex = action.execute as Record<string, unknown>;
+  return ex['type'] === 'scene' && typeof ex['guid'] === 'string' && ex['guid'].length > 0;
+}
+
+function sceneGuidFromAction(action: ActionDefinition | undefined): string | undefined {
+  if (!action?.execute) return undefined;
+  const ex = action.execute as Record<string, unknown>;
+  if (ex['type'] !== 'scene' || typeof ex['guid'] !== 'string') return undefined;
+  return ex['guid'].length > 0 ? ex['guid'] : undefined;
+}
+
 export class PulseBucketAssignManager {
   constructor(
     private projectManager: ProjectManager,
@@ -203,6 +216,8 @@ export class PulseBucketAssignManager {
       return { graphCommands: [], pulsesChanged: false };
     }
 
+    const displaced = this.removeOtherSceneActionsFromBucket(bucketGuid, sceneGuid);
+
     const sceneName =
       this.projectManager.getSceneByGuid(sceneGuid)?.name ?? sceneGuid;
     const bucketLabel =
@@ -217,18 +232,77 @@ export class PulseBucketAssignManager {
       execute: executeItem,
     };
 
-    const nextActions = [...(bucket.actions ?? [])];
+    const refreshed = this.projectManager.getPulseBucket(bucketGuid);
+    const nextActions = [...(refreshed?.actions ?? [])];
     if (!nextActions.includes(newActionGuid)) {
       nextActions.push(newActionGuid);
     }
     this.updateBucketActions(bucketGuid, nextActions);
 
+    if (displaced.displacedLabels.length > 0) {
+      Logger.info(
+        `[pulse] bucket ${bucketGuid}: replaced scene(s) ${displaced.displacedLabels.join(', ')} with ${sceneName}`,
+      );
+    }
+
     return {
       graphCommands: [
+        ...displaced.graphCommands,
         this.upsertCommand('action', newActionGuid, newAction as unknown as Record<string, unknown>),
       ],
       pulsesChanged: true,
     };
+  }
+
+  /**
+   * A bucket may reference at most one scene action; animation actions are kept.
+   */
+  private removeOtherSceneActionsFromBucket(
+    bucketGuid: string,
+    exceptSceneGuid: string,
+  ): { graphCommands: GraphCommand[]; displacedLabels: string[] } {
+    const bucket = this.projectManager.getPulseBucket(bucketGuid);
+    if (!bucket) {
+      return { graphCommands: [], displacedLabels: [] };
+    }
+
+    const toRemove: string[] = [];
+    const displacedLabels: string[] = [];
+
+    for (const ag of bucket.actions ?? []) {
+      const a = this.projectManager.getActionByGuid(ag);
+      if (!actionIsSceneExecute(a)) {
+        continue;
+      }
+      const linkedSceneGuid = sceneGuidFromAction(a);
+      if (!linkedSceneGuid || linkedSceneGuid === exceptSceneGuid) {
+        continue;
+      }
+      toRemove.push(ag);
+      const sceneName =
+        this.projectManager.getSceneByGuid(linkedSceneGuid)?.name ?? linkedSceneGuid;
+      displacedLabels.push(sceneName);
+    }
+
+    if (toRemove.length === 0) {
+      return { graphCommands: [], displacedLabels: [] };
+    }
+
+    const removeSet = new Set(toRemove);
+    const nextActions = (bucket.actions ?? []).filter(ag => !removeSet.has(ag));
+    this.updateBucketActions(bucketGuid, nextActions);
+
+    const commands: GraphCommand[] = [];
+    for (const ag of toRemove) {
+      const keep = this.isActionReferencedInGraph(ag, {
+        excludingBucketGuids: new Set([bucketGuid]),
+      });
+      if (!keep) {
+        commands.push(this.removeActionCommand(ag));
+      }
+    }
+
+    return { graphCommands: commands, displacedLabels };
   }
 
   private unlinkSceneFromBucket(bucketGuid: string, sceneGuid: string): PulseAssignResult {

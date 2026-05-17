@@ -6,6 +6,7 @@ import {
 } from '../core/Modal.js'
 import { sendPulseAssignCommand } from '../core/outboundQueue.js'
 import { formatLinkedAssignLabel } from './assign/assignInlineLabel.js'
+import { notification } from '../app/notification.js'
 
 export class PulseAssignManager {
   /**
@@ -281,19 +282,38 @@ export class PulseAssignManager {
       )
     }
     for (const bg of toLink) {
-      sendPulseAssignCommand(
-        this._contextType === 'scene'
-          ? {
-              command: 'linkSceneToBucket',
-              bucketGuid: bg,
-              sceneGuid: targetGuid
-            }
-          : {
-              command: 'linkAnimationToBucket',
-              bucketGuid: bg,
-              animationGuid: targetGuid
-            }
-      )
+      if (this._contextType === 'scene') {
+        const displaced = projectGraph.getOtherSceneDisplayNamesInBucket(
+          bg,
+          targetGuid
+        )
+        if (displaced.length > 0) {
+          const bucket = [...projectGraph.getPulseBuckets()].find(
+            b => b.guid === bg
+          )
+          const bucketLabel =
+            typeof bucket?.name === 'string' && bucket.name.trim().length > 0
+              ? bucket.name.trim()
+              : bg
+          const list = displaced.join(', ')
+          const plural = displaced.length > 1 ? 'scenes' : 'scene'
+          notification.warn(
+            `Bucket "${bucketLabel}" allows one scene only — removed ${plural}: ${list}.`,
+            `pulse-bucket-one-scene-${bg}`
+          )
+        }
+        sendPulseAssignCommand({
+          command: 'linkSceneToBucket',
+          bucketGuid: bg,
+          sceneGuid: targetGuid
+        })
+        continue
+      }
+      sendPulseAssignCommand({
+        command: 'linkAnimationToBucket',
+        bucketGuid: bg,
+        animationGuid: targetGuid
+      })
     }
   }
 

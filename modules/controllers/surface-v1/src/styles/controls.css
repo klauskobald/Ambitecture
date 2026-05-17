@@ -988,22 +988,7 @@
 }
 
 .perform-pulse-meter__slot--current {
-  background: rgba(230, 126, 34, 0.35);
-  animation: perform-pulse-slot-beat var(--pulse-beat-period, 500ms) linear infinite;
-}
-
-@keyframes perform-pulse-slot-beat {
-  0%,
-  50% {
-    background: #e67e22;
-    box-shadow: 0 0 0.35rem rgba(230, 126, 34, 0.55);
-  }
-
-  50.01%,
-  100% {
-    background: rgba(230, 126, 34, 0.2);
-    box-shadow: none;
-  }
+  background: #e67e22;
 }
 
 .perform-pulse-select,

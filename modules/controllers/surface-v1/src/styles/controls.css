@@ -853,7 +853,9 @@
 
 .perform-subpane--pulse {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
+  min-width: 0;
   min-height: 0;
 }
 
@@ -867,33 +869,39 @@
   flex: 1 1 auto;
   flex-direction: column;
   align-items: stretch;
+  min-width: 0;
   min-height: 0;
-  overflow: hidden;
 }
 
 @media (min-width: 400px) {
   .perform-pulse-main {
     flex-direction: row;
+    overflow: hidden;
   }
 }
 
 .perform-pulse-sync-col {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.2rem 0.45rem;
+  align-content: flex-start;
+  gap: 0.2rem 0.35rem;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   padding: 0.28rem 0.45rem;
   border-bottom: 1px solid var(--color-border, rgba(255, 255, 255, 0.12));
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 @media (min-width: 400px) {
   .perform-pulse-sync-col {
-    flex-wrap: nowrap;
-    width: min(11.5rem, 42vw);
+    flex: 0 1 min(11.5rem, 38vw);
+    width: min(11.5rem, 38vw);
+    max-width: min(11.5rem, 38vw);
     border-bottom: none;
     border-right: 1px solid var(--color-border, rgba(255, 255, 255, 0.12));
   }
@@ -901,9 +909,10 @@
 
 .perform-pulse-sync-col__heading {
   display: inline-flex;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   align-items: center;
   gap: 0.25rem;
+  min-width: 0;
 }
 
 .perform-pulse-sync-col__title {
@@ -951,20 +960,15 @@
 
 .perform-pulse-sync-col__group {
   display: inline-flex;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   align-items: center;
-  gap: 0.28rem;
+  gap: 0.2rem;
   min-width: 0;
+  max-width: 100%;
 }
 
 .perform-pulse-sync-col__group--lerp {
-  margin-left: auto;
-}
-
-@media (min-width: 400px) {
-  .perform-pulse-sync-col__group--lerp {
-    margin-left: 0;
-  }
+  flex: 0 1 auto;
 }
 
 .perform-pulse-sync-col__label {
@@ -976,7 +980,8 @@
 }
 
 .perform-pulse-sync-col__restart-value {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
   margin: 0;
   padding: 0 0.2rem;
   border: none;
@@ -988,6 +993,9 @@
   line-height: 1.2;
   cursor: pointer;
   touch-action: manipulation;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .perform-pulse-sync-col__restart-value:focus-visible {
@@ -1003,6 +1011,7 @@
   justify-content: center;
   width: 2.15rem;
   height: 2.15rem;
+  max-width: 100%;
 }
 
 .perform-pulse-sync-col__lerp-knob .quick-panel-knob {
@@ -1027,9 +1036,17 @@
 .perform-pulse-list-view {
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  overflow-y: auto;
   flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+@media (min-width: 400px) {
+  .perform-pulse-list-view {
+    flex: 1 1 0;
+  }
 }
 
 .perform-pulse-list {

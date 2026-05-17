@@ -258,6 +258,8 @@ export class PulseBucketAssignManager {
       );
       if (defaults) {
         executeItem['params'] = defaults;
+      } else if (!prevRec || !Object.prototype.hasOwnProperty.call(prevRec, 'value')) {
+        executeItem['params'] = { value: 'on' };
       }
     }
     return executeItem as ActionExecuteItem;

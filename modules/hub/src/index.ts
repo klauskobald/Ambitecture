@@ -307,6 +307,7 @@ router.register('pulse:assign', new PulseAssignHandler(
   graphStore,
   pulseBucketAssignManager,
   projectManager,
+  pulseManager,
   publishGraphMutation,
 ));
 router.register('pulse:control', new PulseControlHandler(
@@ -316,7 +317,7 @@ router.register('pulse:control', new PulseControlHandler(
   projectManager,
 ));
 pulseManager.setActionTriggerCallback(actionGuid => {
-  actionHandler.triggerAction(actionGuid);
+  actionHandler.triggerAction(actionGuid, undefined, { value: 'on' });
 });
 router.register('events', new EventsHandler(registry));
 router.register('intents', new IntentsHandler(registry, projectManager, eventQueue, runtimeUpdateDispatcher));

@@ -133,8 +133,13 @@ export class ActionHandler implements MessageHandler {
   /**
    * Public entry point for triggering an action by GUID (e.g., from PulseManager).
    * No WebSocket context; executes without mutation publishing.
+   * Optional `triggerArgs` shallow-merged with execute.params (pulse passes `{ value: 'on' }`).
    */
-  triggerAction(actionGuid: string, location?: [number, number]): void {
+  triggerAction(
+    actionGuid: string,
+    location?: [number, number],
+    triggerArgs?: Record<string, unknown>,
+  ): void {
     const action = this.actionInputManager.getAction(actionGuid);
     if (!action) {
       Logger.warn(`[action] action ${actionGuid} not found`);
@@ -158,11 +163,11 @@ export class ActionHandler implements MessageHandler {
         break;
       }
       case 'animation': {
-        handled += this.executeAnimationItem(item, location, undefined);
+        handled += this.executeAnimationItem(item, location, triggerArgs);
         break;
       }
       case 'intent': {
-        const update = this.intentExecuteItemToRuntimeUpdate(item, actionGuid, {});
+        const update = this.intentExecuteItemToRuntimeUpdate(item, actionGuid, triggerArgs ?? {});
         if (update) {
           this.runtimeUpdateDispatcher.dispatch([update], location, Date.now(), new Set());
           handled = 1;

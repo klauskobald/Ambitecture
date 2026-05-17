@@ -90,6 +90,7 @@ export class PulseControlHandler implements MessageHandler {
 
     if (result.pulsesChanged) {
       this.broadcastPulsesPatch();
+      this.pulseManager.syncActiveSetupFromProject();
     }
   }
 

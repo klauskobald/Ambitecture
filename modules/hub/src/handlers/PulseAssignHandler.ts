@@ -9,6 +9,7 @@ import {
 import { ProjectGraphStore } from '../ProjectGraphStore';
 import { ProjectManager } from '../ProjectManager';
 import { GraphMutationResult } from '../GraphProtocol';
+import { PulseManager } from '../pulse/PulseManager';
 
 function isPulseAssignCommand(payload: unknown): payload is PulseAssignCommand {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false;
@@ -43,6 +44,7 @@ export class PulseAssignHandler implements MessageHandler {
     private graphStore: ProjectGraphStore,
     private pulseBucketAssignManager: PulseBucketAssignManager,
     private projectManager: ProjectManager,
+    private pulseManager: PulseManager,
     private publishMutation: (source: WebSocket, result: GraphMutationResult, location?: [number, number]) => void,
   ) {}
 
@@ -67,6 +69,7 @@ export class PulseAssignHandler implements MessageHandler {
 
     if (result.pulsesChanged) {
       this.broadcastPulsesPatch();
+      this.pulseManager.syncActiveSetupFromProject();
     }
   }
 

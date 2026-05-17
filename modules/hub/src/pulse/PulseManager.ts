@@ -49,6 +49,32 @@ export class PulseManager {
   /**
    * Snapshot for controller register / reconnect.
    */
+  /**
+   * Re-read the active setup and buckets from project YAML after `pulse:assign` / `pulse:control`.
+   */
+  syncActiveSetupFromProject(): void {
+    if (!this.runner) return;
+    const guid = this.runner.setup.guid;
+    if (!guid) return;
+    const setup = this.projectManager.getPulseSetup(guid);
+    if (!setup) {
+      Logger.warn(`[pulse] syncActiveSetupFromProject: setup ${guid} no longer exists`);
+      return;
+    }
+    this.runner.setup = setup;
+    this.runner.tickIntervalMs = this.computeTickIntervalMs(setup.bpm, setup.meter);
+    if (this.runner.currentSlotIdx >= setup.slots.length) {
+      this.runner.currentSlotIdx = 0;
+    }
+  }
+
+  private resolveActiveSetup(): PulseSetup | undefined {
+    if (!this.runner) return undefined;
+    const guid = this.runner.setup.guid;
+    if (!guid) return undefined;
+    return this.projectManager.getPulseSetup(guid);
+  }
+
   getStatusSnapshot(): HubStatusPulsePayload | undefined {
     if (!this.runner || !this.runner.isRunning) {
       return undefined;
@@ -273,18 +299,23 @@ export class PulseManager {
       return;
     }
 
+    const setup = this.resolveActiveSetup();
+    if (!setup) {
+      return;
+    }
+    this.runner.setup = setup;
+
     const slotIdx = this.runner.currentSlotIdx;
-    const actionGuids = this.projectManager.getPulseSlotActionGuids(
-      this.runner.setup,
-      slotIdx,
-    );
+    const actionGuids = this.projectManager.getPulseSlotActionGuids(setup, slotIdx);
     for (const actionGuid of actionGuids) {
       this.dispatchActionItem(actionGuid);
     }
 
     this.broadcastPulseStatus('started', slotIdx);
 
-    this.runner.currentSlotIdx = (slotIdx + 1) % this.runner.setup.slots.length;
+    const slotsTotal = setup.slots.length;
+    this.runner.currentSlotIdx =
+      slotsTotal > 0 ? (slotIdx + 1) % slotsTotal : 0;
     this.runner.msIntoCurrentTick = 0;
   }
 

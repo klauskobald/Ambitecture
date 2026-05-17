@@ -11,6 +11,7 @@ import { DiscoveryService, parseDiscoveryFromRegisterPayload } from '../Discover
 import { resolveRuntimeReferences } from '../ConfigResolver';
 import { PulseManager } from '../pulse/PulseManager';
 import { HubStatusDispatcher } from '../hubStatusTypes';
+import { parseSubscribe, toClientSubscribeState } from '../SubscribeProtocol';
 
 interface RegisterPayload {
   role: 'renderer' | 'controller';
@@ -18,6 +19,7 @@ interface RegisterPayload {
   location?: [number, number];
   boundingBox?: unknown;
   scope?: unknown;
+  subscribe?: unknown;
 }
 
 function isRegisterPayload(payload: unknown): payload is RegisterPayload {
@@ -66,6 +68,14 @@ export class RegisterHandler implements MessageHandler {
 
     const { role, guid, location, boundingBox, scope } = message.payload;
 
+    const parsedSubscribe = parseSubscribe(role, message.payload.subscribe);
+    if (parsedSubscribe === null) {
+      const key = role === 'controller' ? 'subscribe.runtime' : 'subscribe.events';
+      Logger.warn(`[register] rejected — ${key} required (boolean) for ${guid}`);
+      return;
+    }
+    const subscribe = toClientSubscribeState(role, parsedSubscribe);
+
     const meta: Record<string, unknown> = {};
     if (boundingBox !== undefined) {
       meta['boundingBox'] = boundingBox;
@@ -74,13 +84,17 @@ export class RegisterHandler implements MessageHandler {
       meta['scope'] = scope;
     }
 
-    const update: Parameters<ConnectionRegistry['update']>[1] = { role, guid, meta };
+    const update: Parameters<ConnectionRegistry['update']>[1] = { role, guid, meta, subscribe };
     if (location !== undefined) {
       update.location = location;
     }
 
     this.registry.update(ws, update);
-    Logger.info(`[register] ${role} ${guid}`);
+    if (role === 'controller') {
+      Logger.info(`[register] controller ${guid} runtime=${String(subscribe.runtime)}`);
+    } else {
+      Logger.info(`[register] renderer ${guid} events=${String(subscribe.events)}`);
+    }
 
     if (role === 'controller') {
       const discoveryEntry = parseDiscoveryFromRegisterPayload(message.payload);
@@ -98,11 +112,13 @@ export class RegisterHandler implements MessageHandler {
       ws.send(JSON.stringify({ message: { type: 'config', payload: config } }));
       Logger.info(`[register] pushed config to renderer ${guid}`);
 
-      const events = this.graphStore.getActiveSceneEvents();
-      if (events.length > 0) {
-        recordRendererEventDeliveries(events.length, 1);
-        ws.send(JSON.stringify({ message: { type: 'events', payload: events } }));
-        Logger.info(`[register] pushed ${events.length} active scene event(s) to renderer ${guid}`);
+      if (subscribe.events) {
+        const events = this.graphStore.getActiveSceneEvents();
+        if (events.length > 0) {
+          recordRendererEventDeliveries(events.length, 1);
+          ws.send(JSON.stringify({ message: { type: 'events', payload: events } }));
+          Logger.info(`[register] pushed ${events.length} active scene event(s) to renderer ${guid}`);
+        }
       }
     } else if (role === 'controller') {
       const graphInit = {

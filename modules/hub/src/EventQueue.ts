@@ -40,7 +40,9 @@ export class EventQueue {
 
   private dispatch(outbound: string, eventCount: number): void {
     const renderers = this.registry.getByRole('renderer');
-    const openRenderers = renderers.filter(r => r.readyState === WebSocket.OPEN);
+    const openRenderers = renderers.filter(
+      r => r.readyState === WebSocket.OPEN && this.registry.wantsRendererEvents(r),
+    );
     recordRendererEventDeliveries(eventCount, openRenderers.length);
     for (const rendererWs of openRenderers) {
       rendererWs.send(outbound);

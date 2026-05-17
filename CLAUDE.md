@@ -212,4 +212,4 @@ if (isWithinRange && isActiveLayer) { ... }
 - **Update SYSTEM-ARCHITECTURE.md in the same change** when you touch architecture, protocols, or shared subsystems. Stale architecture docs are worse than no docs.
 - When changing renderer behavior, change every renderer (`dmx-ts`, `simulator-2d`) — never just one.
 - When changing a `system.yml` capability shape (input kinds, animation classes, function curves, intent properties), check both the hub and `surface-v1` sides — they must stay in sync.
-- For new headless controllers, start from `modules/controllers/starter/` — it has the correct registration flow, GUID-keyed graph replica, lifecycle hooks for every inbound hub message, and typed send helpers.
+- For new headless controllers, start from `modules/controllers/starter/` — it has the correct registration flow, GUID-keyed graph replica, lifecycle hooks for every inbound hub message, and typed send helpers. On `register`, set `subscribe: { runtime: false }` when the module only pushes pulse/actions and does not need perform `runtime:update`; set `runtime: true` when it mirrors perform live state (e.g. `surface-v1`, sample runtime loop).

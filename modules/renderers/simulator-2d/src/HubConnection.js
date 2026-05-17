@@ -60,6 +60,7 @@ class HubConnection {
                 payload: {
                     role: 'renderer',
                     guid: this.config.GUID,
+                    subscribe: { events: true },
                 },
             },
         }));

@@ -264,16 +264,27 @@ This metadata can be stored in module-local config (`.env`, JSON) and then treat
 
 When a module connects, it should announce its location/capability data to the hub.
 
-- **Renderer -> Hub:** announces geo + optional `boundingBox` metadata + `guid`; spatial truth for the scene comes from hub **`config`** (project zones, each with `boundingBox`).
-- **Controller -> Hub:** announces geo + `guid` + `scope` (rooms/areas); receives hub **`graph:init`** with full controller graph data including zones, scenes, controller-visible intents, renderer routing, and active scene state.
+- **Renderer -> Hub:** announces geo + optional `boundingBox` metadata + `guid` + required **`subscribe.events`** (`true` \| `false`); spatial truth for the scene comes from hub **`config`** (project zones, each with `boundingBox`).
+- **Controller -> Hub:** announces geo + `guid` + `scope` (rooms/areas) + required **`subscribe.runtime`** (`true` \| `false`); receives hub **`graph:init`** with full controller graph data including zones, scenes, controller-visible intents, renderer routing, and active scene state.
 
-The hub keeps this as authoritative runtime metadata and can update it if the module reconnects or republishes.
+**`subscribe` (required, no defaults):** Every `register` payload must include a `subscribe` object with the role’s boolean flag set explicitly. If the flag is missing or not a boolean, the hub **rejects** registration (warn log, no `graph:init` / `config` push; connection stays `unknown`).
+
+| Role | Key | When `true` | When `false` |
+|------|-----|-------------|--------------|
+| `controller` | `subscribe.runtime` | `runtime:update`, `lock:intent`, legacy peer `intents` sync | No perform live fan-out (strict: no echo of own `runtime:command` either) |
+| `renderer` | `subscribe.events` | `events` (live + register catch-up) | `config` only |
+
+**Always delivered (not gated by `subscribe`):** `graph:init`, `graph:delta`, `projectPatch`, `systemCapabilities`, `hub:status`, `discovery:delta`, `binding:value` (after `binding:subscribe`), pulse `projectPatch` broadcasts.
+
+Headless push-only controllers (pulse tap, `action:trigger` only) should register with `subscribe: { runtime: false }`. Perform UIs (`surface-v1`) use `subscribe: { runtime: true }`. Hardware renderers use `subscribe: { events: true }`.
+
+The hub keeps connection metadata and can update it if the module reconnects or republishes.
 
 ### Intent-to-event routing for renderers
 
 Controllers submit authoritative graph/control changes to the hub with `graph:command`, and transient live updates with `runtime:command`. For interpreted `intent` runtime updates, the hub does not mutate the project graph; it derives scheduled renderer-facing `events` when the intent belongs to the active scene. Renderers then apply received events through a capability-based layer engine. In the current implementation, renderers keep intent state keyed by stable intent `guid` and fixtures sample capabilities from snapshots (`light.color.xyY`, `light.strobe`, `master.brightness`, `master.blackout`) instead of handling each event directly.
 
-Hub pre-filtering by bounding box/location is intended optimization, not current default behavior. Current queue dispatch of generated `events` is broadcast to all connected renderers.
+Hub pre-filtering by bounding box/location is intended optimization, not current default behavior. Generated `events` are sent only to renderers that registered with `subscribe.events: true`.
 
 ### Room and scope filtering for controllers
 
@@ -287,14 +298,14 @@ Current controller/hub state sync uses a GUID-addressed graph/control protocol:
 - `graph:command` — controller -> hub for authoritative graph/control mutations. It carries an operation, open `entityType` string, stable `guid`, optional `patch`, optional `remove`, optional full `value`, and a persistence policy.
 - `graph:delta` — hub -> controllers, sent after accepted mutations. It carries one or more deltas with hub-assigned `revision`.
 - `runtime:command` — controller -> hub for transient live updates. It carries an open `entityType`, stable `guid`, and optional `patch` / `remove` / `value` data. It must not save YAML, must not emit `graph:delta`, and must not call the authoritative project graph mutation path.
-- `runtime:update` — hub -> controllers for relayed live updates. Controllers apply these as transient state, separately from `graph:delta`.
+- `runtime:update` — hub -> controllers with `subscribe.runtime: true` for relayed live perform updates. Controllers apply these as transient state, separately from `graph:delta`.
 - `binding:subscribe` / `binding:set` — controller -> hub for per-key bindings to live hub-owned values (animation timescale, keyframe edit state).
 - `binding:value` — hub -> controllers, value pushes for subscribed binding keys.
 - `animation:edit` — controller -> hub, `{ animationGuid, on }` to enter/exit live keyframe edit mode for an animation.
 - `hub:status` — hub -> controllers, broadcast status updates (currently animation `started` / `paused` / `stopped` events). Open by `kind` for future status sources.
-- `lock:intent` — hub -> controllers, indicates an intent is currently driven by an animation and should be uneditable (knobs/drag disabled) until released.
+- `lock:intent` — hub -> controllers with `subscribe.runtime: true`; indicates an intent is currently driven by an animation and should be uneditable until released.
 - `config` — hub -> renderer, still used for assigned zones/fixtures.
-- `events` — hub -> renderer, still used for incremental intent execution.
+- `events` — hub -> renderers with `subscribe.events: true`; incremental intent execution.
 
 Use `graph:command` for scene activation, controller state, durable edits, saves, and final committed graph changes. Use `runtime:command` for live data streams such as intent dragging, controller-generated loops, MIDI/sensor values, temporary overrides, and future realtime entity updates. Runtime traffic is latest-wins/coalesced by entity and must not block or rerender graph/control UI such as scene buttons. Use `binding:*` for controller UI that needs to mirror or push hub-owned live values (animation timescale, edit state); never replicate hub state by polling.
 

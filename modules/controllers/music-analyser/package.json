@@ -1,0 +1,23 @@
+{
+  "name": "ambitecture-music-analyser",
+  "version": "0.1.0",
+  "description": "Ambitecture music analyser controller",
+  "main": "src/analyser.js",
+  "scripts": {
+    "start": "node src/analyser.js",
+    "dev": "node --watch --watch-path=src src/analyser.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [],
+  "author": "Klaus P Kobald Gmbh",
+  "license": "ISC",
+  "dependencies": {
+    "meyda": "^5.6.3",
+    "node-record-lpcm16": "^1.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.3"
+  }
+}

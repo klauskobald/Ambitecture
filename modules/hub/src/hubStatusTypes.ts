@@ -87,7 +87,7 @@ export class HubStatusDispatcher {
         payload,
       },
     });
-    for (const ws of this.registry.getByRole('controller')) {
+    for (const ws of this.registry.getControllersSubscribedToRuntime()) {
       if (ws.readyState !== ws.OPEN) continue;
       ws.send(outbound);
     }

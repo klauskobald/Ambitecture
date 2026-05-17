@@ -1,4 +1,5 @@
 import WebSocket from 'ws';
+import { buildRegisterPayload } from './registerPayload';
 import { isDeepStrictEqual } from 'node:util';
 
 import type { DotPathRecord } from '../src/dotPath';
@@ -153,19 +154,21 @@ function effectiveKeyframeSteps(config: AnimationTestConfig): AnimationKeyframeS
 }
 
 function registerController(ws: WebSocket, location: [number, number]): void {
-  ws.send(buildEnvelope('register', location, {
-    role: 'controller',
-    guid: 'test-animation-controller',
-    scope: [],
-  }));
+  ws.send(buildEnvelope('register', location, buildRegisterPayload(
+    'controller',
+    'test-animation-controller',
+    { runtime: true },
+    { scope: [] },
+  )));
 }
 
 function registerRenderer(ws: WebSocket, location: [number, number]): void {
-  ws.send(buildEnvelope('register', location, {
-    role: 'renderer',
-    guid: 'test-animation-renderer',
-    boundingBox: [0, 0, 0, 10, 5, 10],
-  }));
+  ws.send(buildEnvelope('register', location, buildRegisterPayload(
+    'renderer',
+    'test-animation-renderer',
+    { events: true },
+    { boundingBox: [0, 0, 0, 10, 5, 10] },
+  )));
 }
 
 function upsertTestAnimation(ws: WebSocket, location: [number, number], config: AnimationTestConfig): void {

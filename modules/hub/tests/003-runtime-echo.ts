@@ -1,4 +1,5 @@
 import WebSocket from 'ws';
+import { buildRegisterPayload } from './registerPayload';
 
 export const defaultArgs: string[] = [];
 
@@ -59,11 +60,12 @@ export async function main(
   });
 
   ws.send(
-    envelope('register', location, {
-      role: 'controller',
-      guid: controllerGuid,
-      scope: [],
-    }),
+    envelope('register', location, buildRegisterPayload(
+      'controller',
+      controllerGuid,
+      { runtime: true },
+      { scope: [] },
+    )),
   );
 
   const graphInit = await waitForType(ws, 'graph:init', data.timeout * 1000);

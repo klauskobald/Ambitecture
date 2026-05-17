@@ -1,4 +1,5 @@
 import WebSocket from 'ws';
+import { buildRegisterPayload } from './registerPayload';
 
 export const defaultArgs: string[] = [];
 
@@ -12,12 +13,13 @@ function buildEnvelope(type: string, location: [number, number], payload: unknow
   return JSON.stringify({ message: { type, location, payload } });
 }
 
-function buildRegisterPayload(location: [number, number]): string {
-  return buildEnvelope('register', location, {
-    role: 'controller',
-    guid: 'test-blinker-001',
-    scope: [],
-  });
+function sendRegister(ws: WebSocket, location: [number, number]): void {
+  ws.send(buildEnvelope('register', location, buildRegisterPayload(
+    'controller',
+    'test-blinker-001',
+    { runtime: true },
+    { scope: [] },
+  )));
 }
 
 function buildIntentsPayload(location: [number, number], intents: unknown[]): string {
@@ -68,7 +70,7 @@ export async function main(
 
     ws.on('open', async () => {
       try {
-        ws.send(buildRegisterPayload(location));
+        sendRegister(ws, location);
 
         while (Date.now() - startedAt < timeoutMs) {
           ws.send(buildIntentsPayload(location, intents));

@@ -1,10 +1,12 @@
 import { WebSocket } from 'ws';
+import type { ClientSubscribeState } from './SubscribeProtocol';
 
 export interface ClientInfo {
   role: 'renderer' | 'controller' | 'unknown';
   guid: string;
   location?: [number, number];
   meta: Record<string, unknown>;
+  subscribe?: ClientSubscribeState;
 }
 
 export class ConnectionRegistry {
@@ -38,5 +40,19 @@ export class ConnectionRegistry {
       }
     }
     return result;
+  }
+
+  wantsRuntimeUpdates(ws: WebSocket): boolean {
+    const info = this.clients.get(ws);
+    return info?.role === 'controller' && info.subscribe?.runtime === true;
+  }
+
+  wantsRendererEvents(ws: WebSocket): boolean {
+    const info = this.clients.get(ws);
+    return info?.role === 'renderer' && info.subscribe?.events === true;
+  }
+
+  getControllersSubscribedToRuntime(): WebSocket[] {
+    return this.getByRole('controller').filter(ws => this.wantsRuntimeUpdates(ws));
   }
 }

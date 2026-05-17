@@ -45,7 +45,7 @@ export class IntentsHandler implements MessageHandler {
 
     this.eventQueue.schedule(entries, message.location);
 
-    const openControllers = this.registry.getByRole('controller')
+    const openControllers = this.registry.getControllersSubscribedToRuntime()
       .filter(c => c !== ws && c.readyState === WebSocket.OPEN);
     if (openControllers.length > 0) {
       if (intents.length > 0) {

@@ -157,6 +157,7 @@ export class HubSocket {
       role: 'controller',
       guid: this.config.guid,
       scope: [],
+      subscribe: { runtime: this.config.subscribeRuntime },
     });
     if (ok) {
       this.handlers.onRegistered();

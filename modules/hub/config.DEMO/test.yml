@@ -433,6 +433,11 @@ testParams:
           args:
             "position.2": 5
 
+  006-runtime-subscribe.ts:
+    location: [0, 0]
+    controllerGuidA: controller-web-test-001
+    controllerGuidB: test-runtime-subscribe-b
+
   # Timescale WebSocket binding stays registered after stop (no null to slaves).
   005-timescale-binding.ts:
     location: [0, 0]

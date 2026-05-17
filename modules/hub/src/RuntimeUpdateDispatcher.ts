@@ -53,7 +53,7 @@ export class RuntimeUpdateDispatcher {
         payload: updates,
       },
     });
-    for (const ws of this.registry.getByRole('controller')) {
+    for (const ws of this.registry.getControllersSubscribedToRuntime()) {
       if (ws.readyState !== WebSocket.OPEN) continue;
       if (excludeControllerSockets?.has(ws)) continue;
       ws.send(outbound);

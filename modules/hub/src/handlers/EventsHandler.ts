@@ -61,7 +61,9 @@ export class EventsHandler implements MessageHandler {
     });
 
     const renderers = this.registry.getByRole('renderer');
-    const openRenderers = renderers.filter(ws => ws.readyState === WebSocket.OPEN);
+    const openRenderers = renderers.filter(
+      ws => ws.readyState === WebSocket.OPEN && this.registry.wantsRendererEvents(ws),
+    );
 
     recordRendererEventDeliveries(normalizedEvents.length, openRenderers.length);
     for (const rendererWs of openRenderers) {

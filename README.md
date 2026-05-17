@@ -9,8 +9,9 @@ Ambitecture is open source and currently focused on production readiness for a l
 
 ## Notice from Klaus 
 
-I did my best to explain the agents a proper coding style. The experience was sobering.  All agents no matter what model did create monolithic code instsead of following factory or plugin patterns. They ignored my design patterns mostly. Only if I explicitly demanded a proper style it worked. It took me a while to refactor and repair every little piece. If you still find code that looks ugly feel free to refactor. I gave up at some point. At some point I started to only give little tasks like to a junior coder. That worked better.
+I did my best to guide the AI agents toward a proper coding style, but the experience was quite sobering. Regardless of the model used, the agents consistently generated monolithic code instead of adhering to factory or plugin patterns, largely ignoring the established design principles. They only produced clean architecture when explicitly and repeatedly prompted to do so.
 
+Ultimately, it took considerable time to refactor and repair the output. If you encounter any remaining messy code, please feel free to refactor it—I eventually had to throw in the towel. Moving forward, I found that treating the agents like junior developers and assigning them highly isolated, bite-sized tasks yielded much better results.
 
 ## Project Status
 
@@ -201,7 +202,8 @@ Current test files:
 
 - `001-blinker.ts` — controller client that registers via WebSocket and sends timed intent batches.
 - `002-intent-action.ts` — exercises action/input wiring and `action:trigger` execution.
-- `003-runtime-echo.ts` — verifies that `runtime:command` patches round-trip back as `runtime:update` to other controllers.
+- `003-runtime-echo.ts` — verifies that `runtime:command` patches round-trip back as `runtime:update` when `subscribe.runtime` is true.
+- `006-runtime-subscribe.ts` — required `subscribe` on register; runtime/events gating and rejection without subscribe.
 - `004-animation.ts` — keyframe animation lifecycle: trigger, lerp, edit mode, stop.
 - `005-timescale-binding.ts` — `binding:subscribe` / `binding:set` against the animation timescale master.
 

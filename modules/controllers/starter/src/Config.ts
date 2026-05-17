@@ -9,6 +9,8 @@ export interface ControllerConfig {
   sampleIntentGuid: string | null;
   sampleIntervalMs: number;
   sampleRadius: number;
+  /** Hub `register` — receive perform `runtime:update` when true. */
+  subscribeRuntime: boolean;
 }
 
 function requiredEnv(key: string): string {
@@ -55,5 +57,6 @@ export function loadConfig(): ControllerConfig {
     sampleIntentGuid: sampleIntentGuid || null,
     sampleIntervalMs: parsePositiveNumber('SAMPLE_INTERVAL_MS', optionalEnv('SAMPLE_INTERVAL_MS', '40')),
     sampleRadius: parsePositiveNumber('SAMPLE_RADIUS', optionalEnv('SAMPLE_RADIUS', '1')),
+    subscribeRuntime: optionalEnv('SUBSCRIBE_RUNTIME', sampleIntentGuid ? 'true' : 'false') === 'true',
   };
 }

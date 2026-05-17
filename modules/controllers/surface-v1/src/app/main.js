@@ -151,7 +151,8 @@ async function main () {
             payload: {
               role: 'controller',
               guid: cfg.CONTROLLER_GUID,
-              scope: []
+              scope: [],
+              subscribe: { runtime: true }
             }
           }
         })

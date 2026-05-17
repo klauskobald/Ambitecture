@@ -134,6 +134,7 @@ export class HubConnection {
                     role: 'renderer',
                     guid: Config.guid,
                     boundingBox: Config.boundingBox,
+                    subscribe: { events: true },
                 },
             },
         };

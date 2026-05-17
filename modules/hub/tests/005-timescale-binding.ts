@@ -1,4 +1,5 @@
 import WebSocket from 'ws';
+import { buildRegisterPayload } from './registerPayload';
 
 export const defaultArgs: string[] = [];
 
@@ -7,11 +8,12 @@ function buildEnvelope(type: string, location: [number, number], payload: unknow
 }
 
 function registerController(ws: WebSocket, location: [number, number]): void {
-  ws.send(buildEnvelope('register', location, {
-    role: 'controller',
-    guid: 'test-timescale-binding-controller',
-    scope: [],
-  }));
+  ws.send(buildEnvelope('register', location, buildRegisterPayload(
+    'controller',
+    'test-timescale-binding-controller',
+    { runtime: true },
+    { scope: [] },
+  )));
 }
 
 interface TimescaleBindingTestConfig {

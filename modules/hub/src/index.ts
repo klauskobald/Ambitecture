@@ -167,7 +167,7 @@ const pushConfigsToModules = (includeControllerIntentPatch = true) => {
     if (info && ws.readyState === ws.OPEN) {
       const config = graphStore.buildRendererConfig(info.guid);
       ws.send(JSON.stringify({ message: { type: 'config', payload: config } }));
-      if (sceneEvents.msg) {
+      if (sceneEvents.msg && registry.wantsRendererEvents(ws)) {
         ws.send(sceneEvents.msg);
         sceneEventRecipients += 1;
       }

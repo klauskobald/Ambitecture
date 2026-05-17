@@ -120,6 +120,7 @@ export class HubSocket {
       role: 'controller',
       guid: this.config.guid,
       scope: [],
+      subscribe: { runtime: false },
       discovery: this.config.discovery,
     });
     if (ok) this.handlers.onRegistered?.();

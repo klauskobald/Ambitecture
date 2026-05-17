@@ -1,4 +1,5 @@
 import WebSocket from 'ws';
+import { buildRegisterPayload } from './registerPayload';
 
 export const defaultArgs: string[] = [];
 
@@ -25,19 +26,21 @@ function readConfig(testconfig: Record<string, unknown>): IntentActionConfig {
 }
 
 function registerController(ws: WebSocket, location: [number, number]): void {
-  ws.send(buildEnvelope('register', location, {
-    role: 'controller',
-    guid: 'test-intent-action-controller',
-    scope: [],
-  }));
+  ws.send(buildEnvelope('register', location, buildRegisterPayload(
+    'controller',
+    'test-intent-action-controller',
+    { runtime: true },
+    { scope: [] },
+  )));
 }
 
 function registerRenderer(ws: WebSocket, location: [number, number]): void {
-  ws.send(buildEnvelope('register', location, {
-    role: 'renderer',
-    guid: 'test-intent-action-renderer',
-    boundingBox: [0, 0, 0, 10, 5, 10],
-  }));
+  ws.send(buildEnvelope('register', location, buildRegisterPayload(
+    'renderer',
+    'test-intent-action-renderer',
+    { events: true },
+    { boundingBox: [0, 0, 0, 10, 5, 10] },
+  )));
 }
 
 function activateScene(ws: WebSocket, location: [number, number], sceneGuid: string): void {

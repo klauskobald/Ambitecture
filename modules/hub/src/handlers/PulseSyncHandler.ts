@@ -2,6 +2,7 @@ import { WebSocket } from 'ws';
 import { Logger } from '../Logger';
 import { ConnectionRegistry } from '../ConnectionRegistry';
 import { MessageHandler, WsMessage } from '../MessageRouter';
+import { HubStatusDispatcher } from '../hubStatusTypes';
 import { PulseSync, PulseSyncKind, PulseSyncPayload } from '../pulse/PulseSync';
 
 function isPulseSyncKind(value: unknown): value is PulseSyncKind {
@@ -50,6 +51,7 @@ export class PulseSyncHandler implements MessageHandler {
   constructor(
     private readonly registry: ConnectionRegistry,
     private readonly pulseSync: PulseSync,
+    private readonly hubStatus: HubStatusDispatcher,
   ) { }
 
   handle(ws: WebSocket, message: WsMessage, _registry: ConnectionRegistry): void {
@@ -64,6 +66,7 @@ export class PulseSyncHandler implements MessageHandler {
       return;
     }
 
+    this.hubStatus.broadcastPulseSyncRx(message.payload.kind);
     this.pulseSync.apply(message.payload);
   }
 }

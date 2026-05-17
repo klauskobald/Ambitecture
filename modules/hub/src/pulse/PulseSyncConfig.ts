@@ -3,11 +3,13 @@ import type { PulsesConfig } from '../ProjectManager';
 export type PulseSyncRestartMode = 'never' | 'bar' | 'onset';
 
 export type PulseSyncProjectConfig = {
+  enabled: boolean;
   restart: PulseSyncRestartMode;
   lerp: number;
 };
 
 const DEFAULTS: PulseSyncProjectConfig = {
+  enabled: false,
   restart: 'never',
   lerp: 0.35,
 };
@@ -21,11 +23,12 @@ export function parsePulseSyncProjectConfig(pulses: PulsesConfig | undefined): P
     return { ...DEFAULTS };
   }
   const sync = pulses.sync as Record<string, unknown>;
+  const enabled = sync['enabled'] === true;
   const restartRaw = sync['restart'];
   const restart = isRestartMode(restartRaw) ? restartRaw : DEFAULTS.restart;
   const lerpRaw = sync['lerp'];
   const lerp = typeof lerpRaw === 'number' && Number.isFinite(lerpRaw)
     ? Math.min(1, Math.max(0.01, lerpRaw))
     : DEFAULTS.lerp;
-  return { restart, lerp };
+  return { enabled, restart, lerp };
 }

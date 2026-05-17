@@ -20,7 +20,17 @@ export type HubStatusPulsePayload = {
   data: { bpm: number; slotIdx: number; slotsTotal: number };
 };
 
-export type HubStatusPayload = HubStatusAnimationPayload | HubStatusPulsePayload;
+/** `hub:status` when an external controller sent `pulse:sync` (applied or not). */
+export type HubStatusPulseSyncRxPayload = {
+  kind: 'pulseSyncRx';
+  message: { text: string };
+  data: { syncKind: 'onset' | 'bar'; atMs: number };
+};
+
+export type HubStatusPayload =
+  | HubStatusAnimationPayload
+  | HubStatusPulsePayload
+  | HubStatusPulseSyncRxPayload;
 
 /**
  * Fan-out hub-originated status to all controllers (same idea as {@link RuntimeUpdateDispatcher}).
@@ -40,6 +50,18 @@ export class HubStatusDispatcher {
     payload: HubStatusPulsePayload,
     location?: [number, number],
   ): void {
+    this.broadcastHubStatus(payload, location);
+  }
+
+  broadcastPulseSyncRx(
+    syncKind: 'onset' | 'bar',
+    location?: [number, number],
+  ): void {
+    const payload: HubStatusPulseSyncRxPayload = {
+      kind: 'pulseSyncRx',
+      message: { text: `sync ${syncKind}` },
+      data: { syncKind, atMs: Date.now() },
+    };
     this.broadcastHubStatus(payload, location);
   }
 

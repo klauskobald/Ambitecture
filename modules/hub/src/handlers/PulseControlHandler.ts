@@ -44,7 +44,8 @@ function isPulseControlCommand(payload: unknown): payload is PulseControlCommand
         && typeof p['slotIdx'] === 'number'
         && typeof p['active'] === 'boolean';
     case 'setSyncConfig':
-      return (p['restart'] === undefined
+      return (p['enabled'] === undefined || typeof p['enabled'] === 'boolean')
+        && (p['restart'] === undefined
           || p['restart'] === 'never'
           || p['restart'] === 'bar'
           || p['restart'] === 'onset')

@@ -12,6 +12,10 @@ import {
   applyHubPulseStatus,
   resetPulsePlayState
 } from '../core/pulsePlayRegistry.js'
+import {
+  isPulseSyncRxHubStatus,
+  notifyPulseSyncReceived
+} from '../core/pulseSyncActivity.js'
 import { applyBindingValue, resubscribeAll } from '../core/bindingRegistry.js'
 import { SimulatorViewport } from '../viewport/simulatorViewport.js'
 import { OverlayCanvas } from '../viewport/overlayCanvas.js'
@@ -249,6 +253,10 @@ async function main () {
         }
         case 'hub:status': {
           const statusPayload = message.payload
+          if (isPulseSyncRxHubStatus(statusPayload)) {
+            notifyPulseSyncReceived()
+            break
+          }
           applyHubAnimationStatus(statusPayload)
           applyHubPulseStatus(statusPayload)
           break

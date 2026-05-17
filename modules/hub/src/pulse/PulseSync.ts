@@ -28,6 +28,13 @@ export class PulseSync {
   ) { }
 
   apply(payload: PulseSyncPayload): void {
+    const syncProject = parsePulseSyncProjectConfig(
+      this.projectManager.getPulsesWirePayload(),
+    );
+    if (!syncProject.enabled) {
+      return;
+    }
+
     if (!Number.isFinite(payload.bpm) || payload.bpm <= 0) {
       Logger.warn('[pulse] pulse:sync ignored — invalid bpm');
       return;
@@ -57,10 +64,6 @@ export class PulseSync {
     const targetBpm = Math.min(
       this.config.maxBpm,
       Math.max(this.config.minBpm, payload.bpm),
-    );
-
-    const syncProject = parsePulseSyncProjectConfig(
-      this.projectManager.getPulsesWirePayload(),
     );
 
     const setup = this.projectManager.getPulseSetup(setupGuid);

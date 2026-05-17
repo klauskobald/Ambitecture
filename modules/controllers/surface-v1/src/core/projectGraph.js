@@ -296,19 +296,20 @@ class ProjectGraph {
   }
 
   /**
-   * @returns {{ restart: 'never' | 'bar' | 'onset', lerp: number }}
+   * @returns {{ enabled: boolean, restart: 'never' | 'bar' | 'onset', lerp: number }}
    */
   getPulseSync () {
     const raw = this._data.pulses.sync
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-      return { restart: 'never', lerp: 0.35 }
+      return { enabled: false, restart: 'never', lerp: 0.35 }
     }
+    const enabled = raw.enabled === true
     const restartRaw = raw.restart
     const restart =
       restartRaw === 'bar' || restartRaw === 'onset' ? restartRaw : 'never'
     const lerp =
       typeof raw.lerp === 'number' && Number.isFinite(raw.lerp) ? raw.lerp : 0.35
-    return { restart, lerp: Math.min(1, Math.max(0.1, lerp)) }
+    return { enabled, restart, lerp: Math.min(1, Math.max(0.1, lerp)) }
   }
 
   /**

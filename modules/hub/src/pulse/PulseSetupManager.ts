@@ -22,7 +22,7 @@ export type PulseControlCommand =
   | { command: 'setSetupSlotCount'; setupGuid: string; count: number }
   | { command: 'assignSlotBucket'; setupGuid: string; slotIdx: number; bucketGuid: string | null }
   | { command: 'setSlotActive'; setupGuid: string; slotIdx: number; active: boolean }
-  | { command: 'setSyncConfig'; restart?: PulseSyncRestartMode; lerp?: number };
+  | { command: 'setSyncConfig'; enabled?: boolean; restart?: PulseSyncRestartMode; lerp?: number };
 
 export type PulseControlResult = {
   pulsesChanged: boolean;
@@ -52,7 +52,7 @@ export class PulseSetupManager {
       case 'setSlotActive':
         return this.setSlotActive(command.setupGuid, command.slotIdx, command.active);
       case 'setSyncConfig':
-        return this.setSyncConfig(command.restart, command.lerp);
+        return this.setSyncConfig(command.enabled, command.restart, command.lerp);
     }
   }
 
@@ -209,12 +209,16 @@ export class PulseSetupManager {
   }
 
   private setSyncConfig(
+    enabled?: boolean,
     restart?: PulseSyncRestartMode,
     lerp?: number,
   ): PulseControlResult {
     const config = this.projectManager.ensurePulsesConfig();
     const prev = config.sync ?? {};
     const next = { ...prev };
+    if (enabled !== undefined) {
+      next.enabled = enabled;
+    }
     if (restart !== undefined) {
       next.restart = restart;
     }

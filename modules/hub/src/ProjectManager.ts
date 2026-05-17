@@ -222,6 +222,8 @@ export interface PulseSetup {
 export type PulseSyncRestartMode = 'never' | 'bar' | 'onset';
 
 export interface PulseSyncYamlConfig {
+  /** When false, hub ignores `pulse:sync` from external controllers. */
+  enabled?: boolean;
   /** Which sync kinds reset pulse to slot 0 before the next aligned tick. */
   restart?: PulseSyncRestartMode;
   /** BPM blend toward analyser tempo per sync (0–1). */

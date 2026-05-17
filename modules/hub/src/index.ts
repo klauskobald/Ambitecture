@@ -345,7 +345,7 @@ const pulseSync = new PulseSync(
     }
   },
 );
-router.register('pulse:sync', new PulseSyncHandler(registry, pulseSync));
+router.register('pulse:sync', new PulseSyncHandler(registry, pulseSync, hubStatusDispatcher));
 pulseManager.setActionTriggerCallback(actionGuid => {
   actionHandler.triggerAction(actionGuid, undefined, { value: 'on' });
 });

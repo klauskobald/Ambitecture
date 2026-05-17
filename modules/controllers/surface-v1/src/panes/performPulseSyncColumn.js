@@ -1,6 +1,7 @@
 import { projectGraph } from '../core/projectGraph.js'
 import { sendPulseControlCommand } from '../core/outboundQueue.js'
 import { pickChoice } from '../core/Modal.js'
+import { subscribePulseSyncReceived } from '../core/pulseSyncActivity.js'
 import { ScalarRadialKnobSvg } from '../edit/components/ScalarRadialKnobSvg.js'
 
 /** @type {ReadonlyArray<{ wire: 'never' | 'bar' | 'onset', label: string }>} */
@@ -29,9 +30,33 @@ export function createPerformPulseSyncColumn () {
   el.className = 'perform-pulse-sync-col'
   el.setAttribute('aria-label', 'Pulse sync')
 
+  const heading = document.createElement('span')
+  heading.className = 'perform-pulse-sync-col__heading'
+
   const title = document.createElement('span')
   title.className = 'perform-pulse-sync-col__title'
   title.textContent = 'Sync'
+
+  const enabledToggle = document.createElement('button')
+  enabledToggle.type = 'button'
+  enabledToggle.className =
+    'perform-pulse-sync-col__enabled-toggle intent-toggle'
+  enabledToggle.setAttribute('aria-label', 'External pulse sync')
+  enabledToggle.addEventListener('click', () => {
+    const { enabled } = projectGraph.getPulseSync()
+    sendPulseControlCommand({ command: 'setSyncConfig', enabled: !enabled })
+  })
+
+  heading.appendChild(title)
+  heading.appendChild(enabledToggle)
+
+  function blinkSyncTitle () {
+    title.classList.remove('perform-pulse-sync-col__title--rx')
+    void title.offsetWidth
+    title.classList.add('perform-pulse-sync-col__title--rx')
+  }
+
+  subscribePulseSyncReceived(blinkSyncTitle)
 
   const restartGroup = document.createElement('span')
   restartGroup.className = 'perform-pulse-sync-col__group'
@@ -95,13 +120,20 @@ export function createPerformPulseSyncColumn () {
   lerpGroup.appendChild(lerpLabel)
   lerpGroup.appendChild(knobWrap)
 
-  el.appendChild(title)
+  el.appendChild(heading)
   el.appendChild(restartGroup)
   el.appendChild(lerpGroup)
 
   function refresh () {
-    const { restart, lerp } = projectGraph.getPulseSync()
+    const { enabled, restart, lerp } = projectGraph.getPulseSync()
     currentLerp = lerp
+    const syncActive = enabled === true
+    el.classList.toggle('perform-pulse-sync-col--off', !syncActive)
+    enabledToggle.textContent = syncActive ? 'On' : 'Off'
+    enabledToggle.classList.toggle('intent-toggle--enabled', syncActive)
+    enabledToggle.setAttribute('aria-pressed', String(syncActive))
+    restartValue.disabled = !syncActive
+    restartValue.tabIndex = syncActive ? 0 : -1
     restartValue.textContent = restartLabelForWire(restart)
     lerpKnob.syncFromExternal()
   }

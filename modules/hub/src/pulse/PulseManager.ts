@@ -8,6 +8,7 @@ type ActivePulseRunner = {
   currentSlotIdx: number;
   tickIntervalMs: number;
   tickTimer: ReturnType<typeof setInterval> | undefined;
+  alignTimeout: ReturnType<typeof setTimeout> | undefined;
   msIntoCurrentTick: number;
 };
 
@@ -116,6 +117,7 @@ export class PulseManager {
         this.runner.currentSlotIdx = 0;
         this.runner.tickIntervalMs = this.computeTickIntervalMs(setup.bpm, setup.meter);
         this.runner.isRunning = true;
+        this.runner.alignTimeout = undefined;
         this.projectManager.setActivePulseGuid(guid);
         this.scheduleNextTick();
         return;
@@ -128,11 +130,58 @@ export class PulseManager {
       currentSlotIdx: 0,
       tickIntervalMs: this.computeTickIntervalMs(setup.bpm, setup.meter),
       tickTimer: undefined,
+      alignTimeout: undefined,
       msIntoCurrentTick: 0,
     };
     this.projectManager.setActivePulseGuid(guid);
     Logger.info(`[pulse] selected setup ${guid} (${setup.name}, ${setup.bpm} BPM, ${setup.meter} meter)`);
     this.start();
+  }
+
+  /**
+   * Activate a setup for external sync without firing an immediate tick.
+   * Caller should follow with {@link applyAlignedSync}.
+   */
+  selectSetupForSync(guid: string): void {
+    const setup = this.projectManager.getPulseSetup(guid);
+    if (!setup) {
+      Logger.warn(`[pulse] unknown pulse setup ${guid}`);
+      return;
+    }
+
+    this.stopTimer();
+    this.runner = {
+      setup,
+      isRunning: false,
+      currentSlotIdx: 0,
+      tickIntervalMs: this.computeTickIntervalMs(setup.bpm, setup.meter),
+      tickTimer: undefined,
+      alignTimeout: undefined,
+      msIntoCurrentTick: 0,
+    };
+    this.projectManager.setActivePulseGuid(guid);
+    Logger.info(`[pulse] selected setup for sync ${guid} (${setup.name})`);
+  }
+
+  /**
+   * Set BPM and schedule the next tick at an absolute wall-clock time (phase-aligned sync).
+   */
+  applyAlignedSync(bpm: number, nextTickAtMs: number): void {
+    if (!this.runner) {
+      Logger.warn('[pulse] applyAlignedSync called but no pulse is active');
+      return;
+    }
+    const setup = this.projectManager.getPulseSetup(this.runner.setup.guid ?? '');
+    if (setup) {
+      this.runner.setup = setup;
+    }
+    this.runner.setup.bpm = bpm;
+    this.runner.tickIntervalMs = this.computeTickIntervalMs(bpm, this.runner.setup.meter);
+    this.runner.isRunning = true;
+    Logger.info(
+      `[pulse] aligned sync BPM=${bpm} nextTick in ${Math.max(0, nextTickAtMs - Date.now())}ms`,
+    );
+    this.scheduleAlignedTicks(nextTickAtMs);
   }
 
   private restartActiveSetup(): void {
@@ -223,6 +272,32 @@ export class PulseManager {
       clearInterval(this.runner.tickTimer);
       this.runner.tickTimer = undefined;
     }
+    if (this.runner.alignTimeout !== undefined) {
+      clearTimeout(this.runner.alignTimeout);
+      this.runner.alignTimeout = undefined;
+    }
+  }
+
+  /**
+   * Phase-align: wait until {@link nextTickAtMs}, fire one tick, then interval at tickIntervalMs.
+   */
+  private scheduleAlignedTicks(nextTickAtMs: number): void {
+    if (!this.runner || !this.runner.isRunning) {
+      return;
+    }
+
+    this.stopTimer();
+    const delayMs = Math.max(0, nextTickAtMs - Date.now());
+    this.runner.alignTimeout = setTimeout(() => {
+      if (!this.runner || !this.runner.isRunning) {
+        return;
+      }
+      this.runner.alignTimeout = undefined;
+      this.tickRound();
+      this.runner.tickTimer = setInterval(() => {
+        this.tickRound();
+      }, this.runner.tickIntervalMs);
+    }, delayMs);
   }
 
   /**

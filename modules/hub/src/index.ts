@@ -36,7 +36,9 @@ import { PulseAssignHandler } from './handlers/PulseAssignHandler';
 import { PulseSetupManager } from './pulse/PulseSetupManager';
 import { PulseControlHandler } from './handlers/PulseControlHandler';
 import { PulseTapHandler } from './handlers/PulseTapHandler';
+import { PulseSyncHandler } from './handlers/PulseSyncHandler';
 import { parsePulseTapTempoConfig } from './pulse/PulseTapTempoConfig';
+import { PulseSync } from './pulse/PulseSync';
 
 const serverConfig = new Config('server');
 const systemConfig = new Config('system', true);
@@ -328,6 +330,23 @@ router.register('pulse:tap', new PulseTapHandler(
   pulseSetupManager,
   projectManager,
 ));
+const pulseSync = new PulseSync(
+  pulseTapTempoConfig,
+  pulseManager,
+  pulseSetupManager,
+  projectManager,
+  () => {
+    const data = projectManager.getPulsesWirePayload();
+    const patch = JSON.stringify({
+      message: { type: 'projectPatch', payload: { key: 'pulses', data } },
+    });
+    for (const controllerWs of registry.getByRole('controller')) {
+      if (controllerWs.readyState !== WebSocket.OPEN) continue;
+      controllerWs.send(patch);
+    }
+  },
+);
+router.register('pulse:sync', new PulseSyncHandler(registry, pulseSync));
 pulseManager.setActionTriggerCallback(actionGuid => {
   actionHandler.triggerAction(actionGuid, undefined, { value: 'on' });
 });

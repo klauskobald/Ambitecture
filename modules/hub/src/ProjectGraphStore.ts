@@ -56,6 +56,17 @@ export class ProjectGraphStore {
       ? this.runtimeIntentStore.listRuntimeOverlayGuidsInActiveScene(sceneIntentGuids)
       : [];
 
+    const controllerRecord = this.projectManager
+      .getControllersWirePayload()
+      .find(c => c.guid === guid);
+    const transmit =
+      controllerRecord !== undefined
+      && typeof controllerRecord === 'object'
+      && controllerRecord !== null
+      && 'transmit' in controllerRecord
+        ? controllerRecord['transmit']
+        : undefined;
+
     return {
       projectName: this.projectManager.getWireProjectName(),
       revision: this.revision,
@@ -71,6 +82,7 @@ export class ProjectGraphStore {
       interactionPolicies: this.projectManager.getControllerInteractionPolicies(guid),
       entities: this.projectManager.getGraphEntities(),
       runtimeOverlayGuidsInScene,
+      ...(transmit !== undefined ? { transmit } : {}),
     };
   }
 

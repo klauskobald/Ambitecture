@@ -1,3 +1,4 @@
+import { WebSocket } from 'ws';
 import type { ConnectionRegistry } from './ConnectionRegistry';
 
 export type AnimationRunStatus = 'started' | 'paused' | 'stopped';
@@ -11,7 +12,15 @@ export type HubStatusAnimationPayload = {
   data: Record<string, unknown>;
 };
 
-export type HubStatusPayload = HubStatusAnimationPayload;
+export type HubStatusPulsePayload = {
+  kind: 'pulse';
+  setupGuid: string;
+  status: 'started' | 'stopped';
+  message: { text: string };
+  data: { bpm: number; slotIdx: number; slotsTotal: number };
+};
+
+export type HubStatusPayload = HubStatusAnimationPayload | HubStatusPulsePayload;
 
 /**
  * Fan-out hub-originated status to all controllers (same idea as {@link RuntimeUpdateDispatcher}).
@@ -22,6 +31,20 @@ export class HubStatusDispatcher {
 
   broadcastAnimationStatus(
     payload: HubStatusAnimationPayload,
+    location?: [number, number],
+  ): void {
+    this.broadcastHubStatus(payload, location);
+  }
+
+  broadcastPulseStatus(
+    payload: HubStatusPulsePayload,
+    location?: [number, number],
+  ): void {
+    this.broadcastHubStatus(payload, location);
+  }
+
+  private broadcastHubStatus(
+    payload: HubStatusPayload,
     location?: [number, number],
   ): void {
     const outbound = JSON.stringify({
@@ -35,6 +58,21 @@ export class HubStatusDispatcher {
       if (ws.readyState !== ws.OPEN) continue;
       ws.send(outbound);
     }
+  }
+
+  sendPulseStatusTo(
+    ws: WebSocket,
+    payload: HubStatusPulsePayload,
+    location?: [number, number],
+  ): void {
+    if (ws.readyState !== ws.OPEN) return;
+    ws.send(JSON.stringify({
+      message: {
+        type: 'hub:status',
+        ...(location !== undefined ? { location } : {}),
+        payload,
+      },
+    }));
   }
 
   /** Fan-out `lock:intent` — controllers only (`animation-started` / `animation-stopped`, etc.). */

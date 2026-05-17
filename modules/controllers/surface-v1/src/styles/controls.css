@@ -845,6 +845,259 @@
   outline: none;
 }
 
+/* ── Perform → Pulse ─────────────────────────────────────────────────────── */
+
+.perform-pulse-list-view {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  flex: 1 1 auto;
+}
+
+.perform-pulse-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.5rem;
+  margin: 0;
+}
+
+.perform-pulse-empty {
+  margin: 0.35rem 0.5rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.perform-pulse-footer {
+  display: flex;
+  justify-content: center;
+  padding: 0.35rem 0.5rem 0.75rem;
+}
+
+.perform-pulse-empty__create {
+  align-self: center;
+}
+
+.perform-pulse-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-raised);
+}
+
+.perform-pulse-row--active {
+  background: var(--color-accent-dim);
+  border-color: var(--color-accent);
+}
+
+.perform-pulse-row__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.perform-pulse-row__name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.perform-pulse-row__status {
+  width: 100%;
+  min-height: 0.5rem;
+}
+
+.perform-pulse-row__status-text {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+}
+
+.perform-pulse-meter {
+  display: flex;
+  flex-direction: row;
+  gap: 0.2rem;
+  padding: 0.25rem 0.35rem;
+  border-radius: 6px;
+  background: var(--color-accent);
+}
+
+.perform-pulse-meter__slot {
+  flex: 1 1 0;
+  min-width: 0.35rem;
+  height: 0.55rem;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.perform-pulse-meter__slot--current {
+  background: #e67e22;
+}
+
+.perform-pulse-select,
+.perform-pulse-edit-btn {
+  flex: 0 0 auto;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.85rem;
+  line-height: 1;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
+.perform-pulse-select {
+  padding-left: 0.2rem;
+}
+
+.perform-pulse-select:focus-visible,
+.perform-pulse-edit-btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.perform-pulse-edit {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg);
+  overflow: hidden;
+}
+
+.perform-pulse-edit[hidden] {
+  display: none !important;
+}
+
+.perform-pulse-edit__top {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.perform-pulse-edit__back {
+  flex: 0 0 auto;
+  min-width: 2rem;
+  height: 1.8rem;
+  padding: 0 0.45rem;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-raised);
+  color: var(--color-text);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.perform-pulse-edit__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.25rem 0.35rem;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.perform-pulse-edit__name:focus-visible {
+  color: var(--color-accent);
+  outline: none;
+}
+
+.perform-pulse-edit__delete {
+  flex: 0 0 auto;
+  min-width: 2rem;
+  height: 1.8rem;
+  padding: 0 0.45rem;
+  border-radius: 4px;
+  border: 1px solid #c44;
+  background: transparent;
+  color: #c44;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.perform-pulse-edit__body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 0.65rem 0.5rem;
+}
+
+.perform-pulse-edit__field {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+}
+
+.perform-pulse-edit__field > span {
+  flex: 0 0 3.5rem;
+  color: var(--color-text-muted);
+}
+
+.perform-pulse-edit__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.35rem 0.45rem;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-raised);
+  color: var(--color-text);
+  font-size: 0.85rem;
+}
+
+.perform-pulse-edit__slots {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.perform-pulse-edit__slot-row {
+  width: 100%;
+  text-align: left;
+  padding: 0.45rem 0.5rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-raised);
+  color: var(--color-text);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.perform-pulse-edit__slot-row:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
 .perform-animate-edit__body {
   flex: 1 1 auto;
   overflow-y: auto;

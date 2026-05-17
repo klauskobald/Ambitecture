@@ -9,6 +9,8 @@ import { getAllAnimatorDescriptors, getAllAnimatorCommandDescriptors } from '../
 import { recordRendererEventDeliveries } from '../hubWebSocketStats';
 import { DiscoveryService, parseDiscoveryFromRegisterPayload } from '../DiscoveryService';
 import { resolveRuntimeReferences } from '../ConfigResolver';
+import { PulseManager } from '../pulse/PulseManager';
+import { HubStatusDispatcher } from '../hubStatusTypes';
 
 interface RegisterPayload {
   role: 'renderer' | 'controller';
@@ -33,6 +35,8 @@ export class RegisterHandler implements MessageHandler {
   private rateLimitEventsPerSecond: number;
   private systemConfig: Config;
   private discovery: DiscoveryService;
+  private pulseManager: PulseManager | undefined;
+  private hubStatus: HubStatusDispatcher | undefined;
 
   constructor(
     registry: ConnectionRegistry,
@@ -41,6 +45,8 @@ export class RegisterHandler implements MessageHandler {
     rateLimitEventsPerSecond: number,
     systemConfig: Config,
     discovery: DiscoveryService,
+    pulseManager?: PulseManager,
+    hubStatus?: HubStatusDispatcher,
   ) {
     this.registry = registry;
     this.graphStore = graphStore;
@@ -48,6 +54,8 @@ export class RegisterHandler implements MessageHandler {
     this.rateLimitEventsPerSecond = rateLimitEventsPerSecond;
     this.systemConfig = systemConfig;
     this.discovery = discovery;
+    this.pulseManager = pulseManager;
+    this.hubStatus = hubStatus;
   }
 
   handle(ws: WebSocket, message: WsMessage, _registry: ConnectionRegistry): void {
@@ -109,6 +117,12 @@ export class RegisterHandler implements MessageHandler {
         message: { type: 'projectPatch', payload: { key: 'pulses', data: pulses } },
       }));
       Logger.info(`[register] pushed projectPatch pulses to controller ${guid}`);
+
+      const pulseSnapshot = this.pulseManager?.getStatusSnapshot();
+      if (pulseSnapshot && this.hubStatus) {
+        this.hubStatus.sendPulseStatusTo(ws, pulseSnapshot);
+        Logger.info(`[register] pushed hub:status pulse snapshot to controller ${guid}`);
+      }
 
       const capabilitiesRaw = this.systemConfig.getOrDefault<unknown>('systemCapabilities', null);
       if (capabilitiesRaw !== null) {

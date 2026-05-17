@@ -41,8 +41,10 @@ The hub is the **single source of truth** for system-wide configuration and grap
 - **`src/ActionInputManager.ts`** — Builds `GraphCommand[]` from `ActionInputCommand` payloads (`ensureInputAssignment`, `removeInputAssignment`, `renameInput`, `updateInput`). Validates input/display types against `systemCapabilities`, composes typed params via `composeInputParams.ts`, and wires actions ↔ inputs by target (`{ type, guid }`). Also provides `buildSceneCleanupCommands(sceneGuid)` for orphan removal when a scene is deleted.
 - **`src/inputAssignment/composeInputParams.ts`** — Pure stateless helpers for reading `systemCapabilities.inputTypes`/`displayTypes`, resolving defaults, validating type class strings, and composing typed `params` from `inputConfig` fields. Extend `applyParamKind()` here when adding new param kinds (currently only `jsonString`).
 - **`src/handlers/ActionHandler.ts`** — Handles `action:input` and `action:trigger`. Triggers shallow-merge `execute.params` with payload `args`, then type-specific executors under [`src/handlers/actionExecute/`](modules/hub/src/handlers/actionExecute/): [`intentTriggerExecutor.ts`](modules/hub/src/handlers/actionExecute/intentTriggerExecutor.ts) (`argsOn`/`argsOff`/`args` + `value` → intent patch), [`animationTriggerExecutor.ts`](modules/hub/src/handlers/actionExecute/animationTriggerExecutor.ts) (`value` on/off for start/stop, optional `timescale`; or `command` when `value` omitted for tests), [`sceneTriggerExecutor.ts`](modules/hub/src/handlers/actionExecute/sceneTriggerExecutor.ts) (post-activation animation side effect from `animationGuid` + `value`). Shared merge helpers: [`merge.ts`](modules/hub/src/handlers/actionExecute/merge.ts). Only registered controllers may send these messages.
-- **`src/pulse/PulseManager.ts`** — Hub-side pulse orchestration: selects an active pulse setup, ticks slots, and fires bucket actions via `action:trigger`. Does not mutate project YAML.
+- **`src/pulse/PulseManager.ts`** — Hub-side pulse orchestration: selects an active pulse setup, ticks slots, and fires bucket actions via `action:trigger`. Broadcasts `hub:status` (`kind: 'pulse'`) with live `data: { bpm, slotIdx, slotsTotal }` on each tick. Does not mutate project YAML for setups.
+- **`src/pulse/PulseSetupManager.ts`** — Mutates `pulses.setups` from `PulseControlCommand` payloads (create/delete/rename setup, BPM, slot count, slot→bucket assign).
 - **`src/pulse/PulseBucketAssignManager.ts`** — Builds `GraphCommand[]` for pulse-bucket action rows plus in-memory `pulses.buckets` updates from `PulseAssignCommand` payloads (link/unlink animation to bucket, bucket CRUD).
+- **`src/handlers/PulseControlHandler.ts`** — Handles controller `pulse:control`; applies setup mutations, calls `PulseManager.selectSetup` / `setBPM`, broadcasts `projectPatch` key `pulses`.
 - **`src/handlers/PulseAssignHandler.ts`** — Handles controller `pulse:assign`; applies action graph commands, then broadcasts `projectPatch` key `pulses` when buckets change.
 - **`src/animation/AnimationManager.ts`** — Hub-side animation orchestrator. Holds one runner per animation `guid`, drives lifecycle (`trigger` / `stop` / `pause` / `setTimescale`), enters/exits live keyframe edit mode, broadcasts `hub:status` updates and per-target `lock:intent` notifications, and registers timescale + edit-state binding masters with `BindingManager`. Scene-membership changes gracefully restart runners so closures over stale graph state are dropped.
 - **`src/animation/keyframeAnimator.ts`** — Keyframe animation runner. Config is read **only** from `definition.content` (required object). `content.length` (seconds, finite > 0) is required; at least **two** steps are stored, with the earliest pinned to `time: 0` and the latest to `time: length` (centisecond rounding). Endpoint rows omit `args` when empty. Plays time-ordered steps against `targetIntent`, dispatches mutations through `RuntimeUpdateDispatcher`, and supports live edit mode (Add uses `diffRecordsToPatch`). The only animation class with built-in edit support today; new classes plug in via `intents/registry.ts`-style registration.
@@ -51,7 +53,7 @@ The hub is the **single source of truth** for system-wide configuration and grap
 - **`src/BindingManager.ts`** — Generic bidirectional binding layer. Hub modules call `registerMaster(key, getDataFn, setDataFn)`; controllers `binding:subscribe` to a key and `binding:set` to push values. The hub never caches master values — every read hits the live getter. Pending subscribers are queued until their master registers. Used today for animation timescale and keyframe edit state, and for any future hub-owned UI value.
 - **`src/handlers/BindingHandler.ts`** — Routes `binding:subscribe` and `binding:set` controller messages into `BindingManager`.
 - **`src/statsTool.ts`** — EMA-based per-key sample/rate counter with display-interval logging. Used to profile animation tick rates, runtime dispatch rates, and per-renderer event delivery.
-- **`src/hubStatusTypes.ts`** — Type definitions for `hub:status` payloads (currently `HubStatusAnimationPayload`: `kind` / `animationGuid` / `status: 'started' | 'paused' | 'stopped'` / `message` / `data`). Open by `kind` so future status sources can extend without breaking controllers.
+- **`src/hubStatusTypes.ts`** — Type definitions for `hub:status` payloads (`HubStatusAnimationPayload`, `HubStatusPulsePayload`). Open by `kind` so future status sources can extend without breaking controllers.
 - **`src/hubWebSocketStats.ts`** — Per-socket WebSocket counters surfaced through `statsTool`.
 - **Profile example:** `config.DEMO/server.yml` defines `LISTEN_PORT` and `LISTEN_HOST` (demo uses `3000` and `0.0.0.0`). Use `.env` / `.env.DEMO` to point `CONFIG_PATH` at a profile such as `config.DEMO`.
 
@@ -174,6 +176,8 @@ Renderer data authority model:
 - **performPane.js** — top-level Perform orchestrator. Mounts the perform HUD, scene buttons, perform buttons, and the **performSubnavShell** for the lower section.
 - **performSubnavShell.js** — nested navigation between **Control**, **Animate**, and optional **plugin** subpanes inside Perform (see **Plugin UI panels** below).
 - **performControlPanel.js** — Control subpane: scene activation buttons, perform buttons, system status.
+- **performPulsePanel.js** — Pulse subpane (between Control and Animate): list pulse setups with select (▶), slot meter from `hub:status`, and create. Subscribes to `pulsePlayRegistry` and `projectGraph` topic `pulses`.
+- **performPulseEditPane.js** — Per-setup edit overlay: rename, BPM, slot count, slot→bucket assignment via `pulse:control`.
 - **performAnimatePanel.js** — Animate subpane: list of project animations with play / stop / pause / open-edit controls. Subscribes to `animationPlayRegistry`.
 - **performAnimateEditPane.js** — Per-animation edit overlay. Uses an `AnimatorViewer` for the animation's class and the `bindingRegistry` to mirror timescale and keyframe step state from the hub.
 - **performIntentFilter.js** (`src/core/performIntentFilter.js`) — Shared perform-mode **intent filter** (GUID or `null`). **performSubnavShell** drives the funnel chip from this module (chip visible on **Animate** and **plugin** subpanes; hidden on **Control** while the filter may still be remembered). Single-tap an intent on the perform overlay toggles the filter when **Animate** or an active **plugin** subpane is selected. **performSubnavShell** adds **`filter=<intentGuid>`** to the plugin iframe URL when set and drops it when the filter is cleared.
@@ -414,6 +418,19 @@ Perform parameter payloads for intent (e.g. `argsOn` / `argsOff` / `args` as `js
 
 Hub applies action changes via `graph:delta` and pushes **`projectPatch`** `{ key: "pulses", data: PulsesConfig }` to all controllers when buckets change. On controller register, hub sends an initial `pulses` patch after `graph:init`. Surface: `sendPulseAssignCommand(command)` in `outboundQueue.js`; `projectGraph` topic `pulses`.
 
+**`pulse:control`** (controller → hub): sends `PulseControlCommand` payloads. Commands include:
+- `selectSetup` — `{ setupGuid }`; hub activates that setup (single runner), persists `activePulseGuid`, starts ticking
+- `createSetup` — `{ name?, bpm?, slotCount? }`; appends `pulse-{uuid}` to `pulses.setups`
+- `deleteSetup` — `{ setupGuid }`; removes setup; stops pulse if it was active
+- `renameSetup` — `{ setupGuid, name }`
+- `setSetupBpm` — `{ setupGuid, bpm }`; updates YAML; reschedules interval when that setup is active
+- `setSetupSlotCount` — `{ setupGuid, count }`; resizes `slots[]` (preserves leading bucket assignments)
+- `assignSlotBucket` — `{ setupGuid, slotIdx, bucketGuid | null }`
+
+Hub pushes **`projectPatch`** `{ key: "pulses", data: PulsesConfig }` to all controllers on setup mutations. Surface Perform → **Pulse** subpane (`performPulsePanel.js`, `performPulseEditPane.js`): `sendPulseControlCommand(command)`; live slot meter from `hub:status` via `pulsePlayRegistry.js`.
+
+**`hub:status`** (`kind: 'pulse'`, hub → controllers): `{ setupGuid, status: 'started' | 'stopped', message: { text }, data: { bpm, slotIdx, slotsTotal } }`. Emitted on pulse tick, start, stop, and as a one-shot snapshot on controller register when a pulse is already running.
+
 **`action:trigger`** (controller → hub): `{ actionGuid, args? }` — one message per action. Hub builds `merged = shallowMerge(execute.params ?? {}, args ?? {})` ([`merge.ts`](modules/hub/src/handlers/actionExecute/merge.ts)), then:
 
 - **Intent** — [`resolveIntentMergedToPatch`](modules/hub/src/handlers/actionExecute/intentTriggerExecutor.ts): `argsOn`/`argsOff` + `value`, or `args` (+ optional `value` → `params.value`).
@@ -443,6 +460,8 @@ The hub runs animations as authoritative time-driven mutators of intents. The fu
 
 - **`AnimatorViewer`** — abstract base; subclasses implement `getClassName/getName/getFieldDescriptor/renderField/renderEditSection`. `animatorViewerRegistry` maps class → constructor.
 - **`KeyframeAnimatorViewer`** — renders the field set defined in `systemCapabilities.animations[].display`, plus the live keyframe step editor (prev/next/add/remove/merge) wired through `bindingRegistry`.
+- **Pulse panel** (`performPulsePanel.js`) — pulse setup list with select/create/edit; slot meter from `hub:status` (`kind: 'pulse'`); subscribes to `pulsePlayRegistry`.
+- **Pulse edit pane** (`performPulseEditPane.js`) — setup BPM, slot count, and bucket-per-slot editing via `pulse:control`.
 - **Animate panel** (`performAnimatePanel.js`) — animation list with play/stop/pause/open-edit; subscribes to `animationPlayRegistry`.
 - **Animate edit pane** (`performAnimateEditPane.js`) — opens the viewer for an animation, subscribes to its timescale and edit-state binding keys.
 
@@ -663,6 +682,10 @@ Also supports `removeInputAssignment`, `renameInput`, and `updateInput`. Hub val
 **`pulse:assign`** — controller -> hub:
 
 Manages pulse bucket membership and bucket CRUD. Payload is a `PulseAssignCommand` (`linkAnimationToBucket`, `unlinkAnimationFromBucket`, `createBucket`, `createBucketAssignment`, `renameBucket`, `deleteBucket`). Action rows are applied via `graph:delta`; bucket list changes are pushed as `projectPatch` key `pulses`.
+
+**`pulse:control`** — controller -> hub:
+
+Manages pulse setups and selection. Payload is a `PulseControlCommand` (`selectSetup`, `createSetup`, `deleteSetup`, `renameSetup`, `setSetupBpm`, `setSetupSlotCount`, `assignSlotBucket`). Setup changes are pushed as `projectPatch` key `pulses`; `selectSetup` drives `PulseManager` and subsequent `hub:status` (`kind: 'pulse'`) ticks.
 
 **`action:trigger`** — controller -> hub:
 

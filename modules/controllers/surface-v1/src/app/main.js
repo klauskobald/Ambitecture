@@ -8,6 +8,10 @@ import {
   applyHubAnimationStatus,
   resetAnimationPlayState
 } from '../core/animationPlayRegistry.js'
+import {
+  applyHubPulseStatus,
+  resetPulsePlayState
+} from '../core/pulsePlayRegistry.js'
 import { applyBindingValue, resubscribeAll } from '../core/bindingRegistry.js'
 import { SimulatorViewport } from '../viewport/simulatorViewport.js'
 import { OverlayCanvas } from '../viewport/overlayCanvas.js'
@@ -189,6 +193,7 @@ async function main () {
         case 'graph:init': {
           const payload = message.payload
           resetAnimationPlayState()
+          resetPulsePlayState()
           projectGraph.applyGraphInit(payload, cfg.SIMULATOR_RENDERER_GUID)
           const rateLimit = /** @type {Record<string,unknown>} */ (
             payload ?? {}
@@ -242,7 +247,9 @@ async function main () {
           break
         }
         case 'hub:status': {
-          applyHubAnimationStatus(message.payload)
+          const statusPayload = message.payload
+          applyHubAnimationStatus(statusPayload)
+          applyHubPulseStatus(statusPayload)
           break
         }
         case 'binding:value': {

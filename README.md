@@ -7,6 +7,9 @@ Distributed framework for live orchestration of physical environments (lights, D
 
 Ambitecture is open source and currently focused on production readiness for a live show deadline on **May 20, 2026**.
 
+## Notice from Klaus 
+
+I did my best to explain the agents a proper coding style. The experience was sobering.  All agents no matter what model did create monolithic code instsead of following factory or plugin patterns. They ignored my design patterns mostly. Only if I explicitly demanded a proper style it worked. It took me a while to refactor and repair every little piece. If you still find code that looks ugly feel free to refactor. I gave up at some point. At some point I started to only give little tasks like to a junior coder. That worked better.
 
 
 ## Project Status

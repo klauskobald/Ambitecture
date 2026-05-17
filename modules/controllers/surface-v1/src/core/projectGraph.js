@@ -290,6 +290,22 @@ class ProjectGraph {
     return this._data.pulses.buckets
   }
 
+  /** @returns {Record<string, unknown>[]} */
+  getPulseSetups () {
+    return this._data.pulses.setups
+  }
+
+  /**
+   * @param {string} guid
+   * @returns {Record<string, unknown> | undefined}
+   */
+  getPulseSetup (guid) {
+    if (!guid) return undefined
+    return this._data.pulses.setups.find(
+      s => typeof s.guid === 'string' && s.guid === guid
+    )
+  }
+
   /**
    * @param {Record<string, unknown>} bucket
    * @param {string} animationGuid
@@ -1996,7 +2012,41 @@ function normalizePulsesConfig (data) {
     data && typeof data === 'object' && !Array.isArray(data)
       ? /** @type {Record<string, unknown>} */ (data)
       : {}
-  const setups = Array.isArray(raw.setups) ? raw.setups : []
+  const setups = Array.isArray(raw.setups)
+    ? /** @type {unknown[]} */ (raw.setups)
+        .map(s => {
+          if (!s || typeof s !== 'object' || Array.isArray(s)) return null
+          const row = /** @type {Record<string, unknown>} */ (s)
+          const guid = typeof row.guid === 'string' ? row.guid : ''
+          if (!guid) return null
+          const name = typeof row.name === 'string' ? row.name : guid
+          const bpm =
+            typeof row.bpm === 'number' && Number.isFinite(row.bpm)
+              ? row.bpm
+              : 120
+          const meter =
+            typeof row.meter === 'number' && Number.isFinite(row.meter)
+              ? row.meter
+              : 4
+          const slots = Array.isArray(row.slots)
+            ? row.slots.map(slot => {
+                if (!slot || typeof slot !== 'object' || Array.isArray(slot)) {
+                  return {}
+                }
+                const slotRow = /** @type {Record<string, unknown>} */ (slot)
+                const bucket =
+                  typeof slotRow.bucket === 'string' && slotRow.bucket.length > 0
+                    ? slotRow.bucket
+                    : undefined
+                return bucket ? { bucket } : {}
+              })
+            : []
+          return { guid, name, bpm, meter, slots }
+        })
+        .filter(
+          /** @returns {row is Record<string, unknown>} */ row => row !== null
+        )
+    : []
   const buckets = Array.isArray(raw.buckets)
     ? /** @type {unknown[]} */ (raw.buckets)
         .map(b => {

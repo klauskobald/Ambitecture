@@ -6,6 +6,7 @@
 import { projectGraph } from '../core/projectGraph.js'
 import { createPerformControlPanel } from './performControlPanel.js'
 import { createPerformAnimatePanel } from './performAnimatePanel.js'
+import { createPerformPulsePanel } from './performPulsePanel.js'
 import { getResolvedPerformPlugins } from '../plugins/pluginRegistry.js'
 import { postThemeToIframe } from '../plugins/themeToIframe.js'
 import {
@@ -15,7 +16,7 @@ import {
   togglePerformIntentFilter
 } from '../core/performIntentFilter.js'
 
-/** @typedef {'control' | 'animate' | string} PerformSubpaneId */
+/** @typedef {'control' | 'pulse' | 'animate' | string} PerformSubpaneId */
 
 /**
  * @param {string} baseUrl
@@ -89,6 +90,12 @@ export class PerformSubnavShell {
     this._linkControl.dataset.subpane = 'control'
     this._linkControl.textContent = 'Control'
 
+    this._linkPulse = document.createElement('a')
+    this._linkPulse.className = 'nav-link'
+    this._linkPulse.href = '#perform-pulse'
+    this._linkPulse.dataset.subpane = 'pulse'
+    this._linkPulse.textContent = 'Pulse'
+
     this._linkAnimate = document.createElement('a')
     this._linkAnimate.className = 'nav-link'
     this._linkAnimate.href = '#perform-animate'
@@ -103,6 +110,7 @@ export class PerformSubnavShell {
     this._subnav.appendChild(this._filterChip)
     this._subnav.appendChild(subnavFill)
     this._subnav.appendChild(this._linkControl)
+    this._subnav.appendChild(this._linkPulse)
     this._subnav.appendChild(this._linkAnimate)
     this._subnav.appendChild(this._pluginNavMount)
 
@@ -112,6 +120,9 @@ export class PerformSubnavShell {
     const control = createPerformControlPanel()
     this._controlPanel = control.panel
     this.controlsMount = control.controlsMount
+
+    const pulse = createPerformPulsePanel()
+    this._pulsePanel = pulse.panel
 
     const animate = createPerformAnimatePanel()
     this._animatePanel = animate.panel
@@ -132,6 +143,7 @@ export class PerformSubnavShell {
     })
 
     this._subpanes.appendChild(this._controlPanel)
+    this._subpanes.appendChild(this._pulsePanel)
     this._subpanes.appendChild(this._animatePanel)
 
     this._pluginPaneMount = document.createElement('div')
@@ -152,13 +164,14 @@ export class PerformSubnavShell {
       this._subnavToggle.setAttribute('aria-expanded', String(isOpen))
     })
 
-    for (const link of [this._linkControl, this._linkAnimate]) {
+    for (const link of [this._linkControl, this._linkPulse, this._linkAnimate]) {
       link.addEventListener('click', ev => {
         ev.preventDefault()
         this._subnav.classList.remove('perform-subnav--open')
         this._subnavToggle.setAttribute('aria-expanded', 'false')
+        const subpane = link.dataset.subpane
         const id = /** @type {PerformSubpaneId} */ (
-          link.dataset.subpane === 'animate' ? 'animate' : 'control'
+          subpane === 'animate' || subpane === 'pulse' ? subpane : 'control'
         )
         this.setSubpane(id)
       })
@@ -240,6 +253,7 @@ export class PerformSubnavShell {
 
     const stillValid =
       prevActive === 'control' ||
+      prevActive === 'pulse' ||
       prevActive === 'animate' ||
       this._pluginSlots.has(prevActive)
     if (!stillValid) this._activeSubpane = 'control'
@@ -262,8 +276,10 @@ export class PerformSubnavShell {
   setSubpane (id) {
     this._activeSubpane = id
     this._linkControl.classList.toggle('nav-link--active', id === 'control')
+    this._linkPulse.classList.toggle('nav-link--active', id === 'pulse')
     this._linkAnimate.classList.toggle('nav-link--active', id === 'animate')
     this._controlPanel.hidden = id !== 'control'
+    this._pulsePanel.hidden = id !== 'pulse'
     this._animatePanel.hidden = id !== 'animate'
 
     for (const [guid, slot] of this._pluginSlots) {
@@ -303,7 +319,12 @@ export class PerformSubnavShell {
    * @returns {boolean}
    */
   isPluginSubpane (id) {
-    return id !== 'control' && id !== 'animate' && this._pluginSlots.has(id)
+    return (
+      id !== 'control' &&
+      id !== 'pulse' &&
+      id !== 'animate' &&
+      this._pluginSlots.has(id)
+    )
   }
 
   _syncActivePluginIframeFromFilter () {
@@ -320,7 +341,7 @@ export class PerformSubnavShell {
 
   _renderFilterChipFromState () {
     const guid = getPerformIntentFilter()
-    if (!guid || this._activeSubpane === 'control') {
+    if (!guid || this._activeSubpane === 'control' || this._activeSubpane === 'pulse') {
       this._filterChip.hidden = true
       return
     }

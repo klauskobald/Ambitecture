@@ -33,6 +33,8 @@ import { registerZonesRangeResolver } from './resolvers/ZonesRangeResolver';
 import { PulseManager } from './pulse/PulseManager';
 import { PulseBucketAssignManager } from './pulse/PulseBucketAssignManager';
 import { PulseAssignHandler } from './handlers/PulseAssignHandler';
+import { PulseSetupManager } from './pulse/PulseSetupManager';
+import { PulseControlHandler } from './handlers/PulseControlHandler';
 
 const serverConfig = new Config('server');
 const systemConfig = new Config('system', true);
@@ -68,6 +70,8 @@ const animationManager = new AnimationManager(
   bindingManager,
 );
 const pulseManager = new PulseManager(projectManager);
+pulseManager.setHubStatusDispatcher(hubStatusDispatcher);
+const pulseSetupManager = new PulseSetupManager(projectManager);
 const pulseBucketAssignManager = new PulseBucketAssignManager(
   projectManager,
   () => resolveRuntimeReferences(systemConfig.getOrDefault<unknown>('systemCapabilities', {})),
@@ -282,6 +286,8 @@ router.register('register', new RegisterHandler(
   rateLimitEventsPerSecond,
   systemConfig,
   discoveryService,
+  pulseManager,
+  hubStatusDispatcher,
 ));
 router.register('discovery:subscribe', new DiscoveryHandler(discoveryService));
 router.register('graph:command', new GraphCommandHandler(registry, graphStore, publishGraphMutation));
@@ -302,6 +308,12 @@ router.register('pulse:assign', new PulseAssignHandler(
   pulseBucketAssignManager,
   projectManager,
   publishGraphMutation,
+));
+router.register('pulse:control', new PulseControlHandler(
+  registry,
+  pulseSetupManager,
+  pulseManager,
+  projectManager,
 ));
 pulseManager.setActionTriggerCallback(actionGuid => {
   actionHandler.triggerAction(actionGuid);

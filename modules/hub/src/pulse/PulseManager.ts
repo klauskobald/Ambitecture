@@ -1,10 +1,6 @@
 import type { ProjectManager, PulseSetup } from '../ProjectManager';
 import { Logger } from '../Logger';
 
-type PulseSlot = {
-  actions: string[];
-};
-
 type ActivePulseRunner = {
   setup: PulseSetup;
   isRunning: boolean;
@@ -16,7 +12,8 @@ type ActivePulseRunner = {
 
 /**
  * Hub-side pulse orchestration. Maintains a single active pulse setup with
- * a per-slot action dispatcher. Tick intervals are rescheduled when necessary:
+ * a per-slot action dispatcher. Each slot references one reusable bucket in
+ * `pulses.buckets`. Tick intervals are rescheduled when necessary:
  * - selectSetup: current tick completes, then new setup begins
  * - setBPM: current tick completes, then reschedules with new interval
  */
@@ -157,58 +154,48 @@ export class PulseManager {
   }
 
   /**
-   * Add an action GUID to a slot. Actions are stored as a simple array.
+   * Add an action GUID to the bucket assigned to a slot.
    */
   addSlotAction(slotIdx: number, actionGuid: string): void {
     if (!this.runner) {
       Logger.warn('[pulse] addSlotAction called but no pulse is active');
       return;
     }
-    if (slotIdx < 0 || slotIdx >= this.runner.setup.slots.length) {
-      Logger.warn(`[pulse] slot index ${slotIdx} out of range`);
+    const bucket = this.bucketForSlot(this.runner.setup, slotIdx);
+    if (!bucket) {
+      return;
+    }
+    if (bucket.actions.includes(actionGuid)) {
+      Logger.info(`[pulse] action ${actionGuid} already in bucket ${bucket.guid} (slot ${slotIdx})`);
       return;
     }
 
-    const slot = this.runner.setup.slots[slotIdx];
-    if (!slot) {
-      Logger.warn(`[pulse] slot ${slotIdx} is undefined`);
-      return;
-    }
-    if (slot.actions.includes(actionGuid)) {
-      Logger.info(`[pulse] action ${actionGuid} already in slot ${slotIdx}`);
-      return;
-    }
-
-    slot.actions.push(actionGuid);
-    Logger.info(`[pulse] added action ${actionGuid} to slot ${slotIdx}`);
+    bucket.actions.push(actionGuid);
+    this.projectManager.touchPulses();
+    Logger.info(`[pulse] added action ${actionGuid} to bucket ${bucket.guid} (slot ${slotIdx})`);
   }
 
   /**
-   * Remove an action GUID from a slot.
+   * Remove an action GUID from the bucket assigned to a slot.
    */
   removeSlotAction(slotIdx: number, actionGuid: string): void {
     if (!this.runner) {
       Logger.warn('[pulse] removeSlotAction called but no pulse is active');
       return;
     }
-    if (slotIdx < 0 || slotIdx >= this.runner.setup.slots.length) {
-      Logger.warn(`[pulse] slot index ${slotIdx} out of range`);
+    const bucket = this.bucketForSlot(this.runner.setup, slotIdx);
+    if (!bucket) {
       return;
     }
-
-    const slot = this.runner.setup.slots[slotIdx];
-    if (!slot) {
-      Logger.warn(`[pulse] slot ${slotIdx} is undefined`);
-      return;
-    }
-    const idx = slot.actions.indexOf(actionGuid);
+    const idx = bucket.actions.indexOf(actionGuid);
     if (idx === -1) {
-      Logger.warn(`[pulse] action ${actionGuid} not in slot ${slotIdx}`);
+      Logger.warn(`[pulse] action ${actionGuid} not in bucket ${bucket.guid} (slot ${slotIdx})`);
       return;
     }
 
-    slot.actions.splice(idx, 1);
-    Logger.info(`[pulse] removed action ${actionGuid} from slot ${slotIdx}`);
+    bucket.actions.splice(idx, 1);
+    this.projectManager.touchPulses();
+    Logger.info(`[pulse] removed action ${actionGuid} from bucket ${bucket.guid} (slot ${slotIdx})`);
   }
 
   /**
@@ -225,18 +212,19 @@ export class PulseManager {
   }
 
   /**
-   * Execute one tick: dispatch all actions in the current slot, advance slot index.
+   * Execute one tick: dispatch all actions in the current slot's bucket, advance slot index.
    */
   private tickRound(): void {
     if (!this.runner || !this.runner.isRunning) {
       return;
     }
 
-    const slot = this.runner.setup.slots[this.runner.currentSlotIdx];
-    if (slot) {
-      for (const actionGuid of slot.actions) {
-        this.dispatchActionItem(actionGuid);
-      }
+    const actionGuids = this.projectManager.getPulseSlotActionGuids(
+      this.runner.setup,
+      this.runner.currentSlotIdx,
+    );
+    for (const actionGuid of actionGuids) {
+      this.dispatchActionItem(actionGuid);
     }
 
     this.runner.currentSlotIdx = (this.runner.currentSlotIdx + 1) % this.runner.setup.slots.length;
@@ -253,6 +241,29 @@ export class PulseManager {
     }
     this.onTriggerAction(actionGuid);
     Logger.debug(`[pulse] triggered action ${actionGuid} from slot ${this.runner?.currentSlotIdx ?? '?'}`);
+  }
+
+  private bucketForSlot(setup: PulseSetup, slotIdx: number) {
+    if (slotIdx < 0 || slotIdx >= setup.slots.length) {
+      Logger.warn(`[pulse] slot index ${slotIdx} out of range`);
+      return undefined;
+    }
+    const slot = setup.slots[slotIdx];
+    if (!slot) {
+      Logger.warn(`[pulse] slot ${slotIdx} is undefined`);
+      return undefined;
+    }
+    const bucketGuid = slot.bucket;
+    if (typeof bucketGuid !== 'string' || bucketGuid.length === 0) {
+      Logger.warn(`[pulse] slot ${slotIdx} has no bucket assigned`);
+      return undefined;
+    }
+    const bucket = this.projectManager.getPulseBucket(bucketGuid);
+    if (!bucket) {
+      Logger.warn(`[pulse] unknown bucket ${bucketGuid} on slot ${slotIdx}`);
+      return undefined;
+    }
+    return bucket;
   }
 
   /**

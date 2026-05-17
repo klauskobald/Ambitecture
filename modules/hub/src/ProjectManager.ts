@@ -198,8 +198,15 @@ export function isCompanionAnimationRunnerAction(
   return record['type'] === 'animation' && record['guid'] === animationGuid;
 }
 
-export interface PulseSlot {
+export interface PulseBucket {
+  guid?: string;
+  name?: string;
   actions: string[];
+}
+
+export interface PulseSlot {
+  /** GUID of a row in `pulses.buckets`. */
+  bucket?: string;
 }
 
 export interface PulseSetup {
@@ -210,6 +217,11 @@ export interface PulseSetup {
   slots: PulseSlot[];
 }
 
+export interface PulsesConfig {
+  setups: PulseSetup[];
+  buckets: PulseBucket[];
+}
+
 interface Project {
   name: string;
   'zone-to-renderer': Record<string, string[]>;
@@ -217,7 +229,7 @@ interface Project {
   scenes?: Scene[];
   actions?: ActionDefinition[];
   animations?: AnimationDefinition[];
-  pulses?: PulseSetup[];
+  pulses?: PulsesConfig;
   activeSceneGuid?: string;
   activePulseGuid?: string;
   zones: Zone[];
@@ -284,6 +296,7 @@ export class ProjectManager {
     this.project = this._projectConfig.getAll() as Project;
 
     const normalizedGraph = this._normalizeActionsAndInputsAfterLoad();
+    const normalizedPulses = this._normalizePulsesAfterLoad();
     this._rebuildIntentDefinitions(this.project.intents ?? []);
     const createdGuids = this._ensureGraphGuids();
     const ensuredCompanions = this._ensureAnimationCompanionActions();
@@ -313,7 +326,7 @@ export class ProjectManager {
     }));
 
     Logger.info(`[project] loaded "${this.project.name}" with ${this.project.zones.length} zone(s), ${this.intentDefinitions.size} intent(s), ${(this.project.scenes ?? []).length} scene(s)`);
-    if (createdGuids || ensuredCompanions || normalizedGraph || createdEmptyScene) {
+    if (createdGuids || ensuredCompanions || normalizedGraph || normalizedPulses || createdEmptyScene) {
       this._scheduleSave();
     }
   }
@@ -404,6 +417,53 @@ export class ProjectManager {
   }
 
   /**
+   * Normalize pulse YAML: legacy top-level `pulses` array and inline `slots[].actions` →
+   * `pulses.setups` + `pulses.buckets` with slot `bucket` references.
+   */
+  private _normalizePulsesAfterLoad(): boolean {
+    if (!this.project) return false;
+    const raw = this.project.pulses as unknown;
+    if (raw === undefined || raw === null) return false;
+
+    let changed = false;
+    let config: PulsesConfig;
+
+    if (Array.isArray(raw)) {
+      config = { setups: raw as PulseSetup[], buckets: [] };
+      changed = true;
+    } else if (typeof raw === 'object') {
+      const rec = raw as Record<string, unknown>;
+      const setups = Array.isArray(rec['setups']) ? (rec['setups'] as PulseSetup[]) : [];
+      const buckets = Array.isArray(rec['buckets']) ? (rec['buckets'] as PulseBucket[]) : [];
+      if (!Array.isArray(rec['setups']) || !Array.isArray(rec['buckets'])) {
+        changed = true;
+      }
+      config = { setups, buckets };
+    } else {
+      return false;
+    }
+
+    for (const setup of config.setups) {
+      for (const slot of setup.slots ?? []) {
+        const legacy = slot as unknown as Record<string, unknown>;
+        const legacyActions = legacy['actions'];
+        if (!Array.isArray(legacyActions)) continue;
+        const actions = legacyActions.filter((x): x is string => typeof x === 'string' && x.length > 0);
+        const bucketGuid = `bucket-${randomUUID()}`;
+        config.buckets.push({ guid: bucketGuid, actions });
+        slot.bucket = bucketGuid;
+        delete legacy['actions'];
+        changed = true;
+      }
+    }
+
+    if (changed || this.project.pulses !== config) {
+      this.project.pulses = config;
+    }
+    return changed;
+  }
+
+  /**
    * YAML or hand-edited projects may list `animations` without the paired runner `action` rows
    * the UI creates via graph commands. Without them, controllers hide animations from the perform list.
    */
@@ -465,6 +525,12 @@ export class ProjectManager {
     for (const anim of this.project.animations ?? []) {
       ensureGuid(anim as unknown as Record<string, unknown>, 'animation');
     }
+    for (const setup of this.project.pulses?.setups ?? []) {
+      ensureGuid(setup as unknown as Record<string, unknown>, 'pulse');
+    }
+    for (const bucket of this.project.pulses?.buckets ?? []) {
+      ensureGuid(bucket as unknown as Record<string, unknown>, 'bucket');
+    }
     for (const zone of this.project.zones) {
       ensureGuid(zone as unknown as Record<string, unknown>, 'zone');
       for (const fixture of zone.fixtures) {
@@ -484,7 +550,9 @@ export class ProjectManager {
       'scenes',
       'actions',
       'animations',
+      'pulses',
       'activeSceneGuid',
+      'activePulseGuid',
       'zones',
       'controller',
     ]);
@@ -737,7 +805,9 @@ export class ProjectManager {
       'scenes',
       'actions',
       'animations',
+      'pulses',
       'activeSceneGuid',
+      'activePulseGuid',
       'zones',
       'controller',
     ]);
@@ -1010,7 +1080,17 @@ export class ProjectManager {
   }
 
   getPulseSetup(guid: string): PulseSetup | undefined {
-    return (this.project?.pulses ?? []).find(p => p.guid === guid);
+    return (this.project?.pulses?.setups ?? []).find(p => p.guid === guid);
+  }
+
+  getPulseBucket(guid: string): PulseBucket | undefined {
+    return (this.project?.pulses?.buckets ?? []).find(b => b.guid === guid);
+  }
+
+  getPulseSlotActionGuids(setup: PulseSetup, slotIdx: number): string[] {
+    const slot = setup.slots[slotIdx];
+    if (!slot?.bucket) return [];
+    return [...(this.getPulseBucket(slot.bucket)?.actions ?? [])];
   }
 
   getActivePulseGuid(): string | undefined {
@@ -1042,6 +1122,10 @@ export class ProjectManager {
    * No graph event/broadcast; only schedules durable save.
    */
   touchAnimations(): void {
+    this._scheduleSave();
+  }
+
+  touchPulses(): void {
     this._scheduleSave();
   }
 

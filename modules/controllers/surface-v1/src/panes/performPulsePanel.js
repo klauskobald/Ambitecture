@@ -101,9 +101,33 @@ export function createPerformPulsePanel () {
     })
   }
 
+  /**
+   * @param {Record<string, unknown>} setup
+   * @returns {string}
+   */
+  function pulseSetupDisplayName (setup) {
+    const name = typeof setup.name === 'string' ? setup.name : ''
+    const guid = typeof setup.guid === 'string' ? setup.guid : ''
+    return name || guid
+  }
+
+  /**
+   * @param {Record<string, unknown>[]} setups
+   * @returns {Record<string, unknown>[]}
+   */
+  function sortedPulseSetups (setups) {
+    return [...setups].sort((a, b) =>
+      pulseSetupDisplayName(a).localeCompare(
+        pulseSetupDisplayName(b),
+        undefined,
+        { sensitivity: 'base' }
+      )
+    )
+  }
+
   /** @param {Record<string, unknown>[]} setups */
   function listKey (setups) {
-    return setups
+    return sortedPulseSetups(setups)
       .map(s => {
         const guid = typeof s.guid === 'string' ? s.guid : ''
         const name = typeof s.name === 'string' ? s.name : ''
@@ -220,7 +244,7 @@ export function createPerformPulsePanel () {
   }
 
   function renderList () {
-    const setups = projectGraph.getPulseSetups()
+    const setups = sortedPulseSetups(projectGraph.getPulseSetups())
     const key = listKey(setups)
     if (key === lastListKey) {
       syncAllRowStates()

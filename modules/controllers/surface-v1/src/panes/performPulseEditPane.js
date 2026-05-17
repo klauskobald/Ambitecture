@@ -16,7 +16,7 @@ import {
  * @returns {string}
  */
 function resolveBucketLabel (bucketGuid) {
-  if (!bucketGuid) return 'Empty'
+  if (!bucketGuid) return ''
   const bucket = [...projectGraph.getPulseBuckets()].find(
     b => b.guid === bucketGuid
   )
@@ -190,7 +190,8 @@ export function createPulseEditPane ({ onClose }) {
       { value: '', label: 'None' },
       ...[...projectGraph.getPulseBuckets()].map(b => ({
         value: String(b.guid ?? ''),
-        label: typeof b.name === 'string' && b.name ? b.name : String(b.guid ?? '')
+        label:
+          typeof b.name === 'string' && b.name ? b.name : String(b.guid ?? '')
       }))
     ]
     const choice = await pickChoice('Assign bucket to slot', options)
@@ -273,4 +274,3 @@ export function createPulseEditPane ({ onClose }) {
 
   return { el, open }
 }
-

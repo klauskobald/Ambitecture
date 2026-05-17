@@ -347,14 +347,18 @@
 
 .scene-perform {
   display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .scene-perform-row {
   display: flex;
   align-items: center;
   min-width: 0;
+  flex: 0 1 auto;
+  max-width: min(14rem, 50%);
   opacity: 0.55;
 }
 

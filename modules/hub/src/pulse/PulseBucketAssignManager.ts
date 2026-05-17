@@ -13,8 +13,11 @@ import { composeDefaultAnimationExecuteParams } from '../inputAssignment/compose
 export type PulseAssignCommand =
   | { command: 'linkAnimationToBucket'; bucketGuid: string; animationGuid: string }
   | { command: 'unlinkAnimationFromBucket'; bucketGuid: string; animationGuid: string }
+  | { command: 'linkSceneToBucket'; bucketGuid: string; sceneGuid: string }
+  | { command: 'unlinkSceneFromBucket'; bucketGuid: string; sceneGuid: string }
   | { command: 'createBucket'; name?: string }
   | { command: 'createBucketAssignment'; animationGuid: string; name?: string }
+  | { command: 'createSceneBucketAssignment'; sceneGuid: string; name?: string }
   | { command: 'renameBucket'; bucketGuid: string; name: string }
   | { command: 'deleteBucket'; bucketGuid: string };
 
@@ -32,6 +35,15 @@ function actionTargetsAnimation(
   return ex['type'] === 'animation' && ex['guid'] === animationGuid;
 }
 
+function actionTargetsScene(
+  action: ActionDefinition | undefined,
+  sceneGuid: string,
+): boolean {
+  if (!action?.execute) return false;
+  const ex = action.execute as Record<string, unknown>;
+  return ex['type'] === 'scene' && ex['guid'] === sceneGuid;
+}
+
 export class PulseBucketAssignManager {
   constructor(
     private projectManager: ProjectManager,
@@ -44,10 +56,16 @@ export class PulseBucketAssignManager {
         return this.linkAnimationToBucket(command.bucketGuid, command.animationGuid);
       case 'unlinkAnimationFromBucket':
         return this.unlinkAnimationFromBucket(command.bucketGuid, command.animationGuid);
+      case 'linkSceneToBucket':
+        return this.linkSceneToBucket(command.bucketGuid, command.sceneGuid);
+      case 'unlinkSceneFromBucket':
+        return this.unlinkSceneFromBucket(command.bucketGuid, command.sceneGuid);
       case 'createBucket':
         return this.createBucket(command.name);
       case 'createBucketAssignment':
         return this.createBucketAssignment(command.animationGuid, command.name);
+      case 'createSceneBucketAssignment':
+        return this.createSceneBucketAssignment(command.sceneGuid, command.name);
       case 'renameBucket':
         return this.renameBucket(command.bucketGuid, command.name);
       case 'deleteBucket':
@@ -161,6 +179,104 @@ export class PulseBucketAssignManager {
       return created;
     }
     const linked = this.linkAnimationToBucket(bucketGuid, animationGuid);
+    return {
+      graphCommands: [...created.graphCommands, ...linked.graphCommands],
+      pulsesChanged: created.pulsesChanged || linked.pulsesChanged,
+    };
+  }
+
+  private linkSceneToBucket(bucketGuid: string, sceneGuid: string): PulseAssignResult {
+    if (bucketGuid.length === 0 || sceneGuid.length === 0) {
+      return { graphCommands: [], pulsesChanged: false };
+    }
+    const bucket = this.projectManager.getPulseBucket(bucketGuid);
+    if (!bucket) {
+      Logger.warn(`[pulse] linkSceneToBucket: unknown bucket ${bucketGuid}`);
+      return { graphCommands: [], pulsesChanged: false };
+    }
+
+    const existing = (bucket.actions ?? []).some(ag => {
+      const a = this.projectManager.getActionByGuid(ag);
+      return actionTargetsScene(a, sceneGuid);
+    });
+    if (existing) {
+      return { graphCommands: [], pulsesChanged: false };
+    }
+
+    const sceneName =
+      this.projectManager.getSceneByGuid(sceneGuid)?.name ?? sceneGuid;
+    const bucketLabel =
+      typeof bucket.name === 'string' && bucket.name.trim().length > 0
+        ? bucket.name.trim()
+        : bucketGuid;
+    const newActionGuid = `action-${randomUUID()}`;
+    const executeItem: ActionExecuteItem = { type: 'scene', guid: sceneGuid };
+    const newAction: ActionDefinition = {
+      guid: newActionGuid,
+      name: `${bucketLabel} → ${sceneName}`,
+      execute: executeItem,
+    };
+
+    const nextActions = [...(bucket.actions ?? [])];
+    if (!nextActions.includes(newActionGuid)) {
+      nextActions.push(newActionGuid);
+    }
+    this.updateBucketActions(bucketGuid, nextActions);
+
+    return {
+      graphCommands: [
+        this.upsertCommand('action', newActionGuid, newAction as unknown as Record<string, unknown>),
+      ],
+      pulsesChanged: true,
+    };
+  }
+
+  private unlinkSceneFromBucket(bucketGuid: string, sceneGuid: string): PulseAssignResult {
+    if (bucketGuid.length === 0 || sceneGuid.length === 0) {
+      return { graphCommands: [], pulsesChanged: false };
+    }
+    const bucket = this.projectManager.getPulseBucket(bucketGuid);
+    if (!bucket) {
+      return { graphCommands: [], pulsesChanged: false };
+    }
+
+    const toRemove: string[] = [];
+    for (const ag of bucket.actions ?? []) {
+      const a = this.projectManager.getActionByGuid(ag);
+      if (actionTargetsScene(a, sceneGuid)) {
+        toRemove.push(ag);
+      }
+    }
+    if (toRemove.length === 0) {
+      return { graphCommands: [], pulsesChanged: false };
+    }
+
+    const removeSet = new Set(toRemove);
+    const nextActions = (bucket.actions ?? []).filter(ag => !removeSet.has(ag));
+    this.updateBucketActions(bucketGuid, nextActions);
+
+    const commands: GraphCommand[] = [];
+    for (const ag of toRemove) {
+      const keep = this.isActionReferencedInGraph(ag, {
+        excludingBucketGuids: new Set([bucketGuid]),
+      });
+      if (!keep) {
+        commands.push(this.removeActionCommand(ag));
+      }
+    }
+
+    return { graphCommands: commands, pulsesChanged: true };
+  }
+
+  private createSceneBucketAssignment(sceneGuid: string, name?: string): PulseAssignResult {
+    const created = this.createBucket(name);
+    const config = this.projectManager.ensurePulsesConfig();
+    const bucket = config.buckets[config.buckets.length - 1];
+    const bucketGuid = bucket?.guid;
+    if (!bucketGuid) {
+      return created;
+    }
+    const linked = this.linkSceneToBucket(bucketGuid, sceneGuid);
     return {
       graphCommands: [...created.graphCommands, ...linked.graphCommands],
       pulsesChanged: created.pulsesChanged || linked.pulsesChanged,

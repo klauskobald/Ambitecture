@@ -407,13 +407,16 @@ Perform parameter payloads for intent (e.g. `argsOn` / `argsOff` / `args` as `js
 - `unlinkInputFromTarget` — removes **one** input’s link to `{ targetType, targetGuid }` (drops the matching action GUID from that input’s `actions[]` and deletes the action row if nothing else references it). Does not remove the companion animation runner row from the graph.
 - `deleteInput` — removes the input; removes any action that is no longer referenced from any input’s `actions[]`. `expectedLinkedTargetCount` is the number of entries in `actions[]` at delete time (stale-guard).
 
-**Pulse buckets** (project YAML `pulses.setups` + `pulses.buckets`): reusable action lists referenced by pulse setup slots (`slot.bucket` → bucket GUID). Linking an animation to a bucket means the bucket’s `actions[]` includes at least one row whose `execute` is `{ type: "animation", guid }` (not a separate execute type). [`PulseManager`](modules/hub/src/pulse/PulseManager.ts) only dispatches those actions at runtime; durable bucket membership is edited via assign UI / `pulse:assign`.
+**Pulse buckets** (project YAML `pulses.setups` + `pulses.buckets`): reusable action lists referenced by pulse setup slots (`slot.bucket` → bucket GUID). Linking an animation or scene to a bucket means the bucket’s `actions[]` includes at least one row whose `execute` is `{ type: "animation", guid }` or `{ type: "scene", guid }` (not a separate execute type). [`PulseManager`](modules/hub/src/pulse/PulseManager.ts) only dispatches those actions at runtime; durable bucket membership is edited via assign UI / `pulse:assign`.
 
 **`pulse:assign`** (controller → hub): sends `PulseAssignCommand` payloads. Commands include:
 - `linkAnimationToBucket` — `{ bucketGuid, animationGuid }`; appends a new action row to the bucket when none targets that animation (default manual `execute.params` when applicable)
 - `unlinkAnimationFromBucket` — removes matching action GUIDs from the bucket and deletes orphaned action rows
+- `linkSceneToBucket` — `{ bucketGuid, sceneGuid }`; appends a new scene action row when none targets that scene
+- `unlinkSceneFromBucket` — removes matching scene action GUIDs from the bucket and deletes orphaned action rows
 - `createBucket` — `{ name? }`; new `bucket-{uuid}` in `pulses.buckets`
 - `createBucketAssignment` — `{ animationGuid, name? }`; `createBucket` + link in one step
+- `createSceneBucketAssignment` — `{ sceneGuid, name? }`; `createBucket` + scene link in one step
 - `renameBucket` — `{ bucketGuid, name }`
 - `deleteBucket` — removes the bucket, clears `slot.bucket` on setups that referenced it, scrubs unreferenced actions
 
@@ -687,7 +690,7 @@ Also supports `removeInputAssignment`, `renameInput`, and `updateInput`. Hub val
 
 **`pulse:assign`** — controller -> hub:
 
-Manages pulse bucket membership and bucket CRUD. Payload is a `PulseAssignCommand` (`linkAnimationToBucket`, `unlinkAnimationFromBucket`, `createBucket`, `createBucketAssignment`, `renameBucket`, `deleteBucket`). Action rows are applied via `graph:delta`; bucket list changes are pushed as `projectPatch` key `pulses`.
+Manages pulse bucket membership and bucket CRUD. Payload is a `PulseAssignCommand` (`linkAnimationToBucket`, `unlinkAnimationFromBucket`, `linkSceneToBucket`, `unlinkSceneFromBucket`, `createBucket`, `createBucketAssignment`, `createSceneBucketAssignment`, `renameBucket`, `deleteBucket`). Action rows are applied via `graph:delta`; bucket list changes are pushed as `projectPatch` key `pulses`.
 
 **`pulse:control`** — controller -> hub:
 

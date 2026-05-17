@@ -59,7 +59,7 @@ export class PulseAssignManager {
   }
 
   async showControl () {
-    if (this._contextType !== 'animation' || !this._contextGuid) return
+    if (!this._isSupportedContext() || !this._contextGuid) return
 
     const bucketRows = this._collectBucketRows()
     const modalOutcome = await this._openAssignBucketsModal(bucketRows)
@@ -93,7 +93,11 @@ export class PulseAssignManager {
    */
   _collectLinkedBucketDisplayNames () {
     const names = []
-    for (const bucket of projectGraph.getBucketsLinkedToAnimation(this._contextGuid)) {
+    const linkedBuckets =
+      this._contextType === 'scene'
+        ? projectGraph.getBucketsLinkedToScene(this._contextGuid)
+        : projectGraph.getBucketsLinkedToAnimation(this._contextGuid)
+    for (const bucket of linkedBuckets) {
       const rawName = bucket.name
       const name =
         typeof rawName === 'string' && rawName.trim().length > 0
@@ -146,7 +150,11 @@ export class PulseAssignManager {
       const initialLinked = new Set()
       for (const row of bucketRows) {
         for (const b of projectGraph.getPulseBuckets()) {
-          if (b.guid === row.guid && projectGraph.bucketLinksAnimation(b, this._contextGuid)) {
+          const isLinked =
+            this._contextType === 'scene'
+              ? projectGraph.bucketLinksScene(b, this._contextGuid)
+              : projectGraph.bucketLinksAnimation(b, this._contextGuid)
+          if (b.guid === row.guid && isLinked) {
             initialLinked.add(row.guid)
             break
           }
@@ -254,22 +262,38 @@ export class PulseAssignManager {
    * @param {Set<string>} pending
    */
   _applyAssignmentPendingSets (initialLinked, pending) {
-    const animationGuid = this._contextGuid
+    const targetGuid = this._contextGuid
     const toUnlink = [...initialLinked].filter(g => !pending.has(g))
     const toLink = [...pending].filter(g => !initialLinked.has(g))
     for (const bg of toUnlink) {
-      sendPulseAssignCommand({
-        command: 'unlinkAnimationFromBucket',
-        bucketGuid: bg,
-        animationGuid
-      })
+      sendPulseAssignCommand(
+        this._contextType === 'scene'
+          ? {
+              command: 'unlinkSceneFromBucket',
+              bucketGuid: bg,
+              sceneGuid: targetGuid
+            }
+          : {
+              command: 'unlinkAnimationFromBucket',
+              bucketGuid: bg,
+              animationGuid: targetGuid
+            }
+      )
     }
     for (const bg of toLink) {
-      sendPulseAssignCommand({
-        command: 'linkAnimationToBucket',
-        bucketGuid: bg,
-        animationGuid
-      })
+      sendPulseAssignCommand(
+        this._contextType === 'scene'
+          ? {
+              command: 'linkSceneToBucket',
+              bucketGuid: bg,
+              sceneGuid: targetGuid
+            }
+          : {
+              command: 'linkAnimationToBucket',
+              bucketGuid: bg,
+              animationGuid: targetGuid
+            }
+      )
     }
   }
 
@@ -278,7 +302,18 @@ export class PulseAssignManager {
       typeof this._labelDefault === 'string' && this._labelDefault.trim().length > 0
         ? this._labelDefault.trim()
         : this._contextGuid
-    return `Animation ${name}`.trim()
+    const kind = this._contextType === 'scene' ? 'Scene' : 'Animation'
+    return `${kind} ${name}`.trim()
+  }
+
+  _isSupportedContext () {
+    return this._contextType === 'animation' || this._contextType === 'scene'
+  }
+
+  _bucketLinksTarget (bucket) {
+    return this._contextType === 'scene'
+      ? projectGraph.bucketLinksScene(bucket, this._contextGuid)
+      : projectGraph.bucketLinksAnimation(bucket, this._contextGuid)
   }
 
   /** @returns {Promise<string | null>} */
@@ -297,11 +332,19 @@ export class PulseAssignManager {
     )
     const name = values?.name?.trim()
     if (!name) return null
-    sendPulseAssignCommand({
-      command: 'createBucketAssignment',
-      animationGuid: this._contextGuid,
-      name
-    })
+    sendPulseAssignCommand(
+      this._contextType === 'scene'
+        ? {
+            command: 'createSceneBucketAssignment',
+            sceneGuid: this._contextGuid,
+            name
+          }
+        : {
+            command: 'createBucketAssignment',
+            animationGuid: this._contextGuid,
+            name
+          }
+    )
     return name
   }
 
@@ -367,7 +410,7 @@ export class PulseAssignManager {
             ? bucket.name.trim()
             : ''
         if (name !== expected) continue
-        if (projectGraph.bucketLinksAnimation(bucket, this._contextGuid)) return true
+        if (this._bucketLinksTarget(bucket)) return true
       }
       return false
     }

@@ -333,6 +333,33 @@ class ProjectGraph {
     )
   }
 
+  /**
+   * @param {Record<string, unknown>} bucket
+   * @param {string} sceneGuid
+   * @returns {boolean}
+   */
+  bucketLinksScene (bucket, sceneGuid) {
+    const actions = this._data.actions
+    const guids = Array.isArray(bucket.actions) ? bucket.actions : []
+    for (const ag of guids) {
+      if (typeof ag !== 'string') continue
+      const action = actions.get(ag)
+      if (actionExecuteTargetsScene(action, sceneGuid)) return true
+    }
+    return false
+  }
+
+  /**
+   * @param {string} sceneGuid
+   * @returns {Record<string, unknown>[]}
+   */
+  getBucketsLinkedToScene (sceneGuid) {
+    if (!sceneGuid) return []
+    return this._data.pulses.buckets.filter(b =>
+      this.bucketLinksScene(b, sceneGuid)
+    )
+  }
+
   /** @returns {Map<string, Record<string, unknown>>} */
   getInputs () {
     return this._data.inputs
@@ -2083,6 +2110,24 @@ function actionExecuteTargetsAnimation (action, animationGuid) {
       : null
   if (!ex) return false
   return ex.type === 'animation' && ex.guid === animationGuid
+}
+
+/**
+ * @param {unknown} action
+ * @param {string} sceneGuid
+ * @returns {boolean}
+ */
+function actionExecuteTargetsScene (action, sceneGuid) {
+  const raw =
+    action && typeof action === 'object' && !Array.isArray(action)
+      ? /** @type {{ execute?: unknown }} */ (action).execute
+      : undefined
+  const ex =
+    raw && typeof raw === 'object' && !Array.isArray(raw)
+      ? /** @type {Record<string, unknown>} */ (raw)
+      : null
+  if (!ex) return false
+  return ex.type === 'scene' && ex.guid === sceneGuid
 }
 
 function addTopicsToSet (target, topic) {

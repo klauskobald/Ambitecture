@@ -3,6 +3,7 @@ import { intentName } from '../core/stores.js'
 import { projectGraph } from '../core/projectGraph.js'
 import { sendGraphCommand, sendSceneActivate, sendSaveProject } from '../core/outboundQueue.js'
 import { InputAssignManager } from '../edit/InputAssignManager.js'
+import { PulseAssignManager } from '../edit/PulseAssignManager.js'
 
 export class ScenesPane {
   constructor () {
@@ -91,7 +92,7 @@ export class ScenesPane {
 
     // React to scene structure, intent labels, and assign-row entities (actions/inputs).
     // `intents:runtime` from animation must NOT wake this pane or the list rebuilds every frame.
-    this._unsubscribe = projectGraph.subscribe(['scenes', 'intents:def', 'actions', 'inputs'], () => {
+    this._unsubscribe = projectGraph.subscribe(['scenes', 'intents:def', 'actions', 'inputs', 'pulses'], () => {
       this._ensureActiveScene()
       this._render()
     })
@@ -164,6 +165,14 @@ export class ScenesPane {
       labelDefault: activeScene,
     })
     this._performBody.appendChild(iam.getInlinePane({
+      rowClass: 'scene-perform-row',
+      toggleClass: 'intent-toggle scene-perform-button'
+    }))
+    const pam = new PulseAssignManager({
+      context: { type: 'scene', guid: sceneGuid },
+      labelDefault: activeScene,
+    })
+    this._performBody.appendChild(pam.getInlinePane({
       rowClass: 'scene-perform-row',
       toggleClass: 'intent-toggle scene-perform-button'
     }))

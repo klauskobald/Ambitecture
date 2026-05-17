@@ -21,11 +21,21 @@ function isPulseAssignCommand(payload: unknown): payload is PulseAssignCommand {
         && p['bucketGuid'].length > 0
         && typeof p['animationGuid'] === 'string'
         && p['animationGuid'].length > 0;
+    case 'linkSceneToBucket':
+    case 'unlinkSceneFromBucket':
+      return typeof p['bucketGuid'] === 'string'
+        && p['bucketGuid'].length > 0
+        && typeof p['sceneGuid'] === 'string'
+        && p['sceneGuid'].length > 0;
     case 'createBucket':
       return p['name'] === undefined || typeof p['name'] === 'string';
     case 'createBucketAssignment':
       return typeof p['animationGuid'] === 'string'
         && p['animationGuid'].length > 0
+        && (p['name'] === undefined || typeof p['name'] === 'string');
+    case 'createSceneBucketAssignment':
+      return typeof p['sceneGuid'] === 'string'
+        && p['sceneGuid'].length > 0
         && (p['name'] === undefined || typeof p['name'] === 'string');
     case 'renameBucket':
       return typeof p['bucketGuid'] === 'string'

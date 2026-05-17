@@ -56,20 +56,16 @@ export class InputAssignManager {
   }
 
   /**
-   * Inline assign row (target-agnostic): fixed "Input" toggle + assigned input name in grey when set.
-   * Unassigned: no placeholder beside the button (name span hidden / empty).
+   * Inline assign row (target-agnostic): "Input" toggle, or assigned input name on the toggle when linked.
    * @param {{ rowClass?: string, toggleClass?: string, labelClass?: string }} [opts]
    * @returns {HTMLElement}
    */
   getInlinePane (opts = {}) {
     const rowClass = opts.rowClass ?? 'input-assign-inline-row'
     const toggleClass = opts.toggleClass ?? 'intent-toggle'
-    const extraLabelClass = opts.labelClass ?? ''
-
     const row = document.createElement('div')
     const toggle = document.createElement('button')
     toggle.type = 'button'
-    const label = document.createElement('span')
 
     const sync = () => {
       const input = projectGraph.getAssignedInput(
@@ -83,17 +79,18 @@ export class InputAssignManager {
       toggle.className = isActive
         ? `${toggleClass} intent-toggle--enabled`.trim()
         : toggleClass
-      toggle.textContent = 'Input'
       const rawName = input?.name
       const name =
         typeof rawName === 'string' && rawName.trim().length > 0
           ? rawName.trim()
           : ''
-      label.className = ['input-assign-inline-assigned-name', extraLabelClass]
-        .filter(Boolean)
-        .join(' ')
-      label.textContent = name
-      label.hidden = !name
+      if (isActive && name) {
+        toggle.textContent = name
+        toggle.title = `Input: ${name}`
+      } else {
+        toggle.textContent = 'Input'
+        toggle.title = 'Assign input'
+      }
     }
 
     sync()
@@ -103,7 +100,6 @@ export class InputAssignManager {
     })
 
     row.appendChild(toggle)
-    row.appendChild(label)
     return row
   }
 

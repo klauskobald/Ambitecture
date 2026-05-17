@@ -104,8 +104,7 @@ export function createAnimationEditPane ({ onClose }) {
     assignHost.appendChild(
       iam.getInlinePane({
         rowClass: 'scene-perform-row',
-        toggleClass: 'intent-toggle scene-perform-button',
-        labelClass: 'scene-perform-label'
+        toggleClass: 'intent-toggle scene-perform-button'
       })
     )
   }

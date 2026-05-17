@@ -165,8 +165,7 @@ export class ScenesPane {
     })
     this._performBody.appendChild(iam.getInlinePane({
       rowClass: 'scene-perform-row',
-      toggleClass: 'intent-toggle scene-perform-button',
-      labelClass: 'scene-perform-label',
+      toggleClass: 'intent-toggle scene-perform-button'
     }))
   }
 

@@ -352,11 +352,17 @@
 }
 
 .scene-perform-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 0.5rem;
+  display: flex;
   align-items: center;
+  min-width: 0;
   opacity: 0.55;
+}
+
+.scene-perform-button {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .input-assign-inline-meta {

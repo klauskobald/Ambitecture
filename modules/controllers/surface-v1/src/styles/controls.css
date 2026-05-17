@@ -1130,8 +1130,15 @@
   gap: 0.35rem;
 }
 
+.perform-pulse-edit__slot-row-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 .perform-pulse-edit__slot-row {
-  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
   text-align: left;
   padding: 0.45rem 0.5rem;
   border-radius: 8px;
@@ -1140,6 +1147,10 @@
   color: var(--color-text);
   font-size: 0.78rem;
   cursor: pointer;
+}
+
+.perform-pulse-edit__slot-clear {
+  flex: 0 0 auto;
 }
 
 .perform-pulse-edit__slot-row:focus-visible {

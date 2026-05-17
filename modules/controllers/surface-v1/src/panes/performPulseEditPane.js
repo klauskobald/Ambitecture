@@ -172,35 +172,67 @@ export function createPulseEditPane ({ onClose }) {
         slot.bucket.length > 0
           ? slot.bucket
           : undefined
+      const rowWrap = document.createElement('div')
+      rowWrap.className = 'perform-pulse-edit__slot-row-wrap'
+
       const rowBtn = document.createElement('button')
       rowBtn.type = 'button'
       rowBtn.className = 'perform-pulse-edit__slot-row'
-      rowBtn.textContent = `Slot ${i + 1}: ${resolveBucketLabel(bucketGuid)}`
+      const bucketLabel = resolveBucketLabel(bucketGuid)
+      rowBtn.textContent = bucketLabel
+        ? `Slot ${i + 1}: ${bucketLabel}`
+        : `Slot ${i + 1}`
       rowBtn.addEventListener('click', () => {
         void pickSlotBucket(i)
       })
-      slotList.appendChild(rowBtn)
+
+      const clearBtn = document.createElement('button')
+      clearBtn.type = 'button'
+      clearBtn.className =
+        'input-assign-inline-icon-btn input-assign-inline-icon-btn--delete perform-pulse-edit__slot-clear'
+      clearBtn.textContent = '❌'
+      clearBtn.setAttribute('aria-label', `Clear bucket from slot ${i + 1}`)
+      clearBtn.addEventListener('click', event => {
+        event.stopPropagation()
+        clearSlotBucket(i)
+      })
+
+      rowWrap.appendChild(rowBtn)
+      rowWrap.appendChild(clearBtn)
+      slotList.appendChild(rowWrap)
     }
     body.appendChild(slotList)
   }
 
   /** @param {number} slotIdx */
-  async function pickSlotBucket (slotIdx) {
-    const options = [
-      { value: '', label: 'None' },
-      ...[...projectGraph.getPulseBuckets()].map(b => ({
-        value: String(b.guid ?? ''),
-        label:
-          typeof b.name === 'string' && b.name ? b.name : String(b.guid ?? '')
-      }))
-    ]
-    const choice = await pickChoice('Assign bucket to slot', options)
-    if (choice === null) return
+  function clearSlotBucket (slotIdx) {
     sendPulseControlCommand({
       command: 'assignSlotBucket',
       setupGuid: currentGuid,
       slotIdx,
-      bucketGuid: choice.length > 0 ? choice : null
+      bucketGuid: null
+    })
+  }
+
+  /** @param {number} slotIdx */
+  async function pickSlotBucket (slotIdx) {
+    const buckets = [...projectGraph.getPulseBuckets()]
+    if (buckets.length === 0) {
+      await Modal.warn('No pulse buckets defined yet.')
+      return
+    }
+    const options = buckets.map(b => ({
+      value: String(b.guid ?? ''),
+      label:
+        typeof b.name === 'string' && b.name ? b.name : String(b.guid ?? '')
+    }))
+    const choice = await pickChoice('Assign bucket to slot', options)
+    if (choice === null || choice.length === 0) return
+    sendPulseControlCommand({
+      command: 'assignSlotBucket',
+      setupGuid: currentGuid,
+      slotIdx,
+      bucketGuid: choice
     })
   }
 

@@ -68,25 +68,18 @@ export class InputAssignManager {
     toggle.type = 'button'
 
     const sync = () => {
-      const input = projectGraph.getAssignedInput(
-        this._contextType,
-        this._contextGuid
-      )
-      const isActive = this._anyInputLinkedToContext()
+      const linkedNames = this._collectLinkedInputDisplayNames()
+      const isActive = linkedNames.length > 0
       row.className = isActive
         ? `${rowClass} ${rowClass}--active`.trim()
         : rowClass
       toggle.className = isActive
         ? `${toggleClass} intent-toggle--enabled`.trim()
         : toggleClass
-      const rawName = input?.name
-      const name =
-        typeof rawName === 'string' && rawName.trim().length > 0
-          ? rawName.trim()
-          : ''
-      if (isActive && name) {
-        toggle.textContent = name
-        toggle.title = `Input: ${name}`
+      if (isActive) {
+        const fullLabel = linkedNames.join(', ')
+        toggle.textContent = this._formatInlineInputLabel(linkedNames)
+        toggle.title = `Inputs: ${fullLabel}`
       } else {
         toggle.textContent = 'Input'
         toggle.title = 'Assign input'
@@ -150,17 +143,43 @@ export class InputAssignManager {
   }
 
   _anyInputLinkedToContext () {
+    return this._collectLinkedInputDisplayNames().length > 0
+  }
+
+  /**
+   * Display names for every input linked to this assign context, sorted.
+   * @returns {string[]}
+   */
+  _collectLinkedInputDisplayNames () {
+    const names = []
     for (const input of projectGraph.getInputs().values()) {
-      if (
-        input &&
-        typeof input === 'object' &&
-        !Array.isArray(input) &&
-        this._inputLinksTarget(/** @type {Record<string, unknown>} */ (input))
-      ) {
-        return true
+      if (!input || typeof input !== 'object' || Array.isArray(input)) continue
+      if (!this._inputLinksTarget(/** @type {Record<string, unknown>} */ (input))) {
+        continue
       }
+      const rawName = input.name
+      const name =
+        typeof rawName === 'string' && rawName.trim().length > 0
+          ? rawName.trim()
+          : typeof input.guid === 'string'
+            ? input.guid
+            : ''
+      if (name.length > 0) names.push(name)
     }
-    return false
+    return names.sort((a, b) => a.localeCompare(b))
+  }
+
+  /**
+   * @param {string[]} names
+   * @param {number} [maxLen]
+   * @returns {string}
+   */
+  _formatInlineInputLabel (names, maxLen = 25) {
+    if (names.length === 0) return ''
+    const joined = names.join(', ')
+    if (joined.length <= maxLen) return joined
+    if (maxLen <= 1) return joined.slice(0, maxLen)
+    return `${joined.slice(0, maxLen - 1)}…`
   }
 
   /**

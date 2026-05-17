@@ -2032,7 +2032,7 @@ function normalizeQuickPanelDotKeys (value) {
  */
 /**
  * @param {unknown} data
- * @returns {{ setups: unknown[], buckets: Array<Record<string, unknown>> }}
+ * @returns {{ setups: unknown[], buckets: Array<Record<string, unknown>>, sync?: Record<string, unknown> }}
  */
 function normalizePulsesConfig (data) {
   const raw =
@@ -2096,7 +2096,15 @@ function normalizePulsesConfig (data) {
           /** @returns {row is Record<string, unknown>} */ row => row !== null
         )
     : []
-  return { setups, buckets }
+  const result = { setups, buckets }
+  if (
+    raw.sync &&
+    typeof raw.sync === 'object' &&
+    !Array.isArray(raw.sync)
+  ) {
+    result.sync = /** @type {Record<string, unknown>} */ (raw.sync)
+  }
+  return result
 }
 
 /**

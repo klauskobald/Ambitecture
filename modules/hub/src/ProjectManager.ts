@@ -219,9 +219,17 @@ export interface PulseSetup {
   slots: PulseSlot[];
 }
 
+export interface PulseSyncYamlConfig {
+  /** Which sync kinds reset pulse to slot 0 before the next aligned tick. */
+  restart?: 'never' | 'bar' | 'onset';
+  /** BPM blend toward analyser tempo per sync (0–1). */
+  lerp?: number;
+}
+
 export interface PulsesConfig {
   setups: PulseSetup[];
   buckets: PulseBucket[];
+  sync?: PulseSyncYamlConfig;
 }
 
 interface Project {
@@ -441,6 +449,10 @@ export class ProjectManager {
         changed = true;
       }
       config = { setups, buckets };
+      const syncRaw = rec['sync'];
+      if (syncRaw !== undefined && typeof syncRaw === 'object' && !Array.isArray(syncRaw)) {
+        config.sync = syncRaw as PulseSyncYamlConfig;
+      }
     } else {
       return false;
     }

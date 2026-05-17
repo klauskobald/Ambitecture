@@ -10,6 +10,8 @@ type ActivePulseRunner = {
   tickTimer: ReturnType<typeof setInterval> | undefined;
   alignTimeout: ReturnType<typeof setTimeout> | undefined;
   msIntoCurrentTick: number;
+  /** Live tempo from analyser sync; not written to project YAML until explicit edit. */
+  liveBpm?: number;
 };
 
 /**
@@ -60,10 +62,24 @@ export class PulseManager {
       return;
     }
     this.runner.setup = setup;
-    this.runner.tickIntervalMs = this.computeTickIntervalMs(setup.bpm, setup.meter);
+    this.runner.tickIntervalMs = this.computeTickIntervalMs(
+      this.getRunnerBpm(),
+      setup.meter,
+    );
     if (this.runner.currentSlotIdx >= setup.slots.length) {
       this.runner.currentSlotIdx = 0;
     }
+  }
+
+  private getRunnerBpm(): number {
+    if (!this.runner) {
+      return 120;
+    }
+    const live = this.runner.liveBpm;
+    if (typeof live === 'number' && Number.isFinite(live)) {
+      return live;
+    }
+    return this.runner.setup.bpm;
   }
 
   private resolveActiveSetup(): PulseSetup | undefined {
@@ -166,7 +182,7 @@ export class PulseManager {
   /**
    * Set BPM and schedule the next tick at an absolute wall-clock time (phase-aligned sync).
    */
-  applyAlignedSync(bpm: number, nextTickAtMs: number): void {
+  applyAlignedSync(bpm: number, nextTickAtMs: number, restartFromSlotZero = false): void {
     if (!this.runner) {
       Logger.warn('[pulse] applyAlignedSync called but no pulse is active');
       return;
@@ -175,11 +191,16 @@ export class PulseManager {
     if (setup) {
       this.runner.setup = setup;
     }
-    this.runner.setup.bpm = bpm;
+    this.runner.liveBpm = bpm;
     this.runner.tickIntervalMs = this.computeTickIntervalMs(bpm, this.runner.setup.meter);
     this.runner.isRunning = true;
+    if (restartFromSlotZero) {
+      this.runner.currentSlotIdx = 0;
+      this.runner.msIntoCurrentTick = 0;
+    }
     Logger.info(
-      `[pulse] aligned sync BPM=${bpm} nextTick in ${Math.max(0, nextTickAtMs - Date.now())}ms`,
+      `[pulse] aligned sync BPM=${bpm} nextTick in ${Math.max(0, nextTickAtMs - Date.now())}ms`
+        + (restartFromSlotZero ? ' (slot 0)' : ''),
     );
     this.scheduleAlignedTicks(nextTickAtMs);
   }
@@ -207,6 +228,7 @@ export class PulseManager {
       this.runner.setup = setup;
     }
     this.runner.setup.bpm = bpm;
+    delete this.runner.liveBpm;
     this.runner.tickIntervalMs = this.computeTickIntervalMs(bpm, this.runner.setup.meter);
     Logger.info(`[pulse] BPM set to ${bpm}`);
     if (this.runner.isRunning) {
@@ -417,7 +439,9 @@ export class PulseManager {
     slotIdx: number,
   ): HubStatusPulsePayload {
     const setup = this.runner?.setup ?? this.projectManager.getPulseSetup(setupGuid);
-    const bpm = setup?.bpm ?? 120;
+    const bpm = this.runner?.setup.guid === setupGuid
+      ? this.getRunnerBpm()
+      : (setup?.bpm ?? 120);
     const bpmLabel = Number.isFinite(bpm) ? bpm.toFixed(1) : '120.0';
     const slotsTotal = setup?.slots.length ?? 0;
     const name = setup?.name ?? setupGuid;
@@ -472,6 +496,10 @@ export class PulseManager {
    */
   getActiveSetupGuid(): string | undefined {
     return this.runner?.setup.guid;
+  }
+
+  getLiveBpm(): number | undefined {
+    return this.runner?.liveBpm;
   }
 
   /**

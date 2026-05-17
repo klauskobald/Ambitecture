@@ -333,7 +333,6 @@ router.register('pulse:tap', new PulseTapHandler(
 const pulseSync = new PulseSync(
   pulseTapTempoConfig,
   pulseManager,
-  pulseSetupManager,
   projectManager,
   () => {
     const data = projectManager.getPulsesWirePayload();

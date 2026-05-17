@@ -447,7 +447,18 @@ Hub pushes **`projectPatch`** `{ key: "pulses", data: PulsesConfig }` to all con
 
 **`pulse:tap`** (controller → hub): live tap-tempo stream (not durable per message). Payload `{ setupGuid, atMs? }`. Hub [`PulseTapTempo`](modules/hub/src/pulse/PulseTapTempo.ts) estimates interval from recent taps, smooths BPM, calls `PulseManager.setBPM`, broadcasts `hub:status`, and debounces `setSetupBpm` + `projectPatch`. If the setup is not active, `selectSetup` runs first. Tunables: root-level **`pulse.tapTempo`** in hub `system.yml` (`minBpm`, `maxBpm`, `minTaps`, `windowMs`, `smoothing`, `persistDebounceMs`), merged into controller `systemCapabilities` as `pulse`.
 
-**`pulse:sync`** (controller → hub): music-analyser (or similar) phase-aligned tempo sync. Payload `{ bpm, beatAtMs, sentAtMs, kind: "onset" | "bar", phaseAdjustMs?, audioT?, spectrum? }` — no `setupGuid`; hub applies to the active pulse runner (or project `activePulseGuid` via [`PulseSync`](modules/hub/src/pulse/PulseSync.ts)). Hub estimates one-way latency from `sentAtMs`, computes the next beat boundary, smooths BPM (same clamp/smoothing as tap tempo), calls [`PulseManager.applyAlignedSync`](modules/hub/src/pulse/PulseManager.ts) (phase-aligned `setTimeout` + interval), and debounces `setSetupBpm`. `kind: "bar"` always reschedules; `kind: "onset"` reschedules only when `|phaseAdjustMs| ≤ 50`. `spectrum` is reserved for future FFT data.
+**`pulse:sync`** (controller → hub): music-analyser (or similar) phase-aligned tempo sync. Payload `{ bpm, beatAtMs, sentAtMs, kind: "onset" | "bar", phaseAdjustMs?, audioT?, spectrum? }` — no `setupGuid`; hub applies to the active pulse runner (or project `activePulseGuid` via [`PulseSync`](modules/hub/src/pulse/PulseSync.ts)). Hub estimates one-way latency from `sentAtMs`, computes the next beat boundary, smooths BPM toward the reported tempo using project **`pulses.sync.lerp`** (0–1; default `0.35`), clamps with tap-tempo `minBpm`/`maxBpm`, stores tempo on the runner as **`liveBpm`** (runtime only — does **not** call `setSetupBpm` or schedule a project save), and calls [`PulseManager.applyAlignedSync`](modules/hub/src/pulse/PulseManager.ts) (phase-aligned `setTimeout` + interval). Live BPM is shown via `hub:status`; durable `pulses.setups[].bpm` changes only through Perform pulse edit / `pulse:control` `setSetupBpm` (or tap-tempo persist). `kind: "bar"` always reschedules; `kind: "onset"` reschedules only when `|phaseAdjustMs| ≤ 50`. Optional project **`pulses.sync.restart`**: `never` (default), `bar`, or `onset` — when the incoming `kind` matches, hub sets `currentSlotIdx` to 0 before the next aligned tick (downbeat-style restart without an immediate fire). Project **`pulses.sync`** is durable YAML (preserved on load/normalize); it is not stripped when setups/buckets are normalized. `spectrum` is reserved for future FFT data.
+
+Example project YAML:
+
+```yaml
+pulses:
+  sync:
+    restart: bar
+    lerp: 0.2
+  setups: [ ... ]
+  buckets: [ ... ]
+```
 
 **Controller transmit throttle:** project YAML may set `controller[].transmit.minIntervalSeconds` (e.g. `4`). Hub includes `transmit` on `graph:init` for the registering controller. Headless controllers (e.g. `music-analyser`) rate-limit outbound `pulse:sync` to that interval and prefer queued `bar` over `onset` when flushing.
 

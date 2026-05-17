@@ -1,8 +1,8 @@
 import { Logger } from '../Logger';
 import { ProjectManager } from '../ProjectManager';
 import { PulseManager } from './PulseManager';
-import { PulseSetupManager } from './PulseSetupManager';
 import { PulseTapTempoConfig } from './PulseTapTempoConfig';
+import { parsePulseSyncProjectConfig } from './PulseSyncConfig';
 
 export type PulseSyncKind = 'onset' | 'bar';
 
@@ -20,16 +20,11 @@ const SYNC_SCHEDULE_LEAD_MS = 30;
 const ONSET_PHASE_RESCHEDULE_MAX_MS = 50;
 
 export class PulseSync {
-  private persistTimer: ReturnType<typeof setTimeout> | undefined;
-  private pendingSetupGuid?: string;
-  private pendingBpm?: number;
-
   constructor(
     private readonly config: PulseTapTempoConfig,
     private readonly pulseManager: PulseManager,
-    private readonly pulseSetupManager: PulseSetupManager,
     private readonly projectManager: ProjectManager,
-    private readonly onPersisted: () => void,
+    private readonly onPulsesBroadcast: () => void,
   ) { }
 
   apply(payload: PulseSyncPayload): void {
@@ -64,15 +59,24 @@ export class PulseSync {
       Math.max(this.config.minBpm, payload.bpm),
     );
 
+    const syncProject = parsePulseSyncProjectConfig(
+      this.projectManager.getPulsesWirePayload(),
+    );
+
     const setup = this.projectManager.getPulseSetup(setupGuid);
-    const currentBpm = setup?.bpm ?? targetBpm;
+    const durableBpm = setup?.bpm ?? targetBpm;
+    const currentLiveBpm = this.pulseManager.getLiveBpm() ?? durableBpm;
     const smoothedBpm = Math.min(
       this.config.maxBpm,
       Math.max(
         this.config.minBpm,
-        currentBpm + this.config.smoothing * (targetBpm - currentBpm),
+        currentLiveBpm + syncProject.lerp * (targetBpm - currentLiveBpm),
       ),
     );
+
+    const restartFromSlotZero =
+      (syncProject.restart === 'bar' && payload.kind === 'bar')
+      || (syncProject.restart === 'onset' && payload.kind === 'onset');
 
     const periodMs = 60000 / smoothedBpm;
     let beatIndex = Math.ceil(
@@ -84,8 +88,8 @@ export class PulseSync {
     const nextTickAtMs = beatAtHubMs + beatIndex * periodMs;
 
     this.ensureRunner(setupGuid);
-    this.pulseManager.applyAlignedSync(smoothedBpm, nextTickAtMs);
-    this.schedulePersist(setupGuid, smoothedBpm);
+    this.pulseManager.applyAlignedSync(smoothedBpm, nextTickAtMs, restartFromSlotZero);
+    this.onPulsesBroadcast();
   }
 
   private resolveSetupGuid(): string | undefined {
@@ -102,30 +106,5 @@ export class PulseSync {
       return;
     }
     this.pulseManager.selectSetupForSync(setupGuid);
-  }
-
-  private schedulePersist(setupGuid: string, bpm: number): void {
-    this.pendingSetupGuid = setupGuid;
-    this.pendingBpm = bpm;
-    if (this.persistTimer !== undefined) {
-      clearTimeout(this.persistTimer);
-    }
-    this.persistTimer = setTimeout(() => {
-      this.persistTimer = undefined;
-      const guid = this.pendingSetupGuid;
-      const nextBpm = this.pendingBpm;
-      if (!guid || nextBpm === undefined) {
-        return;
-      }
-      const result = this.pulseSetupManager.build({
-        command: 'setSetupBpm',
-        setupGuid: guid,
-        bpm: nextBpm,
-      });
-      if (result.pulsesChanged) {
-        this.pulseManager.syncActiveSetupFromProject();
-        this.onPersisted();
-      }
-    }, this.config.persistDebounceMs);
   }
 }

@@ -105,7 +105,7 @@ export class ActionHandler implements MessageHandler {
     private registry: ConnectionRegistry,
     private graphStore: ProjectGraphStore,
     private actionInputManager: ActionInputManager,
-    private publishMutation: (source: WebSocket, result: GraphMutationResult, location?: [number, number]) => void,
+    private publishMutation: (source: WebSocket | undefined, result: GraphMutationResult, location?: [number, number]) => void,
     private runtimeUpdateDispatcher: RuntimeUpdateDispatcher,
     private animationManager?: AnimationManager,
   ) { }
@@ -154,14 +154,9 @@ export class ActionHandler implements MessageHandler {
     let handled = 0;
     const item = executeItem;
     switch (item.type) {
-      case 'scene': {
-        const sceneGuid = typeof item.guid === 'string' ? item.guid : undefined;
-        if (sceneGuid) {
-          this.graphStore.activateScene(sceneGuid, location, 'runtime');
-          handled = 1;
-        }
+      case 'scene':
+        handled += this.completeSceneActivation(item, location, undefined, triggerArgs);
         break;
-      }
       case 'animation': {
         handled += this.executeAnimationItem(item, location, triggerArgs);
         break;
@@ -238,21 +233,39 @@ export class ActionHandler implements MessageHandler {
   }
 
   private executeSceneItem(ws: WebSocket, item: ActionExecuteItem, message: WsMessage): number {
-    const scene = this.actionInputManager.getSceneForExecuteItem(item);
-    if (!scene?.guid) {
-      Logger.warn(`[action] scene target ${item.guid ?? 'unknown'} not found`);
-      return 0;
-    }
     const p = message.payload as Record<string, unknown> | undefined;
     const triggerArgs =
       p && typeof p['args'] === 'object' && p['args'] !== null && !Array.isArray(p['args'])
         ? (p['args'] as Record<string, unknown>)
         : undefined;
+    if (this.completeSceneActivation(item, message.location, ws, triggerArgs) === 0) {
+      return 0;
+    }
+    return 1;
+  }
+
+  /**
+   * Activates a scene execute target and broadcasts graph/renderer effects.
+   * `sourceWs` omitted for hub-internal triggers (e.g. pulse) — all controllers receive deltas.
+   */
+  private completeSceneActivation(
+    item: ActionExecuteItem,
+    location?: [number, number],
+    sourceWs?: WebSocket,
+    triggerArgs?: Record<string, unknown>,
+  ): number {
+    const scene = this.actionInputManager.getSceneForExecuteItem(item);
+    if (!scene?.guid) {
+      Logger.warn(`[action] scene target ${item.guid ?? 'unknown'} not found`);
+      return 0;
+    }
     const merged = shallowMergeActionParams(executeParamsFromItem(item), triggerArgs);
-    const result = this.graphStore.activateScene(scene.guid, message.location, 'runtime');
-    this.sendResultToSource(ws, result);
-    this.publishMutation(ws, result, message.location);
-    applySceneTriggerSideEffects(merged, this.animationManager, message.location);
+    const result = this.graphStore.activateScene(scene.guid, location, 'runtime');
+    if (sourceWs) {
+      this.sendResultToSource(sourceWs, result);
+    }
+    this.publishMutation(sourceWs, result, location);
+    applySceneTriggerSideEffects(merged, this.animationManager, location);
     return 1;
   }
 

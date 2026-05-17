@@ -9,7 +9,7 @@ export class GraphCommandHandler implements MessageHandler {
   constructor(
     private registry: ConnectionRegistry,
     private graphStore: ProjectGraphStore,
-    private publishMutation: (source: WebSocket, result: GraphMutationResult, location?: [number, number]) => void,
+    private publishMutation: (source: WebSocket | undefined, result: GraphMutationResult, location?: [number, number]) => void,
   ) {}
 
   handle(ws: WebSocket, message: WsMessage, _registry: ConnectionRegistry): void {

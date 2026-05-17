@@ -177,10 +177,10 @@ const pushConfigsToModules = (includeControllerIntentPatch = true) => {
   pushControllerProjectPatches(includeControllerIntentPatch);
 };
 
-const publishGraphMutation = (source: import('ws').WebSocket, result: GraphMutationResult, location?: [number, number]): void => {
+const publishGraphMutation = (source: import('ws').WebSocket | undefined, result: GraphMutationResult, location?: [number, number]): void => {
   if (result.controllerDeltas.length > 0) {
     for (const ws of registry.getByRole('controller')) {
-      if (ws === source || ws.readyState !== ws.OPEN) continue;
+      if ((source !== undefined && ws === source) || ws.readyState !== ws.OPEN) continue;
       const info = registry.get(ws);
       const deltas = result.controllerDeltas.filter(delta =>
         delta.entityType !== 'controller' || info?.guid === delta.guid

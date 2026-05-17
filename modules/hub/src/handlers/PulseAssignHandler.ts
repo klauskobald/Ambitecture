@@ -55,7 +55,7 @@ export class PulseAssignHandler implements MessageHandler {
     private pulseBucketAssignManager: PulseBucketAssignManager,
     private projectManager: ProjectManager,
     private pulseManager: PulseManager,
-    private publishMutation: (source: WebSocket, result: GraphMutationResult, location?: [number, number]) => void,
+    private publishMutation: (source: WebSocket | undefined, result: GraphMutationResult, location?: [number, number]) => void,
   ) {}
 
   handle(ws: WebSocket, message: WsMessage, _registry: ConnectionRegistry): void {

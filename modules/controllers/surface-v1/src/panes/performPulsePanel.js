@@ -18,11 +18,17 @@ import { prompt as modalPrompt } from '../core/Modal.js'
  *
  * @param {number} slotsTotal
  * @param {number} firedSlotIdx
+ * @param {number} bpm
  * @returns {HTMLElement}
  */
-function renderSlotMeter (slotsTotal, firedSlotIdx) {
+function renderSlotMeter (slotsTotal, firedSlotIdx, bpm) {
   const meter = document.createElement('div')
   meter.className = 'perform-pulse-meter'
+  const beatMs =
+    typeof bpm === 'number' && Number.isFinite(bpm) && bpm > 0
+      ? (60 / bpm) * 1000
+      : 500
+  meter.style.setProperty('--pulse-beat-period', `${beatMs}ms`)
   for (let i = 0; i < slotsTotal; i += 1) {
     const block = document.createElement('span')
     block.className = 'perform-pulse-meter__slot'
@@ -116,7 +122,7 @@ export function createPerformPulsePanel () {
     if (!statusHost) return
     if (status.isActive && status.slotsTotal > 0) {
       statusHost.replaceChildren(
-        renderSlotMeter(status.slotsTotal, status.slotIdx)
+        renderSlotMeter(status.slotsTotal, status.slotIdx, status.bpm)
       )
     } else if (status.message) {
       statusHost.replaceChildren()

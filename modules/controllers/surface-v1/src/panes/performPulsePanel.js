@@ -9,6 +9,7 @@ import {
   subscribePulsePlayState,
   isPulseActive
 } from '../core/pulsePlayRegistry.js'
+import { formatPulseBpmDisplay } from '../core/pulseFormat.js'
 import { createPulseEditPane } from './performPulseEditPane.js'
 import { prompt as modalPrompt } from '../core/Modal.js'
 
@@ -110,7 +111,7 @@ export function createPerformPulsePanel () {
     rowEl.classList.toggle('perform-pulse-row--active', status.isActive)
     const bpmEl = rowEl.querySelector('.perform-pulse-row__head .perform-pulse-row__bpm')
     if (bpmEl && setup) {
-      bpmEl.textContent = `${displayBpmForSetup(guid, setup)} bpm`
+      bpmEl.textContent = `${formatPulseBpmDisplay(displayBpmForSetup(guid, setup))} bpm`
     }
     const statusHost = rowEl.querySelector('.perform-pulse-row__status')
     if (!statusHost) return
@@ -166,7 +167,7 @@ export function createPerformPulsePanel () {
     title.textContent = name
     const bpmEl = document.createElement('span')
     bpmEl.className = 'perform-pulse-row__bpm'
-    bpmEl.textContent = `${displayBpmForSetup(guid, setup)} bpm`
+    bpmEl.textContent = `${formatPulseBpmDisplay(displayBpmForSetup(guid, setup))} bpm`
 
     head.appendChild(title)
     head.appendChild(bpmEl)

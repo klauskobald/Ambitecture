@@ -177,7 +177,7 @@ export class PulseSetupManager {
 
   private clampBpm(bpm: number): number {
     if (!Number.isFinite(bpm)) return DEFAULT_BPM;
-    return Math.min(300, Math.max(20, Math.round(bpm)));
+    return Math.min(300, Math.max(20, bpm));
   }
 
   private clampSlotCount(count: number): number {

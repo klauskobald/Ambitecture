@@ -19,7 +19,7 @@ export class PulseTapTempo {
     private pulseSetupManager: PulseSetupManager,
     private projectManager: ProjectManager,
     private onPersisted: () => void,
-  ) {}
+  ) { }
 
   recordTap(setupGuid: string, atMs?: number): void {
     if (setupGuid.length === 0) {
@@ -65,14 +65,13 @@ export class PulseTapTempo {
 
     const meanIntervalMs =
       intervals.reduce((sum, n) => sum + n, 0) / intervals.length;
-    let targetBpm = Math.round(60000 / meanIntervalMs);
+    let targetBpm = (60000 / meanIntervalMs);
     targetBpm = Math.min(this.config.maxBpm, Math.max(this.config.minBpm, targetBpm));
 
     const fresh = this.projectManager.getPulseSetup(setupGuid);
     const currentBpm = fresh?.bpm ?? setup.bpm;
-    const smoothed = Math.round(
-      currentBpm + this.config.smoothing * (targetBpm - currentBpm),
-    );
+    const smoothed =
+      currentBpm + this.config.smoothing * (targetBpm - currentBpm);
     const nextBpm = Math.min(
       this.config.maxBpm,
       Math.max(this.config.minBpm, smoothed),

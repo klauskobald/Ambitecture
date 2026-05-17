@@ -15,8 +15,8 @@ type ActivePulseRunner = {
  * Hub-side pulse orchestration. Maintains a single active pulse setup with
  * a per-slot action dispatcher. Each slot references one reusable bucket in
  * `pulses.buckets`. Tick intervals are rescheduled when necessary:
- * - selectSetup: current tick completes, then new setup begins
- * - setBPM: current tick completes, then reschedules with new interval
+ * - selectSetup: stops prior timer, fires slot 0 immediately, then interval loop
+ * - setBPM: reschedules interval and fires current slot immediately
  */
 export class PulseManager {
   private runner?: ActivePulseRunner;
@@ -110,7 +110,7 @@ export class PulseManager {
 
     if (this.runner) {
       if (this.runner.isRunning) {
-        Logger.info(`[pulse] selectSetup(${guid}): current pulse completes this tick, then switching`);
+        Logger.info(`[pulse] selectSetup(${guid}): switching active pulse`);
         this.stopTimer();
         this.runner.setup = setup;
         this.runner.currentSlotIdx = 0;
@@ -118,7 +118,6 @@ export class PulseManager {
         this.runner.isRunning = true;
         this.projectManager.setActivePulseGuid(guid);
         this.scheduleNextTick();
-        this.broadcastPulseStatus('started', 0);
         return;
       }
     }
@@ -143,7 +142,6 @@ export class PulseManager {
     this.runner.msIntoCurrentTick = 0;
     this.runner.isRunning = true;
     this.scheduleNextTick();
-    this.broadcastPulseStatus('started', 0);
     Logger.info(`[pulse] restarted setup ${this.runner.setup.guid ?? '?'}`);
   }
 
@@ -163,9 +161,7 @@ export class PulseManager {
     this.runner.tickIntervalMs = this.computeTickIntervalMs(bpm, this.runner.setup.meter);
     Logger.info(`[pulse] BPM set to ${bpm}`);
     if (this.runner.isRunning) {
-      this.stopTimer();
       this.scheduleNextTick();
-      this.broadcastPulseStatus('started', this.runner.currentSlotIdx);
     }
   }
 
@@ -205,7 +201,6 @@ export class PulseManager {
 
     Logger.info(`[pulse] started (${this.runner.setup.name}, ${this.runner.tickIntervalMs}ms/tick)`);
     this.scheduleNextTick();
-    this.broadcastPulseStatus('started', 0);
   }
 
   /**
@@ -276,13 +271,15 @@ export class PulseManager {
   }
 
   /**
-   * Internal: start the interval tick loop. Uses setInterval for beat-accurate timing.
+   * Fire the current slot immediately, then schedule repeating ticks at tickIntervalMs.
    */
   private scheduleNextTick(): void {
     if (!this.runner || !this.runner.isRunning) {
       return;
     }
 
+    this.stopTimer();
+    this.tickRound();
     this.runner.tickTimer = setInterval(() => {
       this.tickRound();
     }, this.runner.tickIntervalMs);
@@ -343,13 +340,14 @@ export class PulseManager {
   ): HubStatusPulsePayload {
     const setup = this.runner?.setup ?? this.projectManager.getPulseSetup(setupGuid);
     const bpm = setup?.bpm ?? 120;
+    const bpmLabel = Number.isFinite(bpm) ? bpm.toFixed(1) : '120.0';
     const slotsTotal = setup?.slots.length ?? 0;
     const name = setup?.name ?? setupGuid;
     const text =
       status === 'started' && slotsTotal > 0
-        ? `${name} · slot ${slotIdx + 1}/${slotsTotal} @ ${bpm} BPM`
+        ? `${name} · slot ${slotIdx + 1}/${slotsTotal} @ ${bpmLabel} BPM`
         : status === 'started'
-          ? `${name} @ ${bpm} BPM`
+          ? `${name} @ ${bpmLabel} BPM`
           : `${name} stopped`;
     return {
       kind: 'pulse',

@@ -3,6 +3,7 @@ import { sendPulseControlCommand } from '../core/outboundQueue.js'
 import * as Modal from '../core/Modal.js'
 import { pickChoice } from '../core/Modal.js'
 import { ScalarRadialKnobSvg } from '../edit/components/ScalarRadialKnobSvg.js'
+import { clampPulseBpm } from '../core/pulseFormat.js'
 import { createPulseTapButton } from '../edit/components/PulseTapButton.js'
 import {
   getPulseSlotStatus,
@@ -108,14 +109,14 @@ export function createPulseEditPane ({ onClose }) {
       descriptor: {
         name: 'BPM',
         range: [20, 300],
-        step: 1,
+        step: 0.1,
         defaultValue: 120,
         stepFunction: 'linear'
       },
       intentGuid: currentGuid,
       readValue: () => currentBpm,
       onCommit: domain => {
-        const next = Math.round(domain)
+        const next = clampPulseBpm(domain)
         if (!Number.isFinite(next)) return
         currentBpm = next
         sendPulseControlCommand({

@@ -9,18 +9,10 @@ import { sendActionInputCommand } from '../core/outboundQueue.js'
 import {
   getDisplayTypes,
   getInputTypes,
-  resolveAnimationCommandsForClass,
-  resolveDefaultPerformTypes,
-  resolveDescriptorsForClass
+  resolveDefaultPerformTypes
 } from '../core/systemCapabilities.js'
-import { IntentParamsSelect } from './components/intentParamsSelect.js'
 import { normalizeInputKeyChar } from '../core/performButtonInputs.js'
-
-/** @param {unknown} raw */
-function cloneParamSlice (raw) {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
-  return { .../** @type {Record<string, unknown>} */ (raw) }
-}
+import { AssignedActionsEditor } from './actionEdit/AssignedActionsEditor.js'
 
 /** @param {Record<string, unknown> | null | undefined} input */
 function displayClassFromInputRecord (input) {
@@ -570,57 +562,6 @@ export class InputAssignManager {
     return /** @type {Record<string, unknown>} */ (value)
   }
 
-  /**
-   * Human-readable line for an action `execute` row (intent / scene / animation / other).
-   * @param {Record<string, unknown> | undefined} ex
-   * @returns {string}
-   */
-  _executeTargetSummary (ex) {
-    if (!ex || typeof ex !== 'object' || Array.isArray(ex)) return '—'
-    const t = typeof ex.type === 'string' ? ex.type : ''
-    const guid = typeof ex.guid === 'string' ? ex.guid : ''
-    if (!t || !guid) return '—'
-    switch (t) {
-      case 'intent': {
-        const row = projectGraph.getEffectiveIntent(guid)
-        const rec =
-          row && typeof row === 'object' && !Array.isArray(row)
-            ? /** @type {Record<string, unknown>} */ (row)
-            : null
-        const name = typeof rec?.name === 'string' ? rec.name.trim() : ''
-        return `Intent · ${name.length > 0 ? name : guid}`
-      }
-      case 'scene': {
-        const scenes = projectGraph.getScenesData()
-        const hit = Array.isArray(scenes)
-          ? scenes.find(
-              s =>
-                s &&
-                typeof s === 'object' &&
-                !Array.isArray(s) &&
-                /** @type {{ guid?: string }} */ (s).guid === guid
-            )
-          : undefined
-        const name =
-          hit && typeof hit === 'object' && !Array.isArray(hit) && typeof hit.name === 'string'
-            ? hit.name.trim()
-            : ''
-        return `Scene · ${name.length > 0 ? name : guid}`
-      }
-      case 'animation': {
-        const row = projectGraph.getAnimations().get(guid)
-        const rec =
-          row && typeof row === 'object' && !Array.isArray(row)
-            ? /** @type {Record<string, unknown>} */ (row)
-            : null
-        const name = typeof rec?.name === 'string' ? rec.name.trim() : ''
-        return `Animation · ${name.length > 0 ? name : guid}`
-      }
-      default:
-        return `${t} · ${guid}`
-    }
-  }
-
   /** @returns {Array<{ guid: string, name: string }>} */
   _collectInputRows () {
     const inputs = [...projectGraph.getInputs().values()]
@@ -767,9 +708,6 @@ export class InputAssignManager {
       displaySelect.value = curDisplay
       displayLabel.appendChild(displaySelect)
 
-      const paramHost = document.createElement('div')
-      paramHost.className = 'input-assign-modal__param-host'
-
       const errorEl = document.createElement('p')
       errorEl.className = 'input-assign-modal__error'
       errorEl.hidden = true
@@ -777,368 +715,17 @@ export class InputAssignManager {
       const actionGuidsList = inputActionGuidList(
         /** @type {Record<string, unknown>} */ (input)
       )
-      let actionIndex = 0
-      let intentActionGuidForParams = ''
-      let intentExecuteGuidForParams = ''
-      /** @type {Record<string, unknown>} */
-      let paramsSnapshot = {}
-      /** @type {string | null} */
-      let intentClass = null
-      /** @type {unknown[]} */
-      let descriptors = []
-      let hasIntentDescriptors = false
-
-      // ── animation action tracking (parallel to intent, read from systemCapabilities) ─────
-      let animationActionGuidForParams = ''
-      let animationGuidForParams = ''
-      /** @type {string | null} */
-      let animationClass = null
-      /** @type {{ command: string, hint: string, params: Record<string, unknown> }[] | null} */
-      let animationCommands = null
-      let hasAnimationCommands = false
-      /** @type {{ command?: string, [key: string]: unknown }} */
-      let animationParamsDraft = {}
-
-      const recomputeAnimationCommands = () => {
-        const g = animationGuidForParams
-        if (!g) {
-          animationClass = null
-          animationCommands = null
-          hasAnimationCommands = false
-          return
-        }
-        const anim = projectGraph.getAnimations().get(g)
-        const rec =
-          anim && typeof anim === 'object' && !Array.isArray(anim)
-            ? /** @type {Record<string, unknown>} */ (anim)
-            : null
-        const runmode = typeof rec?.runmode === 'string' ? rec.runmode : 'auto'
-        if (runmode !== 'manual') {
-          animationClass = null
-          animationCommands = null
-          hasAnimationCommands = false
-          return
-        }
-        const cls = typeof rec?.class === 'string' && rec.class.length > 0 ? rec.class : null
-        animationClass = cls
-        const cmds = animationClass
-          ? resolveAnimationCommandsForClass(animationClass)
-          : null
-        animationCommands = cmds
-        hasAnimationCommands = Array.isArray(cmds) && cmds.length > 0
-      }
-
-      const recomputeIntentDescriptors = () => {
-        const g = intentExecuteGuidForParams
-        if (!g) {
-          intentClass = null
-          descriptors = []
-          hasIntentDescriptors = false
-          return
-        }
-        const intent = projectGraph.getEffectiveIntent(g)
-        const rec =
-          intent && typeof intent === 'object' && !Array.isArray(intent)
-            ? /** @type {Record<string, unknown>} */ (intent)
-            : null
-        const cls = typeof rec?.class === 'string' && rec.class.length > 0 ? rec.class : null
-        intentClass = cls
-        const descriptorsRaw = intentClass
-          ? resolveDescriptorsForClass(intentClass)
-          : null
-        descriptors = Array.isArray(descriptorsRaw) ? descriptorsRaw : []
-        hasIntentDescriptors = descriptors.length > 0
-      }
-
-      const assignedTitle = document.createElement('p')
-      assignedTitle.className = 'modal-text'
-      assignedTitle.textContent = 'Assigned actions'
-
-      const actionNav = document.createElement('div')
-      actionNav.className = 'input-assign-modal__action-nav'
-      const prevBtn = document.createElement('button')
-      prevBtn.type = 'button'
-      prevBtn.className = 'btn'
-      prevBtn.textContent = 'Prev'
-      const summaryEl = document.createElement('p')
-      summaryEl.className = 'modal-text input-assign-modal__action-summary'
-      summaryEl.textContent = '—'
-      const nextBtn = document.createElement('button')
-      nextBtn.type = 'button'
-      nextBtn.className = 'btn'
-      nextBtn.textContent = 'Next'
-      const counterEl = document.createElement('span')
-      counterEl.className = 'input-assign-modal__action-counter'
-      actionNav.appendChild(prevBtn)
-      actionNav.appendChild(summaryEl)
-      actionNav.appendChild(nextBtn)
-      actionNav.appendChild(counterEl)
-
-      const syncActionStepper = () => {
-        const n = actionGuidsList.length
-        if (n === 0) {
-          summaryEl.textContent = 'No actions assigned'
-          counterEl.textContent = ''
-          prevBtn.disabled = true
-          nextBtn.disabled = true
-          return
-        }
-        actionIndex = Math.max(0, Math.min(n - 1, actionIndex))
-        const ag = actionGuidsList[actionIndex]
-        const act = ag ? projectGraph.getActions().get(ag) : undefined
-        const ex =
-          act && typeof act.execute === 'object' && !Array.isArray(act.execute)
-            ? /** @type {Record<string, unknown>} */ (act.execute)
-            : undefined
-        summaryEl.textContent = this._executeTargetSummary(ex)
-        counterEl.textContent = `${actionIndex + 1} / ${n}`
-        prevBtn.disabled = n <= 1 || actionIndex === 0
-        nextBtn.disabled = n <= 1 || actionIndex >= n - 1
-      }
-
-      const applyActionSelection = () => {
-        const n = actionGuidsList.length
-        if (n === 0) {
-          intentActionGuidForParams = ''
-          intentExecuteGuidForParams = ''
-          animationActionGuidForParams = ''
-          animationGuidForParams = ''
-          paramsSnapshot = {}
-          animationParamsDraft = {}
-          recomputeIntentDescriptors()
-          recomputeAnimationCommands()
-          syncActionStepper()
-          return
-        }
-        actionIndex = Math.max(0, Math.min(n - 1, actionIndex))
-        const ag = actionGuidsList[actionIndex]
-        intentActionGuidForParams = ''
-        intentExecuteGuidForParams = ''
-        animationActionGuidForParams = ''
-        animationGuidForParams = ''
-        if (ag) {
-          const a = projectGraph.getActions().get(ag)
-          const ex = a?.execute
-          if (
-            ex &&
-            typeof ex === 'object' &&
-            !Array.isArray(ex) &&
-            typeof ex.guid === 'string'
-          ) {
-            if (ex.type === 'intent') {
-              intentActionGuidForParams = ag
-              intentExecuteGuidForParams = ex.guid
-            } else if (ex.type === 'animation') {
-              animationActionGuidForParams = ag
-              animationGuidForParams = ex.guid
-            }
-          }
-        }
-        const activeActionGuid =
-          intentActionGuidForParams || animationActionGuidForParams
-        const rawStoredParams =
-          activeActionGuid.length > 0
-            ? (() => {
-                const a = projectGraph.getActions().get(activeActionGuid)
-                const x = a?.execute
-                return x && typeof x === 'object' && !Array.isArray(x) ? x.params : undefined
-              })()
-            : undefined
-        paramsSnapshot = this._recordOrUndefined(rawStoredParams) ?? {}
-        animationParamsDraft = animationActionGuidForParams.length > 0
-          ? { ...paramsSnapshot }
-          : {}
-        recomputeIntentDescriptors()
-        recomputeAnimationCommands()
-        syncActionStepper()
-      }
-
-      prevBtn.addEventListener('click', () => {
-        if (actionGuidsList.length <= 1) return
-        actionIndex = Math.max(0, actionIndex - 1)
-        applyActionSelection()
-        rebuildDraftFromSnapshot(typeSelect.value)
-        renderParamFields(typeSelect.value)
+      const assignedActionsEditor = new AssignedActionsEditor()
+      const assignedActionsBuilt = assignedActionsEditor.build({
+        actionGuids: actionGuidsList,
+        idPrefix: inputGuid,
+        inputTypes,
+        intentParamBinding: { getInputTypeClass: () => typeSelect.value }
       })
-      nextBtn.addEventListener('click', () => {
-        if (actionGuidsList.length <= 1) return
-        actionIndex = Math.min(actionGuidsList.length - 1, actionIndex + 1)
-        applyActionSelection()
-        rebuildDraftFromSnapshot(typeSelect.value)
-        renderParamFields(typeSelect.value)
-      })
-
-      /** @type {Record<string, Record<string, unknown>>} */
-      let draftBySlot = {}
-      /** @type {Array<{ destroy: () => void }>} */
-      let ipsBuilt = []
-
-      const rebuildDraftFromSnapshot = typeClass => {
-        const def = inputTypes.find(t => t.class === typeClass)
-        draftBySlot = {}
-        if (animationActionGuidForParams.length > 0) {
-          animationParamsDraft = { ...paramsSnapshot }
-          return
-        }
-        if (!def?.params) return
-        for (const pk of Object.keys(def.params)) {
-          draftBySlot[pk] = cloneParamSlice(paramsSnapshot?.[pk])
-        }
-      }
-
-      const destroyIpsBuilt = () => {
-        for (const x of ipsBuilt) x.destroy()
-        ipsBuilt = []
-      }
-
-      const renderParamFields = typeClass => {
-        destroyIpsBuilt()
-        paramHost.replaceChildren()
-        errorEl.hidden = true
-
-        // ── animation action params (flat command args, no input-type slots) ───
-        if (animationActionGuidForParams.length > 0 && hasAnimationCommands && animationCommands) {
-          renderAnimationCommandFields()
-          return
-        }
-
-        const def = inputTypes.find(t => t.class === typeClass)
-        if (!def?.params) return
-
-        const needsJsonSlots = Object.values(def.params).some(k => k === 'jsonString')
-        if (needsJsonSlots && !hasIntentDescriptors) {
-          return
-        }
-
-        for (const [paramKey, kind] of Object.entries(def.params)) {
-          if (kind !== 'jsonString') continue
-
-          const lab = document.createElement('label')
-          lab.className = 'input-assign-modal__label'
-          lab.textContent = paramKey
-
-          if (!draftBySlot[paramKey]) {
-            draftBySlot[paramKey] = {}
-          }
-          const paramsSlice = draftBySlot[paramKey]
-
-          const ips = new IntentParamsSelect(true)
-          const built = ips.build({
-            id: `${inputGuid}-${paramKey}-${actionIndex}`,
-            params: paramsSlice,
-            descriptors,
-            onLifecycle: () => {}
-          })
-          ipsBuilt.push(built)
-
-          const holder = document.createElement('div')
-          holder.className = 'intent-params-select__wrap'
-          holder.appendChild(built.root)
-          lab.appendChild(holder)
-          paramHost.appendChild(lab)
-        }
-      }
-
-      /**
-       * Render animation command selector + param fields from
-       * `animationCommands` (systemCapabilities). No hardcoded command names.
-       */
-      const renderAnimationCommandFields = () => {
-        if (!animationCommands) return
-
-        const curCmd = typeof animationParamsDraft.command === 'string'
-          ? animationParamsDraft.command
-          : (animationCommands[0]?.command ?? '')
-        const curEntry = animationCommands.find(c => c.command === curCmd)
-
-        // Command selector
-        const cmdLabel = document.createElement('label')
-        cmdLabel.className = 'input-assign-modal__label'
-        cmdLabel.textContent = 'Command'
-        const cmdSelect = document.createElement('select')
-        cmdSelect.className = 'modal-input modal-select-capitalize'
-        for (const c of animationCommands) {
-          const opt = document.createElement('option')
-          opt.value = c.command
-          opt.textContent = c.hint
-            ? `${c.command} — ${c.hint}`
-            : c.command
-          cmdSelect.appendChild(opt)
-        }
-        cmdSelect.value = curCmd
-        cmdLabel.appendChild(cmdSelect)
-        paramHost.appendChild(cmdLabel)
-
-        // Per-command param fields
-        const paramsHost = document.createElement('div')
-        paramsHost.className = 'input-assign-modal__anim-params'
-
-        const renderCmdParams = () => {
-          paramsHost.replaceChildren()
-          const selected = animationCommands.find(c => c.command === cmdSelect.value)
-          const cmdParams = selected?.params
-          if (!cmdParams || typeof cmdParams !== 'object' || Array.isArray(cmdParams)) return
-
-          for (const [pk, pd] of Object.entries(cmdParams)) {
-            if (!pd || typeof pd !== 'object' || Array.isArray(pd)) continue
-            const pdef = /** @type {Record<string, unknown>} */ (pd)
-            const ptype = typeof pdef.type === 'string' ? pdef.type : 'string'
-
-            const lab = document.createElement('label')
-            lab.className = 'input-assign-modal__label'
-            lab.textContent = pk
-
-            if (ptype === 'number') {
-              const inp = document.createElement('input')
-              inp.type = 'number'
-              inp.className = 'modal-input'
-              const step = typeof pdef.step === 'number' ? pdef.step : 1
-              const defVal = typeof pdef.default === 'number' ? pdef.default : 0
-              inp.step = String(step)
-              inp.value = String(
-                typeof animationParamsDraft[pk] === 'number'
-                  ? animationParamsDraft[pk]
-                  : defVal
-              )
-              inp.addEventListener('input', () => {
-                const n = Number(inp.value)
-                animationParamsDraft[pk] = Number.isFinite(n) ? n : defVal
-              })
-              lab.appendChild(inp)
-            } else {
-              const inp = document.createElement('input')
-              inp.type = 'text'
-              inp.className = 'modal-input'
-              const defVal = typeof pdef.default === 'string' ? pdef.default : ''
-              inp.value = String(animationParamsDraft[pk] ?? defVal)
-              inp.addEventListener('input', () => {
-                animationParamsDraft[pk] = inp.value
-              })
-              lab.appendChild(inp)
-            }
-            paramsHost.appendChild(lab)
-          }
-        }
-
-        cmdSelect.addEventListener('change', () => {
-          const fresh = { command: cmdSelect.value }
-          animationParamsDraft = fresh
-          animationParamsDraft.command = cmdSelect.value
-          renderCmdParams()
-        })
-
-        paramHost.appendChild(paramsHost)
-        renderCmdParams()
-      }
-
-      applyActionSelection()
-      rebuildDraftFromSnapshot(typeSelect.value)
-      renderParamFields(typeSelect.value)
 
       typeSelect.addEventListener('change', () => {
         errorEl.hidden = true
-        rebuildDraftFromSnapshot(typeSelect.value)
-        renderParamFields(typeSelect.value)
+        assignedActionsBuilt.setInputTypeClass(typeSelect.value)
       })
 
       const actions = document.createElement('div')
@@ -1148,7 +735,10 @@ export class InputAssignManager {
       cancelBtn.type = 'button'
       cancelBtn.className = 'btn'
       cancelBtn.textContent = 'Cancel'
-      cancelBtn.addEventListener('click', () => dismiss(null))
+      cancelBtn.addEventListener('click', () => {
+        assignedActionsBuilt.destroy()
+        dismiss(null)
+      })
 
       const saveBtn = document.createElement('button')
       saveBtn.type = 'button'
@@ -1163,13 +753,6 @@ export class InputAssignManager {
           return
         }
 
-        const typeClass = typeSelect.value
-        const def = inputTypes.find(t => t.class === typeClass)
-        const needsJsonSlots =
-          !!def?.params &&
-          Object.values(def.params).some(k => k === 'jsonString')
-        const canEmitParams = hasIntentDescriptors && needsJsonSlots
-
         sendActionInputCommand({
           command: 'updateInput',
           inputGuid,
@@ -1179,45 +762,8 @@ export class InputAssignManager {
             displayType: displaySelect.value
           }
         })
-        if (canEmitParams && intentActionGuidForParams.length > 0 && intentExecuteGuidForParams.length > 0 && def?.params) {
-          const nextParams = {}
-          for (const [paramKey, kind] of Object.entries(def.params)) {
-            if (kind !== 'jsonString') continue
-            const slice = draftBySlot[paramKey]
-            if (slice && typeof slice === 'object') {
-              nextParams[paramKey] = slice
-            }
-          }
-          sendActionInputCommand({
-            command: 'updateAction',
-            actionGuid: intentActionGuidForParams,
-            patch: {
-              execute: {
-                type: 'intent',
-                guid: intentExecuteGuidForParams,
-                params: nextParams
-              }
-            }
-          })
-        }
-
-        if (animationActionGuidForParams.length > 0 && animationGuidForParams.length > 0 && hasAnimationCommands) {
-          const cmd = animationParamsDraft.command
-          if (typeof cmd === 'string' && cmd.length > 0) {
-            const flatParams = { ...animationParamsDraft }
-            sendActionInputCommand({
-              command: 'updateAction',
-              actionGuid: animationActionGuidForParams,
-              patch: {
-                execute: {
-                  type: 'animation',
-                  guid: animationGuidForParams,
-                  params: flatParams
-                }
-              }
-            })
-          }
-        }
+        assignedActionsBuilt.emitActionPatches()
+        assignedActionsBuilt.destroy()
         dismiss(true)
       })
 
@@ -1228,9 +774,7 @@ export class InputAssignManager {
       card.appendChild(nameLabel)
       card.appendChild(typeLabel)
       card.appendChild(displayLabel)
-      card.appendChild(assignedTitle)
-      card.appendChild(actionNav)
-      card.appendChild(paramHost)
+      card.appendChild(assignedActionsBuilt.root)
       card.appendChild(errorEl)
       card.appendChild(actions)
 

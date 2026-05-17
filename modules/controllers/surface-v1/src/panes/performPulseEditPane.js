@@ -179,7 +179,8 @@ export function createPulseEditPane ({ onClose }) {
         : 4
     if (meter > 2) {
       const modeField = document.createElement('div')
-      modeField.className = 'perform-pulse-edit__field perform-pulse-edit__field--mode'
+      modeField.className =
+        'perform-pulse-edit__field perform-pulse-edit__field--mode'
 
       const modeLabel = document.createElement('span')
       modeLabel.textContent = 'Mode'
@@ -187,18 +188,26 @@ export function createPulseEditPane ({ onClose }) {
       const modeValue = document.createElement('button')
       modeValue.type = 'button'
       modeValue.className = 'perform-pulse-edit__mode-value'
-      const currentMode = setup.mode === 'random' ? 'random' : 'forward'
+      const currentMode =
+        setup.mode === 'backward' || setup.mode === 'random'
+          ? setup.mode
+          : 'forward'
       modeValue.textContent = currentMode
       modeValue.addEventListener('click', async () => {
-        const choice = await pickChoice('Slot mode', [
-          { value: 'forward', label: 'forward' },
-          { value: 'random', label: 'random (no repeat)' }
-        ], { selected: currentMode })
+        const choice = await pickChoice(
+          'Slot mode',
+          [
+            { value: 'forward', label: 'forward' },
+            { value: 'backward', label: 'backward' },
+            { value: 'random', label: 'random' }
+          ],
+          { selected: currentMode }
+        )
         if (!choice || choice === currentMode) return
         sendPulseControlCommand({
           command: 'setSetupMode',
           setupGuid: currentGuid,
-          mode: /** @type {'forward' | 'random'} */ (choice)
+          mode: /** @type {'forward' | 'backward' | 'random'} */ (choice)
         })
       })
 

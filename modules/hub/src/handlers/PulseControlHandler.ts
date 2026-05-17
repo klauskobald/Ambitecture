@@ -36,7 +36,7 @@ function isPulseControlCommand(payload: unknown): payload is PulseControlCommand
     case 'setSetupMode':
       return typeof p['setupGuid'] === 'string'
         && p['setupGuid'].length > 0
-        && (p['mode'] === 'forward' || p['mode'] === 'random');
+        && (p['mode'] === 'forward' || p['mode'] === 'backward' || p['mode'] === 'random');
     case 'assignSlotBucket':
       return typeof p['setupGuid'] === 'string'
         && p['setupGuid'].length > 0

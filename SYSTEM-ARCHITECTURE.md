@@ -440,6 +440,7 @@ Hub applies action changes via `graph:delta` and pushes **`projectPatch`** `{ ke
 - `renameSetup` — `{ setupGuid, name }`
 - `setSetupBpm` — `{ setupGuid, bpm }`; updates YAML; reschedules interval when that setup is active
 - `setSetupSlotCount` — `{ setupGuid, count }`; resizes `slots[]` (preserves leading bucket assignments)
+- `setSetupMode` — `{ setupGuid, mode: "forward" | "backward" | "random" }`; slot advance after each tick. `forward` cycles `0 → 1 → …`; `backward` cycles `… → 1 → 0`. `random` (only when setup `meter` > 2) picks a different slot index than the one that just fired — never the same slot twice in a row (needs at least two slots).
 - `assignSlotBucket` — `{ setupGuid, slotIdx, bucketGuid | null }`
 - `setSlotActive` — `{ setupGuid, slotIdx, active }`; when `active` is true, slot fires on pulse tick (`active: true` in YAML); omitted/false = silent slot
 - `setSyncConfig` — `{ enabled?: boolean, restart?: "never" | "bar" | "onset", lerp?: number }`; updates durable `pulses.sync` in project YAML (Perform pulse sync toolbar + music-analyser gate)

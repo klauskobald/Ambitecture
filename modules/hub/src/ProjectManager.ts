@@ -211,7 +211,7 @@ export interface PulseSlot {
   active?: boolean;
 }
 
-export type PulseSlotMode = 'forward' | 'random';
+export type PulseSlotMode = 'forward' | 'backward' | 'random';
 
 export interface PulseSetup {
   guid?: string;

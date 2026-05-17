@@ -159,7 +159,7 @@ export class PulseSetupManager {
       Logger.warn(`[pulse] setSetupMode: unknown setup ${setupGuid}`);
       return { pulsesChanged: false };
     }
-    setup.mode = mode === 'random' ? 'random' : 'forward';
+    setup.mode = this.normalizeSetupMode(mode);
     this.persistPulses();
     return { pulsesChanged: true, setupGuid };
   }
@@ -248,6 +248,13 @@ export class PulseSetupManager {
 
   private persistPulses(): void {
     this.projectManager.setProjectData('pulses', this.projectManager.getPulsesWirePayload());
+  }
+
+  private normalizeSetupMode(mode: PulseSlotMode): PulseSlotMode {
+    if (mode === 'backward' || mode === 'random') {
+      return mode;
+    }
+    return 'forward';
   }
 
   private clampLerp(lerp: number): number {

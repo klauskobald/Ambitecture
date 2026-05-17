@@ -437,10 +437,13 @@ export class PulseManager {
   }
 
   private resolveSlotAdvanceMode(setup: PulseSetup): PulseSlotMode {
-    if (setup.meter <= 2) {
+    const mode = setup.mode === 'backward' || setup.mode === 'random'
+      ? setup.mode
+      : 'forward';
+    if (setup.meter <= 2 && mode === 'random') {
       return 'forward';
     }
-    return setup.mode === 'random' ? 'random' : 'forward';
+    return mode;
   }
 
   /**
@@ -452,10 +455,14 @@ export class PulseManager {
       return 0;
     }
     const mode = this.resolveSlotAdvanceMode(setup);
-    if (mode === 'forward') {
-      return (slotIdx + 1) % slotsTotal;
+    switch (mode) {
+      case 'backward':
+        return (slotIdx - 1 + slotsTotal) % slotsTotal;
+      case 'random':
+        return this.pickRandomSlotIndexOtherThan(slotIdx, slotsTotal);
+      default:
+        return (slotIdx + 1) % slotsTotal;
     }
-    return this.pickRandomSlotIndexOtherThan(slotIdx, slotsTotal);
   }
 
   /** Uniform pick in `[0, slotsTotal)` excluding `excludeIdx` (requires `slotsTotal` ≥ 2). */

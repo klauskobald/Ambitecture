@@ -3,7 +3,8 @@ import {
   confirm as modalConfirm,
   openModalCard,
   prompt as modalPrompt,
-  sampleKey
+  sampleKey,
+  setModalDismissHook
 } from '../core/Modal.js'
 import { sendActionInputCommand } from '../core/outboundQueue.js'
 import {
@@ -12,6 +13,11 @@ import {
   resolveDefaultPerformTypes
 } from '../core/systemCapabilities.js'
 import { normalizeInputKeyChar } from '../core/performButtonInputs.js'
+import {
+  bindModalChoiceScrollPersistence,
+  captureModalChoiceScroll,
+  restoreModalChoiceScroll
+} from '../core/modalChoiceScroll.js'
 import { AssignedActionsEditor } from './actionEdit/AssignedActionsEditor.js'
 import { formatLinkedAssignLabel } from './assign/assignInlineLabel.js'
 
@@ -240,6 +246,25 @@ export class InputAssignManager {
    */
   _openAssignInputsModal (inputRows) {
     return openModalCard(dismiss => {
+      /** @type {HTMLElement | null} */
+      let assignScrollEl = null
+      /** @type {(() => void) | null} */
+      let unbindAssignScroll = null
+      const teardownAssignScroll = () => {
+        if (assignScrollEl) {
+          captureModalChoiceScroll(assignScrollEl, 'input-assign.assign-picker')
+        }
+        unbindAssignScroll?.()
+        unbindAssignScroll = null
+      }
+      const finish = (
+        /** @type {Parameters<typeof dismiss>[0]} */ value
+      ) => {
+        setModalDismissHook(null)
+        teardownAssignScroll()
+        dismiss(value)
+      }
+
       const card = document.createElement('div')
       card.className =
         'modal input-assign-modal input-assign-modal--assign-picker'
@@ -350,7 +375,7 @@ export class InputAssignManager {
         keyShortcutBtn.setAttribute('aria-label', 'Set keyboard shortcut')
         keyShortcutBtn.addEventListener('click', e => {
           e.stopPropagation()
-          dismiss({ kind: 'sampleKey', inputGuid: row.guid })
+          finish({ kind: 'sampleKey', inputGuid: row.guid })
         })
 
         const editBtn = document.createElement('button')
@@ -362,7 +387,7 @@ export class InputAssignManager {
         editBtn.setAttribute('aria-label', 'Edit')
         editBtn.addEventListener('click', e => {
           e.stopPropagation()
-          dismiss({ kind: 'edit', inputGuid: row.guid })
+          finish({ kind: 'edit', inputGuid: row.guid })
         })
 
         const deleteBtn = document.createElement('button')
@@ -374,7 +399,7 @@ export class InputAssignManager {
         deleteBtn.setAttribute('aria-label', 'Delete')
         deleteBtn.addEventListener('click', e => {
           e.stopPropagation()
-          dismiss({ kind: 'delete', inputGuid: row.guid })
+          finish({ kind: 'delete', inputGuid: row.guid })
         })
 
         wrap.appendChild(mainBtn)
@@ -391,7 +416,7 @@ export class InputAssignManager {
       createBtn.type = 'button'
       createBtn.className = 'btn modal-choice-list__btn'
       createBtn.textContent = 'Create new input'
-      createBtn.addEventListener('click', () => dismiss({ kind: 'create' }))
+      createBtn.addEventListener('click', () => finish({ kind: 'create' }))
       createRow.appendChild(createBtn)
 
       const footer = document.createElement('div')
@@ -402,7 +427,7 @@ export class InputAssignManager {
       okBtn.textContent = 'OK'
       okBtn.addEventListener('click', () => {
         this._applyAssignmentPendingSets(initialLinked, pending)
-        dismiss({ kind: 'done' })
+        finish({ kind: 'done' })
       })
       footer.appendChild(okBtn)
 
@@ -410,6 +435,14 @@ export class InputAssignManager {
       scrollBody.className = 'input-assign-modal__assign-scroll'
       scrollBody.appendChild(list)
       scrollBody.appendChild(createRow)
+
+      assignScrollEl = scrollBody
+      unbindAssignScroll = bindModalChoiceScrollPersistence(
+        scrollBody,
+        'input-assign.assign-picker'
+      )
+      restoreModalChoiceScroll(scrollBody, 'input-assign.assign-picker')
+      setModalDismissHook(teardownAssignScroll)
 
       card.appendChild(heading)
       card.appendChild(scrollBody)

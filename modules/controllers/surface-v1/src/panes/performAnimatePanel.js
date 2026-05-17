@@ -343,7 +343,9 @@ export function createPerformAnimatePanel () {
       await modalWarn('No animator classes available.')
       return
     }
-    const choice = await pickChoice('Create animation type', options)
+    const choice = await pickChoice('Create animation type', options, {
+      scrollKey: 'animate.create-type'
+    })
     if (!choice) return
 
     const suffix =

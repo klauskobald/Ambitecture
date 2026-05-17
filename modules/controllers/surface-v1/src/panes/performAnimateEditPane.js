@@ -183,7 +183,7 @@ export function createAnimationEditPane ({ onClose }) {
           value: opt,
           label: runmodeDisplayLabel(opt)
         })),
-        { selected: current }
+        { selected: current, scrollKey: 'animate.runmode' }
       )
       if (!choice || choice === current) return
       sendAnimationPatch(currentGuid, { runmode: choice })
@@ -376,7 +376,8 @@ function makeGenericWidget (
       value: effectiveValue,
       options: list,
       onChange,
-      ariaLabel: label
+      ariaLabel: label,
+      scrollKey: `animate.field.${dotKey}`
     })
     popup.mount(host)
     return host

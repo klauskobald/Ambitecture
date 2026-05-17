@@ -14,16 +14,32 @@
  *   pickChoice('Pick one', [
  *     { value: 'a', label: 'Option A' },
  *     { value: 'b', label: 'Option B', disabled: true, title: 'Soon' }
- *   ]).then(v => { ... })  // v is chosen value string, or null if cancelled
+ *   ], { scrollKey: 'my-list-id' }).then(v => { ... })  // v is chosen value string, or null if cancelled; scrollKey restores list scroll via localStorage
  *   sampleKey('Press Key', 'No Key').then(k => { ... })  // key string, '' = clear, null = cancel
  *   Modal.sampleKey(...)  // same as named export
  *   openModalCard(dismiss => { ... build card, call dismiss(result) ... }).then(...)
  */
 
+import {
+  bindModalChoiceScrollPersistence,
+  captureModalChoiceScroll,
+  restoreModalChoiceScroll
+} from './modalChoiceScroll.js'
+
 /** @type {HTMLElement | null} */
 let _overlay = null
 /** @type {(() => void) | null} */
 let _resolve = null
+/** @type {(() => void) | null} */
+let _onDismissHook = null
+
+/**
+ * Runs before the overlay is cleared (overlay click, Escape paths, programmatic dismiss).
+ * @param {(() => void) | null} fn
+ */
+export function setModalDismissHook (fn) {
+  _onDismissHook = fn
+}
 
 // ── DOM singleton ──────────────────────────────────────────────────────────────
 
@@ -39,6 +55,8 @@ function _ensureOverlay () {
 
 function _dismiss (value) {
   if (!_overlay) return
+  _onDismissHook?.()
+  _onDismissHook = null
   _overlay.classList.remove('is-open')
   _overlay.classList.remove('modal-overlay--fullscreen')
   _overlay.innerHTML = ''
@@ -246,6 +264,7 @@ function _buildAlert (text) {
  * @param {{
  *   cancel?: string,
  *   selected?: string | null,
+ *   scrollKey?: string,
  *   displayRowFn?: (
  *     row: HTMLElement,
  *     option: { value: string, label: string, disabled?: boolean, title?: string },
@@ -255,6 +274,10 @@ function _buildAlert (text) {
  * @returns {HTMLElement}
  */
 function _buildChoiceListModal (message, options, opts) {
+  const scrollKey =
+    typeof opts?.scrollKey === 'string' && opts.scrollKey.trim()
+      ? opts.scrollKey.trim()
+      : null
   const card = document.createElement('div')
   card.className = 'modal'
   card.addEventListener('click', (e) => e.stopPropagation())
@@ -316,13 +339,15 @@ function _buildChoiceListModal (message, options, opts) {
   card.appendChild(actions)
 
   requestAnimationFrame(() => {
+    const focusOpts = scrollKey ? { preventScroll: true } : undefined
     if (selectedBtn) {
-      selectedBtn.focus()
-      return
+      selectedBtn.focus(focusOpts)
+    } else {
+      const el = list.querySelector('button:not([disabled])')
+      if (el instanceof HTMLElement) el.focus(focusOpts)
+      else cancelBtn.focus(focusOpts)
     }
-    const el = list.querySelector('button:not([disabled])')
-    if (el instanceof HTMLElement) el.focus()
-    else cancelBtn.focus()
+    if (scrollKey) restoreModalChoiceScroll(card, scrollKey)
   })
 
   return card
@@ -469,6 +494,7 @@ export function prompt (text, fields, buttons, callback) {
  * @param {{
  *   cancel?: string,
  *   selected?: string | null,
+ *   scrollKey?: string,
  *   callback?: (choice: string | null) => void,
  *   displayRowFn?: (
  *     row: HTMLElement,
@@ -481,12 +507,27 @@ export function prompt (text, fields, buttons, callback) {
 export function pickChoice (message, options, opts) {
   _dismiss(null)
   _ensureOverlay()
+  const scrollKey =
+    typeof opts?.scrollKey === 'string' && opts.scrollKey.trim()
+      ? opts.scrollKey.trim()
+      : null
   return new Promise((resolve) => {
+    const card = _buildChoiceListModal(message, options, opts)
+    /** @type {(() => void) | null} */
+    let unbindScroll = null
+    if (scrollKey) {
+      unbindScroll = bindModalChoiceScrollPersistence(card, scrollKey)
+      setModalDismissHook(() => {
+        captureModalChoiceScroll(card, scrollKey)
+        unbindScroll?.()
+        unbindScroll = null
+      })
+    }
     _resolve = (val) => {
       resolve(/** @type {string | null} */ (val))
       opts?.callback?.(/** @type {string | null} */ (val))
     }
-    _overlay.appendChild(_buildChoiceListModal(message, options, opts))
+    _overlay.appendChild(card)
     _overlay.classList.add('is-open')
   })
 }

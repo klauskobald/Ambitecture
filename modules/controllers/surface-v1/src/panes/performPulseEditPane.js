@@ -400,6 +400,7 @@ export function createPulseEditPane ({ onClose }) {
 
     const choice = await pickChoice('Assign bucket to slot', options, {
       selected: selectedBucketGuid,
+      scrollKey: 'pulse.bucket-slot-picker',
       displayRowFn: (row, option, { button }) => {
         row.classList.add('pulse-bucket-pick-row')
         button.classList.add('pulse-bucket-pick-row__btn')

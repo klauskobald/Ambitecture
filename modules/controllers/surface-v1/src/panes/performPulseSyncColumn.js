@@ -73,7 +73,7 @@ export function createPerformPulseSyncColumn () {
     const choice = await pickChoice(
       'Restart',
       RESTART_OPTIONS.map(o => ({ value: o.wire, label: o.label })),
-      { selected: restart }
+      { selected: restart, scrollKey: 'pulse.sync.restart' }
     )
     if (!choice) return
     sendPulseControlCommand({

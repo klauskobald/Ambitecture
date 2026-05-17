@@ -2,8 +2,14 @@ import { projectGraph } from '../core/projectGraph.js'
 import {
   confirm as modalConfirm,
   openModalCard,
-  prompt as modalPrompt
+  prompt as modalPrompt,
+  setModalDismissHook
 } from '../core/Modal.js'
+import {
+  bindModalChoiceScrollPersistence,
+  captureModalChoiceScroll,
+  restoreModalChoiceScroll
+} from '../core/modalChoiceScroll.js'
 import { sendPulseAssignCommand } from '../core/outboundQueue.js'
 import { formatLinkedAssignLabel } from './assign/assignInlineLabel.js'
 import { notification } from '../app/notification.js'
@@ -135,6 +141,25 @@ export class PulseAssignManager {
    */
   _openAssignBucketsModal (bucketRows) {
     return openModalCard(dismiss => {
+      /** @type {HTMLElement | null} */
+      let assignScrollEl = null
+      /** @type {(() => void) | null} */
+      let unbindAssignScroll = null
+      const teardownAssignScroll = () => {
+        if (assignScrollEl) {
+          captureModalChoiceScroll(assignScrollEl, 'pulse-assign.assign-picker')
+        }
+        unbindAssignScroll?.()
+        unbindAssignScroll = null
+      }
+      const finish = (
+        /** @type {Parameters<typeof dismiss>[0]} */ value
+      ) => {
+        setModalDismissHook(null)
+        teardownAssignScroll()
+        dismiss(value)
+      }
+
       const card = document.createElement('div')
       card.className =
         'modal input-assign-modal pulse-assign-modal input-assign-modal--assign-picker'
@@ -203,7 +228,7 @@ export class PulseAssignManager {
         renameBtn.setAttribute('aria-label', 'Rename')
         renameBtn.addEventListener('click', e => {
           e.stopPropagation()
-          dismiss({ kind: 'rename', bucketGuid: row.guid })
+          finish({ kind: 'rename', bucketGuid: row.guid })
         })
 
         const deleteBtn = document.createElement('button')
@@ -215,7 +240,7 @@ export class PulseAssignManager {
         deleteBtn.setAttribute('aria-label', 'Delete')
         deleteBtn.addEventListener('click', e => {
           e.stopPropagation()
-          dismiss({ kind: 'delete', bucketGuid: row.guid })
+          finish({ kind: 'delete', bucketGuid: row.guid })
         })
 
         wrap.appendChild(mainBtn)
@@ -231,7 +256,7 @@ export class PulseAssignManager {
       createBtn.type = 'button'
       createBtn.className = 'btn modal-choice-list__btn'
       createBtn.textContent = 'Create new bucket'
-      createBtn.addEventListener('click', () => dismiss({ kind: 'create' }))
+      createBtn.addEventListener('click', () => finish({ kind: 'create' }))
       createRowEl.appendChild(createBtn)
 
       const footer = document.createElement('div')
@@ -242,7 +267,7 @@ export class PulseAssignManager {
       okBtn.textContent = 'OK'
       okBtn.addEventListener('click', () => {
         this._applyAssignmentPendingSets(initialLinked, pending)
-        dismiss({ kind: 'done' })
+        finish({ kind: 'done' })
       })
       footer.appendChild(okBtn)
 
@@ -250,6 +275,14 @@ export class PulseAssignManager {
       scrollBody.className = 'input-assign-modal__assign-scroll'
       scrollBody.appendChild(listEl)
       scrollBody.appendChild(createRowEl)
+
+      assignScrollEl = scrollBody
+      unbindAssignScroll = bindModalChoiceScrollPersistence(
+        scrollBody,
+        'pulse-assign.assign-picker'
+      )
+      restoreModalChoiceScroll(scrollBody, 'pulse-assign.assign-picker')
+      setModalDismissHook(teardownAssignScroll)
 
       card.appendChild(heading)
       card.appendChild(scrollBody)

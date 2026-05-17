@@ -11,6 +11,7 @@ export class SelectPopup {
    *  options: Array<string> | Array<{ value: string, label: string, disabled?: boolean, title?: string }>
    *  onChange: (value: string) => void
    *  ariaLabel?: string
+   *  scrollKey?: string
    * }} opts
    */
   constructor (opts) {
@@ -38,6 +39,11 @@ export class SelectPopup {
     this._onChange = opts.onChange
     /** @type {string} */
     this._ariaLabel = opts.ariaLabel ?? 'Select option'
+    /** @type {string | undefined} */
+    this._scrollKey =
+      typeof opts.scrollKey === 'string' && opts.scrollKey.trim()
+        ? opts.scrollKey.trim()
+        : undefined
 
     /** @type {HTMLButtonElement | null} */
     this._button = null
@@ -75,7 +81,8 @@ export class SelectPopup {
           : String(this._value)
       const choice = await pickChoice('', this._options, {
         cancel: 'Cancel',
-        selected: currentStr
+        selected: currentStr,
+        scrollKey: this._scrollKey
       })
       if (choice === null) return
 

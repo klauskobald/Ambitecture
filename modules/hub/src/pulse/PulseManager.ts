@@ -300,9 +300,12 @@ export class PulseManager {
     this.runner.setup = setup;
 
     const slotIdx = this.runner.currentSlotIdx;
-    const actionGuids = this.projectManager.getPulseSlotActionGuids(setup, slotIdx);
-    for (const actionGuid of actionGuids) {
-      this.dispatchActionItem(actionGuid);
+    const slot = setup.slots[slotIdx];
+    if (slot?.active === true) {
+      const actionGuids = this.projectManager.getPulseSlotActionGuids(setup, slotIdx);
+      for (const actionGuid of actionGuids) {
+        this.dispatchActionItem(actionGuid);
+      }
     }
 
     this.broadcastPulseStatus('started', slotIdx);

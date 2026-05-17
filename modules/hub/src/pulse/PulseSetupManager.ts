@@ -19,7 +19,8 @@ export type PulseControlCommand =
   | { command: 'renameSetup'; setupGuid: string; name: string }
   | { command: 'setSetupBpm'; setupGuid: string; bpm: number }
   | { command: 'setSetupSlotCount'; setupGuid: string; count: number }
-  | { command: 'assignSlotBucket'; setupGuid: string; slotIdx: number; bucketGuid: string | null };
+  | { command: 'assignSlotBucket'; setupGuid: string; slotIdx: number; bucketGuid: string | null }
+  | { command: 'setSlotActive'; setupGuid: string; slotIdx: number; active: boolean };
 
 export type PulseControlResult = {
   pulsesChanged: boolean;
@@ -46,6 +47,8 @@ export class PulseSetupManager {
         return this.setSetupSlotCount(command.setupGuid, command.count);
       case 'assignSlotBucket':
         return this.assignSlotBucket(command.setupGuid, command.slotIdx, command.bucketGuid);
+      case 'setSlotActive':
+        return this.setSlotActive(command.setupGuid, command.slotIdx, command.active);
     }
   }
 
@@ -127,11 +130,14 @@ export class PulseSetupManager {
     const next: PulseSlot[] = [];
     for (let i = 0; i < nextCount; i += 1) {
       const existing = prev[i];
+      const nextSlot: PulseSlot = {};
       if (existing?.bucket) {
-        next.push({ bucket: existing.bucket });
-      } else {
-        next.push({});
+        nextSlot.bucket = existing.bucket;
       }
+      if (existing?.active === true) {
+        nextSlot.active = true;
+      }
+      next.push(nextSlot);
     }
     setup.slots = next;
     this.persistPulses();
@@ -166,6 +172,33 @@ export class PulseSetupManager {
       delete slot.bucket;
     } else {
       slot.bucket = bucketGuid;
+    }
+    this.persistPulses();
+    return { pulsesChanged: true, setupGuid };
+  }
+
+  private setSlotActive(
+    setupGuid: string,
+    slotIdx: number,
+    active: boolean,
+  ): PulseControlResult {
+    const setup = this.projectManager.getPulseSetup(setupGuid);
+    if (!setup) {
+      Logger.warn(`[pulse] setSlotActive: unknown setup ${setupGuid}`);
+      return { pulsesChanged: false };
+    }
+    if (slotIdx < 0 || slotIdx >= setup.slots.length) {
+      Logger.warn(`[pulse] setSlotActive: slot ${slotIdx} out of range`);
+      return { pulsesChanged: false };
+    }
+    const slot = setup.slots[slotIdx];
+    if (!slot) {
+      return { pulsesChanged: false };
+    }
+    if (active) {
+      slot.active = true;
+    } else {
+      delete slot.active;
     }
     this.persistPulses();
     return { pulsesChanged: true, setupGuid };

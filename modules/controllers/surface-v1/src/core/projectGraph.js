@@ -2065,7 +2065,12 @@ function normalizePulsesConfig (data) {
                   typeof slotRow.bucket === 'string' && slotRow.bucket.length > 0
                     ? slotRow.bucket
                     : undefined
-                return bucket ? { bucket } : {}
+                const active = slotRow.active === true
+                if (!bucket && !active) return {}
+                const normalized = /** @type {Record<string, unknown>} */ ({})
+                if (bucket) normalized.bucket = bucket
+                if (active) normalized.active = true
+                return normalized
               })
             : []
           return { guid, name, bpm, meter, slots }

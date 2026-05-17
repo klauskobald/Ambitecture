@@ -1145,32 +1145,48 @@
   gap: 0.35rem;
 }
 
-.perform-pulse-edit__slot-row-wrap {
+.perform-pulse-edit__slot-row {
   display: flex;
   align-items: center;
   gap: 0.35rem;
-}
-
-.perform-pulse-edit__slot-row {
-  flex: 1 1 auto;
-  min-width: 0;
-  text-align: left;
-  padding: 0.45rem 0.5rem;
+  padding: 0.35rem 0.45rem;
   border-radius: 8px;
   border: 1px solid var(--color-border);
   background: var(--color-bg-raised);
+}
+
+.perform-pulse-edit__slot-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
   color: var(--color-text);
   font-size: 0.78rem;
+  text-align: left;
   cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.perform-pulse-edit__slot-label:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+  border-radius: 4px;
 }
 
 .perform-pulse-edit__slot-clear {
   flex: 0 0 auto;
 }
 
-.perform-pulse-edit__slot-row:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
+.perform-pulse-slot-active-btn {
+  flex: 0 0 auto;
+  min-width: 2.75rem;
+  padding: 0.3rem 0.55rem;
+  font-size: 0.72rem;
+  touch-action: manipulation;
 }
 
 .perform-animate-edit__body {

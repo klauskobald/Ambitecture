@@ -430,6 +430,7 @@ Hub applies action changes via `graph:delta` and pushes **`projectPatch`** `{ ke
 - `setSetupBpm` — `{ setupGuid, bpm }`; updates YAML; reschedules interval when that setup is active
 - `setSetupSlotCount` — `{ setupGuid, count }`; resizes `slots[]` (preserves leading bucket assignments)
 - `assignSlotBucket` — `{ setupGuid, slotIdx, bucketGuid | null }`
+- `setSlotActive` — `{ setupGuid, slotIdx, active }`; when `active` is true, slot fires on pulse tick (`active: true` in YAML); omitted/false = silent slot
 
 Hub pushes **`projectPatch`** `{ key: "pulses", data: PulsesConfig }` to all controllers on setup mutations. Surface Perform → **Pulse** subpane (`performPulsePanel.js`, `performPulseEditPane.js`): `sendPulseControlCommand(command)`; live slot meter from `hub:status` via `pulsePlayRegistry.js`.
 
@@ -694,7 +695,7 @@ Manages pulse bucket membership and bucket CRUD. Payload is a `PulseAssignComman
 
 **`pulse:control`** — controller -> hub:
 
-Manages pulse setups and selection. Payload is a `PulseControlCommand` (`selectSetup`, `createSetup`, `deleteSetup`, `renameSetup`, `setSetupBpm`, `setSetupSlotCount`, `assignSlotBucket`). Setup changes are pushed as `projectPatch` key `pulses`; `selectSetup` drives `PulseManager` and subsequent `hub:status` (`kind: 'pulse'`) ticks.
+Manages pulse setups and selection. Payload is a `PulseControlCommand` (`selectSetup`, `createSetup`, `deleteSetup`, `renameSetup`, `setSetupBpm`, `setSetupSlotCount`, `assignSlotBucket`, `setSlotActive`). Setup changes are pushed as `projectPatch` key `pulses`; `selectSetup` drives `PulseManager` and subsequent `hub:status` (`kind: 'pulse'`) ticks. Only slots with `active: true` dispatch bucket actions on tick.
 
 **`pulse:tap`** — controller -> hub:
 

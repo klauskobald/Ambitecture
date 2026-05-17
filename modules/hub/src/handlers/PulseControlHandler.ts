@@ -38,6 +38,11 @@ function isPulseControlCommand(payload: unknown): payload is PulseControlCommand
         && p['setupGuid'].length > 0
         && typeof p['slotIdx'] === 'number'
         && (p['bucketGuid'] === null || typeof p['bucketGuid'] === 'string');
+    case 'setSlotActive':
+      return typeof p['setupGuid'] === 'string'
+        && p['setupGuid'].length > 0
+        && typeof p['slotIdx'] === 'number'
+        && typeof p['active'] === 'boolean';
     default:
       return false;
   }

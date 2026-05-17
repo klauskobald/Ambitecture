@@ -207,6 +207,8 @@ export interface PulseBucket {
 export interface PulseSlot {
   /** GUID of a row in `pulses.buckets`. */
   bucket?: string;
+  /** When true, this slot's bucket actions fire on pulse tick. */
+  active?: boolean;
 }
 
 export interface PulseSetup {

@@ -15,6 +15,19 @@ import {
  * @param {string | undefined} bucketGuid
  * @returns {string}
  */
+/**
+ * @param {unknown} slot
+ * @returns {boolean}
+ */
+function isSlotActive (slot) {
+  return (
+    slot !== null &&
+    typeof slot === 'object' &&
+    !Array.isArray(slot) &&
+    /** @type {Record<string, unknown>} */ (slot).active === true
+  )
+}
+
 function resolveBucketLabel (bucketGuid) {
   if (!bucketGuid) return ''
   const bucket = [...projectGraph.getPulseBuckets()].find(
@@ -172,17 +185,38 @@ export function createPulseEditPane ({ onClose }) {
         slot.bucket.length > 0
           ? slot.bucket
           : undefined
-      const rowWrap = document.createElement('div')
-      rowWrap.className = 'perform-pulse-edit__slot-row-wrap'
+      const row = document.createElement('div')
+      row.className = 'perform-pulse-edit__slot-row'
 
-      const rowBtn = document.createElement('button')
-      rowBtn.type = 'button'
-      rowBtn.className = 'perform-pulse-edit__slot-row'
+      const active = isSlotActive(slot)
+      const activeBtn = document.createElement('button')
+      activeBtn.type = 'button'
+      activeBtn.className = 'intent-toggle perform-pulse-slot-active-btn'
+      activeBtn.textContent = active ? 'On' : 'Off'
+      activeBtn.setAttribute('aria-pressed', active ? 'true' : 'false')
+      activeBtn.dataset.slotIdx = String(i)
+      if (active) {
+        activeBtn.classList.add('intent-toggle--enabled')
+      }
+      activeBtn.addEventListener('click', event => {
+        event.preventDefault()
+        event.stopPropagation()
+        const slotIdx = Number(activeBtn.dataset.slotIdx)
+        if (!Number.isFinite(slotIdx)) return
+        const setup = projectGraph.getPulseSetup(currentGuid)
+        const slotRows = Array.isArray(setup?.slots) ? setup.slots : []
+        const slotNow = slotRows[slotIdx]
+        setSlotActive(slotIdx, !isSlotActive(slotNow))
+      })
+
+      const labelBtn = document.createElement('button')
+      labelBtn.type = 'button'
+      labelBtn.className = 'perform-pulse-edit__slot-label'
       const bucketLabel = resolveBucketLabel(bucketGuid)
-      rowBtn.textContent = bucketLabel
+      labelBtn.textContent = bucketLabel
         ? `Slot ${i + 1}: ${bucketLabel}`
         : `Slot ${i + 1}`
-      rowBtn.addEventListener('click', () => {
+      labelBtn.addEventListener('click', () => {
         void pickSlotBucket(i)
       })
 
@@ -193,15 +227,30 @@ export function createPulseEditPane ({ onClose }) {
       clearBtn.textContent = '❌'
       clearBtn.setAttribute('aria-label', `Clear bucket from slot ${i + 1}`)
       clearBtn.addEventListener('click', event => {
+        event.preventDefault()
         event.stopPropagation()
         clearSlotBucket(i)
       })
 
-      rowWrap.appendChild(rowBtn)
-      rowWrap.appendChild(clearBtn)
-      slotList.appendChild(rowWrap)
+      row.appendChild(activeBtn)
+      row.appendChild(labelBtn)
+      row.appendChild(clearBtn)
+      slotList.appendChild(row)
     }
     body.appendChild(slotList)
+  }
+
+  /**
+   * @param {number} slotIdx
+   * @param {boolean} active
+   */
+  function setSlotActive (slotIdx, active) {
+    sendPulseControlCommand({
+      command: 'setSlotActive',
+      setupGuid: currentGuid,
+      slotIdx,
+      active
+    })
   }
 
   /** @param {number} slotIdx */

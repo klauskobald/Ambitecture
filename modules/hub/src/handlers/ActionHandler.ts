@@ -29,6 +29,7 @@ function isActionInputCommand(payload: unknown): payload is ActionInputCommand {
   const hasValidInput = input !== undefined && typeof input === 'object' && input !== null && !Array.isArray(input);
   switch (p['command']) {
     case 'ensureInputAssignment':
+    case 'createInputAssignment':
       return typeof p['targetType'] === 'string'
         && p['targetType'].length > 0
         && typeof p['targetGuid'] === 'string'

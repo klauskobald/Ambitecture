@@ -19,6 +19,7 @@ import {
   isKnownInputType,
   resolveDefaultPerformTypes,
 } from './inputAssignment/composeInputParams';
+import { composeDefaultAnimationExecuteParams } from './inputAssignment/composeAnimationExecuteParams';
 
 type AssignTargetType = 'scene' | 'intent' | 'sequence' | string;
 
@@ -30,6 +31,7 @@ export type InputAssignConfig = {
 
 export type ActionInputCommand =
   | { command: 'ensureInputAssignment'; targetType: AssignTargetType; targetGuid: string; input: InputAssignConfig }
+  | { command: 'createInputAssignment'; targetType: AssignTargetType; targetGuid: string; input: InputAssignConfig }
   | { command: 'removeInputAssignment'; targetType: AssignTargetType; targetGuid: string }
   | { command: 'renameInput'; inputGuid: string; name: string }
   | { command: 'updateInput'; inputGuid: string; input: InputAssignConfig }
@@ -59,6 +61,8 @@ export class ActionInputManager {
     switch (command.command) {
       case 'ensureInputAssignment':
         return this.ensureInputAssignmentCommands(controllerGuid, command.targetType, command.targetGuid, command.input);
+      case 'createInputAssignment':
+        return this.createInputAssignmentCommands(controllerGuid, command.targetType, command.targetGuid, command.input);
       case 'removeInputAssignment':
         return this.removeInputAssignmentCommands(controllerGuid, command.targetType, command.targetGuid);
       case 'renameInput':
@@ -108,13 +112,84 @@ export class ActionInputManager {
     targetGuid: string,
     inputConfig: InputAssignConfig,
   ): GraphCommand[] {
+    return this.buildInputAssignmentCommands(
+      controllerGuid,
+      targetType,
+      targetGuid,
+      inputConfig,
+      { forceNew: false },
+    );
+  }
+
+  private createInputAssignmentCommands(
+    controllerGuid: string,
+    targetType: AssignTargetType,
+    targetGuid: string,
+    inputConfig: InputAssignConfig,
+  ): GraphCommand[] {
+    return this.buildInputAssignmentCommands(
+      controllerGuid,
+      targetType,
+      targetGuid,
+      inputConfig,
+      { forceNew: true },
+    );
+  }
+
+  private buildExecuteItemForAssignment(
+    targetType: AssignTargetType,
+    targetGuid: string,
+    existingAction: ActionDefinition | undefined,
+    composedParams: Record<string, unknown> | undefined,
+  ): ActionExecuteItem {
+    const executeItem: Record<string, unknown> = { type: targetType, guid: targetGuid };
+    const prevEx = existingAction?.execute;
+    if (prevEx && typeof prevEx === 'object' && !Array.isArray(prevEx)) {
+      const prev = prevEx as Record<string, unknown>;
+      if (prev['params'] !== undefined && typeof prev['params'] === 'object' && !Array.isArray(prev['params'])) {
+        executeItem['params'] = cloneRecord(prev['params'] as Record<string, unknown>);
+      }
+    }
+    if (targetType === 'intent' && composedParams !== undefined) {
+      executeItem['params'] = composedParams;
+    }
+    if (targetType === 'animation') {
+      const prevParams = executeItem['params'];
+      const prevRec =
+        prevParams && typeof prevParams === 'object' && !Array.isArray(prevParams)
+          ? (prevParams as Record<string, unknown>)
+          : undefined;
+      const hasCommand =
+        typeof prevRec?.['command'] === 'string' && prevRec['command'].length > 0;
+      if (!hasCommand) {
+        const defaults = composeDefaultAnimationExecuteParams(
+          this.getSystemCapabilities(),
+          targetGuid,
+          g => this.projectManager.getAnimationByGuid(g),
+        );
+        if (defaults) {
+          executeItem['params'] = defaults;
+        }
+      }
+    }
+    return executeItem as ActionExecuteItem;
+  }
+
+  private buildInputAssignmentCommands(
+    controllerGuid: string,
+    targetType: AssignTargetType,
+    targetGuid: string,
+    inputConfig: InputAssignConfig,
+    opts: { forceNew: boolean },
+  ): GraphCommand[] {
     if (targetGuid.length === 0 || targetType.length === 0) return [];
+    const logLabel = opts.forceNew ? 'createInputAssignment' : 'ensureInputAssignment';
     const caps = this.getSystemCapabilities();
     const defaults = resolveDefaultPerformTypes(caps);
     const fallbackType = defaults?.type ?? 'button';
     const fallbackDisplay = defaults?.displayType ?? 'button';
     if (!defaults) {
-      Logger.warn('[action] ensureInputAssignment: missing systemCapabilities inputTypes/displayTypes; using button/button');
+      Logger.warn(`[action] ${logLabel}: missing systemCapabilities inputTypes/displayTypes; using button/button`);
     }
 
     const configuredType = typeof inputConfig.type === 'string' && inputConfig.type.length > 0
@@ -127,30 +202,36 @@ export class ActionInputManager {
 
     const cfgRecord = inputConfig as Record<string, unknown>;
     if (hasCapabilityInputTypes(caps) && !isKnownInputType(caps, configuredType)) {
-      Logger.warn(`[action] ensureInputAssignment: unknown input type "${configuredType}"`);
+      Logger.warn(`[action] ${logLabel}: unknown input type "${configuredType}"`);
       return [];
     }
     if (hasCapabilityDisplayTypes(caps) && !isKnownDisplayType(caps, configuredDisplayType)) {
-      Logger.warn(`[action] ensureInputAssignment: unknown display type "${configuredDisplayType}"`);
+      Logger.warn(`[action] ${logLabel}: unknown display type "${configuredDisplayType}"`);
       return [];
     }
 
     const composed = composeInputParamsFromCapabilities(caps, configuredType, cfgRecord);
     if (!composed.ok) {
-      Logger.warn(`[action] ensureInputAssignment: ${composed.reason}`);
+      Logger.warn(`[action] ${logLabel}: ${composed.reason}`);
       return [];
     }
 
     const targetName = this.getTargetName(targetType, targetGuid);
-    const existingAction = this.findActionByTarget(targetType, targetGuid);
-    const existingInput = this.findInputByTarget(controllerGuid, targetType, targetGuid, existingAction?.guid);
+    const existingAction = opts.forceNew
+      ? undefined
+      : this.findActionByTarget(targetType, targetGuid);
+    const existingInput = opts.forceNew
+      ? undefined
+      : this.findInputByTarget(controllerGuid, targetType, targetGuid, existingAction?.guid);
     const actionGuid = existingAction?.guid ?? `action-${randomUUID()}`;
     const inputGuid = existingInput?.guid ?? `input-${randomUUID()}`;
 
-    const executeItem = { type: targetType, guid: targetGuid } as ActionExecuteItem;
-    if (targetType === 'intent' && composed.params !== undefined) {
-      (executeItem as Record<string, unknown>)['params'] = composed.params;
-    }
+    const executeItem = this.buildExecuteItemForAssignment(
+      targetType,
+      targetGuid,
+      existingAction,
+      composed.params,
+    );
 
     const action: ActionDefinition = {
       guid: actionGuid,
@@ -370,7 +451,7 @@ export class ActionInputManager {
     const newAction: ActionDefinition = {
       guid: newActionGuid,
       name: baseName,
-      execute: { type: targetType, guid: targetGuid } as ActionExecuteItem,
+      execute: this.buildExecuteItemForAssignment(targetType, targetGuid, undefined, undefined),
     };
 
     const inputRecord = cloneRecord(input as unknown as Record<string, unknown>);

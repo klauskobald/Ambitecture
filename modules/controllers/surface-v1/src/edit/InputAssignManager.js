@@ -455,7 +455,10 @@ export class InputAssignManager {
       return
     }
     if (modalOutcome.kind === 'create') {
-      await this._createInputAndAssign(inputTypes, displayTypes)
+      const createdName = await this._createInputAndAssign(inputTypes, displayTypes)
+      if (createdName) {
+        await this._waitForInputLinkedToTargetByName(createdName)
+      }
       this._refreshInvokeButton()
       await this.showControl()
       return
@@ -479,7 +482,10 @@ export class InputAssignManager {
       return
     }
     if (modalOutcome.kind === 'delete' && typeof modalOutcome.inputGuid === 'string') {
-      await this._confirmAndDeleteInput(modalOutcome.inputGuid)
+      const deleted = await this._confirmAndDeleteInput(modalOutcome.inputGuid)
+      if (deleted) {
+        await this._waitForInputRemovedFromGraph(modalOutcome.inputGuid)
+      }
       this._refreshInvokeButton()
       await this.showControl()
       return
@@ -583,8 +589,81 @@ export class InputAssignManager {
   }
 
   /**
+   * @param {string} inputGuid
+   * @returns {Promise<void>}
+   */
+  async _waitForInputRemovedFromGraph (inputGuid) {
+    if (!inputGuid) return
+    const matches = () => !projectGraph.getInputs().has(inputGuid)
+    if (matches()) return
+
+    await new Promise(resolve => {
+      let done = false
+      const finish = () => {
+        if (done) return
+        done = true
+        window.clearTimeout(tid)
+        unsub()
+        resolve()
+      }
+      const unsub = projectGraph.subscribe(['inputs', 'actions'], () => {
+        if (matches()) finish()
+      })
+      const tid = window.setTimeout(finish, 2500)
+      queueMicrotask(() => {
+        if (matches()) finish()
+      })
+    })
+  }
+
+  /**
+   * @param {string} inputName
+   * @returns {Promise<void>}
+   */
+  async _waitForInputLinkedToTargetByName (inputName) {
+    const expected = inputName.trim()
+    if (!expected) return
+
+    const matches = () => {
+      for (const input of projectGraph.getInputs().values()) {
+        if (typeof input?.name !== 'string' || input.name.trim() !== expected) continue
+        if (
+          input &&
+          typeof input === 'object' &&
+          !Array.isArray(input) &&
+          this._inputLinksTarget(/** @type {Record<string, unknown>} */ (input))
+        ) {
+          return true
+        }
+      }
+      return false
+    }
+
+    if (matches()) return
+
+    await new Promise(resolve => {
+      let done = false
+      const finish = () => {
+        if (done) return
+        done = true
+        window.clearTimeout(tid)
+        unsub()
+        resolve()
+      }
+      const unsub = projectGraph.subscribe(['inputs', 'actions'], () => {
+        if (matches()) finish()
+      })
+      const tid = window.setTimeout(finish, 2500)
+      queueMicrotask(() => {
+        if (matches()) finish()
+      })
+    })
+  }
+
+  /**
    * @param {Array<{ class: string }>} inputTypes
    * @param {Array<{ class: string }>} displayTypes
+   * @returns {Promise<string | null>} created input name, or null if cancelled
    */
   async _createInputAndAssign (inputTypes, displayTypes) {
     const values = await modalPrompt(
@@ -600,17 +679,18 @@ export class InputAssignManager {
       { submit: 'Create' }
     )
     const name = values?.name?.trim()
-    if (!name) return
+    if (!name) return null
     const defaults = resolveDefaultPerformTypes()
     const type = defaults?.type ?? inputTypes[0]?.class ?? 'button'
     const displayType =
       defaults?.displayType ?? displayTypes[0]?.class ?? 'button'
     sendActionInputCommand({
-      command: 'ensureInputAssignment',
+      command: 'createInputAssignment',
       targetType: this._contextType,
       targetGuid: this._contextGuid,
       input: { name, type, displayType }
     })
+    return name
   }
 
   /** @param {string} inputGuid */
@@ -784,19 +864,23 @@ export class InputAssignManager {
     })
   }
 
-  /** @param {string} inputGuid */
+  /**
+   * @param {string} inputGuid
+   * @returns {Promise<boolean>} whether delete was confirmed and sent
+   */
   async _confirmAndDeleteInput (inputGuid) {
     const linkedTargetCount = this._countLinkedTargetsForInput(inputGuid)
     const ok = await modalConfirm(
       `Delete this input? It is linked to ${linkedTargetCount} action(s).`,
       { yes: 'Delete', no: 'Cancel' }
     )
-    if (!ok) return
+    if (!ok) return false
     sendActionInputCommand({
       command: 'deleteInput',
       inputGuid,
       expectedLinkedTargetCount: linkedTargetCount
     })
+    return true
   }
 
   /**

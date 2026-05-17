@@ -173,6 +173,40 @@ export function createPulseEditPane ({ onClose }) {
     slotsField.appendChild(slotsInput)
     body.appendChild(slotsField)
 
+    const meter =
+      typeof setup.meter === 'number' && Number.isFinite(setup.meter)
+        ? setup.meter
+        : 4
+    if (meter > 2) {
+      const modeField = document.createElement('div')
+      modeField.className = 'perform-pulse-edit__field perform-pulse-edit__field--mode'
+
+      const modeLabel = document.createElement('span')
+      modeLabel.textContent = 'Mode'
+
+      const modeValue = document.createElement('button')
+      modeValue.type = 'button'
+      modeValue.className = 'perform-pulse-edit__mode-value'
+      const currentMode = setup.mode === 'random' ? 'random' : 'forward'
+      modeValue.textContent = currentMode
+      modeValue.addEventListener('click', async () => {
+        const choice = await pickChoice('Slot mode', [
+          { value: 'forward', label: 'forward' },
+          { value: 'random', label: 'random (no repeat)' }
+        ], { selected: currentMode })
+        if (!choice || choice === currentMode) return
+        sendPulseControlCommand({
+          command: 'setSetupMode',
+          setupGuid: currentGuid,
+          mode: /** @type {'forward' | 'random'} */ (choice)
+        })
+      })
+
+      modeField.appendChild(modeLabel)
+      modeField.appendChild(modeValue)
+      body.appendChild(modeField)
+    }
+
     const slotList = document.createElement('div')
     slotList.className = 'perform-pulse-edit__slots'
     for (let i = 0; i < slots.length; i += 1) {

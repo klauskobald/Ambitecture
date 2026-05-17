@@ -2072,6 +2072,7 @@ function normalizePulsesConfig (data) {
             typeof row.meter === 'number' && Number.isFinite(row.meter)
               ? row.meter
               : 4
+          const mode = row.mode === 'random' ? 'random' : 'forward'
           const slots = Array.isArray(row.slots)
             ? row.slots.map(slot => {
                 if (!slot || typeof slot !== 'object' || Array.isArray(slot)) {
@@ -2090,7 +2091,7 @@ function normalizePulsesConfig (data) {
                 return normalized
               })
             : []
-          return { guid, name, bpm, meter, slots }
+          return { guid, name, bpm, meter, mode, slots }
         })
         .filter(
           /** @returns {row is Record<string, unknown>} */ row => row !== null

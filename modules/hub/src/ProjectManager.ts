@@ -211,11 +211,15 @@ export interface PulseSlot {
   active?: boolean;
 }
 
+export type PulseSlotMode = 'forward' | 'random';
+
 export interface PulseSetup {
   guid?: string;
   name: string;
   bpm: number;
   meter: number;
+  /** Slot order after each tick; `random` applies when {@link meter} > 2. */
+  mode?: PulseSlotMode;
   slots: PulseSlot[];
 }
 

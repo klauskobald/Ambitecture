@@ -1,4 +1,5 @@
-import type { ProjectManager, PulseSetup } from '../ProjectManager';
+import { randomInt } from 'crypto';
+import type { ProjectManager, PulseSetup, PulseSlotMode } from '../ProjectManager';
 import { Logger } from '../Logger';
 import type { HubStatusDispatcher, HubStatusPulsePayload } from '../hubStatusTypes';
 
@@ -431,9 +432,39 @@ export class PulseManager {
     this.broadcastPulseStatus('started', slotIdx);
 
     const slotsTotal = setup.slots.length;
-    this.runner.currentSlotIdx =
-      slotsTotal > 0 ? (slotIdx + 1) % slotsTotal : 0;
+    this.runner.currentSlotIdx = this.advanceSlotIdx(setup, slotIdx);
     this.runner.msIntoCurrentTick = 0;
+  }
+
+  private resolveSlotAdvanceMode(setup: PulseSetup): PulseSlotMode {
+    if (setup.meter <= 2) {
+      return 'forward';
+    }
+    return setup.mode === 'random' ? 'random' : 'forward';
+  }
+
+  /**
+   * Next slot after {@link slotIdx} fired. `random` never returns the same index twice in a row.
+   */
+  private advanceSlotIdx(setup: PulseSetup, slotIdx: number): number {
+    const slotsTotal = setup.slots.length;
+    if (slotsTotal === 0) {
+      return 0;
+    }
+    const mode = this.resolveSlotAdvanceMode(setup);
+    if (mode === 'forward') {
+      return (slotIdx + 1) % slotsTotal;
+    }
+    return this.pickRandomSlotIndexOtherThan(slotIdx, slotsTotal);
+  }
+
+  /** Uniform pick in `[0, slotsTotal)` excluding `excludeIdx` (requires `slotsTotal` ≥ 2). */
+  private pickRandomSlotIndexOtherThan(excludeIdx: number, slotsTotal: number): number {
+    if (slotsTotal <= 1) {
+      return 0;
+    }
+    const next = randomInt(0, slotsTotal - 1);
+    return next >= excludeIdx ? next + 1 : next;
   }
 
   /**

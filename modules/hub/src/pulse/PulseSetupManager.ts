@@ -3,6 +3,7 @@ import {
   ProjectManager,
   PulseSetup,
   PulseSlot,
+  PulseSlotMode,
   PulseSyncRestartMode,
 } from '../ProjectManager';
 import { Logger } from '../Logger';
@@ -20,6 +21,7 @@ export type PulseControlCommand =
   | { command: 'renameSetup'; setupGuid: string; name: string }
   | { command: 'setSetupBpm'; setupGuid: string; bpm: number }
   | { command: 'setSetupSlotCount'; setupGuid: string; count: number }
+  | { command: 'setSetupMode'; setupGuid: string; mode: PulseSlotMode }
   | { command: 'assignSlotBucket'; setupGuid: string; slotIdx: number; bucketGuid: string | null }
   | { command: 'setSlotActive'; setupGuid: string; slotIdx: number; active: boolean }
   | { command: 'setSyncConfig'; enabled?: boolean; restart?: PulseSyncRestartMode; lerp?: number };
@@ -47,6 +49,8 @@ export class PulseSetupManager {
         return this.setSetupBpm(command.setupGuid, command.bpm);
       case 'setSetupSlotCount':
         return this.setSetupSlotCount(command.setupGuid, command.count);
+      case 'setSetupMode':
+        return this.setSetupMode(command.setupGuid, command.mode);
       case 'assignSlotBucket':
         return this.assignSlotBucket(command.setupGuid, command.slotIdx, command.bucketGuid);
       case 'setSlotActive':
@@ -70,6 +74,7 @@ export class PulseSetupManager {
       name: label,
       bpm: nextBpm,
       meter: DEFAULT_METER,
+      mode: 'forward',
       slots: this.buildEmptySlots(count),
     };
     config.setups.push(setup);
@@ -144,6 +149,17 @@ export class PulseSetupManager {
       next.push(nextSlot);
     }
     setup.slots = next;
+    this.persistPulses();
+    return { pulsesChanged: true, setupGuid };
+  }
+
+  private setSetupMode(setupGuid: string, mode: PulseSlotMode): PulseControlResult {
+    const setup = this.projectManager.getPulseSetup(setupGuid);
+    if (!setup) {
+      Logger.warn(`[pulse] setSetupMode: unknown setup ${setupGuid}`);
+      return { pulsesChanged: false };
+    }
+    setup.mode = mode === 'random' ? 'random' : 'forward';
     this.persistPulses();
     return { pulsesChanged: true, setupGuid };
   }

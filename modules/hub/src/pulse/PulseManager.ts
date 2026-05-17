@@ -7,7 +7,8 @@ type ActivePulseRunner = {
   isRunning: boolean;
   currentSlotIdx: number;
   tickIntervalMs: number;
-  tickTimer: ReturnType<typeof setInterval> | undefined;
+  /** Chained timeout for the next slot tick (not setInterval — BPM changes reschedule one shot). */
+  tickTimer: ReturnType<typeof setTimeout> | undefined;
   alignTimeout: ReturnType<typeof setTimeout> | undefined;
   msIntoCurrentTick: number;
   /** Live tempo from analyser sync; not written to project YAML until explicit edit. */
@@ -18,8 +19,9 @@ type ActivePulseRunner = {
  * Hub-side pulse orchestration. Maintains a single active pulse setup with
  * a per-slot action dispatcher. Each slot references one reusable bucket in
  * `pulses.buckets`. Tick intervals are rescheduled when necessary:
- * - selectSetup: stops prior timer, fires slot 0 immediately, then interval loop
- * - setBPM: reschedules interval and fires current slot immediately
+ * - selectSetup: stops prior timer, fires slot 0 immediately, then chained tick loop
+ * - setBPM / live sync tempo: updates interval only — no extra tick mid-cycle
+ * - applyAlignedSync (bar): phase-align next tick, then chained loop
  */
 export class PulseManager {
   private runner?: ActivePulseRunner;
@@ -202,7 +204,40 @@ export class PulseManager {
       `[pulse] aligned sync BPM=${bpm} nextTick in ${Math.max(0, nextTickAtMs - Date.now())}ms`
         + (restartFromSlotZero ? ' (slot 0)' : ''),
     );
-    this.scheduleAlignedTicks(nextTickAtMs);
+    this.schedulePhaseAlignedTick(nextTickAtMs);
+  }
+
+  /**
+   * Update live analyser tempo without phase realign or an extra tick (keeps slot cadence).
+   */
+  updateLiveTempo(bpm: number): void {
+    if (!this.runner) {
+      Logger.warn('[pulse] updateLiveTempo called but no pulse is active');
+      return;
+    }
+    const setup = this.projectManager.getPulseSetup(this.runner.setup.guid ?? '');
+    if (setup) {
+      this.runner.setup = setup;
+    }
+    this.runner.liveBpm = bpm;
+    this.runner.tickIntervalMs = this.computeTickIntervalMs(bpm, this.runner.setup.meter);
+    if (!this.runner.isRunning) {
+      return;
+    }
+    if (this.runner.alignTimeout !== undefined) {
+      return;
+    }
+    Logger.info(`[pulse] live tempo ${bpm} BPM (${this.runner.tickIntervalMs}ms/tick, no extra tick)`);
+    this.rescheduleRepeatingTickFromNow();
+  }
+
+  /**
+   * Reset slot cursor only (e.g. onset restart policy) without stopping the tick chain.
+   */
+  resetSlotIndexToZero(): void {
+    if (!this.runner) return;
+    this.runner.currentSlotIdx = 0;
+    this.runner.msIntoCurrentTick = 0;
   }
 
   private restartActiveSetup(): void {
@@ -216,7 +251,7 @@ export class PulseManager {
   }
 
   /**
-   * Set BPM on the active setup. Reschedules interval when running.
+   * Set BPM on the active setup. Reschedules the next tick interval when running (no extra slot fire).
    */
   setBPM(bpm: number): void {
     if (!this.runner) {
@@ -232,7 +267,7 @@ export class PulseManager {
     this.runner.tickIntervalMs = this.computeTickIntervalMs(bpm, this.runner.setup.meter);
     Logger.info(`[pulse] BPM set to ${bpm}`);
     if (this.runner.isRunning) {
-      this.scheduleNextTick();
+      this.rescheduleRepeatingTickFromNow();
     }
   }
 
@@ -291,7 +326,7 @@ export class PulseManager {
   private stopTimer(): void {
     if (!this.runner) return;
     if (this.runner.tickTimer !== undefined) {
-      clearInterval(this.runner.tickTimer);
+      clearTimeout(this.runner.tickTimer);
       this.runner.tickTimer = undefined;
     }
     if (this.runner.alignTimeout !== undefined) {
@@ -301,9 +336,9 @@ export class PulseManager {
   }
 
   /**
-   * Phase-align: wait until {@link nextTickAtMs}, fire one tick, then interval at tickIntervalMs.
+   * Phase-align: wait until {@link nextTickAtMs}, fire one tick, then chained ticks at tickIntervalMs.
    */
-  private scheduleAlignedTicks(nextTickAtMs: number): void {
+  private schedulePhaseAlignedTick(nextTickAtMs: number): void {
     if (!this.runner || !this.runner.isRunning) {
       return;
     }
@@ -316,10 +351,40 @@ export class PulseManager {
       }
       this.runner.alignTimeout = undefined;
       this.tickRound();
-      this.runner.tickTimer = setInterval(() => {
-        this.tickRound();
-      }, this.runner.tickIntervalMs);
+      this.scheduleRepeatingTick();
     }, delayMs);
+  }
+
+  /**
+   * Next tick after tickIntervalMs (chain continues after each tickRound).
+   */
+  private scheduleRepeatingTick(): void {
+    if (!this.runner || !this.runner.isRunning) {
+      return;
+    }
+    const periodMs = this.runner.tickIntervalMs;
+    this.runner.tickTimer = setTimeout(() => {
+      if (!this.runner || !this.runner.isRunning) {
+        return;
+      }
+      this.runner.tickTimer = undefined;
+      this.tickRound();
+      this.scheduleRepeatingTick();
+    }, periodMs);
+  }
+
+  /**
+   * Apply a new interval from now without firing the current slot again.
+   */
+  private rescheduleRepeatingTickFromNow(): void {
+    if (!this.runner || !this.runner.isRunning) {
+      return;
+    }
+    if (this.runner.tickTimer !== undefined) {
+      clearTimeout(this.runner.tickTimer);
+      this.runner.tickTimer = undefined;
+    }
+    this.scheduleRepeatingTick();
   }
 
   /**
@@ -370,6 +435,7 @@ export class PulseManager {
   /**
    * Fire the current slot immediately, then schedule repeating ticks at tickIntervalMs.
    */
+  /** Play / restart: fire current slot once, then chained ticks. */
   private scheduleNextTick(): void {
     if (!this.runner || !this.runner.isRunning) {
       return;
@@ -377,9 +443,7 @@ export class PulseManager {
 
     this.stopTimer();
     this.tickRound();
-    this.runner.tickTimer = setInterval(() => {
-      this.tickRound();
-    }, this.runner.tickIntervalMs);
+    this.scheduleRepeatingTick();
   }
 
   /**

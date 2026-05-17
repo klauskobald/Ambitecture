@@ -88,7 +88,16 @@ export class PulseSync {
     const nextTickAtMs = beatAtHubMs + beatIndex * periodMs;
 
     this.ensureRunner(setupGuid);
-    this.pulseManager.applyAlignedSync(smoothedBpm, nextTickAtMs, restartFromSlotZero);
+
+    if (payload.kind === 'bar') {
+      this.pulseManager.applyAlignedSync(smoothedBpm, nextTickAtMs, restartFromSlotZero);
+    } else {
+      if (restartFromSlotZero) {
+        this.pulseManager.resetSlotIndexToZero();
+      }
+      this.pulseManager.updateLiveTempo(smoothedBpm);
+    }
+
     this.onPulsesBroadcast();
   }
 

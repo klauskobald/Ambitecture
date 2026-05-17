@@ -1,5 +1,6 @@
 import { projectGraph } from '../core/projectGraph.js'
 import { sendPulseControlCommand } from '../core/outboundQueue.js'
+import { pickChoice } from '../core/Modal.js'
 import { ScalarRadialKnobSvg } from '../edit/components/ScalarRadialKnobSvg.js'
 
 /** @type {ReadonlyArray<{ wire: 'never' | 'bar' | 'onset', label: string }>} */
@@ -10,53 +11,65 @@ const RESTART_OPTIONS = [
 ]
 
 /**
- * Left column: durable `pulses.sync` settings (restart pills + lerp knob).
+ * @param {'never' | 'bar' | 'onset'} wire
+ * @returns {string}
+ */
+function restartLabelForWire (wire) {
+  const opt = RESTART_OPTIONS.find(o => o.wire === wire)
+  return opt?.label ?? 'none'
+}
+
+/**
+ * Slim toolbar: `SYNC` · restart [value] · lerp [knob] (one row from 400px up).
  *
  * @returns {{ el: HTMLElement, refresh: () => void }}
  */
 export function createPerformPulseSyncColumn () {
   const el = document.createElement('aside')
   el.className = 'perform-pulse-sync-col'
+  el.setAttribute('aria-label', 'Pulse sync')
 
-  const title = document.createElement('h3')
+  const title = document.createElement('span')
   title.className = 'perform-pulse-sync-col__title'
   title.textContent = 'Sync'
 
-  const restartBlock = document.createElement('div')
-  restartBlock.className = 'perform-pulse-sync-col__field'
+  const restartGroup = document.createElement('span')
+  restartGroup.className = 'perform-pulse-sync-col__group'
 
   const restartLabel = document.createElement('span')
   restartLabel.className = 'perform-pulse-sync-col__label'
-  restartLabel.textContent = 'Restart'
+  restartLabel.textContent = 'restart'
 
-  const pills = document.createElement('div')
-  pills.className = 'prop-pills perform-pulse-sync-col__pills'
-
-  /** @type {HTMLButtonElement[]} */
-  const pillButtons = []
-
-  for (const opt of RESTART_OPTIONS) {
-    const btn = document.createElement('button')
-    btn.type = 'button'
-    btn.className = 'prop-pill intent-toggle'
-    btn.textContent = opt.label
-    btn.dataset.restart = opt.wire
-    btn.addEventListener('click', () => {
-      sendPulseControlCommand({ command: 'setSyncConfig', restart: opt.wire })
+  const restartValue = document.createElement('button')
+  restartValue.type = 'button'
+  restartValue.className = 'perform-pulse-sync-col__restart-value'
+  restartValue.addEventListener('click', async () => {
+    const { restart } = projectGraph.getPulseSync()
+    const choice = await pickChoice(
+      'Restart',
+      RESTART_OPTIONS.map(o => ({ value: o.wire, label: o.label })),
+      { selected: restart }
+    )
+    if (!choice) return
+    sendPulseControlCommand({
+      command: 'setSyncConfig',
+      restart: /** @type {'never' | 'bar' | 'onset'} */ (choice)
     })
-    pills.appendChild(btn)
-    pillButtons.push(btn)
-  }
+  })
 
-  restartBlock.appendChild(restartLabel)
-  restartBlock.appendChild(pills)
+  restartGroup.appendChild(restartLabel)
+  restartGroup.appendChild(restartValue)
 
-  const lerpBlock = document.createElement('div')
-  lerpBlock.className = 'perform-pulse-sync-col__lerp'
+  const lerpGroup = document.createElement('span')
+  lerpGroup.className = 'perform-pulse-sync-col__group perform-pulse-sync-col__group--lerp'
+
+  const lerpLabel = document.createElement('span')
+  lerpLabel.className = 'perform-pulse-sync-col__label'
+  lerpLabel.textContent = 'lerp'
 
   let currentLerp = 0.35
 
-  const knobWrap = document.createElement('div')
+  const knobWrap = document.createElement('span')
   knobWrap.className = 'perform-pulse-sync-col__lerp-knob'
 
   const lerpKnob = new ScalarRadialKnobSvg({
@@ -79,21 +92,17 @@ export function createPerformPulseSyncColumn () {
   })
   lerpKnob.mount(knobWrap)
 
-  lerpBlock.appendChild(knobWrap)
+  lerpGroup.appendChild(lerpLabel)
+  lerpGroup.appendChild(knobWrap)
 
   el.appendChild(title)
-  el.appendChild(restartBlock)
-  el.appendChild(lerpBlock)
+  el.appendChild(restartGroup)
+  el.appendChild(lerpGroup)
 
   function refresh () {
     const { restart, lerp } = projectGraph.getPulseSync()
     currentLerp = lerp
-    for (const btn of pillButtons) {
-      const wire = btn.dataset.restart
-      const isActive = wire === restart
-      btn.classList.toggle('prop-pill--active', isActive)
-      btn.classList.toggle('intent-toggle--enabled', isActive)
-    }
+    restartValue.textContent = restartLabelForWire(restart)
     lerpKnob.syncFromExternal()
   }
 

@@ -6,7 +6,8 @@ import { projectGraph } from '../core/projectGraph.js'
 import { sendPulseControlCommand } from '../core/outboundQueue.js'
 import {
   getPulseSlotStatus,
-  subscribePulsePlayState
+  subscribePulsePlayState,
+  isPulseActive
 } from '../core/pulsePlayRegistry.js'
 import { createPulseEditPane } from './performPulseEditPane.js'
 import { prompt as modalPrompt } from '../core/Modal.js'
@@ -32,6 +33,19 @@ function buildSlotMeter (setupGuid, slotsTotal, slotIdx) {
     meter.appendChild(block)
   }
   return meter
+}
+
+/**
+ * @param {string} guid
+ * @param {Record<string, unknown>} setup
+ * @returns {number}
+ */
+function displayBpmForSetup (guid, setup) {
+  if (isPulseActive(guid)) {
+    return getPulseSlotStatus(guid).bpm
+  }
+  const bpm = setup.bpm
+  return typeof bpm === 'number' && Number.isFinite(bpm) ? bpm : 120
 }
 
 /**
@@ -91,8 +105,13 @@ export function createPerformPulsePanel () {
   function syncRowState (rowEl) {
     const guid = rowEl.dataset.pulseGuid
     if (!guid) return
+    const setup = projectGraph.getPulseSetup(guid)
     const status = getPulseSlotStatus(guid)
     rowEl.classList.toggle('perform-pulse-row--active', status.isActive)
+    const bpmEl = rowEl.querySelector('.perform-pulse-row__head .perform-pulse-row__bpm')
+    if (bpmEl && setup) {
+      bpmEl.textContent = `${displayBpmForSetup(guid, setup)} bpm`
+    }
     const statusHost = rowEl.querySelector('.perform-pulse-row__status')
     if (!statusHost) return
     statusHost.replaceChildren()
@@ -139,10 +158,19 @@ export function createPerformPulsePanel () {
     const label = document.createElement('div')
     label.className = 'perform-pulse-row__label'
 
+    const head = document.createElement('div')
+    head.className = 'perform-pulse-row__head'
+
     const title = document.createElement('span')
     title.className = 'perform-pulse-row__name'
     title.textContent = name
-    label.appendChild(title)
+    const bpmEl = document.createElement('span')
+    bpmEl.className = 'perform-pulse-row__bpm'
+    bpmEl.textContent = `${displayBpmForSetup(guid, setup)} bpm`
+
+    head.appendChild(title)
+    head.appendChild(bpmEl)
+    label.appendChild(head)
 
     const statusEl = document.createElement('div')
     statusEl.className = 'perform-pulse-row__status'

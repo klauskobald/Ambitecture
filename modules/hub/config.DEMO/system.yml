@@ -234,3 +234,12 @@ systemCapabilities:
         isMandatory: true
         display: vector3
 
+pulse:
+  tapTempo:
+    minBpm: 20
+    maxBpm: 300
+    minTaps: 2
+    windowMs: 2500
+    smoothing: 0.35
+    persistDebounceMs: 400
+

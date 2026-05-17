@@ -2,6 +2,13 @@ import { projectGraph } from '../core/projectGraph.js'
 import { sendPulseControlCommand } from '../core/outboundQueue.js'
 import * as Modal from '../core/Modal.js'
 import { pickChoice } from '../core/Modal.js'
+import { ScalarRadialKnobSvg } from '../edit/components/ScalarRadialKnobSvg.js'
+import { createPulseTapButton } from '../edit/components/PulseTapButton.js'
+import {
+  getPulseSlotStatus,
+  subscribePulsePlayState,
+  isPulseActive
+} from '../core/pulsePlayRegistry.js'
 
 /**
  * @param {string | undefined} bucketGuid
@@ -62,33 +69,65 @@ export function createPulseEditPane ({ onClose }) {
   /** @type {string} */
   let currentGuid = ''
 
+  /** @type {number} */
+  let currentBpm = 120
+
+  /** @type {ScalarRadialKnobSvg | null} */
+  let bpmKnob = null
+
+  /** @param {Record<string, unknown>} setup */
+  function readBpmFromSetup (setup) {
+    if (isPulseActive(currentGuid)) {
+      return getPulseSlotStatus(currentGuid).bpm
+    }
+    const bpm = setup.bpm
+    return typeof bpm === 'number' && Number.isFinite(bpm) ? bpm : 120
+  }
+
   /** @param {Record<string, unknown>} setup */
   function renderBody (setup) {
     body.replaceChildren()
+    currentBpm = readBpmFromSetup(setup)
 
-    const bpmField = document.createElement('label')
-    bpmField.className = 'perform-pulse-edit__field'
-    const bpmLabel = document.createElement('span')
-    bpmLabel.textContent = 'BPM'
-    const bpmInput = document.createElement('input')
-    bpmInput.type = 'number'
-    bpmInput.min = '20'
-    bpmInput.max = '300'
-    bpmInput.step = '1'
-    bpmInput.className = 'perform-pulse-edit__input'
-    bpmInput.value = String(setup.bpm ?? 120)
-    bpmInput.addEventListener('change', () => {
-      const next = Number(bpmInput.value)
-      if (!Number.isFinite(next)) return
-      sendPulseControlCommand({
-        command: 'setSetupBpm',
-        setupGuid: currentGuid,
-        bpm: next
-      })
+    const bpmCluster = document.createElement('div')
+    bpmCluster.className = 'perform-pulse-edit__bpm-cluster'
+
+    const tapBtn = createPulseTapButton({
+      resolveSetupGuid: () => currentGuid,
+      className: 'perform-pulse-tap-btn'
     })
-    bpmField.appendChild(bpmLabel)
-    bpmField.appendChild(bpmInput)
-    body.appendChild(bpmField)
+
+    const knobWrap = document.createElement('div')
+    knobWrap.className = 'perform-pulse-edit__bpm-knob'
+
+    bpmKnob = new ScalarRadialKnobSvg({
+      descriptor: {
+        name: 'BPM',
+        range: [20, 300],
+        step: 1,
+        defaultValue: 120,
+        stepFunction: 'linear'
+      },
+      intentGuid: currentGuid,
+      readValue: () => currentBpm,
+      onCommit: domain => {
+        const next = Math.round(domain)
+        if (!Number.isFinite(next)) return
+        currentBpm = next
+        sendPulseControlCommand({
+          command: 'setSetupBpm',
+          setupGuid: currentGuid,
+          bpm: next
+        })
+      },
+      showInnerSvgTitle: false,
+      hint: 'BPM'
+    })
+    bpmKnob.mount(knobWrap)
+
+    bpmCluster.appendChild(tapBtn)
+    bpmCluster.appendChild(knobWrap)
+    body.appendChild(bpmCluster)
 
     const slotsField = document.createElement('label')
     slotsField.className = 'perform-pulse-edit__field'
@@ -200,6 +239,14 @@ export function createPulseEditPane ({ onClose }) {
     renderBody(setup)
   }
 
+  function syncKnobFromState () {
+    if (!currentGuid || !bpmKnob) return
+    const setup = projectGraph.getPulseSetup(currentGuid)
+    if (!setup) return
+    currentBpm = readBpmFromSetup(setup)
+    bpmKnob.syncFromExternal()
+  }
+
   projectGraph.subscribe(['pulses'], () => {
     if (el.hidden || !currentGuid) return
     const setup = projectGraph.getPulseSetup(currentGuid)
@@ -211,6 +258,11 @@ export function createPulseEditPane ({ onClose }) {
     const name = typeof setup.name === 'string' ? setup.name : currentGuid
     nameLabel.textContent = name
     renderBody(setup)
+  })
+
+  subscribePulsePlayState(() => {
+    if (el.hidden || !currentGuid) return
+    syncKnobFromState()
   })
 
   return { el, open }

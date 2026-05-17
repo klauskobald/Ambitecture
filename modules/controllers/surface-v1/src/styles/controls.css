@@ -903,12 +903,48 @@
   gap: 0.25rem;
 }
 
+.perform-pulse-row__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.4rem;
+  min-width: 0;
+}
+
 .perform-pulse-row__name {
   font-size: 0.78rem;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.perform-pulse-row__bpm {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.perform-subnav-tap {
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+  min-width: 2rem;
+  margin-right: 0.15rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.perform-pulse-edit__bpm-cluster {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.perform-pulse-edit__bpm-knob {
+  flex: 0 0 auto;
 }
 
 .perform-pulse-row__status {

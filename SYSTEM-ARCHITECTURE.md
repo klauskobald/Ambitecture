@@ -176,8 +176,9 @@ Renderer data authority model:
 - **performPane.js** — top-level Perform orchestrator. Mounts the perform HUD, scene buttons, perform buttons, and the **performSubnavShell** for the lower section.
 - **performSubnavShell.js** — nested navigation between **Control**, **Animate**, and optional **plugin** subpanes inside Perform (see **Plugin UI panels** below).
 - **performControlPanel.js** — Control subpane: scene activation buttons, perform buttons, system status.
-- **performPulsePanel.js** — Pulse subpane (between Control and Animate): list pulse setups with select (▶), slot meter from `hub:status`, and create. Subscribes to `pulsePlayRegistry` and `projectGraph` topic `pulses`.
-- **performPulseEditPane.js** — Per-setup edit overlay: rename, BPM, slot count, slot→bucket assignment via `pulse:control`.
+- **performPulsePanel.js** — Pulse subpane (between Control and Animate): list pulse setups (name + BPM) with select (▶), slot meter from `hub:status`, and create. Subscribes to `pulsePlayRegistry` and `projectGraph` topic `pulses`.
+- **performPulseEditPane.js** — Per-setup edit overlay: radial BPM knob, tap tempo button, slot count, slot→bucket assignment via `pulse:control`.
+- **PulseTapButton.js** — Tap tempo control (subnav + edit pane); pointerdown and Ctrl+T → `pulse:tap`.
 - **performAnimatePanel.js** — Animate subpane: list of project animations with play / stop / pause / open-edit controls. Subscribes to `animationPlayRegistry`.
 - **performAnimateEditPane.js** — Per-animation edit overlay. Uses an `AnimatorViewer` for the animation's class and the `bindingRegistry` to mirror timescale and keyframe step state from the hub.
 - **performIntentFilter.js** (`src/core/performIntentFilter.js`) — Shared perform-mode **intent filter** (GUID or `null`). **performSubnavShell** drives the funnel chip from this module (chip visible on **Animate** and **plugin** subpanes; hidden on **Control** while the filter may still be remembered). Single-tap an intent on the perform overlay toggles the filter when **Animate** or an active **plugin** subpane is selected. **performSubnavShell** adds **`filter=<intentGuid>`** to the plugin iframe URL when set and drops it when the filter is cleared.
@@ -429,6 +430,10 @@ Hub applies action changes via `graph:delta` and pushes **`projectPatch`** `{ ke
 
 Hub pushes **`projectPatch`** `{ key: "pulses", data: PulsesConfig }` to all controllers on setup mutations. Surface Perform → **Pulse** subpane (`performPulsePanel.js`, `performPulseEditPane.js`): `sendPulseControlCommand(command)`; live slot meter from `hub:status` via `pulsePlayRegistry.js`.
 
+**`pulse:tap`** (controller → hub): live tap-tempo stream (not durable per message). Payload `{ setupGuid, atMs? }`. Hub [`PulseTapTempo`](modules/hub/src/pulse/PulseTapTempo.ts) estimates interval from recent taps, smooths BPM, calls `PulseManager.setBPM`, broadcasts `hub:status`, and debounces `setSetupBpm` + `projectPatch`. If the setup is not active, `selectSetup` runs first. Tunables: root-level **`pulse.tapTempo`** in hub `system.yml` (`minBpm`, `maxBpm`, `minTaps`, `windowMs`, `smoothing`, `persistDebounceMs`), merged into controller `systemCapabilities` as `pulse`.
+
+Surface: reusable **`PulseTapButton`** (`edit/components/PulseTapButton.js`) in the perform **subnav** title bar (left of ☰ / tabs) and beside the BPM knob in the pulse edit pane; **Ctrl+T** fires a tap for the active (or first) setup via `sendPulseTap`. List rows show setup name + BPM (live BPM when active).
+
 **`hub:status`** (`kind: 'pulse'`, hub → controllers): `{ setupGuid, status: 'started' | 'stopped', message: { text }, data: { bpm, slotIdx, slotsTotal } }`. Emitted on pulse tick, start, stop, and as a one-shot snapshot on controller register when a pulse is already running.
 
 **`action:trigger`** (controller → hub): `{ actionGuid, args? }` — one message per action. Hub builds `merged = shallowMerge(execute.params ?? {}, args ?? {})` ([`merge.ts`](modules/hub/src/handlers/actionExecute/merge.ts)), then:
@@ -460,8 +465,9 @@ The hub runs animations as authoritative time-driven mutators of intents. The fu
 
 - **`AnimatorViewer`** — abstract base; subclasses implement `getClassName/getName/getFieldDescriptor/renderField/renderEditSection`. `animatorViewerRegistry` maps class → constructor.
 - **`KeyframeAnimatorViewer`** — renders the field set defined in `systemCapabilities.animations[].display`, plus the live keyframe step editor (prev/next/add/remove/merge) wired through `bindingRegistry`.
-- **Pulse panel** (`performPulsePanel.js`) — pulse setup list with select/create/edit; slot meter from `hub:status` (`kind: 'pulse'`); subscribes to `pulsePlayRegistry`.
-- **Pulse edit pane** (`performPulseEditPane.js`) — setup BPM, slot count, and bucket-per-slot editing via `pulse:control`.
+- **Pulse panel** (`performPulsePanel.js`) — pulse setup list (name + BPM) with select/create/edit; slot meter from `hub:status` (`kind: 'pulse'`); subscribes to `pulsePlayRegistry`.
+- **Pulse edit pane** (`performPulseEditPane.js`) — radial BPM knob, tap button, slot count, bucket-per-slot via `pulse:control`.
+- **Perform subnav** — global tap tempo button (left of perform tabs) + Ctrl+T; may sit under intent filter chip.
 - **Animate panel** (`performAnimatePanel.js`) — animation list with play/stop/pause/open-edit; subscribes to `animationPlayRegistry`.
 - **Animate edit pane** (`performAnimateEditPane.js`) — opens the viewer for an animation, subscribes to its timescale and edit-state binding keys.
 
@@ -686,6 +692,10 @@ Manages pulse bucket membership and bucket CRUD. Payload is a `PulseAssignComman
 **`pulse:control`** — controller -> hub:
 
 Manages pulse setups and selection. Payload is a `PulseControlCommand` (`selectSetup`, `createSetup`, `deleteSetup`, `renameSetup`, `setSetupBpm`, `setSetupSlotCount`, `assignSlotBucket`). Setup changes are pushed as `projectPatch` key `pulses`; `selectSetup` drives `PulseManager` and subsequent `hub:status` (`kind: 'pulse'`) ticks.
+
+**`pulse:tap`** — controller -> hub:
+
+Live tap tempo for the active pulse setup. Payload `{ setupGuid, atMs? }`. Hub smooths measured BPM and debounces durable `setSetupBpm`.
 
 **`action:trigger`** — controller -> hub:
 

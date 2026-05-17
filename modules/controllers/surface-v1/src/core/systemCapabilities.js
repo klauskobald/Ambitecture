@@ -177,3 +177,15 @@ export function resolveDefaultPerformTypes () {
   if (!type || !displayType) return null
   return { type, displayType }
 }
+
+/** @typedef {{ tapTempo?: { minBpm?: number, maxBpm?: number, minTaps?: number, windowMs?: number, smoothing?: number, persistDebounceMs?: number } }} PulseCapabilitiesConfig */
+
+/**
+ * @returns {PulseCapabilitiesConfig}
+ */
+export function getPulseConfig () {
+  if (!_caps || typeof _caps.pulse !== 'object' || Array.isArray(_caps.pulse)) {
+    return {}
+  }
+  return /** @type {PulseCapabilitiesConfig} */ (_caps.pulse)
+}

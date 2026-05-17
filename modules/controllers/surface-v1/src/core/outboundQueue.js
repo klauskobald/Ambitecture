@@ -180,6 +180,19 @@ export function sendPulseControlCommand (command) {
   }))
 }
 
+/** @param {{ setupGuid: string, atMs?: number }} payload */
+export function sendPulseTap (payload) {
+  if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation)
+    return
+  activeWs.send(JSON.stringify({
+    message: {
+      type: 'pulse:tap',
+      location: activeLocation,
+      payload
+    }
+  }))
+}
+
 /** @param {string} key */
 export function sendBindingSubscribe (key) {
   if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation) return

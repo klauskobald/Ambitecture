@@ -47,9 +47,6 @@ export class PulseManager {
   }
 
   /**
-   * Snapshot for controller register / reconnect.
-   */
-  /**
    * Re-read the active setup and buckets from project YAML after `pulse:assign` / `pulse:control`.
    */
   syncActiveSetupFromProject(): void {

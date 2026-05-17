@@ -35,6 +35,8 @@ import { PulseBucketAssignManager } from './pulse/PulseBucketAssignManager';
 import { PulseAssignHandler } from './handlers/PulseAssignHandler';
 import { PulseSetupManager } from './pulse/PulseSetupManager';
 import { PulseControlHandler } from './handlers/PulseControlHandler';
+import { PulseTapHandler } from './handlers/PulseTapHandler';
+import { parsePulseTapTempoConfig } from './pulse/PulseTapTempoConfig';
 
 const serverConfig = new Config('server');
 const systemConfig = new Config('system', true);
@@ -314,6 +316,16 @@ router.register('pulse:control', new PulseControlHandler(
   registry,
   pulseSetupManager,
   pulseManager,
+  projectManager,
+));
+const pulseTapTempoConfig = parsePulseTapTempoConfig(
+  systemConfig.getOrDefault<unknown>('pulse', null),
+);
+router.register('pulse:tap', new PulseTapHandler(
+  registry,
+  pulseTapTempoConfig,
+  pulseManager,
+  pulseSetupManager,
   projectManager,
 ));
 pulseManager.setActionTriggerCallback(actionGuid => {

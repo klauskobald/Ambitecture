@@ -15,6 +15,11 @@ import {
   subscribePerformIntentFilter,
   togglePerformIntentFilter
 } from '../core/performIntentFilter.js'
+import {
+  createPulseTapButton,
+  mountPulseTapGlobalShortcut
+} from '../edit/components/PulseTapButton.js'
+import { resolvePulseTapSetupGuid } from '../core/pulseTapResolve.js'
 
 /** @typedef {'control' | 'pulse' | 'animate' | string} PerformSubpaneId */
 
@@ -44,6 +49,11 @@ export class PerformSubnavShell {
     this._subnav = document.createElement('nav')
     this._subnav.className = 'perform-subnav'
     this._subnav.setAttribute('aria-label', 'Perform tools')
+
+    this._tapBtn = createPulseTapButton({
+      resolveSetupGuid: resolvePulseTapSetupGuid,
+      className: 'perform-pulse-tap-btn perform-subnav-tap'
+    })
 
     this._subnavToggle = document.createElement('button')
     this._subnavToggle.type = 'button'
@@ -106,6 +116,7 @@ export class PerformSubnavShell {
     this._pluginNavMount.className = 'perform-subnav-plugins'
     this._pluginNavMount.setAttribute('aria-hidden', 'false')
 
+    this._subnav.appendChild(this._tapBtn)
     this._subnav.appendChild(this._subnavToggle)
     this._subnav.appendChild(this._filterChip)
     this._subnav.appendChild(subnavFill)
@@ -176,6 +187,8 @@ export class PerformSubnavShell {
         this.setSubpane(id)
       })
     }
+
+    mountPulseTapGlobalShortcut(resolvePulseTapSetupGuid)
 
     this._rebuildPluginSlots()
   }

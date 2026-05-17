@@ -127,7 +127,12 @@ export class RegisterHandler implements MessageHandler {
       const capabilitiesRaw = this.systemConfig.getOrDefault<unknown>('systemCapabilities', null);
       if (capabilitiesRaw !== null) {
         const capabilities = resolveRuntimeReferences(capabilitiesRaw);
-        ws.send(JSON.stringify({ message: { type: 'systemCapabilities', payload: mergeAnimatorDescriptors(capabilities) } }));
+        const pulseCfg = this.systemConfig.getOrDefault<unknown>('pulse', null);
+        const mergedCaps =
+          pulseCfg !== null && typeof pulseCfg === 'object' && !Array.isArray(pulseCfg)
+            ? { ...(mergeAnimatorDescriptors(capabilities) as Record<string, unknown>), pulse: pulseCfg }
+            : mergeAnimatorDescriptors(capabilities);
+        ws.send(JSON.stringify({ message: { type: 'systemCapabilities', payload: mergedCaps } }));
         Logger.info(`[register] pushed systemCapabilities to controller ${guid}`);
       }
     }

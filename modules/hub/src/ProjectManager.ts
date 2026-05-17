@@ -219,9 +219,11 @@ export interface PulseSetup {
   slots: PulseSlot[];
 }
 
+export type PulseSyncRestartMode = 'never' | 'bar' | 'onset';
+
 export interface PulseSyncYamlConfig {
   /** Which sync kinds reset pulse to slot 0 before the next aligned tick. */
-  restart?: 'never' | 'bar' | 'onset';
+  restart?: PulseSyncRestartMode;
   /** BPM blend toward analyser tempo per sync (0–1). */
   lerp?: number;
 }

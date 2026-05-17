@@ -43,6 +43,12 @@ function isPulseControlCommand(payload: unknown): payload is PulseControlCommand
         && p['setupGuid'].length > 0
         && typeof p['slotIdx'] === 'number'
         && typeof p['active'] === 'boolean';
+    case 'setSyncConfig':
+      return (p['restart'] === undefined
+          || p['restart'] === 'never'
+          || p['restart'] === 'bar'
+          || p['restart'] === 'onset')
+        && (p['lerp'] === undefined || typeof p['lerp'] === 'number');
     default:
       return false;
   }

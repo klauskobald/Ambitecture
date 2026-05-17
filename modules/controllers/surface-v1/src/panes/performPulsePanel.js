@@ -11,6 +11,7 @@ import {
 } from '../core/pulsePlayRegistry.js'
 import { formatPulseBpmDisplay } from '../core/pulseFormat.js'
 import { createPulseEditPane } from './performPulseEditPane.js'
+import { createPerformPulseSyncColumn } from './performPulseSyncColumn.js'
 import { prompt as modalPrompt } from '../core/Modal.js'
 
 /**
@@ -70,12 +71,18 @@ export function createPerformPulsePanel () {
   list.setAttribute('role', 'list')
 
   listView.appendChild(list)
-  panel.appendChild(listView)
+
+  const main = document.createElement('div')
+  main.className = 'perform-pulse-main'
+  const { el: syncCol, refresh: refreshSyncCol } = createPerformPulseSyncColumn()
+  main.appendChild(syncCol)
+  main.appendChild(listView)
+  panel.appendChild(main)
 
   const { el: editPaneEl, open: openEditPane } = createPulseEditPane({
     onClose: () => {
       editPaneEl.hidden = true
-      listView.hidden = false
+      main.hidden = false
     }
   })
   panel.appendChild(editPaneEl)
@@ -159,7 +166,7 @@ export function createPerformPulsePanel () {
     editBtn.addEventListener('click', () => {
       const record = projectGraph.getPulseSetup(guid)
       if (!record) return
-      listView.hidden = true
+      main.hidden = true
       openEditPane(record)
     })
 
@@ -244,8 +251,14 @@ export function createPerformPulsePanel () {
     list.appendChild(footer)
   }
 
-  projectGraph.subscribe(['pulses'], renderList)
+  function onPulsesChanged () {
+    refreshSyncCol()
+    renderList()
+  }
+
+  projectGraph.subscribe(['pulses'], onPulsesChanged)
   subscribePulsePlayState(syncAllRowStates)
+  refreshSyncCol()
   renderList()
 
   return { panel }

@@ -851,6 +851,71 @@
 
 /* ── Perform → Pulse ─────────────────────────────────────────────────────── */
 
+.perform-subpane--pulse {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.perform-pulse-main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: row;
+  align-items: stretch;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.perform-pulse-sync-col {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: min(9.5rem, 38vw);
+  padding: 0.5rem 0.65rem;
+  border-right: 1px solid var(--color-border, rgba(255, 255, 255, 0.12));
+  overflow-y: auto;
+}
+
+.perform-pulse-sync-col__title {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.perform-pulse-sync-col__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.perform-pulse-sync-col__label {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+}
+
+.perform-pulse-sync-col__pills {
+  flex-wrap: wrap;
+}
+
+.perform-pulse-sync-col__lerp {
+  display: flex;
+  justify-content: center;
+  padding-top: 0.25rem;
+}
+
+.perform-pulse-sync-col__lerp-knob {
+  width: 4.5rem;
+  height: 4.5rem;
+}
+
+.perform-pulse-sync-col__lerp-knob .quick-panel-knob__caption {
+  display: none;
+}
+
 .perform-pulse-list-view {
   display: flex;
   flex-direction: column;

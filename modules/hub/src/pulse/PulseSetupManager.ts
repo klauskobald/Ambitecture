@@ -3,6 +3,7 @@ import {
   ProjectManager,
   PulseSetup,
   PulseSlot,
+  PulseSyncRestartMode,
 } from '../ProjectManager';
 import { Logger } from '../Logger';
 
@@ -20,7 +21,8 @@ export type PulseControlCommand =
   | { command: 'setSetupBpm'; setupGuid: string; bpm: number }
   | { command: 'setSetupSlotCount'; setupGuid: string; count: number }
   | { command: 'assignSlotBucket'; setupGuid: string; slotIdx: number; bucketGuid: string | null }
-  | { command: 'setSlotActive'; setupGuid: string; slotIdx: number; active: boolean };
+  | { command: 'setSlotActive'; setupGuid: string; slotIdx: number; active: boolean }
+  | { command: 'setSyncConfig'; restart?: PulseSyncRestartMode; lerp?: number };
 
 export type PulseControlResult = {
   pulsesChanged: boolean;
@@ -49,6 +51,8 @@ export class PulseSetupManager {
         return this.assignSlotBucket(command.setupGuid, command.slotIdx, command.bucketGuid);
       case 'setSlotActive':
         return this.setSlotActive(command.setupGuid, command.slotIdx, command.active);
+      case 'setSyncConfig':
+        return this.setSyncConfig(command.restart, command.lerp);
     }
   }
 
@@ -204,8 +208,31 @@ export class PulseSetupManager {
     return { pulsesChanged: true, setupGuid };
   }
 
+  private setSyncConfig(
+    restart?: PulseSyncRestartMode,
+    lerp?: number,
+  ): PulseControlResult {
+    const config = this.projectManager.ensurePulsesConfig();
+    const prev = config.sync ?? {};
+    const next = { ...prev };
+    if (restart !== undefined) {
+      next.restart = restart;
+    }
+    if (lerp !== undefined) {
+      next.lerp = this.clampLerp(lerp);
+    }
+    config.sync = next;
+    this.persistPulses();
+    return { pulsesChanged: true };
+  }
+
   private persistPulses(): void {
     this.projectManager.setProjectData('pulses', this.projectManager.getPulsesWirePayload());
+  }
+
+  private clampLerp(lerp: number): number {
+    if (!Number.isFinite(lerp)) return 0.35;
+    return Math.min(1, Math.max(0.1, lerp));
   }
 
   private clampBpm(bpm: number): number {

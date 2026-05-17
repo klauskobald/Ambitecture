@@ -442,6 +442,7 @@ Hub applies action changes via `graph:delta` and pushes **`projectPatch`** `{ ke
 - `setSetupSlotCount` — `{ setupGuid, count }`; resizes `slots[]` (preserves leading bucket assignments)
 - `assignSlotBucket` — `{ setupGuid, slotIdx, bucketGuid | null }`
 - `setSlotActive` — `{ setupGuid, slotIdx, active }`; when `active` is true, slot fires on pulse tick (`active: true` in YAML); omitted/false = silent slot
+- `setSyncConfig` — `{ restart?: "never" | "bar" | "onset", lerp?: number }`; updates durable `pulses.sync` in project YAML (music-analyser phase sync reads this block)
 
 Hub pushes **`projectPatch`** `{ key: "pulses", data: PulsesConfig }` to all controllers on setup mutations. Surface Perform → **Pulse** subpane (`performPulsePanel.js`, `performPulseEditPane.js`): `sendPulseControlCommand(command)`; live slot meter from `hub:status` via `pulsePlayRegistry.js`.
 

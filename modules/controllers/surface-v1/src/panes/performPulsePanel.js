@@ -17,12 +17,14 @@ import { prompt as modalPrompt } from '../core/Modal.js'
  * @param {string} setupGuid
  * @param {number} slotsTotal
  * @param {number} slotIdx
+ * @param {number} bpm
  * @returns {HTMLElement}
  */
-function buildSlotMeter (setupGuid, slotsTotal, slotIdx) {
+function buildSlotMeter (setupGuid, slotsTotal, slotIdx, bpm) {
   const meter = document.createElement('div')
   meter.className = 'perform-pulse-meter'
   meter.setAttribute('aria-label', `Pulse slots for ${setupGuid}`)
+  meter.style.setProperty('--pulse-beat-period', `${pulseBeatPeriodMs(bpm)}ms`)
   if (slotsTotal <= 0) return meter
   for (let i = 0; i < slotsTotal; i += 1) {
     const block = document.createElement('span')
@@ -34,6 +36,48 @@ function buildSlotMeter (setupGuid, slotsTotal, slotIdx) {
     meter.appendChild(block)
   }
   return meter
+}
+
+/**
+ * @param {number} bpm
+ * @returns {number}
+ */
+function pulseBeatPeriodMs (bpm) {
+  return typeof bpm === 'number' && Number.isFinite(bpm) && bpm > 0
+    ? (60 / bpm) * 1000
+    : 500
+}
+
+/**
+ * @param {HTMLElement} meter
+ * @param {number} slotsTotal
+ * @param {number} slotIdx
+ * @param {number} bpm
+ */
+function updateSlotMeter (meter, slotsTotal, slotIdx, bpm) {
+  meter.style.setProperty('--pulse-beat-period', `${pulseBeatPeriodMs(bpm)}ms`)
+  const blocks = meter.querySelectorAll('.perform-pulse-meter__slot')
+  if (blocks.length !== slotsTotal) {
+    meter.replaceChildren()
+    for (let i = 0; i < slotsTotal; i += 1) {
+      const block = document.createElement('span')
+      block.className = 'perform-pulse-meter__slot'
+      if (i === slotIdx) {
+        block.classList.add('perform-pulse-meter__slot--current')
+      }
+      block.setAttribute('aria-hidden', 'true')
+      meter.appendChild(block)
+    }
+    return
+  }
+  for (let i = 0; i < blocks.length; i += 1) {
+    const block = blocks[i]
+    if (!(block instanceof HTMLElement)) continue
+    block.classList.toggle(
+      'perform-pulse-meter__slot--current',
+      i === slotIdx
+    )
+  }
 }
 
 /**
@@ -115,16 +159,30 @@ export function createPerformPulsePanel () {
     }
     const statusHost = rowEl.querySelector('.perform-pulse-row__status')
     if (!statusHost) return
-    statusHost.replaceChildren()
     if (status.isActive && status.slotsTotal > 0) {
-      statusHost.appendChild(
-        buildSlotMeter(guid, status.slotsTotal, status.slotIdx)
-      )
+      let meter = statusHost.querySelector('.perform-pulse-meter')
+      if (!(meter instanceof HTMLElement)) {
+        statusHost.replaceChildren()
+        meter = buildSlotMeter(
+          guid,
+          status.slotsTotal,
+          status.slotIdx,
+          status.bpm
+        )
+        statusHost.appendChild(meter)
+      } else {
+        const stray = statusHost.querySelector('.perform-pulse-row__status-text')
+        if (stray) stray.remove()
+        updateSlotMeter(meter, status.slotsTotal, status.slotIdx, status.bpm)
+      }
     } else if (status.message) {
+      statusHost.replaceChildren()
       const text = document.createElement('span')
       text.className = 'perform-pulse-row__status-text'
       text.textContent = status.message
       statusHost.appendChild(text)
+    } else {
+      statusHost.replaceChildren()
     }
   }
 

@@ -11,7 +11,7 @@ import { InputAssignManager } from '../edit/InputAssignManager.js'
 /**
  * Edit pane for a single animation record.
  * Positioned absolute over the full pane-host (covers subnav).
- * Top row: back button | name label | perform assign | target intent.
+ * Top row: back | runmode + name | input assign | target intent | delete.
  * Body: content fields from systemCapabilities display.
  *
  * @param {{ onClose: () => void }} opts
@@ -36,13 +36,8 @@ export function createAnimationEditPane ({ onClose }) {
     onClose()
   })
 
-  const nameLabel = document.createElement('button')
-  nameLabel.type = 'button'
-  nameLabel.className = 'perform-animate-edit__name'
-  nameLabel.title = 'Edit animation name'
-
-  const assignHost = document.createElement('div')
-  assignHost.className = 'perform-animate-edit__assign'
+  const nameCluster = document.createElement('div')
+  nameCluster.className = 'perform-animate-edit__name-cluster'
 
   const caps = getCapabilities()
   const commonCaps = caps && !Array.isArray(caps.animationCommonProperties) ? caps.animationCommonProperties : null
@@ -50,20 +45,21 @@ export function createAnimationEditPane ({ onClose }) {
   const runmodeOptions = Array.isArray(runmodeDescriptor?.options) ? runmodeDescriptor.options : []
   const runmodeDefault = typeof runmodeDescriptor?.defaultValue === 'string' ? runmodeDescriptor.defaultValue : runmodeOptions[0]
 
-  const runmodeGroup = document.createElement('div')
-  runmodeGroup.className = 'prop-pills'
+  const runmodeBtn = document.createElement('button')
+  runmodeBtn.type = 'button'
+  runmodeBtn.className = 'perform-animate-edit__runmode'
+  runmodeBtn.title = 'Run mode'
 
-  /** @type {Map<string, HTMLButtonElement>} */
-  const runmodePillBtns = new Map()
-  for (const opt of runmodeOptions) {
-    const btn = document.createElement('button')
-    btn.type = 'button'
-    btn.className = 'prop-pill intent-toggle'
-    btn.textContent = opt.charAt(0).toUpperCase() + opt.slice(1)
-    btn.dataset.value = opt
-    runmodeGroup.appendChild(btn)
-    runmodePillBtns.set(opt, btn)
-  }
+  const nameLabel = document.createElement('button')
+  nameLabel.type = 'button'
+  nameLabel.className = 'perform-animate-edit__name'
+  nameLabel.title = 'Edit animation name'
+
+  nameCluster.appendChild(runmodeBtn)
+  nameCluster.appendChild(nameLabel)
+
+  const assignHost = document.createElement('div')
+  assignHost.className = 'perform-animate-edit__assign'
 
   const intentSpan = document.createElement('span')
   intentSpan.className = 'perform-animate-edit__intent'
@@ -74,9 +70,8 @@ export function createAnimationEditPane ({ onClose }) {
   deleteBtn.textContent = '❌'
 
   topRow.appendChild(backBtn)
-  topRow.appendChild(nameLabel)
+  topRow.appendChild(nameCluster)
   topRow.appendChild(assignHost)
-  topRow.appendChild(runmodeGroup)
   topRow.appendChild(intentSpan)
   topRow.appendChild(deleteBtn)
 
@@ -94,6 +89,21 @@ export function createAnimationEditPane ({ onClose }) {
   /** @type {Record<string, unknown> | null} */
   let lastOpenRecord = null
 
+  /** @param {string} opt */
+  function runmodeDisplayLabel (opt) {
+    return opt.charAt(0).toUpperCase() + opt.slice(1)
+  }
+
+  function applyRunmodeLabel () {
+    if (!lastOpenRecord) return
+    const rm = runmodeOptions.includes(String(lastOpenRecord.runmode))
+      ? String(lastOpenRecord.runmode)
+      : runmodeDefault
+    runmodeBtn.textContent = runmodeDisplayLabel(rm)
+    runmodeBtn.className = `perform-animate-edit__runmode perform-animate-edit__runmode--${rm}`
+    runmodeBtn.title = `Run mode: ${runmodeDisplayLabel(rm)}`
+  }
+
   function renderAssignRow () {
     if (!lastOpenRecord || !currentGuid) return
     assignHost.replaceChildren()
@@ -109,8 +119,13 @@ export function createAnimationEditPane ({ onClose }) {
     )
   }
 
-  projectGraph.subscribe(['actions', 'inputs'], () => {
+  projectGraph.subscribe(['actions', 'inputs', 'animations'], () => {
     if (!el.hidden && currentGuid && lastOpenRecord) {
+      const row = projectGraph.getAnimations().get(currentGuid)
+      if (row && typeof row === 'object' && !Array.isArray(row)) {
+        lastOpenRecord.runmode = /** @type {Record<string, unknown>} */ (row).runmode
+      }
+      applyRunmodeLabel()
       renderAssignRow()
     }
   })
@@ -134,22 +149,25 @@ export function createAnimationEditPane ({ onClose }) {
       renderAssignRow()
     }
 
-    const applyRunmodePills = () => {
-      const rm = runmodeOptions.includes(String(record.runmode)) ? String(record.runmode) : runmodeDefault
-      for (const [opt, btn] of runmodePillBtns) {
-        const active = opt === rm
-        btn.classList.toggle('prop-pill--active', active)
-        btn.classList.toggle('intent-toggle--enabled', active)
-      }
+    applyRunmodeLabel()
+    runmodeBtn.onclick = async () => {
+      const current = runmodeOptions.includes(String(record.runmode))
+        ? String(record.runmode)
+        : runmodeDefault
+      const choice = await Modal.pickChoice(
+        'Run mode',
+        runmodeOptions.map(opt => ({
+          value: opt,
+          label: runmodeDisplayLabel(opt)
+        })),
+        { selected: current }
+      )
+      if (!choice || choice === current) return
+      sendAnimationPatch(currentGuid, { runmode: choice })
+      record.runmode = choice
+      applyRunmodeLabel()
+      renderAssignRow()
     }
-    for (const [opt, btn] of runmodePillBtns) {
-      btn.onclick = () => {
-        sendAnimationPatch(currentGuid, { runmode: opt })
-        record.runmode = opt
-        applyRunmodePills()
-      }
-    }
-    applyRunmodePills()
 
     const intentGuid = String(record.targetIntent ?? record.intent ?? '')
     intentSpan.textContent = resolveIntentName(intentGuid)

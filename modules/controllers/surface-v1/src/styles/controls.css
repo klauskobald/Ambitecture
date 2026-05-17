@@ -743,6 +743,44 @@
   outline: none;
 }
 
+.perform-animate-edit__name-cluster {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.perform-animate-edit__runmode {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0 0.15rem;
+  border: none;
+  background: transparent;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.8rem;
+  font-family: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.perform-animate-edit__runmode--auto {
+  color: #5b9fd4;
+}
+
+.perform-animate-edit__runmode--manual {
+  color: #e8923a;
+}
+
+.perform-animate-edit__runmode:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 .perform-animate-edit__name {
   flex: 1 1 0;
   min-width: 0;

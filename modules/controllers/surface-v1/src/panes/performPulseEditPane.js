@@ -38,6 +38,63 @@ function resolveBucketLabel (bucketGuid) {
 }
 
 /**
+ * @param {unknown} action
+ * @returns {{ text: string, kind: 'scene' | 'animation' | 'other' } | null}
+ */
+function chipForPulseBucketAction (action) {
+  if (!action || typeof action !== 'object' || Array.isArray(action)) {
+    return null
+  }
+  const row = /** @type {Record<string, unknown>} */ (action)
+  const raw = row.execute
+  const ex =
+    raw && typeof raw === 'object' && !Array.isArray(raw)
+      ? /** @type {Record<string, unknown>} */ (raw)
+      : null
+  if (ex?.type === 'scene' && typeof ex.guid === 'string' && ex.guid.length > 0) {
+    const scene = projectGraph.getScenesData().find(s => s.guid === ex.guid)
+    const text =
+      typeof scene?.name === 'string' && scene.name.length > 0
+        ? scene.name
+        : ex.guid
+    return { text, kind: 'scene' }
+  }
+  if (
+    ex?.type === 'animation' &&
+    typeof ex.guid === 'string' &&
+    ex.guid.length > 0
+  ) {
+    const anim = projectGraph.getAnimations().get(ex.guid)
+    const text =
+      typeof anim?.name === 'string' && anim.name.length > 0
+        ? anim.name
+        : ex.guid
+    return { text, kind: 'animation' }
+  }
+  const name = typeof row.name === 'string' ? row.name.trim() : ''
+  if (name.length > 0) {
+    return { text: name, kind: 'other' }
+  }
+  return null
+}
+
+/**
+ * @param {Record<string, unknown>} bucket
+ * @returns {Array<{ text: string, kind: 'scene' | 'animation' | 'other' }>}
+ */
+function bucketMemberChips (bucket) {
+  const chips = []
+  const guids = Array.isArray(bucket.actions) ? bucket.actions : []
+  const actions = projectGraph.getActions()
+  for (const ag of guids) {
+    if (typeof ag !== 'string') continue
+    const chip = chipForPulseBucketAction(actions.get(ag))
+    if (chip) chips.push(chip)
+  }
+  return chips
+}
+
+/**
  * Edit pane for a single pulse setup (BPM, slot count, slot→bucket mapping).
  *
  * @param {{ onClose: () => void }} opts
@@ -313,12 +370,68 @@ export function createPulseEditPane ({ onClose }) {
       await Modal.warn('No pulse buckets defined yet.')
       return
     }
-    const options = buckets.map(b => ({
-      value: String(b.guid ?? ''),
-      label:
-        typeof b.name === 'string' && b.name ? b.name : String(b.guid ?? '')
-    }))
-    const choice = await pickChoice('Assign bucket to slot', options)
+    const setup = projectGraph.getPulseSetup(currentGuid)
+    const slots = Array.isArray(setup?.slots) ? setup.slots : []
+    const slot = slots[slotIdx]
+    const selectedBucketGuid =
+      slot &&
+      typeof slot === 'object' &&
+      !Array.isArray(slot) &&
+      typeof slot.bucket === 'string' &&
+      slot.bucket.length > 0
+        ? slot.bucket
+        : null
+
+    const options = buckets.map(b => {
+      const guid = String(b.guid ?? '')
+      const name =
+        typeof b.name === 'string' && b.name ? b.name : guid
+      const members = bucketMemberChips(b)
+      const summary =
+        members.length > 0
+          ? members.map(c => c.text).join(', ')
+          : 'empty'
+      return {
+        value: guid,
+        label: name,
+        title: `${name}: ${summary}`
+      }
+    })
+
+    const choice = await pickChoice('Assign bucket to slot', options, {
+      selected: selectedBucketGuid,
+      displayRowFn: (row, option, { button }) => {
+        row.classList.add('pulse-bucket-pick-row')
+        button.classList.add('pulse-bucket-pick-row__btn')
+        button.style.justifyContent = 'flex-start'
+        button.style.textAlign = 'left'
+
+        const bucket = buckets.find(
+          b => String(b.guid ?? '') === option.value
+        )
+        const members = bucket ? bucketMemberChips(bucket) : []
+
+        const chipsEl = document.createElement('div')
+        chipsEl.className = 'pulse-bucket-pick-row__chips'
+        chipsEl.setAttribute('aria-hidden', 'true')
+
+        if (members.length === 0) {
+          const chip = document.createElement('span')
+          chip.className = 'pulse-bucket-chip pulse-bucket-chip--empty'
+          chip.textContent = 'empty'
+          chipsEl.appendChild(chip)
+        } else {
+          for (const member of members) {
+            const chip = document.createElement('span')
+            chip.className = `pulse-bucket-chip pulse-bucket-chip--${member.kind}`
+            chip.textContent = member.text
+            chipsEl.appendChild(chip)
+          }
+        }
+
+        row.appendChild(chipsEl)
+      }
+    })
     if (choice === null || choice.length === 0) return
     sendPulseControlCommand({
       command: 'assignSlotBucket',

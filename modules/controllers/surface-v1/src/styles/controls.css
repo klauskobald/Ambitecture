@@ -1347,6 +1347,54 @@
   font-size: 0.85rem;
 }
 
+/* Assign-bucket modal (pulse edit pane) */
+.pulse-bucket-pick-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.28rem;
+}
+
+.pulse-bucket-pick-row__btn {
+  width: 100%;
+}
+
+.pulse-bucket-pick-row__chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.22rem 0.28rem;
+  padding: 0 0.4rem 0.15rem;
+  pointer-events: none;
+}
+
+.pulse-bucket-chip {
+  display: inline-block;
+  font-size: 0.62rem;
+  line-height: 1.25;
+  padding: 0.1rem 0.38rem;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-raised);
+  color: var(--color-text-muted);
+  max-width: 100%;
+}
+
+.pulse-bucket-chip--scene {
+  border-color: rgba(91, 159, 212, 0.5);
+  color: #5b9fd4;
+}
+
+.pulse-bucket-chip--animation {
+  border-color: rgba(232, 146, 58, 0.5);
+  color: #e8923a;
+}
+
+.pulse-bucket-chip--empty {
+  opacity: 0.55;
+  font-style: italic;
+}
+
 .perform-pulse-edit__slots {
   display: flex;
   flex-direction: column;

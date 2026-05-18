@@ -63,7 +63,22 @@
   padding: 0.35rem;
 }
 
-/* Stage + stage-edit pair: mode bar row pushes sim down (not an overlay) */
+/* Intent params: single column like surface-v1 drawer (not multi-column grid) */
+
+.stage-edit-params-overlay__body .prop-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.stage-edit-params-overlay__body .prop-panel-section--perform-reset,
+.stage-edit-params-overlay__body .prop-row {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Stage + stage-edit pair: mode bar sits below simulator inside stage mount wrap */
 
 .layout-leaf--stage-pair {
   display: flex;
@@ -71,9 +86,27 @@
   min-height: 0;
 }
 
+.layout-leaf-pane-mount-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+.layout-leaf-pane-mount-wrap[hidden] {
+  display: none !important;
+}
+
+.layout-leaf-pane-mount-wrap > .layout-leaf-pane-mount {
+  flex: 1 1 0;
+  min-height: 0;
+  height: auto;
+}
+
 .layout-stage-edit-mode-bar {
   flex: 0 0 auto;
-  border-bottom: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-border);
   background: var(--color-bg-raised);
 }
 
@@ -85,10 +118,6 @@
   flex: 1 1 0;
   min-height: 0;
   overflow: hidden;
-}
-
-.layout-leaf-body--stage-pair .layout-leaf-pane-mount[data-pane-id='stage'] {
-  height: 100%;
 }
 
 /* Edit mode bar buttons (from surface-v1) */

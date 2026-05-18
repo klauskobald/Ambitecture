@@ -76,9 +76,9 @@ export class IntentParamsHost {
     if (!this._ensureOverlay() || !this._body || !this._title || !this._overlayEl) return
 
     this._lastDescriptors = descriptors
-    this._rebuildPanel(guids)
     this._overlayEl.hidden = false
     this._overlayEl.setAttribute('aria-hidden', 'false')
+    this._rebuildPanel(guids)
 
     if (!this._selectionUnsub) {
       this._selectionUnsub = selectionState.subscribe(() =>

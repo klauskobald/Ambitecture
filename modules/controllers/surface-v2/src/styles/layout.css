@@ -152,7 +152,8 @@
   position: relative;
 }
 
-.layout-leaf-body:has(.layout-leaf-pane-mount[data-pane-id='stage']) {
+.layout-leaf-body:has(.layout-leaf-pane-mount[data-pane-id='stage']),
+.layout-leaf-body:has(.layout-leaf-pane-mount-wrap[data-pane-id='stage']) {
   overflow: hidden;
 }
 

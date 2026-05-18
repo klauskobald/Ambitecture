@@ -15,7 +15,8 @@ import {
 /**
  * @typedef {object} LeafPaneEntry
  * @property {import('./paneRendererRegistry.js').PaneRenderer} instance
- * @property {HTMLElement} mountEl
+ * @property {HTMLElement} mountEl visibility root (wrap when chrome sits under a mount)
+ * @property {HTMLElement} [paneMountEl] inner mount passed to PaneRenderer.mount
  * @property {boolean} mounted
  */
 
@@ -257,11 +258,55 @@ function buildLeaf (node, nodePath) {
   }
 
   leaf.appendChild(header)
-  if (leafChromeRowEl) leaf.appendChild(leafChromeRowEl)
+  if (
+    leafChromeRowEl &&
+    !leafChrome?.chromeUnderMountPaneId
+  ) {
+    leaf.appendChild(leafChromeRowEl)
+  }
   leaf.appendChild(body)
   applyLayoutTags(leaf, node.tags)
   activateLeafPane(leaf, node.panes[0])
   return leaf
+}
+
+/**
+ * @param {LeafState} state
+ * @param {string} paneId
+ * @returns {LeafPaneEntry}
+ */
+function ensurePaneMount (state, paneId) {
+  let entry = state.cache.get(paneId)
+  if (entry) return entry
+
+  const paneMount = document.createElement('div')
+  paneMount.className = 'layout-leaf-pane-mount'
+  paneMount.dataset.paneId = paneId
+
+  const chromeUnderMount =
+    state.leafChrome?.chromeUnderMountPaneId === paneId && state.leafChromeRowEl
+
+  /** @type {HTMLElement} */
+  let mountRoot = paneMount
+  if (chromeUnderMount) {
+    const wrap = document.createElement('div')
+    wrap.className = 'layout-leaf-pane-mount-wrap'
+    wrap.dataset.paneId = paneId
+    wrap.appendChild(paneMount)
+    wrap.appendChild(state.leafChromeRowEl)
+    mountRoot = wrap
+  }
+
+  state.bodyEl.appendChild(mountRoot)
+
+  entry = {
+    instance: createPaneRenderer(paneId),
+    mountEl: mountRoot,
+    ...(chromeUnderMount ? { paneMountEl: paneMount } : {}),
+    mounted: false
+  }
+  state.cache.set(paneId, entry)
+  return entry
 }
 
 /**
@@ -308,29 +353,20 @@ function activateLeafPane (leafEl, paneId) {
     state.leafChromeRowEl &&
     paneId === state.leafChrome.ownerPaneId
   ) {
+    if (state.leafChrome.chromeUnderMountPaneId) {
+      ensurePaneMount(state, state.leafChrome.chromeUnderMountPaneId)
+    }
     state.bodyEl.dataset.activePane = paneId
     state.leafChrome.getRenderer(state.leafChromeRowEl).activate?.()
     return
   }
 
-  let entry = state.cache.get(paneId)
-  if (!entry) {
-    const mountEl = document.createElement('div')
-    mountEl.className = 'layout-leaf-pane-mount'
-    mountEl.dataset.paneId = paneId
-    state.bodyEl.appendChild(mountEl)
-    entry = {
-      instance: createPaneRenderer(paneId),
-      mountEl,
-      mounted: false
-    }
-    state.cache.set(paneId, entry)
-  }
-
+  const entry = ensurePaneMount(state, paneId)
   entry.mountEl.hidden = false
 
+  const paneMountTarget = entry.paneMountEl ?? entry.mountEl
   if (!entry.mounted) {
-    entry.instance.mount(entry.mountEl)
+    entry.instance.mount(paneMountTarget)
     entry.mounted = true
   }
 

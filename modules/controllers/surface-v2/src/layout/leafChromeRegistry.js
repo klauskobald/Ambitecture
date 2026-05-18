@@ -1,12 +1,13 @@
 /**
- * Optional per-pane hooks for chrome between a leaf header and body
- * (e.g. stage-edit mode bar). LayoutManager only calls these adapters.
+ * Optional per-pane hooks for extra chrome (e.g. stage-edit mode bar).
+ * LayoutManager only calls these adapters.
  */
 
 /**
  * @typedef {object} LeafChromeAdapter
  * @property {string} ownerPaneId
  * @property {string} [bodyClass] extra class on .layout-leaf-body when present
+ * @property {string} [chromeUnderMountPaneId] append chrome below this pane mount (not under leaf header)
  * @property {(leafEl: HTMLElement, paneIds: string[]) => HTMLElement} createRow
  * @property {(activePaneId: string) => boolean} isChromeVisible
  * @property {(activePaneId: string, mountPaneId: string, paneIds: string[]) => boolean} keepMountVisible

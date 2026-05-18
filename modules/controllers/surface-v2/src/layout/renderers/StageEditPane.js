@@ -40,6 +40,7 @@ function getParamsHost () {
 /** @type {import('../leafChromeRegistry.js').LeafChromeAdapter} */
 export const stageEditLeafChrome = {
   ownerPaneId: 'stage-edit',
+  chromeUnderMountPaneId: 'stage',
   bodyClass: 'layout-leaf-body--stage-pair',
 
   createRow (leafEl) {

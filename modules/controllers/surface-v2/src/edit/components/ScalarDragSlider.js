@@ -71,6 +71,8 @@ export class ScalarDragSlider {
     this._t = 0
     /** @type {AbortController | null} */
     this._abort = null
+    /** @type {ResizeObserver | null} */
+    this._resizeObserver = null
     /** @type {number | null} */
     this._dragPointerId = null
     /** @type {number} */
@@ -173,6 +175,13 @@ export class ScalarDragSlider {
     track.addEventListener('pointercancel', e => this._onPointerCancel(e), { signal })
     track.addEventListener('keydown', e => this._onKeyDown(e), { signal })
 
+    if (typeof ResizeObserver !== 'undefined') {
+      this._resizeObserver = new ResizeObserver(() => {
+        this._syncVisualFromT()
+      })
+      this._resizeObserver.observe(track)
+    }
+
     return wrapper
   }
 
@@ -188,6 +197,8 @@ export class ScalarDragSlider {
   }
 
   destroy () {
+    this._resizeObserver?.disconnect()
+    this._resizeObserver = null
     this._abort?.abort()
     this._abort = null
     this._wrapper = null

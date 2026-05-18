@@ -1,5 +1,60 @@
 /* Properties drawer, action bar, and property controls */
 
+/* ── Shared buttons (ModalControl name field, etc.) ─────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg-raised);
+  color: var(--color-text);
+  font-size: 0.85rem;
+  font-family: inherit;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn--active {
+  background: var(--color-accent-dim);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* ── Intent param toggles (OFF / Shared / quick panel / pills) ───────────── */
+
+.intent-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-family: inherit;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.intent-toggle--enabled {
+  background: var(--color-accent-dim);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
 /* ── Slide-up drawer ─────────────────────────────────────────────────────── */
 
 .prop-drawer-backdrop {
@@ -159,7 +214,7 @@
   min-height: 24px;
   height: 28px;
   border-radius: 999px;
-  background: var(--color-bg-raised);
+  background: var(--color-bg);
   border: 1px solid var(--color-border);
   cursor: grab;
   outline: none;
@@ -301,6 +356,12 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: left;
+}
+
+.prop-info-text {
+  font-size: 0.85rem;
+  color: var(--color-text);
+  padding: 0.25rem 0;
 }
 
 /* ── Action bar ──────────────────────────────────────────────────────────── */

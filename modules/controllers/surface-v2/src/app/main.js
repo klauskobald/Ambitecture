@@ -3,7 +3,6 @@ import { connectStageHub } from './hubConnection.js'
 import { LayoutManager } from '../layout/LayoutManager.js'
 import { registerPaneRenderer } from '../layout/paneRendererRegistry.js'
 import { initStageCommon } from '../stage/stageCommon.js'
-import { HelloWorldPane } from '../layout/renderers/HelloWorldPane.js'
 import { Simulator2dPane } from '../layout/renderers/Simulator2dPane.js'
 import { StagePane } from '../layout/renderers/StagePane.js'
 import {
@@ -14,9 +13,13 @@ import { ScenesPane } from '../layout/renderers/ScenesPane.js'
 import { ControlPane } from '../layout/renderers/ControlPane.js'
 import { PulsePane } from '../layout/renderers/PulsePane.js'
 import { AnimationPane } from '../layout/renderers/AnimationPane.js'
-
-/** @type {string[]} */
-const PLACEHOLDER_PANE_IDS = ['plugins']
+import {
+  PluginPane,
+  getPluginPaneTabLabel
+} from '../layout/renderers/PluginPane.js'
+import {
+  registerPaneTabLabel
+} from '../layout/paneRendererRegistry.js'
 
 async function main () {
   const appCfg = await loadAppConfig()
@@ -35,9 +38,11 @@ async function main () {
   registerPaneRenderer('control', () => new ControlPane())
   registerPaneRenderer('pulse', () => new PulsePane())
   registerPaneRenderer('animation', () => new AnimationPane())
-  for (const paneId of PLACEHOLDER_PANE_IDS) {
-    registerPaneRenderer(paneId, () => new HelloWorldPane(paneId))
-  }
+  registerPaneRenderer(
+    'plugin',
+    arg => new PluginPane(arg ?? '')
+  )
+  registerPaneTabLabel('plugin', arg => getPluginPaneTabLabel(arg ?? ''))
 
   const toolbar = document.getElementById('layout-toolbar')
   const stage = document.getElementById('layout-stage')

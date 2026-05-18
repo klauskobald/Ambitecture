@@ -1,4 +1,4 @@
-import { createPaneRenderer } from './paneRendererRegistry.js'
+import { createPaneRenderer, getPaneTabLabel } from './paneRendererRegistry.js'
 import { attachSplitResize } from './splitResize.js'
 import { loadActiveLayoutId, saveActiveLayoutId } from './layoutSplitState.js'
 
@@ -221,7 +221,7 @@ function buildLeaf (node, nodePath) {
     const btn = document.createElement('button')
     btn.type = 'button'
     btn.className = 'layout-leaf-toggle'
-    btn.textContent = paneId
+    btn.textContent = getPaneTabLabel(paneId)
     btn.setAttribute('role', 'tab')
     btn.dataset.paneId = paneId
     btn.addEventListener('click', () => activateLeafPane(leaf, paneId))

@@ -1,5 +1,13 @@
 import { connect } from '../core/socket.js'
-import { setSocket, setMinInterval } from '../core/outboundQueue.js'
+import {
+  setSocket,
+  setMinInterval,
+  sendDiscoverySubscribe
+} from '../core/outboundQueue.js'
+import {
+  applyDiscoverySnapshot,
+  applyDiscoveryDelta
+} from '../plugins/discoveryRegistry.js'
 import { projectGraph } from '../core/projectGraph.js'
 import { applyIntentLockFromHub } from '../core/intentLockRegistry.js'
 import { applySystemCapabilities } from '../core/systemCapabilities.js'
@@ -96,6 +104,7 @@ export function connectStageHub (appCfg) {
         })
       )
       resubscribeAll()
+      sendDiscoverySubscribe()
       statusDisplay.info(
         'registered as controller — waiting for config…',
         'connection'
@@ -199,6 +208,17 @@ export function connectStageHub (appCfg) {
         }
         case 'binding:value': {
           applyBindingValue(message.payload)
+          break
+        }
+        case 'discovery:snapshot': {
+          const p = /** @type {Record<string, unknown>} */ (message.payload ?? {})
+          applyDiscoverySnapshot(p.entries)
+          projectGraph.touchDiscovery()
+          break
+        }
+        case 'discovery:delta': {
+          applyDiscoveryDelta(message.payload)
+          projectGraph.touchDiscovery()
           break
         }
       }

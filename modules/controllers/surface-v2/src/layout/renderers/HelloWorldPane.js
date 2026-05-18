@@ -1,4 +1,9 @@
 export class HelloWorldPane {
+  /** @param {string | undefined} [arg] */
+  static getButtonLabel (arg) {
+    return arg ? `Hello ${arg}` : 'Hello'
+  }
+
   /**
    * @param {string} [paneId]
    */

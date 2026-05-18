@@ -16,14 +16,17 @@ import * as statusDisplay from '../app/statusDisplay.js'
  */
 
 /**
- * @typedef {(arg?: string) => PaneRenderer} PaneRendererFactory
+ * @typedef {new (arg?: string) => PaneRenderer} PaneRendererConstructor
  */
 
-/** @type {Map<string, PaneRendererFactory>} */
-const registry = new Map()
+/**
+ * @typedef {object} PaneRendererRegistration
+ * @property {PaneRendererConstructor} Renderer
+ * @property {(arg?: string) => PaneRenderer} create
+ */
 
-/** @type {Map<string, (arg: string | undefined) => string>} */
-const tabLabelByKind = new Map()
+/** @type {Map<string, PaneRendererRegistration>} */
+const registry = new Map()
 
 /**
  * Split catalog pane ids: `plugin:midi-setup-1` → kind `plugin`, arg `midi-setup-1`.
@@ -45,28 +48,29 @@ export function parsePaneSpec (paneId) {
 
 /**
  * @param {string} kind
- * @param {PaneRendererFactory} factory
+ * @param {PaneRendererConstructor} Renderer
+ * @param {(arg?: string) => PaneRenderer} [create]
  */
-export function registerPaneRenderer (kind, factory) {
-  registry.set(kind, factory)
-}
-
-/**
- * @param {string} kind
- * @param {(arg: string | undefined) => string} resolver
- */
-export function registerPaneTabLabel (kind, resolver) {
-  tabLabelByKind.set(kind, resolver)
+export function registerPaneRenderer (kind, Renderer, create) {
+  registry.set(kind, {
+    Renderer,
+    create: create ?? (() => new Renderer())
+  })
 }
 
 /**
  * @param {string} paneId full catalog id (may include `kind:arg`)
  * @returns {string}
  */
-export function getPaneTabLabel (paneId) {
+export function getButtonLabel (paneId) {
   const { kind, arg } = parsePaneSpec(paneId)
-  const resolver = tabLabelByKind.get(kind)
-  if (resolver) return resolver(arg)
+  const entry = registry.get(kind)
+  if (
+    entry &&
+    typeof entry.Renderer.getButtonLabel === 'function'
+  ) {
+    return entry.Renderer.getButtonLabel(arg)
+  }
   return arg !== undefined ? `${kind}:${arg}` : kind
 }
 
@@ -76,13 +80,13 @@ export function getPaneTabLabel (paneId) {
  */
 export function createPaneRenderer (paneId) {
   const { kind, arg } = parsePaneSpec(paneId)
-  const factory = registry.get(kind)
-  if (!factory) {
+  const entry = registry.get(kind)
+  if (!entry) {
     statusDisplay.error(
       `No pane renderer registered for kind "${kind}" (pane "${paneId}").`,
       'layout'
     )
     throw new Error(`No pane renderer for kind "${kind}"`)
   }
-  return factory(arg)
+  return entry.create(arg)
 }

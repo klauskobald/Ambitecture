@@ -1,6 +1,11 @@
 import { SimulatorViewport } from '../../viewport/simulatorViewport.js'
 
 export class Simulator2dPane {
+  /** @param {string | undefined} [_arg] */
+  static getButtonLabel (_arg) {
+    return 'Simulator'
+  }
+
   /**
    * @param {string} simulatorIframeUrl
    */

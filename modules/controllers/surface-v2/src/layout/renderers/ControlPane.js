@@ -4,6 +4,11 @@ import { projectGraph } from '../../core/projectGraph.js'
 import { subscribeAnimationPlayState } from '../../core/animationPlayRegistry.js'
 
 export class ControlPane {
+  /** @param {string | undefined} [_arg] */
+  static getButtonLabel (_arg) {
+    return 'Control'
+  }
+
   constructor () {
     this._host = new PerformControlHost()
     /** @type {HTMLElement | null} */

@@ -1,6 +1,11 @@
 import { createPerformPulsePanel } from '../../perform/performPulsePanel.js'
 
 export class PulsePane {
+  /** @param {string | undefined} [_arg] */
+  static getButtonLabel (_arg) {
+    return 'Pulse'
+  }
+
   constructor () {
     /** @type {HTMLDivElement | null} */
     this._panel = null

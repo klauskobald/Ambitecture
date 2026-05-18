@@ -12,6 +12,13 @@ import { postThemeToIframe } from '../../plugins/themeToIframe.js'
 import { getControllerSurface } from '../../stage/stageCommon.js'
 
 export class PluginPane {
+  /** @param {string | undefined} [pluginGuid] */
+  static getButtonLabel (pluginGuid) {
+    const guid = pluginGuid ?? ''
+    const resolved = resolvePluginByGuid(guid)
+    return resolved?.name ?? guid
+  }
+
   /**
    * @param {string} pluginGuid project `plugins[].guid` (layout arg after `plugin:`)
    */
@@ -125,10 +132,4 @@ export class PluginPane {
     )
     if (this._iframe.src !== next) this._iframe.src = next
   }
-}
-
-/** @param {string} pluginGuid @returns {string} */
-export function getPluginPaneTabLabel (pluginGuid) {
-  const resolved = resolvePluginByGuid(pluginGuid)
-  return resolved?.name ?? pluginGuid
 }

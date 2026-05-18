@@ -19,6 +19,13 @@ export class ControllerSurface {
     this._performHudLayer = null
     /** @type {HTMLElement | null} */
     this._resetWrap = null
+    /** @type {HTMLElement | null} */
+    this._stackEl = null
+  }
+
+  /** @returns {HTMLElement | null} */
+  getStack () {
+    return this._stackEl
   }
 
   /** @returns {OverlayCanvas | null} */
@@ -36,6 +43,7 @@ export class ControllerSurface {
    * @param {HTMLElement} stackEl
    */
   mount (stackEl) {
+    this._stackEl = stackEl
     const canvas = document.createElement('canvas')
     canvas.className = 'layout-stage-overlay'
     canvas.setAttribute('aria-hidden', 'true')

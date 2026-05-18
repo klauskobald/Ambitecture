@@ -2,6 +2,7 @@ import { connect } from '../core/socket.js'
 import { setSocket, setMinInterval } from '../core/outboundQueue.js'
 import { projectGraph } from '../core/projectGraph.js'
 import { applyIntentLockFromHub } from '../core/intentLockRegistry.js'
+import { applySystemCapabilities } from '../core/systemCapabilities.js'
 import { markStageOverlayActivity } from '../stage/stageOverlayHost.js'
 import * as statusDisplay from './statusDisplay.js'
 
@@ -15,6 +16,7 @@ const hubOverlayRedrawTypes = new Set([
   'graph:delta',
   'intents',
   'projectPatch',
+  'systemCapabilities',
   'lock:intent',
   'runtime:update'
 ])
@@ -152,6 +154,11 @@ export function connectStageHub (appCfg) {
           if (typeof pp.key === 'string') {
             projectGraph.applyPatch(pp.key, pp.data)
           }
+          break
+        }
+        case 'systemCapabilities': {
+          applySystemCapabilities(message.payload)
+          projectGraph.notifyListeners()
           break
         }
         case 'lock:intent': {

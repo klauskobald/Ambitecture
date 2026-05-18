@@ -152,6 +152,10 @@
   position: relative;
 }
 
+.layout-leaf-body:has(.layout-leaf-pane-mount[data-pane-id='stage']) {
+  overflow: hidden;
+}
+
 .layout-leaf-pane-mount {
   height: 100%;
   box-sizing: border-box;
@@ -223,15 +227,7 @@
   z-index: var(--overlay-z-index, 1);
 }
 
-.layout-stage-hud-layer {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: calc(var(--overlay-z-index, 1) + 1);
-  overflow: visible;
-}
+/* HUD layer rules live in performHud.css */
 
 .layout-stage-reset-wrap {
   position: absolute;

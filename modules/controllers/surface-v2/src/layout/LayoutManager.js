@@ -1,4 +1,8 @@
 import { createPaneRenderer } from './paneRendererRegistry.js'
+import {
+  resolveLeafChrome,
+  notifyLeafChromeLayoutRebuild
+} from './leafChromeRegistry.js'
 import { attachSplitResize } from './splitResize.js'
 import {
   loadActiveLayoutId,
@@ -21,6 +25,8 @@ import {
  * @property {string | null} activePaneId
  * @property {Map<string, LeafPaneEntry>} cache
  * @property {HTMLElement} bodyEl
+ * @property {import('./leafChromeRegistry.js').LeafChromeAdapter | null} [leafChrome]
+ * @property {HTMLElement | null} [leafChromeRowEl]
  */
 
 /** @type {Record<string, LayoutDefinition> | null} */
@@ -89,6 +95,7 @@ export function select (layoutId) {
   }
 
   syncToolbarPressed(layoutId)
+  notifyLeafChromeLayoutRebuild()
 }
 
 /**
@@ -99,8 +106,27 @@ export function getActiveLayoutId () {
 }
 
 /**
- * @param {string} layoutId
+ * @param {LeafState} state
+ * @param {string} activePaneId
+ * @param {string} paneId
+ * @returns {boolean}
  */
+function isPaneMountVisible (state, activePaneId, paneId) {
+  if (paneId === activePaneId) return true
+  if (state.leafChrome?.keepMountVisible(activePaneId, paneId, state.paneIds)) {
+    return true
+  }
+  return false
+}
+
+function applyLayoutTags (el, tags) {
+  if (!tags || tags.length === 0) return
+  el.dataset.layoutTag = tags.join(' ')
+  for (const tag of tags) {
+    el.classList.add(`layout-tag-host--${tag}`)
+  }
+}
+
 function syncToolbarPressed (layoutId) {
   if (!toolbarEl) return
   for (const btn of toolbarEl.querySelectorAll('.layout-toggle')) {
@@ -180,6 +206,7 @@ function buildBox (node, nodePath, layoutId, axis) {
     }
   }
 
+  applyLayoutTags(box, node.tags)
   return box
 }
 
@@ -200,11 +227,21 @@ function buildLeaf (node, nodePath) {
   const body = document.createElement('div')
   body.className = 'layout-leaf-body'
 
+  const leafChrome = resolveLeafChrome(node.panes)
+  /** @type {HTMLElement | null} */
+  let leafChromeRowEl = null
+  if (leafChrome) {
+    leafChromeRowEl = leafChrome.createRow(leaf, node.panes)
+    if (leafChrome.bodyClass) body.classList.add(leafChrome.bodyClass)
+  }
+
   const state = /** @type {LeafState} */ ({
     paneIds: [...node.panes],
     activePaneId: null,
     cache: new Map(),
-    bodyEl: body
+    bodyEl: body,
+    leafChrome: leafChrome ?? null,
+    leafChromeRowEl
   })
   leafStateByEl.set(leaf, state)
 
@@ -220,7 +257,9 @@ function buildLeaf (node, nodePath) {
   }
 
   leaf.appendChild(header)
+  if (leafChromeRowEl) leaf.appendChild(leafChromeRowEl)
   leaf.appendChild(body)
+  applyLayoutTags(leaf, node.tags)
   activateLeafPane(leaf, node.panes[0])
   return leaf
 }
@@ -237,8 +276,16 @@ function activateLeafPane (leafEl, paneId) {
 
   const prevId = state.activePaneId
   if (prevId) {
-    const prev = state.cache.get(prevId)
-    prev?.instance.deactivate?.()
+    if (
+      state.leafChrome &&
+      state.leafChromeRowEl &&
+      prevId === state.leafChrome.ownerPaneId
+    ) {
+      state.leafChrome.getRenderer(state.leafChromeRowEl).deactivate?.()
+    } else {
+      const prev = state.cache.get(prevId)
+      prev?.instance.deactivate?.()
+    }
   }
 
   state.activePaneId = paneId
@@ -248,8 +295,22 @@ function activateLeafPane (leafEl, paneId) {
     btn.setAttribute('aria-pressed', id === paneId ? 'true' : 'false')
   }
 
+  if (state.leafChromeRowEl && state.leafChrome) {
+    state.leafChromeRowEl.hidden = !state.leafChrome.isChromeVisible(paneId)
+  }
+
   for (const [id, entry] of state.cache) {
-    entry.mountEl.hidden = id !== paneId
+    entry.mountEl.hidden = !isPaneMountVisible(state, paneId, id)
+  }
+
+  if (
+    state.leafChrome &&
+    state.leafChromeRowEl &&
+    paneId === state.leafChrome.ownerPaneId
+  ) {
+    state.bodyEl.dataset.activePane = paneId
+    state.leafChrome.getRenderer(state.leafChromeRowEl).activate?.()
+    return
   }
 
   let entry = state.cache.get(paneId)

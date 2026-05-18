@@ -1,6 +1,11 @@
 import { SimulatorViewport } from '../../viewport/simulatorViewport.js'
 import { ControllerSurface } from '../../stage/controllerSurface.js'
 import { setStageOverlay } from '../../stage/stageOverlayHost.js'
+import {
+  setPerformMode,
+  refreshOverlayPolicy
+} from '../../stage/stageOverlayCoordinator.js'
+import { PerformQuickPanelHud } from '../../perform/performQuickPanelHud.js'
 
 export class StagePane {
   /**
@@ -14,6 +19,8 @@ export class StagePane {
     this._viewport = null
     /** @type {ControllerSurface | null} */
     this._controllerSurface = null
+    /** @type {PerformQuickPanelHud | null} */
+    this._quickHud = null
   }
 
   /** @returns {ControllerSurface | null} */
@@ -42,9 +49,42 @@ export class StagePane {
 
     this._controllerSurface = new ControllerSurface(this._viewport, this._layoutConfig)
     this._controllerSurface.mount(stack)
+
+    const overlay = this._controllerSurface.getOverlay()
+    if (overlay) {
+      setStageOverlay(overlay)
+      refreshOverlayPolicy()
+    }
+  }
+
+  activate () {
+    const overlay = this._controllerSurface?.getOverlay()
+    if (!overlay) return
+
+    setPerformMode()
+
+    const hudLayer = this._controllerSurface?.getPerformHudLayer()
+    if (hudLayer) {
+      try {
+        this._quickHud = new PerformQuickPanelHud(overlay, hudLayer)
+        overlay.setCoactivityCallback(() => {
+          this._quickHud?.markLayoutActivity()
+        })
+        this._quickHud.start()
+      } catch {
+        this._quickHud = null
+      }
+    }
+    overlay.resize()
+    overlay.markRenderActivity()
   }
 
   deactivate () {
-    setStageOverlay(null)
+    const overlay = this._controllerSurface?.getOverlay()
+    overlay?.setCoactivityCallback(null)
+    if (this._quickHud) {
+      this._quickHud.stop()
+      this._quickHud = null
+    }
   }
 }

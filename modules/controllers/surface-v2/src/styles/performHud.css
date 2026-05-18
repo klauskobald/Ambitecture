@@ -1,0 +1,172 @@
+/* Perform quick-panel HUD (ported from surface-v1 controls.css subset) */
+
+.layout-stage-hud-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: calc(var(--overlay-z-index, 1) + 1);
+  overflow: visible;
+}
+
+.quick-panel-hud {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.quick-panel-hud__knobs {
+  display: flex;
+  flex-wrap: nowrap;
+  flex-direction: row;
+  gap: 0.35rem;
+  padding: 0.25rem 0.35rem;
+  border-radius: 10px;
+  background: rgba(10, 10, 10, 0.93);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+}
+
+.quick-panel-knob {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.12rem;
+  min-width: 3.1rem;
+  touch-action: none;
+  transform-origin: center center;
+}
+
+.quick-panel-knob--engaged {
+  z-index: 30;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.55);
+}
+
+.quick-panel-knob--engaged .quick-panel-knob__dial {
+  cursor: grabbing;
+}
+
+.quick-panel-knob--engaged .quick-panel-knob__caption {
+  display: none;
+}
+
+.quick-panel-knob__controls {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.quick-panel-knob__engage-hint {
+  display: none;
+  flex: 0 1 auto;
+  max-width: 4rem;
+  font-size: 0.5rem;
+  line-height: 1.15;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  padding: 2px 4px;
+}
+
+.quick-panel-knob--engaged .quick-panel-knob__engage-hint:not([hidden]) {
+  display: block;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg);
+  padding: 2px 4px;
+}
+
+.quick-panel-knob__caption {
+  font-size: 0.755rem;
+  max-width: 3.8rem;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text);
+}
+
+.quick-panel-knob__dial {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 2px solid var(--color-border);
+  background: radial-gradient(circle at 50% 32%, #2c2c2c, #0f0f0f);
+  cursor: grab;
+  touch-action: none;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.quick-panel-knob--svg .quick-panel-knob__dial {
+  border: none;
+  background: transparent;
+  overflow: visible;
+}
+
+.quick-panel-knob-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  touch-action: none;
+}
+
+.quick-panel-knob-svg__face {
+  fill: #141414;
+  pointer-events: none;
+}
+
+.quick-panel-knob-svg__track {
+  fill: none;
+  stroke: var(--color-border);
+  stroke-width: 5;
+  stroke-linecap: round;
+  opacity: 0.42;
+  pointer-events: none;
+}
+
+.quick-panel-knob-svg__progress {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-width: 5;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.quick-panel-knob-svg__label {
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 500;
+  fill: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.quick-panel-knob-svg__value {
+  font-family: inherit;
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  fill: var(--color-text);
+  pointer-events: none;
+}
+
+.quick-panel-hud .quick-panel-knob-svg__label {
+  display: none;
+}
+
+.quick-panel-hud .quick-panel-knob-svg__value {
+  transform: translateY(-10px);
+}
+
+.quick-panel-knob__dial:active {
+  cursor: grabbing;
+}
+
+.quick-panel-knob__dial:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-accent);
+}

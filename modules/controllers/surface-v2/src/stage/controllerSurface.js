@@ -1,8 +1,6 @@
 import { OverlayCanvas } from '../viewport/overlayCanvas.js'
-import { performPolicy } from '../viewport/interactionPolicies.js'
 import { projectGraph } from '../core/projectGraph.js'
 import { sendSceneActivate } from '../core/outboundQueue.js'
-import { setStageOverlay } from './stageOverlayHost.js'
 
 /**
  * Touch overlay, perform HUD host, and runtime reset chrome above the simulator iframe.
@@ -68,8 +66,6 @@ export class ControllerSurface {
       this._viewport,
       this._layoutConfig
     )
-    this._overlay.setPolicy(performPolicy)
-    setStageOverlay(this._overlay)
 
     const syncRuntimeOverlayResetUi = () => {
       if (!this._resetWrap) return

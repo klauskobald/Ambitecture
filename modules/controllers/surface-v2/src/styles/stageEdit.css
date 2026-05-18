@@ -1,0 +1,128 @@
+/* Tagged layout host for stage-edit params overlay */
+
+.layout-tag-host--stage-edit,
+.layout-vbox[data-layout-tag~='stage-edit'],
+.layout-leaf[data-layout-tag~='stage-edit'] {
+  position: relative;
+}
+
+.stage-edit-params-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  box-sizing: border-box;
+  pointer-events: auto;
+}
+
+.stage-edit-params-overlay[hidden] {
+  display: none !important;
+  pointer-events: none;
+}
+
+.stage-edit-params-overlay__header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.stage-edit-params-overlay__title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stage-edit-params-overlay__close {
+  font: inherit;
+  font-size: 1.25rem;
+  line-height: 1;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.stage-edit-params-overlay__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.35rem;
+}
+
+/* Stage + stage-edit pair: mode bar row pushes sim down (not an overlay) */
+
+.layout-leaf--stage-pair {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.layout-stage-edit-mode-bar {
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-raised);
+}
+
+.layout-stage-edit-mode-bar[hidden] {
+  display: none !important;
+}
+
+.layout-leaf-body--stage-pair {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.layout-leaf-body--stage-pair .layout-leaf-pane-mount[data-pane-id='stage'] {
+  height: 100%;
+}
+
+/* Edit mode bar buttons (from surface-v1) */
+
+.layout-stage-edit-mode-bar .mode-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+}
+
+.layout-stage-edit-mode-bar .btn {
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.layout-stage-edit-mode-bar .btn-mode-toggle {
+  min-width: 7rem;
+  min-height: 2.25rem;
+}
+
+.layout-stage-edit-mode-bar .btn--active {
+  background: var(--color-accent-dim);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.layout-stage-edit-mode-bar .btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}

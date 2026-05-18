@@ -8,6 +8,7 @@ import * as statusDisplay from '../app/statusDisplay.js'
  * @typedef {object} LayoutBoxNode
  * @property {'hbox' | 'vbox'} type
  * @property {boolean} [resizable]
+ * @property {string[]} [tags]
  * @property {LayoutNode[]} children
  */
 
@@ -15,6 +16,7 @@ import * as statusDisplay from '../app/statusDisplay.js'
  * @typedef {object} LayoutLeafNode
  * @property {'leaf'} type
  * @property {string[]} panes
+ * @property {string[]} [tags]
  */
 
 /**
@@ -93,6 +95,30 @@ function validateNodeList (value, path) {
 /**
  * @param {unknown} value
  * @param {string} path
+ * @returns {string[] | undefined}
+ */
+function validateTags (value, path) {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value) || value.length === 0) {
+    statusDisplay.error(`${path}.tags must be a non-empty list.`, 'layout')
+    return null
+  }
+  /** @type {string[]} */
+  const tags = []
+  for (let i = 0; i < value.length; i++) {
+    const t = value[i]
+    if (typeof t !== 'string' || t.trim() === '') {
+      statusDisplay.error(`${path}.tags[${i}] must be a non-empty string.`, 'layout')
+      return null
+    }
+    tags.push(t.trim())
+  }
+  return tags
+}
+
+/**
+ * @param {unknown} value
+ * @param {string} path
  * @returns {LayoutNode | null}
  */
 function validateNode (value, path) {
@@ -110,12 +136,16 @@ function validateNode (value, path) {
       statusDisplay.error(`${path}.resizable must be boolean.`, 'layout')
       return null
     }
-    return { type, resizable, children }
+    const tags = validateTags(n.tags, path)
+    if (n.tags !== undefined && tags == null) return null
+    return { type, resizable, children, tags }
   }
   if (type === 'leaf') {
     const panes = validatePaneList(n.panes, `${path}.panes`)
     if (!panes) return null
-    return { type: 'leaf', panes }
+    const tags = validateTags(n.tags, path)
+    if (n.tags !== undefined && tags == null) return null
+    return { type: 'leaf', panes, tags }
   }
   statusDisplay.error(`${path}.type must be hbox, vbox, or leaf.`, 'layout')
   return null

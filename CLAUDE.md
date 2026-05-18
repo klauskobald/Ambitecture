@@ -4,6 +4,17 @@ Guidance for Claude Code (claude.ai/code) and any other coding agent working in 
 
 ---
 
+## DEPRECATED: `surface-v1` (agents: do not touch)
+
+**`modules/controllers/surface-v1/` is legacy and frozen.** Agents must **not** read it for implementation work, **not** edit it, and **not** “sync” hub or `system.yml` changes into v1.
+
+- **Operator UI:** [`modules/controllers/surface-v2/`](modules/controllers/surface-v2/) — read [`modules/controllers/surface-v2/CLAUDE.md`](modules/controllers/surface-v2/CLAUDE.md) before any v2 edit.
+- **Exception:** only if the user explicitly requests a change under `surface-v1` in the same message.
+
+See also [`modules/controllers/surface-v1/CLAUDE.md`](modules/controllers/surface-v1/CLAUDE.md).
+
+---
+
 ## READ FIRST: SYSTEM-ARCHITECTURE.md
 
 **Before editing or designing anything, read [`SYSTEM-ARCHITECTURE.md`](SYSTEM-ARCHITECTURE.md) in this repository.** It is the canonical reference for:
@@ -13,7 +24,7 @@ Guidance for Claude Code (claude.ai/code) and any other coding agent working in 
 - Graph state protocol (`graph:command` / `graph:delta` / `runtime:command` / `runtime:update`)
 - Animation, binding, intent-registry, and function-curve subsystems
 - Hub status / lock-intent / systemCapabilities flows
-- `surface-v1` controller architecture (perform subnav, animator viewers, registries)
+- `surface-v2` controller architecture (layout shell, pane renderers, perform/edit overlays) — v1 sections are historical only
 - Color pipeline (CIE 1931 `xyY`)
 - Project / fixture / scene data model
 - Mandatory rules for graph state, actions/inputs, dot keys, animations, bindings
@@ -36,7 +47,7 @@ A distributed framework for live orchestration of physical environments — ligh
 modules/
   hub/                 — Central authority: HTTP API, WebSocket server, web GUI
   renderers/           — Hardware output drivers (e.g. DMX, simulator-2d)
-  controllers/         — Operator UIs / trigger surfaces (surface-v1, starter)
+  controllers/         — Operator UIs (surface-v2; surface-v1 deprecated/frozen), starter
   deliver/             — Optional static HTTP host for browser-only assets
 var/
   fixtures/            — Fixture profile YAML definitions
@@ -136,7 +147,7 @@ No hardcoded addresses or local config reads inside test files.
 ## Conventions
 
 - **No generic `types.d.ts`.** Types are declared inside the module file where they are used.
-- **No framework or bundler** for the hub web GUI or `surface-v1`. Plain HTML + CSS + JS, served directly.
+- **No framework or bundler** for the hub web GUI or controller surfaces (`surface-v2`). Plain HTML + CSS + JS, served directly.
 - **Mobile-first CSS.** Base styles target small screens; breakpoints add desktop layout.
 - Config in YAML (not hardcoded). Listen port/host always come from `server.yml`.
 - `Logger` (`src/Logger.ts`) is the shared logging utility for hub-side code.
@@ -166,7 +177,7 @@ handler.default.handle(event);
 ### Helper files
 
 - Formatting, color math (CIE conversions, gamut mapping), geo/spatial math, function curves (`FnCurve`), and DMX utilities each live in their own reusable file or class. No ad-hoc helpers scattered in business logic files.
-- For dot-path graph patches use the module-local `dotPath` helper (`hub/src/dotPath.ts`, `surface-v1/src/core/dotPath.js`). Do not hand-roll `split('.')` traversal in feature code.
+- For dot-path graph patches use the module-local `dotPath` helper (`hub/src/dotPath.ts`, `surface-v2/src/core/dotPath.js`). Do not hand-roll `split('.')` traversal in feature code.
 
 ### Fixture / device / animator abstraction pattern
 
@@ -208,9 +219,10 @@ if (isWithinRange && isActiveLayer) { ... }
 
 ## Reminders for Agents
 
+- **Never edit `modules/controllers/surface-v1/`.** It is deprecated and frozen (see section above).
 - **Read SYSTEM-ARCHITECTURE.md before designing anything.** Then check the actual code in case the doc lags.
 - **Editing `modules/controllers/surface-v2/`:** read [modules/controllers/surface-v2/CLAUDE.md](modules/controllers/surface-v2/CLAUDE.md) first. The layout shell under `src/layout/` is framework code — extend via pane registration and leaf-chrome adapters; do not add domain-specific logic there.
 - **Update SYSTEM-ARCHITECTURE.md in the same change** when you touch architecture, protocols, or shared subsystems. Stale architecture docs are worse than no docs.
 - When changing renderer behavior, change every renderer (`dmx-ts`, `simulator-2d`) — never just one.
-- When changing a `system.yml` capability shape (input kinds, animation classes, function curves, intent properties), check both the hub and `surface-v1` sides — they must stay in sync.
-- For new headless controllers, start from `modules/controllers/starter/` — it has the correct registration flow, GUID-keyed graph replica, lifecycle hooks for every inbound hub message, and typed send helpers. On `register`, set `subscribe: { runtime: false }` when the module only pushes pulse/actions and does not need perform `runtime:update`; set `runtime: true` when it mirrors perform live state (e.g. `surface-v1`, sample runtime loop).
+- When changing a `system.yml` capability shape (input kinds, animation classes, function curves, intent properties), update the hub and **`surface-v2`** — not `surface-v1`.
+- For new headless controllers, start from `modules/controllers/starter/` — it has the correct registration flow, GUID-keyed graph replica, lifecycle hooks for every inbound hub message, and typed send helpers. On `register`, set `subscribe: { runtime: false }` when the module only pushes pulse/actions and does not need perform `runtime:update`; set `runtime: true` when it mirrors perform live state (e.g. `surface-v2`, sample runtime loop).

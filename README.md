@@ -31,7 +31,8 @@ modules/
   deliver/                Allowlisted static HTTP host for browser-only UIs (deliver.yml mounts)
   renderers/dmx-ts/       DMX renderer implementation (TypeScript)
   renderers/simulator-2d/ Browser renderer (2D simulator)
-  controllers/surface-v1/ Primary operator controller (touch SPA, perform/edit/setup panes)
+  controllers/surface-v2/ Primary operator controller (configurable layout, perform/edit/stage panes)
+  controllers/surface-v1/ Deprecated legacy UI — frozen, do not edit
   controllers/starter/    Minimal TypeScript reference controller for building headless clients
 var/
   projects/               Project and zone definitions (YAML)
@@ -52,7 +53,7 @@ Ambitecture is intentionally modular: you can pair many controller types with ma
 ### Current Capabilities
 
 - **Scenes** addressed by stable GUID (renames don't break references).
-- **Actions and inputs** wire scenes/intents/animations to perform buttons, momentary switches, and **keyboard shortcuts** (`KeyboardManager` in `surface-v1`).
+- **Actions and inputs** wire scenes/intents/animations to perform buttons, momentary switches, and **keyboard shortcuts** (`KeyboardManager` in `surface-v2`).
 - **Animations** — hub runs keyframe animations against intents with eased intermediate samples (`linear` / `quadratic` / `cubic` / `sqrt` / `smoothstep` / `hard` curves). Live keyframe editing is hub-coordinated so multiple controllers stay in sync.
 - **Bindings** — generic bidirectional binding layer (`binding:subscribe` / `binding:set` / `binding:value`) for controller UI to mirror or push hub-owned live values such as animation timescale.
 - **Function curves** — named easing/attenuation curves shared verbatim across hub and renderers so animation lerps and fixture range falloff look identical wherever they're rendered.

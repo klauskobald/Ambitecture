@@ -1,7 +1,7 @@
 # CLAUDE.md — surface-v2
 
 **Agents: read this file before editing anything under `modules/controllers/surface-v2/`.**  
-Also obey repo-root [CLAUDE.md](../../../CLAUDE.md) and [SYSTEM-ARCHITECTURE.md](../../../SYSTEM-ARCHITECTURE.md) for hub protocol and graph rules. **Do not edit `surface-v1`** unless explicitly asked.
+Also obey repo-root [CLAUDE.md](../../../CLAUDE.md) and [SYSTEM-ARCHITECTURE.md](../../../SYSTEM-ARCHITECTURE.md) for hub protocol and graph rules. **`surface-v1` is deprecated and frozen — never edit it** (only if the user explicitly requests a v1 change in the same message).
 
 ---
 

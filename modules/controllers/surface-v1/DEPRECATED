@@ -1,0 +1,4 @@
+DEPRECATED — frozen legacy controller UI.
+
+Agents: do not modify any file in this directory. Use modules/controllers/surface-v2/ instead.
+See CLAUDE.md in this folder.

@@ -76,7 +76,7 @@ The GUI should use a mobile-first layout with:
 - pane-based sections (system, projects, fixtures, zones, modules, etc.)
 - fast pane switching without full page reloads
 
-The pane-based architecture pattern is already implemented in the `surface-v1` controller as a reference: lazy-loading pane modules, single mount with activate/deactivate lifecycle, no teardown on switch.
+The pane-based architecture pattern is implemented in `surface-v2` (and historically in deprecated `surface-v1`): lazy-loading pane modules, single mount with activate/deactivate lifecycle, no teardown on switch.
 
 ### Renderer setup panes (remote-provided UI)
 
@@ -134,7 +134,11 @@ Renderer data authority model:
 
 **Role:** Front ends and tools that send control intent/state to the hub.
 
-**`controllers/surface-v1/`** — Primary operator controller. Architecture built around a **pane-based SPA** with lazy-loading panes, a touch overlay canvas, and a resizable multi-pane bottom region:
+**Agents:** **`controllers/surface-v1/` is deprecated and frozen** — do not edit. Active operator UI is **`controllers/surface-v2/`** (see [`surface-v2/CLAUDE.md`](modules/controllers/surface-v2/CLAUDE.md)). The `surface-v1` section below is historical reference for patterns already ported or still being ported to v2.
+
+**`controllers/surface-v2/`** — Current operator controller (configurable layout shell, pane renderers, hub WebSocket). See [`modules/controllers/surface-v2/CLAUDE.md`](modules/controllers/surface-v2/CLAUDE.md).
+
+**`controllers/surface-v1/`** — **DEPRECATED (do not edit).** Legacy primary operator controller. Architecture built around a **pane-based SPA** with lazy-loading panes, a touch overlay canvas, and a resizable multi-pane bottom region:
 
 - **Pane router** (`src/app/router.js`): Three panes — **Perform**, **Edit**, **Setup** — each lazily imported, mounted once, and cycled via `activate()`/`deactivate()` lifecycle. No full page reloads or teardown on switch.
 - **Pane host resize** (`src/app/paneHostResize.js`): Drag-to-resize the lower pane region; persists last height per pane. Enables the Perform pane to host a resizable Animate panel under the perform HUD.
@@ -869,7 +873,7 @@ Mandatory animation / binding / intent-registry rules:
 
 - Animation runtime mutations must dispatch through `RuntimeUpdateDispatcher` (transient). Do not write durable graph state from a running animation.
 - Animation lifecycle (start / stop / pause / setTimescale / edit on/off) is hub-owned in `AnimationManager`. Controllers must not maintain their own playback state — read from `animationPlayRegistry` (sourced from `hub:status`) and write through `action:trigger` or `animation:edit`.
-- Adding a new animation class must touch all three sides in one change: hub runner under `hub/src/animation/` (and routed through `AnimationManager`), controller viewer under `surface-v1/src/panes/animators/` registered with `animatorViewerRegistry`, and a matching entry in `system.yml → systemCapabilities.animations[]`.
+- Adding a new animation class must touch all three sides in one change: hub runner under `hub/src/animation/` (and routed through `AnimationManager`), controller viewer under `surface-v2/src/perform/animators/` registered with `animatorViewerRegistry`, and a matching entry in `system.yml → systemCapabilities.animations[]`. Do not edit deprecated `surface-v1`.
 - Edit and Perform UIs must respect `intentLockRegistry`. Do not let the operator drag/knob an intent currently driven by an animation.
 - Use `BindingManager` (via `bindingRegistry` on the controller) for any controller UI that must mirror or push hub-owned live values. Do not poll `runtime:update` or invent ad-hoc subscription messages.
 - Active scene addressing is by **`activeSceneGuid`**, not name. Do not reintroduce `activeSceneName` on the wire or in graph patches.
@@ -882,10 +886,10 @@ Mandatory actions/inputs rules:
 - Do not trigger actions via a graph command patch. Use `sendActionTrigger(guid, args?)` from `outboundQueue.js` with the merge contract above. The hub’s `ActionHandler` routes to `actionExecute/*TriggerExecutor` modules.
 - Do not collect Perform pane buttons by filtering inputs inline. Call `collectPerformButtonInputs()` from `performButtonInputs.js` — it is the canonical filter.
 - Do not reorder list items with hand-rolled index logic. Use `ArraySorter` from `arraySorter.js`. The default sort key is `DEFAULT_PERFORM_INPUT_SORT_KEY`.
-- Do not show dialogs with `window.alert/confirm/prompt`. Use `Modal.*` or `openModalCard` from `surface-v1/src/core/Modal.js`.
+- Do not show dialogs with `window.alert/confirm/prompt`. Use `Modal.*` or `openModalCard` from `surface-v2/src/core/Modal.js`.
 - Do not hardcode input types, display types, or intent property names in controller code. Read them from `systemCapabilities.js` via the exported helpers.
 - Do not add new Perform HUD knobs by modifying `PerformQuickPanelHud` source. Set `quickPanel: true` on the descriptor in `system.yml → systemCapabilities.intentProperties`.
-- Do not add new input param kinds only on one side. When adding a new `kind` to `system.yml`, implement the coercion in `hub/src/inputAssignment/composeInputParams.ts → applyParamKind()` **and** the form parse/stringify in `surface-v1/src/edit/inputAssign/paramKindHandlers.js → parseParamFromForm()`.
+- Do not add new input param kinds only on one side. When adding a new `kind` to `system.yml`, implement the coercion in `hub/src/inputAssignment/composeInputParams.ts → applyParamKind()` **and** the form parse/stringify in `surface-v2/src/edit/inputAssign/paramKindHandlers.js → parseParamFromForm()`.
 - Do not build new headless controllers from scratch. Start from `controllers/starter/` — it has the correct registration flow, graph replica, `action:trigger` send path, and `runtime:command` position path.
 - Do not bind keys to actions by attaching ad-hoc `keydown` listeners. Add `params.key` to the input via `InputAssignManager` and let `KeyboardManager` route the event through `performMomentaryRegistry` / `action:trigger`.
 - Do not subscribe to the project graph by reading the whole snapshot on every change. Use `projectGraph.subscribe(paths, callback)` — register against the slices you care about (`intents`, `inputs`, `actions`, `scenes`, etc.) so multi-field deltas batch.
@@ -893,7 +897,7 @@ Mandatory actions/inputs rules:
 Mandatory dot-key rules:
 
 - Dot keys are the graph patch language for nested properties, for example `position`, `layer`, `params.color`, and `params.aux.amber`.
-- Use the module-local dot-path helper for all dot-key reads/writes/removals: `modules/hub/src/dotPath.ts` in the hub and `modules/controllers/surface-v1/src/core/dotPath.js` in the controller surface.
+- Use the module-local dot-path helper for all dot-key reads/writes/removals: `modules/hub/src/dotPath.ts` in the hub and `modules/controllers/surface-v2/src/core/dotPath.js` in the controller surface.
 - Do not hand-roll `dotKey.split('.')` traversal in feature code. Keeping this logic centralized prevents subtle drift in graph commands, runtime commands, controller UI state, and future scene overlays.
 - Dot-path helpers intentionally traverse plain objects only. Arrays are not addressable by dot key; mutate list members by stable `guid` first, then apply dot keys inside the matched object.
 - Removing a dot-key value removes only the leaf and preserves parent objects, matching current graph patch/remove behavior.
@@ -912,7 +916,7 @@ All long-lived module connections (renderers and controllers) must be treated as
 ### Reconnect behavior
 
 - DMX and simulator renderers reconnect immediately on close/error and re-register.
-- `controllers/surface-v1` automatically reconnects on close/error via its `Socket.connect()` (reconnects immediately with zero delay, re-registers on open).
+- `controllers/surface-v2` (and legacy `surface-v1`) automatically reconnect on close/error via `Socket.connect()` (reconnect immediately with zero delay, re-register on open).
 - After reconnect, modules should re-register identity/capabilities and wait for fresh config before resuming normal operation.
 
 ---

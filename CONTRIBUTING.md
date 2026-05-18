@@ -17,7 +17,8 @@ modules/
   hub/                     Central authority (HTTP + WebSocket)
   renderers/dmx-ts/        DMX renderer (TypeScript)
   renderers/simulator-2d/  Browser-based 2D simulator
-  controllers/surface-v1/  Primary touch operator UI (static HTML/JS)
+  controllers/surface-v2/  Primary touch operator UI (static HTML/JS)
+  controllers/surface-v1/  Deprecated — do not edit (agents/humans: use v2)
   controllers/starter/     Minimal headless controller reference
   deliver/                 Optional static HTTP host for browser modules
 var/
@@ -64,7 +65,7 @@ For runtime issues, the `Logger` output from `modules/hub` is usually the most u
   ts-node tests/runtest.ts
   ```
 - Verify the change end-to-end against a live hub when it touches the WebSocket protocol, graph state, animations, or bindings. There are no mocks — tests are live integration scripts.
-- For UI changes in `surface-v1` or `simulator-2d`, exercise the feature in a real browser session against a running hub.
+- For UI changes in `surface-v2` or `simulator-2d`, exercise the feature in a real browser session against a running hub. Do not change deprecated `surface-v1`.
 
 ### What to include in the PR description
 
@@ -107,7 +108,7 @@ These are enforced by review. Full detail in [`CLAUDE.md`](CLAUDE.md).
 ### CSS
 
 - Mobile-first. Base styles target small screens; breakpoints add desktop layout.
-- No frameworks or bundlers in the hub web GUI or `surface-v1`. Plain HTML + CSS + JS.
+- No frameworks or bundlers in the hub web GUI or controller surfaces (`surface-v2`). Plain HTML + CSS + JS.
 
 ## Architecture Changes
 
@@ -117,7 +118,7 @@ If your change touches any of the following, update [`SYSTEM-ARCHITECTURE.md`](S
 - `graph:command` / `graph:delta` / `runtime:command` / `runtime:update` semantics
 - Animation, binding, intent-registry, or function-curve subsystems
 - Hub status, lock-intent, or `systemCapabilities` flows
-- `surface-v1` controller architecture
+- `surface-v2` controller architecture (`surface-v1` is deprecated — do not edit)
 - The color pipeline (CIE 1931 `xyY`)
 - Project / fixture / scene data model
 
@@ -128,7 +129,7 @@ Stale architecture docs are worse than no docs.
 Before merging, check that:
 
 - [ ] Every renderer (`dmx-ts`, `simulator-2d`) has the same change applied.
-- [ ] If `system.yml` capability shapes changed (input kinds, animation classes, function curves, intent properties), both the hub and `surface-v1` reflect it.
+- [ ] If `system.yml` capability shapes changed (input kinds, animation classes, function curves, intent properties), both the hub and `surface-v2` reflect it.
 - [ ] `SYSTEM-ARCHITECTURE.md` is updated if architecture changed.
 - [ ] `CLAUDE.md` is updated if project-wide conventions changed.
 

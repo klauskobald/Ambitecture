@@ -3,6 +3,7 @@
 :root {
   --color-bg: #0a0a0a;
   --color-bg-raised: #141414;
+  --color-bg-leaf-header: #141d2a;
   --color-text: #ccc;
   --color-text-muted: #666;
   --color-text-warning: rgb(142, 134, 64);

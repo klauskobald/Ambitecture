@@ -209,6 +209,7 @@ if (isWithinRange && isActiveLayer) { ... }
 ## Reminders for Agents
 
 - **Read SYSTEM-ARCHITECTURE.md before designing anything.** Then check the actual code in case the doc lags.
+- **Editing `modules/controllers/surface-v2/`:** read [modules/controllers/surface-v2/CLAUDE.md](modules/controllers/surface-v2/CLAUDE.md) first. The layout shell under `src/layout/` is framework code — extend via pane registration and leaf-chrome adapters; do not add domain-specific logic there.
 - **Update SYSTEM-ARCHITECTURE.md in the same change** when you touch architecture, protocols, or shared subsystems. Stale architecture docs are worse than no docs.
 - When changing renderer behavior, change every renderer (`dmx-ts`, `simulator-2d`) — never just one.
 - When changing a `system.yml` capability shape (input kinds, animation classes, function curves, intent properties), check both the hub and `surface-v1` sides — they must stay in sync.

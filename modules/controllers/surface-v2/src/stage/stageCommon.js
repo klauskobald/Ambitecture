@@ -14,9 +14,6 @@ let _layoutConfig = null
 /** @type {HTMLElement | null} */
 let _root = null
 
-/** @type {HTMLElement | null} */
-let _parkingEl = null
-
 /** @type {SimulatorViewport | null} */
 let _viewport = null
 
@@ -38,26 +35,11 @@ export function initStageCommon (simulatorIframeUrl, layoutConfig) {
   _layoutConfig = layoutConfig
 }
 
-function ensureParking () {
-  if (_parkingEl) return
-  _parkingEl = document.createElement('div')
-  _parkingEl.className = 'layout-stage-parking'
-  _parkingEl.hidden = true
-  _parkingEl.setAttribute('aria-hidden', 'true')
-  document.body.appendChild(_parkingEl)
-}
-
 function cancelScheduledDispose () {
   if (_disposeTimer !== null) {
     clearTimeout(_disposeTimer)
     _disposeTimer = null
   }
-}
-
-function parkStageRoot () {
-  if (!_root) return
-  ensureParking()
-  _parkingEl.appendChild(_root)
 }
 
 function disposeStageBuilt () {
@@ -125,7 +107,6 @@ export function attachStageTo (container) {
   if (!_root) return
 
   if (_root.parentElement !== container) {
-    container.replaceChildren()
     container.appendChild(_root)
   }
 
@@ -139,12 +120,15 @@ export function attachStageTo (container) {
   }
 }
 
-/** Park sim off-screen; tear down iframe stack after idle delay if nothing re-attaches. */
-export function detachStage () {
+/**
+ * @param {HTMLElement} [fromContainer] no-op if sim already moved to another slot
+ */
+export function detachStage (fromContainer) {
   if (!_root || !_attachedContainer) return
+  if (fromContainer && _attachedContainer !== fromContainer) return
 
   _attachedContainer = null
-  parkStageRoot()
+  _root.remove()
   scheduleDispose()
 }
 

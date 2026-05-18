@@ -13,9 +13,17 @@ import * as statusDisplay from '../app/statusDisplay.js'
  */
 
 /**
+ * @typedef {object} LayoutPane
+ * @property {string} id stable key (`stage`, `plugin:midi-setup-1`, …)
+ * @property {string} class renderer registration id
+ * @property {string} label tab button text
+ * @property {string[]} args constructor arguments (may be empty)
+ */
+
+/**
  * @typedef {object} LayoutLeafNode
  * @property {'leaf'} type
- * @property {string[]} panes
+ * @property {LayoutPane[]} panes
  * @property {string[]} [tags]
  */
 
@@ -152,24 +160,92 @@ function validateNode (value, path) {
 }
 
 /**
+ * @param {string} className
+ * @param {string[]} args
+ * @returns {string}
+ */
+export function buildPaneId (className, args) {
+  if (args.length === 0) return className
+  return `${className}:${args.join(':')}`
+}
+
+/**
  * @param {unknown} value
  * @param {string} path
- * @returns {string[] | null}
+ * @returns {LayoutPane | null}
+ */
+function validatePaneEntry (value, path) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    statusDisplay.error(`${path} must be a map with class and label.`, 'layout')
+    return null
+  }
+  const p = /** @type {Record<string, unknown>} */ (value)
+  const className = p.class
+  if (typeof className !== 'string' || className.trim() === '') {
+    statusDisplay.error(`${path}.class must be a non-empty string.`, 'layout')
+    return null
+  }
+  const label = p.label
+  if (typeof label !== 'string' || label.trim() === '') {
+    statusDisplay.error(`${path}.label must be a non-empty string.`, 'layout')
+    return null
+  }
+  let args = []
+  if (p.args !== undefined) {
+    if (!Array.isArray(p.args) || p.args.length === 0) {
+      statusDisplay.error(`${path}.args must be a non-empty list.`, 'layout')
+      return null
+    }
+    /** @type {string[]} */
+    const parsed = []
+    for (let i = 0; i < p.args.length; i++) {
+      const a = p.args[i]
+      if (typeof a !== 'string' || a.trim() === '') {
+        statusDisplay.error(
+          `${path}.args[${i}] must be a non-empty string.`,
+          'layout'
+        )
+        return null
+      }
+      parsed.push(a.trim())
+    }
+    args = parsed
+  }
+  const trimmedClass = className.trim()
+  return {
+    id: buildPaneId(trimmedClass, args),
+    class: trimmedClass,
+    label: label.trim(),
+    args
+  }
+}
+
+/**
+ * @param {unknown} value
+ * @param {string} path
+ * @returns {LayoutPane[] | null}
  */
 function validatePaneList (value, path) {
   if (!Array.isArray(value) || value.length === 0) {
     statusDisplay.error(`${path} must be a non-empty list.`, 'layout')
     return null
   }
-  /** @type {string[]} */
+  /** @type {LayoutPane[]} */
   const panes = []
+  /** @type {Set<string>} */
+  const seenIds = new Set()
   for (let i = 0; i < value.length; i++) {
-    const p = value[i]
-    if (typeof p !== 'string' || p.trim() === '') {
-      statusDisplay.error(`${path}[${i}] must be a non-empty string.`, 'layout')
+    const pane = validatePaneEntry(value[i], `${path}[${i}]`)
+    if (!pane) return null
+    if (seenIds.has(pane.id)) {
+      statusDisplay.error(
+        `${path} has duplicate pane id "${pane.id}".`,
+        'layout'
+      )
       return null
     }
-    panes.push(p.trim())
+    seenIds.add(pane.id)
+    panes.push(pane)
   }
   return panes
 }

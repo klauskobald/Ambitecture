@@ -7,11 +7,6 @@ import { setPerformMode } from '../../stage/stageOverlayCoordinator.js'
 import { PerformQuickPanelHud } from '../../perform/performQuickPanelHud.js'
 
 export class StagePane {
-  /** @param {string | undefined} [_arg] */
-  static getButtonLabel (_arg) {
-    return 'Perform'
-  }
-
   /** @type {PerformQuickPanelHud | null} */
   _quickHud = null
 

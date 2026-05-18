@@ -6,11 +6,6 @@ import { InputAssignManager } from '../../edit/InputAssignManager.js'
 import { PulseAssignManager } from '../../edit/PulseAssignManager.js'
 
 export class ScenesPane {
-  /** @param {string | undefined} [_arg] */
-  static getButtonLabel (_arg) {
-    return 'Scenes'
-  }
-
   constructor () {
     this._layout = document.createElement('div')
     this._layout.className = 'scenes-layout'

@@ -1,4 +1,4 @@
-import { createPaneRenderer, getButtonLabel } from './paneRendererRegistry.js'
+import { createPaneRenderer } from './paneRendererRegistry.js'
 import { attachSplitResize } from './splitResize.js'
 import { loadActiveLayoutId, saveActiveLayoutId } from './layoutSplitState.js'
 
@@ -13,8 +13,13 @@ import { loadActiveLayoutId, saveActiveLayoutId } from './layoutSplitState.js'
  */
 
 /**
+ * @typedef {import('./loadLayoutCatalog.js').LayoutPane} LayoutPane
+ */
+
+/**
  * @typedef {object} LeafState
- * @property {string[]} paneIds
+ * @property {LayoutPane[]} panes
+ * @property {Map<string, LayoutPane>} paneById
  * @property {string | null} activePaneId
  * @property {Map<string, LeafPaneEntry>} cache
  * @property {HTMLElement} bodyEl
@@ -210,28 +215,29 @@ function buildLeaf (node, nodePath) {
   body.className = 'layout-leaf-body'
 
   const state = /** @type {LeafState} */ ({
-    paneIds: [...node.panes],
+    panes: [...node.panes],
+    paneById: new Map(node.panes.map(p => [p.id, p])),
     activePaneId: null,
     cache: new Map(),
     bodyEl: body
   })
   leafStateByEl.set(leaf, state)
 
-  for (const paneId of node.panes) {
+  for (const pane of node.panes) {
     const btn = document.createElement('button')
     btn.type = 'button'
     btn.className = 'layout-leaf-toggle'
-    btn.textContent = getButtonLabel(paneId)
+    btn.textContent = pane.label
     btn.setAttribute('role', 'tab')
-    btn.dataset.paneId = paneId
-    btn.addEventListener('click', () => activateLeafPane(leaf, paneId))
+    btn.dataset.paneId = pane.id
+    btn.addEventListener('click', () => activateLeafPane(leaf, pane.id))
     header.appendChild(btn)
   }
 
   leaf.appendChild(header)
   leaf.appendChild(body)
   applyLayoutTags(leaf, node.tags)
-  activateLeafPane(leaf, node.panes[0])
+  activateLeafPane(leaf, node.panes[0].id)
   return leaf
 }
 
@@ -249,8 +255,13 @@ function ensurePaneMount (state, paneId) {
   mountEl.dataset.paneId = paneId
   state.bodyEl.appendChild(mountEl)
 
+  const pane = state.paneById.get(paneId)
+  if (!pane) {
+    throw new Error(`Unknown pane id "${paneId}" in leaf state`)
+  }
+
   entry = {
-    instance: createPaneRenderer(paneId),
+    instance: createPaneRenderer(pane),
     mountEl,
     mounted: false
   }
@@ -273,7 +284,7 @@ function invokePanePhase (instance, phase) {
  */
 function activateLeafPane (leafEl, paneId) {
   const state = leafStateByEl.get(leafEl)
-  if (!state || !state.paneIds.includes(paneId)) return
+  if (!state || !state.paneById.has(paneId)) return
 
   if (state.activePaneId === paneId) return
 

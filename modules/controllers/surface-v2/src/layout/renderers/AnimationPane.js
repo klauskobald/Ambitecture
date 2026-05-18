@@ -3,11 +3,6 @@ import { togglePerformIntentFilter } from '../../core/performIntentFilter.js'
 import { getControllerSurface } from '../../stage/stageCommon.js'
 
 export class AnimationPane {
-  /** @param {string | undefined} [_arg] */
-  static getButtonLabel (_arg) {
-    return 'Animate'
-  }
-
   constructor () {
     /** @type {HTMLDivElement | null} */
     this._panel = null

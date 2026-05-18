@@ -12,13 +12,6 @@ import { postThemeToIframe } from '../../plugins/themeToIframe.js'
 import { getControllerSurface } from '../../stage/stageCommon.js'
 
 export class PluginPane {
-  /** @param {string | undefined} [pluginGuid] */
-  static getButtonLabel (pluginGuid) {
-    const guid = pluginGuid ?? ''
-    const resolved = resolvePluginByGuid(guid)
-    return resolved?.name ?? guid
-  }
-
   /**
    * @param {string} pluginGuid project `plugins[].guid` (layout arg after `plugin:`)
    */

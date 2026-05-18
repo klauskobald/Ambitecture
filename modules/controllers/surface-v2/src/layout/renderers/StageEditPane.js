@@ -39,11 +39,6 @@ export function rebindIntentParamsHost () {
 }
 
 export class StageEditPane {
-  /** @param {string | undefined} [_arg] */
-  static getButtonLabel (_arg) {
-    return 'Edit'
-  }
-
   constructor () {
     /** @type {string | null} */
     this._activeMode = null

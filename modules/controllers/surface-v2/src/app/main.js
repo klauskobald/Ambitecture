@@ -36,7 +36,7 @@ async function main () {
   registerPaneRenderer(
     'plugin',
     PluginPane,
-    arg => new PluginPane(arg ?? '')
+    args => new PluginPane(args[0] ?? '')
   )
 
   const toolbar = document.getElementById('layout-toolbar')

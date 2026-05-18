@@ -35,11 +35,17 @@
                     "children": [
                         {
                             "type": "leaf",
-                            "panes": ["stage"]
+                            "panes": [
+                                { "class": "stage", "label": "Stage" }
+                            ]
                         },
                         {
                             "type": "leaf",
-                            "panes": ["control", "pulse", "animation", "plugins"]
+                            "panes": [
+                                { "class": "control", "label": "Control" },
+                                { "class": "pulse", "label": "Pulse" },
+                                { "class": "animation", "label": "Animate" }
+                            ]
                         }
                     ]
                 }
@@ -54,7 +60,9 @@
                     "children": [
                         {
                             "type": "leaf",
-                            "panes": ["stage"]
+                            "panes": [
+                                { "class": "stage", "label": "Stage" }
+                            ]
                         },
                         {
                             "type": "vbox",
@@ -62,15 +70,21 @@
                             "children": [
                                 {
                                     "type": "leaf",
-                                    "panes": ["control"]
+                                    "panes": [
+                                        { "class": "control", "label": "Control" }
+                                    ]
                                 },
                                 {
                                     "type": "leaf",
-                                    "panes": ["pulse"]
+                                    "panes": [
+                                        { "class": "pulse", "label": "Pulse" }
+                                    ]
                                 },
                                 {
                                     "type": "leaf",
-                                    "panes": ["animation", "plugins"]
+                                    "panes": [
+                                        { "class": "animation", "label": "Animate" }
+                                    ]
                                 }
                             ]
                         }

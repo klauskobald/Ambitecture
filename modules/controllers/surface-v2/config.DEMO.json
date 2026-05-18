@@ -1,4 +1,5 @@
 {
+    "SIMULATOR_IFRAME_URL": "/simulator-2d/",
     "LAYOUT_MANAGER": {
         "2cols": {
             "label": "2c",

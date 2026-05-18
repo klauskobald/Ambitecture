@@ -31,45 +31,16 @@ import * as statusDisplay from '../app/statusDisplay.js'
  * @returns {Promise<Record<string, LayoutDefinition> | null>}
  */
 export async function loadLayoutCatalog () {
-  let res
-  try {
-    res = await fetch('./config.json', { cache: 'no-store' })
-  } catch (e) {
-    statusDisplay.error(
-      `Could not load config.json (${/** @type {Error} */ (e).message}).`,
-      'layout'
-    )
-    return null
-  }
-  if (!res.ok) {
-    statusDisplay.error(`config.json HTTP ${res.status}`, 'layout')
-    return null
-  }
-  /** @type {unknown} */
-  let cfg
-  try {
-    cfg = await res.json()
-  } catch {
-    statusDisplay.error('config.json is not valid JSON.', 'layout')
-    return null
-  }
-  if (cfg === null || typeof cfg !== 'object' || Array.isArray(cfg)) {
-    statusDisplay.error('config.json root must be an object.', 'layout')
-    return null
-  }
-  const raw = /** @type {Record<string, unknown>} */ (cfg).LAYOUT_MANAGER
-  if (raw === undefined) {
-    statusDisplay.error('config.json missing LAYOUT_MANAGER.', 'layout')
-    return null
-  }
-  return validateCatalog(raw)
+  const { loadAppConfig } = await import('../app/config.js')
+  const cfg = await loadAppConfig()
+  return cfg?.layoutCatalog ?? null
 }
 
 /**
  * @param {unknown} raw
  * @returns {Record<string, LayoutDefinition> | null}
  */
-function validateCatalog (raw) {
+export function parseLayoutCatalog (raw) {
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
     statusDisplay.error('LAYOUT_MANAGER must be a map.', 'layout')
     return null

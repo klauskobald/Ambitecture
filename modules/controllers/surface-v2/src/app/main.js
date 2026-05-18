@@ -1,24 +1,25 @@
-import { loadLayoutCatalog } from '../layout/loadLayoutCatalog.js'
+import { loadAppConfig } from './config.js'
 import { LayoutManager } from '../layout/LayoutManager.js'
 import { registerPaneRenderer } from '../layout/paneRendererRegistry.js'
 import { HelloWorldPane } from '../layout/renderers/HelloWorldPane.js'
+import { Simulator2dPane } from '../layout/renderers/Simulator2dPane.js'
 
 /** @type {string[]} */
-const PANE_IDS = [
-  'simulator-2d',
-  'control',
-  'pulse',
-  'animation',
-  'plugins'
-]
+const PLACEHOLDER_PANE_IDS = ['control', 'pulse', 'animation', 'plugins']
 
 async function main () {
-  for (const paneId of PANE_IDS) {
+  const appCfg = await loadAppConfig()
+  if (!appCfg) return
+
+  registerPaneRenderer(
+    'simulator-2d',
+    () => new Simulator2dPane(appCfg.simulatorIframeUrl)
+  )
+  for (const paneId of PLACEHOLDER_PANE_IDS) {
     registerPaneRenderer(paneId, () => new HelloWorldPane(paneId))
   }
 
-  const catalog = await loadLayoutCatalog()
-  if (!catalog) return
+  const catalog = appCfg.layoutCatalog
 
   const toolbar = document.getElementById('layout-toolbar')
   const stage = document.getElementById('layout-stage')

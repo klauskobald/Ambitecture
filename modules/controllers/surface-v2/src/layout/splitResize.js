@@ -1,5 +1,16 @@
-const STORAGE_PREFIX = 'ambitecture.surface-v2.layoutSplit.'
+const STORAGE_PREFIX = 'ambitecture.surface-v2.layoutSplit.r1.'
 const MIN_PANEL_PX = 80
+
+/**
+ * Grips owned by this box only — not nested hbox/vbox splits inside panels.
+ * @param {HTMLElement} container
+ * @returns {HTMLElement[]}
+ */
+function directSplitGrips (container) {
+  return [...container.children].filter(el =>
+    el.classList.contains('layout-split-grip')
+  )
+}
 
 /**
  * @param {object} opts
@@ -17,48 +28,99 @@ export function attachSplitResize (opts) {
   const sizeProp = isHorizontal ? 'width' : 'height'
   const storageKey = `${STORAGE_PREFIX}${layoutId}.${nodePath}`
 
-  const grips = [...container.querySelectorAll('.layout-split-grip')]
+  const grips = directSplitGrips(container)
   if (grips.length !== panels.length - 1) return
 
-  const fractions = loadFractions(panels.length, storageKey)
-  applyFractions(panels, fractions, isHorizontal)
+  /**
+   * @returns {number}
+   */
+  function gripTotalPx () {
+    let sum = 0
+    for (const g of grips) {
+      const r = g.getBoundingClientRect()
+      sum += isHorizontal ? r.width : r.height
+    }
+    return sum
+  }
 
-  for (let i = 0; i < grips.length; i++) {
-    const grip = /** @type {HTMLElement} */ (grips[i])
-    const left = panels[i]
-    const right = panels[i + 1]
-    if (!left || !right) continue
+  /**
+   * @returns {number}
+   */
+  function availablePx () {
+    const containerRect = container.getBoundingClientRect()
+    const total = isHorizontal ? containerRect.width : containerRect.height
+    return Math.max(MIN_PANEL_PX * panels.length, total - gripTotalPx())
+  }
+
+  /**
+   * @returns {number[]}
+   */
+  function readPanelSizesPx () {
+    return panels.map(p => {
+      const r = p.getBoundingClientRect()
+      const size = isHorizontal ? r.width : r.height
+      return Number.isFinite(size) ? size : MIN_PANEL_PX
+    })
+  }
+
+  /**
+   * @param {number[]} sizes
+   */
+  function applyPanelSizesPx (sizes) {
+    for (let i = 0; i < panels.length; i++) {
+      const px = sizes[i]
+      if (px === undefined || !Number.isFinite(px)) continue
+      panels[i].style.flex = `0 0 ${Math.round(px)}px`
+    }
+  }
+
+  function applyStoredFractions () {
+    const fractions = loadFractions(panels.length, storageKey)
+    applyFractionsFlex(panels, fractions)
+  }
+
+  applyStoredFractions()
+
+  requestAnimationFrame(() => {
+    applyStoredFractions()
+  })
+
+  for (let gripIndex = 0; gripIndex < grips.length; gripIndex++) {
+    const grip = /** @type {HTMLElement} */ (grips[gripIndex])
+    const panelBefore = panels[gripIndex]
+    const panelAfter = panels[gripIndex + 1]
+    if (!panelBefore || !panelAfter) continue
 
     grip.addEventListener('pointerdown', e => {
       if (e.button !== 0) return
       e.preventDefault()
       grip.setPointerCapture(e.pointerId)
 
-      const containerRect = container.getBoundingClientRect()
-      const total = isHorizontal ? containerRect.width : containerRect.height
-      const gripSize = grip.getBoundingClientRect()[sizeProp]
-      const avail = Math.max(
-        MIN_PANEL_PX * panels.length,
-        total - gripSize * grips.length
-      )
+      const startSizes = readPanelSizesPx()
+      const pairTotal = startSizes[gripIndex] + startSizes[gripIndex + 1]
+      const minPair = MIN_PANEL_PX * 2
+      const effectivePairTotal = Math.max(minPair, pairTotal)
 
-      const startLeft = left.getBoundingClientRect()[sizeProp]
       const startCoord = isHorizontal ? e.clientX : e.clientY
+      const startBeforePx = startSizes[gripIndex]
 
       /**
        * @param {PointerEvent} ev
        */
       function onMove (ev) {
         const coord = isHorizontal ? ev.clientX : ev.clientY
-        const origin = isHorizontal ? containerRect.left : containerRect.top
-        let leftPx = startLeft + (coord - startCoord)
-        leftPx = Math.min(
-          avail - MIN_PANEL_PX,
-          Math.max(MIN_PANEL_PX, leftPx)
+        const delta = coord - startCoord
+        let beforePx = startBeforePx + delta
+        beforePx = Math.min(
+          effectivePairTotal - MIN_PANEL_PX,
+          Math.max(MIN_PANEL_PX, beforePx)
         )
-        const rightPx = avail - leftPx
-        left.style.flex = `0 0 ${leftPx}px`
-        right.style.flex = `0 0 ${rightPx}px`
+        const afterPx = effectivePairTotal - beforePx
+
+        const sizes = [...startSizes]
+        sizes[gripIndex] = beforePx
+        sizes[gripIndex + 1] = afterPx
+        applyPanelSizesPx(sizes)
       }
 
       /**
@@ -69,6 +131,7 @@ export function attachSplitResize (opts) {
         grip.removeEventListener('pointermove', onMove)
         grip.removeEventListener('pointerup', onUp)
         grip.removeEventListener('pointercancel', onUp)
+        const avail = availablePx()
         persistFractions(panels, avail, storageKey, isHorizontal)
       }
 
@@ -79,19 +142,18 @@ export function attachSplitResize (opts) {
   }
 
   if (typeof ResizeObserver !== 'undefined') {
+    let rafId = 0
     const ro = new ResizeObserver(() => {
-      const containerRect = container.getBoundingClientRect()
-      const total = isHorizontal ? containerRect.width : containerRect.height
-      const gripSize = grips.reduce(
-        (sum, g) => sum + g.getBoundingClientRect()[sizeProp],
-        0
-      )
-      const avail = Math.max(
-        MIN_PANEL_PX * panels.length,
-        total - gripSize
-      )
-      const stored = loadFractions(panels.length, storageKey)
-      applyFractions(panels, stored, isHorizontal, avail)
+      if (rafId) cancelAnimationFrame(rafId)
+      rafId = requestAnimationFrame(() => {
+        rafId = 0
+        const avail = availablePx()
+        if (avail <= MIN_PANEL_PX * panels.length) return
+        const anyPixelFlex = panels.some(p => p.style.flex.includes('px'))
+        if (!anyPixelFlex) {
+          applyStoredFractions()
+        }
+      })
     })
     ro.observe(container)
   }
@@ -124,26 +186,14 @@ function loadFractions (count, key) {
 }
 
 /**
+ * Proportional flex so the split always fills the container (no fixed px on init).
  * @param {HTMLElement[]} panels
  * @param {number[]} fractions
- * @param {boolean} isHorizontal
- * @param {number} [availTotal]
  */
-function applyFractions (panels, fractions, isHorizontal, availTotal) {
-  const container = panels[0]?.parentElement
-  if (!container) return
-  const containerRect = container.getBoundingClientRect()
-  const total = availTotal ?? (isHorizontal ? containerRect.width : containerRect.height)
-  const grips = container.querySelectorAll('.layout-split-grip')
-  let gripTotal = 0
-  for (const g of grips) {
-    const r = g.getBoundingClientRect()
-    gripTotal += isHorizontal ? r.width : r.height
-  }
-  const avail = Math.max(MIN_PANEL_PX * panels.length, total - gripTotal)
+function applyFractionsFlex (panels, fractions) {
   for (let i = 0; i < panels.length; i++) {
-    const px = Math.max(MIN_PANEL_PX, Math.round(avail * fractions[i]))
-    panels[i].style.flex = `0 0 ${px}px`
+    const grow = fractions[i] ?? 1 / panels.length
+    panels[i].style.flex = `${grow} 1 0`
   }
 }
 
@@ -155,11 +205,13 @@ function applyFractions (panels, fractions, isHorizontal, availTotal) {
  */
 function persistFractions (panels, avail, key, isHorizontal) {
   if (avail <= 0) return
-  const fractions = panels.map(p => {
+  const sizes = panels.map(p => {
     const r = p.getBoundingClientRect()
-    const size = isHorizontal ? r.width : r.height
-    return size / avail
+    return isHorizontal ? r.width : r.height
   })
+  const sum = sizes.reduce((a, b) => a + b, 0)
+  if (sum <= 0) return
+  const fractions = sizes.map(s => s / sum)
   try {
     localStorage.setItem(key, JSON.stringify(fractions))
   } catch {

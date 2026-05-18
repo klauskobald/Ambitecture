@@ -157,6 +157,9 @@ function buildBox (node, nodePath, layoutId, axis) {
   }
 
   if (useResize) {
+    for (const panel of panels) {
+      panel.style.flex = '1 1 0%'
+    }
     attachSplitResize({
       axis,
       container: box,
@@ -166,7 +169,7 @@ function buildBox (node, nodePath, layoutId, axis) {
     })
   } else {
     for (const panel of panels) {
-      panel.style.flex = '1 1 0'
+      panel.style.flex = '1 1 0%'
     }
   }
 

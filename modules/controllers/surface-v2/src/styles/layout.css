@@ -3,6 +3,7 @@
 .layout-app {
   display: flex;
   flex-direction: column;
+  width: 100%;
   height: 100dvh;
   min-height: 0;
   box-sizing: border-box;
@@ -42,22 +43,48 @@
 }
 
 .layout-stage {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 0;
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
+  position: relative;
   padding: var(--page-padding, 8px);
   box-sizing: border-box;
+}
+
+/* Root layout tree fills the stage (absolute avoids flex sizing gaps) */
+.layout-stage > .layout-hbox,
+.layout-stage > .layout-vbox {
+  position: absolute;
+  inset: 0;
+  min-height: 0;
+  min-width: 0;
 }
 
 .layout-hbox,
 .layout-vbox {
   display: flex;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 0;
   min-width: 0;
   box-sizing: border-box;
+}
+
+.layout-hbox {
+  align-items: stretch;
+}
+
+.layout-vbox {
+  align-items: stretch;
+}
+
+/* Nested boxes inside a split panel fill that panel */
+.layout-panel > .layout-hbox,
+.layout-panel > .layout-vbox,
+.layout-panel > .layout-leaf {
+  flex: 1 1 0;
+  width: 100%;
+  min-height: 0;
+  min-width: 0;
 }
 
 .layout-hbox {
@@ -73,7 +100,9 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   overflow: hidden;
+  align-self: stretch;
 }
 
 .layout-leaf {
@@ -143,13 +172,17 @@
   background-color: var(--color-bg-raised);
   border: 1px solid var(--color-border);
   opacity: 0.9;
+  z-index: 1;
 }
 
 .layout-split-grip--ew {
-  width: 0.45rem;
-  min-width: 0.45rem;
+  width: 6px;
+  min-width: 6px;
+  align-self: stretch;
+  min-height: 2rem;
   cursor: ew-resize;
-  margin: 0 1px;
+  margin: 0;
+  flex-shrink: 0;
   background-image: repeating-linear-gradient(
     to right,
     var(--color-text-muted) 0,
@@ -163,10 +196,13 @@
 }
 
 .layout-split-grip--ns {
-  height: 0.45rem;
-  min-height: 0.45rem;
+  height: 6px;
+  min-height: 6px;
+  align-self: stretch;
+  min-width: 2rem;
   cursor: ns-resize;
-  margin: 1px 0;
+  margin: 0;
+  flex-shrink: 0;
   background-image: repeating-linear-gradient(
     to bottom,
     var(--color-text-muted) 0,

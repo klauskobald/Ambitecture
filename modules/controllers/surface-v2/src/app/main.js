@@ -11,9 +11,12 @@ import {
   rebindIntentParamsHost
 } from '../layout/renderers/StageEditPane.js'
 import { ScenesPane } from '../layout/renderers/ScenesPane.js'
+import { ControlPane } from '../layout/renderers/ControlPane.js'
+import { PulsePane } from '../layout/renderers/PulsePane.js'
+import { AnimationPane } from '../layout/renderers/AnimationPane.js'
 
 /** @type {string[]} */
-const PLACEHOLDER_PANE_IDS = ['control', 'pulse', 'animation', 'plugins']
+const PLACEHOLDER_PANE_IDS = ['plugins']
 
 async function main () {
   const appCfg = await loadAppConfig()
@@ -29,6 +32,9 @@ async function main () {
   registerPaneRenderer('stage', () => new StagePane())
   registerPaneRenderer('stage-edit', () => new StageEditPane())
   registerPaneRenderer('scenes', () => new ScenesPane())
+  registerPaneRenderer('control', () => new ControlPane())
+  registerPaneRenderer('pulse', () => new PulsePane())
+  registerPaneRenderer('animation', () => new AnimationPane())
   for (const paneId of PLACEHOLDER_PANE_IDS) {
     registerPaneRenderer(paneId, () => new HelloWorldPane(paneId))
   }

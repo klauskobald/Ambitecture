@@ -3,6 +3,19 @@ import { setSocket, setMinInterval } from '../core/outboundQueue.js'
 import { projectGraph } from '../core/projectGraph.js'
 import { applyIntentLockFromHub } from '../core/intentLockRegistry.js'
 import { applySystemCapabilities } from '../core/systemCapabilities.js'
+import {
+  applyHubAnimationStatus,
+  resetAnimationPlayState
+} from '../core/animationPlayRegistry.js'
+import {
+  applyHubPulseStatus,
+  resetPulsePlayState
+} from '../core/pulsePlayRegistry.js'
+import {
+  isPulseSyncRxHubStatus,
+  notifyPulseSyncReceived
+} from '../core/pulseSyncActivity.js'
+import { applyBindingValue, resubscribeAll } from '../core/bindingRegistry.js'
 import { markStageOverlayActivity } from '../stage/stageOverlayHost.js'
 import * as statusDisplay from './statusDisplay.js'
 
@@ -82,6 +95,7 @@ export function connectStageHub (appCfg) {
           }
         })
       )
+      resubscribeAll()
       statusDisplay.info(
         'registered as controller — waiting for config…',
         'connection'
@@ -117,6 +131,8 @@ export function connectStageHub (appCfg) {
         }
         case 'graph:init': {
           const payload = message.payload
+          resetAnimationPlayState()
+          resetPulsePlayState()
           projectGraph.applyGraphInit(payload, appCfg.simulatorRendererGuid)
           const rateLimit = /** @type {Record<string, unknown>} */ (
             payload ?? {}
@@ -169,6 +185,20 @@ export function connectStageHub (appCfg) {
             flushPendingRuntimeUpdatesImmediate()
           }
           applyIntentLockFromHub(guid, reason)
+          break
+        }
+        case 'hub:status': {
+          const statusPayload = message.payload
+          if (isPulseSyncRxHubStatus(statusPayload)) {
+            notifyPulseSyncReceived()
+            break
+          }
+          applyHubAnimationStatus(statusPayload)
+          applyHubPulseStatus(statusPayload)
+          break
+        }
+        case 'binding:value': {
+          applyBindingValue(message.payload)
           break
         }
       }

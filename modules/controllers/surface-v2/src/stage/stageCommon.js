@@ -20,8 +20,17 @@ let _viewport = null
 /** @type {ControllerSurface | null} */
 let _controllerSurface = null
 
+/** @type {HTMLDivElement | null} */
+let _persistentHost = null
+
 /** @type {HTMLElement | null} */
-let _attachedContainer = null
+let _activeSlot = null
+
+/** @type {ResizeObserver | null} */
+let _slotObserver = null
+
+/** @type {(() => void) | null} */
+let _windowResizeHandler = null
 
 /** @type {ReturnType<typeof setTimeout> | null} */
 let _disposeTimer = null
@@ -35,6 +44,24 @@ export function initStageCommon (simulatorIframeUrl, layoutConfig) {
   _layoutConfig = layoutConfig
 }
 
+function ensurePersistentHost () {
+  if (_persistentHost) return _persistentHost
+  const host = document.createElement('div')
+  Object.assign(host.style, {
+    position: 'fixed',
+    left: '0',
+    top: '0',
+    width: '0',
+    height: '0',
+    pointerEvents: 'auto',
+    zIndex: '5',
+    display: 'none'
+  })
+  document.body.appendChild(host)
+  _persistentHost = host
+  return host
+}
+
 function cancelScheduledDispose () {
   if (_disposeTimer !== null) {
     clearTimeout(_disposeTimer)
@@ -43,7 +70,7 @@ function cancelScheduledDispose () {
 }
 
 function disposeStageBuilt () {
-  if (_attachedContainer) return
+  if (_activeSlot) return
 
   cancelScheduledDispose()
 
@@ -53,6 +80,11 @@ function disposeStageBuilt () {
       iframe.src = 'about:blank'
     }
     _root.remove()
+  }
+
+  if (_persistentHost) {
+    _persistentHost.remove()
+    _persistentHost = null
   }
 
   _root = null
@@ -75,6 +107,8 @@ function ensureBuilt () {
     throw new Error('initStageCommon must be called before attachStageTo')
   }
 
+  const host = ensurePersistentHost()
+
   const root = document.createElement('div')
   root.className = 'layout-stage-common-root'
 
@@ -95,7 +129,40 @@ function ensureBuilt () {
   _controllerSurface = new ControllerSurface(_viewport, _layoutConfig)
   _controllerSurface.mount(stack)
 
+  host.appendChild(root)
   _root = root
+}
+
+function syncHostRect () {
+  if (!_activeSlot || !_persistentHost) return
+  const r = _activeSlot.getBoundingClientRect()
+  const s = _persistentHost.style
+  s.left = `${r.left}px`
+  s.top = `${r.top}px`
+  s.width = `${r.width}px`
+  s.height = `${r.height}px`
+  _controllerSurface?.getOverlay()?.resize()
+}
+
+/** @param {HTMLElement} slot */
+function subscribeToActiveSlot (slot) {
+  _slotObserver = new ResizeObserver(() => syncHostRect())
+  _slotObserver.observe(slot)
+  _windowResizeHandler = () => syncHostRect()
+  window.addEventListener('resize', _windowResizeHandler)
+  syncHostRect()
+  requestAnimationFrame(syncHostRect)
+}
+
+function unsubscribeFromActiveSlot () {
+  if (_slotObserver) {
+    _slotObserver.disconnect()
+    _slotObserver = null
+  }
+  if (_windowResizeHandler) {
+    window.removeEventListener('resize', _windowResizeHandler)
+    _windowResizeHandler = null
+  }
 }
 
 /**
@@ -104,13 +171,16 @@ function ensureBuilt () {
 export function attachStageTo (container) {
   cancelScheduledDispose()
   ensureBuilt()
-  if (!_root) return
+  if (!_root || !_persistentHost) return
 
-  if (_root.parentElement !== container) {
-    container.appendChild(_root)
+  if (_activeSlot && _activeSlot !== container) {
+    unsubscribeFromActiveSlot()
   }
 
-  _attachedContainer = container
+  _activeSlot = container
+  _persistentHost.style.display = ''
+
+  subscribeToActiveSlot(container)
 
   const overlay = _controllerSurface?.getOverlay()
   if (overlay) {
@@ -124,11 +194,12 @@ export function attachStageTo (container) {
  * @param {HTMLElement} [fromContainer] no-op if sim already moved to another slot
  */
 export function detachStage (fromContainer) {
-  if (!_root || !_attachedContainer) return
-  if (fromContainer && _attachedContainer !== fromContainer) return
+  if (!_activeSlot) return
+  if (fromContainer && _activeSlot !== fromContainer) return
 
-  _attachedContainer = null
-  _root.remove()
+  unsubscribeFromActiveSlot()
+  _activeSlot = null
+  if (_persistentHost) _persistentHost.style.display = 'none'
   scheduleDispose()
 }
 

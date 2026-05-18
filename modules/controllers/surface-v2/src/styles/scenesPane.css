@@ -1,0 +1,110 @@
+/* ── Scenes pane (layout mount root) ─────────────────────────── */
+
+.layout-scenes-pane {
+  padding: var(--page-padding);
+  overflow-y: auto;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+/* ── Scenes pane layout ──────────────────────────────────────── */
+
+.scenes-layout {
+  display: grid;
+  grid-template-columns: 25% minmax(0, 1fr);
+  gap: 0.9rem;
+  align-items: start;
+}
+
+.scene-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.scene-list-item {
+  font-size: 1.3rem;
+  border: 1px solid var(--color-border);
+  border-radius: 1px;
+  background: var(--color-bg-raised);
+  color: var(--color-text);
+  padding: 0.5rem 0.3rem;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+}
+
+.scene-list-item--active {
+  background: var(--color-accent-dim);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.scene-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.scene-section {
+  border: 1px solid var(--color-border);
+  border-radius: 1px;
+  background: var(--color-bg-raised);
+  padding: 0.6rem;
+}
+
+.scene-section-title {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.scene-intents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.5rem 0;
+}
+
+.scene-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.scene-perform {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.scene-perform-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 0 1 auto;
+  max-width: min(14rem, 50%);
+  opacity: 0.55;
+}
+
+.scene-perform-button {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 300px) {
+  .scenes-layout {
+    grid-template-columns: 1fr;
+  }
+}

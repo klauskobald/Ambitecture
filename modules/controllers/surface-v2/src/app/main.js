@@ -10,6 +10,7 @@ import {
   StageEditPane,
   rebindIntentParamsHost
 } from '../layout/renderers/StageEditPane.js'
+import { ScenesPane } from '../layout/renderers/ScenesPane.js'
 
 /** @type {string[]} */
 const PLACEHOLDER_PANE_IDS = ['control', 'pulse', 'animation', 'plugins']
@@ -27,6 +28,7 @@ async function main () {
   )
   registerPaneRenderer('stage', () => new StagePane())
   registerPaneRenderer('stage-edit', () => new StageEditPane())
+  registerPaneRenderer('scenes', () => new ScenesPane())
   for (const paneId of PLACEHOLDER_PANE_IDS) {
     registerPaneRenderer(paneId, () => new HelloWorldPane(paneId))
   }

@@ -3,7 +3,7 @@ import { ControllerSurface } from './controllerSurface.js'
 import { setStageOverlay } from './stageOverlayHost.js'
 import { refreshOverlayPolicy } from './stageOverlayCoordinator.js'
 
-const DISPOSE_DELAY_MS = 5000
+const DISPOSE_DELAY_MS = 30000
 
 /** @type {string | null} */
 let _simulatorIframeUrl = null

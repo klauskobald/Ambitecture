@@ -79,6 +79,8 @@ export function attachSplitResize (opts) {
     applyFractionsFlex(panels, fractions)
   }
 
+  let isDragging = false
+
   applyStoredFractions()
 
   requestAnimationFrame(() => {
@@ -95,6 +97,7 @@ export function attachSplitResize (opts) {
       if (e.button !== 0) return
       e.preventDefault()
       grip.setPointerCapture(e.pointerId)
+      isDragging = true
 
       const startSizes = readPanelSizesPx()
       const pairTotal = startSizes[gripIndex] + startSizes[gripIndex + 1]
@@ -131,8 +134,10 @@ export function attachSplitResize (opts) {
         grip.removeEventListener('pointermove', onMove)
         grip.removeEventListener('pointerup', onUp)
         grip.removeEventListener('pointercancel', onUp)
+        isDragging = false
         const avail = availablePx()
         persistFractions(panels, avail, storageKey, isHorizontal)
+        applyStoredFractions()
       }
 
       grip.addEventListener('pointermove', onMove)
@@ -147,12 +152,10 @@ export function attachSplitResize (opts) {
       if (rafId) cancelAnimationFrame(rafId)
       rafId = requestAnimationFrame(() => {
         rafId = 0
+        if (isDragging) return
         const avail = availablePx()
         if (avail <= MIN_PANEL_PX * panels.length) return
-        const anyPixelFlex = panels.some(p => p.style.flex.includes('px'))
-        if (!anyPixelFlex) {
-          applyStoredFractions()
-        }
+        applyStoredFractions()
       })
     })
     ro.observe(container)

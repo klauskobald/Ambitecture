@@ -1,0 +1,52 @@
+{
+    "LAYOUT_MANAGER": {
+        "2cols": {
+            "label": "2c",
+            "children": [
+                {
+                    "type": "hbox",
+                    "resizable": true,
+                    "children": [
+                        {
+                            "type": "leaf",
+                            "panes": ["simulator-2d"]
+                        },
+                        {
+                            "type": "leaf",
+                            "panes": ["control", "pulse", "animation", "plugins"]
+                        }
+                    ]
+                }
+            ]
+        },
+        "1row.left-3rows.right": {
+            "label": "1r+3r",
+            "children": [
+                {
+                    "type": "hbox",
+                    "resizable": true,
+                    "children": [
+                        {
+                            "type": "leaf",
+                            "panes": ["control"]
+                        },
+                        {
+                            "type": "vbox",
+                            "resizable": true,
+                            "children": [
+                                {
+                                    "type": "leaf",
+                                    "panes": ["pulse"]
+                                },
+                                {
+                                    "type": "leaf",
+                                    "panes": ["animation", "plugins"]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+}

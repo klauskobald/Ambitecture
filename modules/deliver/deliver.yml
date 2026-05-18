@@ -10,6 +10,9 @@ mounts:
   surface-v1:
     root: ../controllers/surface-v1
 
+  surface-v2:
+    root: ../controllers/surface-v2
+
   starter-web-app:
     root: ../renderers/starter-web-app
 

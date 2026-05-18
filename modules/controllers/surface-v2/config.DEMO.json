@@ -1,5 +1,30 @@
 {
+    "AMBITECTURE_HUB_URL": "http://localhost:3000",
+    "GEO_LOCATION": "0.000 0.000",
+    "CONTROLLER_GUID": "controller-web-test-001",
+    "SIMULATOR_RENDERER_GUID": "simulator-1234567890",
     "SIMULATOR_IFRAME_URL": "/simulator-2d/",
+    "LAYOUT": {
+        "pagePaddingPx": 3,
+        "mainGapPx": 8,
+        "simStackMinHeightVh": 50,
+        "controlStripMinHeightPx": 120,
+        "iframeZIndex": 0,
+        "overlayZIndex": 1,
+        "overlayFingerRadiusPx": 14,
+        "overlayFingerFillRgba": "rgba(255, 255, 255, 0.22)",
+        "overlayFingerStrokeRgba": "rgba(255, 255, 255, 0.75)",
+        "overlayLineWidthPx": 2,
+        "overlayTrailFadeMs": 450,
+        "animateEditCellWidthPx": 120,
+        "animateEditCellGapPx": 4,
+        "animateEditCellPaddingPx": 4,
+        "animateEditKnobRowHeightPx": 40,
+        "animateEditKnobRowPaddingYPx": 2,
+        "animateEditKnobRowPaddingXPx": 4,
+        "animateEditKnobRowGapPx": 4,
+        "animateEditKnobRowDialSizePx": 36
+    },
     "LAYOUT_MANAGER": {
         "2cols": {
             "label": "2c",
@@ -10,7 +35,7 @@
                     "children": [
                         {
                             "type": "leaf",
-                            "panes": ["simulator-2d"]
+                            "panes": ["stage"]
                         },
                         {
                             "type": "leaf",
@@ -29,12 +54,16 @@
                     "children": [
                         {
                             "type": "leaf",
-                            "panes": ["control"]
+                            "panes": ["stage"]
                         },
                         {
                             "type": "vbox",
                             "resizable": true,
                             "children": [
+                                {
+                                    "type": "leaf",
+                                    "panes": ["control"]
+                                },
                                 {
                                     "type": "leaf",
                                     "panes": ["pulse"]

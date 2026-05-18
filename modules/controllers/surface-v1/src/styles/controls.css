@@ -937,7 +937,7 @@
 }
 
 .perform-pulse-sync-col__title--rx {
-  animation: perform-pulse-sync-title-rx 0.2s ease-out forwards;
+  animation: perform-pulse-sync-title-rx 0.8s ease-out forwards;
 }
 
 .perform-pulse-sync-col__enabled-toggle {
@@ -1182,6 +1182,7 @@
 }
 
 @keyframes perform-pulse-slot-beat {
+
   0%,
   50% {
     background: #e67e22;
@@ -1310,7 +1311,7 @@
   font-size: 0.78rem;
 }
 
-.perform-pulse-edit__field > span {
+.perform-pulse-edit__field>span {
   flex: 0 0 3.5rem;
   color: var(--color-text-muted);
 }

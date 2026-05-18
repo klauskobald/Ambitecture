@@ -5,6 +5,7 @@
   overflow-y: auto;
   height: 100%;
   box-sizing: border-box;
+  touch-action: manipulation;
 }
 
 /* ── Scenes pane layout ──────────────────────────────────────── */
@@ -35,6 +36,7 @@
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
+  touch-action: manipulation;
   transition: background 0.1s, border-color 0.1s, color 0.1s;
 }
 

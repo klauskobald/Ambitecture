@@ -4,6 +4,7 @@ import {
   getEditFixturesUnlocked,
   setEditFixturesUnlocked
 } from '../../viewport/interactionPolicies.js'
+import { attachStageTo, detachStage } from '../../stage/stageCommon.js'
 import { getStageOverlay } from '../../stage/stageOverlayHost.js'
 import {
   setEditMode,
@@ -28,54 +29,13 @@ import { collectPerformButtonInputs } from '../../core/performButtonInputs.js'
 /** @type {IntentParamsHost | null} */
 let sharedParamsHost = null
 
-/** @type {Map<HTMLElement, StageEditPane>} */
-const paneByModeBar = new Map()
-
 function getParamsHost () {
   if (!sharedParamsHost) sharedParamsHost = new IntentParamsHost()
   return sharedParamsHost
 }
 
-
-/** @type {import('../leafChromeRegistry.js').LeafChromeAdapter} */
-export const stageEditLeafChrome = {
-  ownerPaneId: 'stage-edit',
-  chromeUnderMountPaneId: 'stage',
-  bodyClass: 'layout-leaf-body--stage-pair',
-
-  createRow (leafEl) {
-    const row = document.createElement('div')
-    row.className = 'layout-stage-edit-mode-bar'
-    row.hidden = true
-    const pane = new StageEditPane()
-    pane._buildModeBar(row)
-    paneByModeBar.set(row, pane)
-    leafEl.classList.add('layout-leaf--stage-pair')
-    return row
-  },
-
-  isChromeVisible (activePaneId) {
-    return activePaneId === 'stage-edit'
-  },
-
-  keepMountVisible (activePaneId, mountPaneId, paneIds) {
-    return (
-      mountPaneId === 'stage' &&
-      activePaneId === 'stage-edit' &&
-      paneIds.includes('stage') &&
-      paneIds.includes('stage-edit')
-    )
-  },
-
-  getRenderer (chromeRowEl) {
-    const pane = paneByModeBar.get(chromeRowEl)
-    if (!pane) throw new Error('stage-edit mode bar has no renderer instance')
-    return pane
-  },
-
-  onLayoutRebuild () {
-    getParamsHost().rebindHost()
-  }
+export function rebindIntentParamsHost () {
+  getParamsHost().rebindHost()
 }
 
 export class StageEditPane {
@@ -88,16 +48,30 @@ export class StageEditPane {
     this._selectionUnsub = null
     /** @type {HTMLElement | null} */
     this._modeBar = null
+    /** @type {HTMLElement | null} */
+    this._stageSlot = null
   }
 
   /** @param {HTMLElement} container */
-  mount (_container) {}
+  mount (container) {
+    container.classList.add('layout-stage-edit-pane')
+    container.replaceChildren()
 
-  /**
-   * @param {HTMLElement} modeBar
-   */
-  _buildModeBar (modeBar) {
+    const slot = document.createElement('div')
+    slot.className = 'layout-stage-slot'
+    this._stageSlot = slot
+
+    const modeBar = document.createElement('div')
+    modeBar.className = 'layout-stage-edit-mode-bar'
     this._modeBar = modeBar
+    this._buildModeBar(modeBar)
+
+    container.appendChild(slot)
+    container.appendChild(modeBar)
+  }
+
+  /** @param {HTMLElement} modeBar */
+  _buildModeBar (modeBar) {
     modeBar.replaceChildren()
 
     const bar = document.createElement('div')
@@ -140,6 +114,8 @@ export class StageEditPane {
   }
 
   activate () {
+    if (this._stageSlot) attachStageTo(this._stageSlot)
+
     setEditFixturesUnlocked(false)
     this._refreshFixtureLockButton()
     setEditMode()
@@ -166,6 +142,7 @@ export class StageEditPane {
       this._selectionUnsub()
       this._selectionUnsub = null
     }
+    detachStage()
   }
 
   _toggleFixtureLock () {

@@ -153,7 +153,7 @@
 }
 
 .layout-leaf-body:has(.layout-leaf-pane-mount[data-pane-id='stage']),
-.layout-leaf-body:has(.layout-leaf-pane-mount-wrap[data-pane-id='stage']) {
+.layout-leaf-body:has(.layout-leaf-pane-mount[data-pane-id='stage-edit']) {
   overflow: hidden;
 }
 
@@ -194,11 +194,42 @@
 }
 
 .layout-stage-pane {
-  position: relative;
+  display: flex;
+  flex-direction: column;
   height: 100%;
   min-height: 0;
   overflow: hidden;
   padding: 0;
+  box-sizing: border-box;
+}
+
+.layout-stage-pane > .layout-stage-slot {
+  flex: 1 1 0;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.layout-stage-parking {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.layout-stage-parking[hidden] {
+  display: none !important;
+}
+
+.layout-stage-common-root {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .layout-stage-stack {

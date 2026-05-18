@@ -1,8 +1,4 @@
 import { createPaneRenderer } from './paneRendererRegistry.js'
-import {
-  resolveLeafChrome,
-  notifyLeafChromeLayoutRebuild
-} from './leafChromeRegistry.js'
 import { attachSplitResize } from './splitResize.js'
 import {
   loadActiveLayoutId,
@@ -15,8 +11,7 @@ import {
 /**
  * @typedef {object} LeafPaneEntry
  * @property {import('./paneRendererRegistry.js').PaneRenderer} instance
- * @property {HTMLElement} mountEl visibility root (wrap when chrome sits under a mount)
- * @property {HTMLElement} [paneMountEl] inner mount passed to PaneRenderer.mount
+ * @property {HTMLElement} mountEl
  * @property {boolean} mounted
  */
 
@@ -26,8 +21,6 @@ import {
  * @property {string | null} activePaneId
  * @property {Map<string, LeafPaneEntry>} cache
  * @property {HTMLElement} bodyEl
- * @property {import('./leafChromeRegistry.js').LeafChromeAdapter | null} [leafChrome]
- * @property {HTMLElement | null} [leafChromeRowEl]
  */
 
 /** @type {Record<string, LayoutDefinition> | null} */
@@ -42,6 +35,9 @@ let toolbarEl = null
 /** @type {string | null} */
 let activeLayoutId = null
 
+/** @type {(() => void) | null} */
+let onLayoutRebuild = null
+
 /** @type {Map<HTMLElement, LeafState>} */
 const leafStateByEl = new WeakMap()
 
@@ -51,11 +47,13 @@ const leafStateByEl = new WeakMap()
  * @param {HTMLElement} opts.stage
  * @param {Record<string, LayoutDefinition>} opts.catalog
  * @param {string} [opts.defaultLayoutId]
+ * @param {() => void} [opts.onLayoutRebuild]
  */
 export function init (opts) {
   catalog = opts.catalog
   stageEl = opts.stage
   toolbarEl = opts.toolbar
+  onLayoutRebuild = opts.onLayoutRebuild ?? null
   toolbarEl.replaceChildren()
 
   for (const [layoutId, def] of Object.entries(catalog)) {
@@ -96,7 +94,7 @@ export function select (layoutId) {
   }
 
   syncToolbarPressed(layoutId)
-  notifyLeafChromeLayoutRebuild()
+  onLayoutRebuild?.()
 }
 
 /**
@@ -104,20 +102,6 @@ export function select (layoutId) {
  */
 export function getActiveLayoutId () {
   return activeLayoutId
-}
-
-/**
- * @param {LeafState} state
- * @param {string} activePaneId
- * @param {string} paneId
- * @returns {boolean}
- */
-function isPaneMountVisible (state, activePaneId, paneId) {
-  if (paneId === activePaneId) return true
-  if (state.leafChrome?.keepMountVisible(activePaneId, paneId, state.paneIds)) {
-    return true
-  }
-  return false
 }
 
 function applyLayoutTags (el, tags) {
@@ -228,21 +212,11 @@ function buildLeaf (node, nodePath) {
   const body = document.createElement('div')
   body.className = 'layout-leaf-body'
 
-  const leafChrome = resolveLeafChrome(node.panes)
-  /** @type {HTMLElement | null} */
-  let leafChromeRowEl = null
-  if (leafChrome) {
-    leafChromeRowEl = leafChrome.createRow(leaf, node.panes)
-    if (leafChrome.bodyClass) body.classList.add(leafChrome.bodyClass)
-  }
-
   const state = /** @type {LeafState} */ ({
     paneIds: [...node.panes],
     activePaneId: null,
     cache: new Map(),
-    bodyEl: body,
-    leafChrome: leafChrome ?? null,
-    leafChromeRowEl
+    bodyEl: body
   })
   leafStateByEl.set(leaf, state)
 
@@ -258,12 +232,6 @@ function buildLeaf (node, nodePath) {
   }
 
   leaf.appendChild(header)
-  if (
-    leafChromeRowEl &&
-    !leafChrome?.chromeUnderMountPaneId
-  ) {
-    leaf.appendChild(leafChromeRowEl)
-  }
   leaf.appendChild(body)
   applyLayoutTags(leaf, node.tags)
   activateLeafPane(leaf, node.panes[0])
@@ -279,30 +247,14 @@ function ensurePaneMount (state, paneId) {
   let entry = state.cache.get(paneId)
   if (entry) return entry
 
-  const paneMount = document.createElement('div')
-  paneMount.className = 'layout-leaf-pane-mount'
-  paneMount.dataset.paneId = paneId
-
-  const chromeUnderMount =
-    state.leafChrome?.chromeUnderMountPaneId === paneId && state.leafChromeRowEl
-
-  /** @type {HTMLElement} */
-  let mountRoot = paneMount
-  if (chromeUnderMount) {
-    const wrap = document.createElement('div')
-    wrap.className = 'layout-leaf-pane-mount-wrap'
-    wrap.dataset.paneId = paneId
-    wrap.appendChild(paneMount)
-    wrap.appendChild(state.leafChromeRowEl)
-    mountRoot = wrap
-  }
-
-  state.bodyEl.appendChild(mountRoot)
+  const mountEl = document.createElement('div')
+  mountEl.className = 'layout-leaf-pane-mount'
+  mountEl.dataset.paneId = paneId
+  state.bodyEl.appendChild(mountEl)
 
   entry = {
     instance: createPaneRenderer(paneId),
-    mountEl: mountRoot,
-    ...(chromeUnderMount ? { paneMountEl: paneMount } : {}),
+    mountEl,
     mounted: false
   }
   state.cache.set(paneId, entry)
@@ -321,16 +273,8 @@ function activateLeafPane (leafEl, paneId) {
 
   const prevId = state.activePaneId
   if (prevId) {
-    if (
-      state.leafChrome &&
-      state.leafChromeRowEl &&
-      prevId === state.leafChrome.ownerPaneId
-    ) {
-      state.leafChrome.getRenderer(state.leafChromeRowEl).deactivate?.()
-    } else {
-      const prev = state.cache.get(prevId)
-      prev?.instance.deactivate?.()
-    }
+    const prev = state.cache.get(prevId)
+    prev?.instance.deactivate?.()
   }
 
   state.activePaneId = paneId
@@ -340,33 +284,15 @@ function activateLeafPane (leafEl, paneId) {
     btn.setAttribute('aria-pressed', id === paneId ? 'true' : 'false')
   }
 
-  if (state.leafChromeRowEl && state.leafChrome) {
-    state.leafChromeRowEl.hidden = !state.leafChrome.isChromeVisible(paneId)
-  }
-
   for (const [id, entry] of state.cache) {
-    entry.mountEl.hidden = !isPaneMountVisible(state, paneId, id)
-  }
-
-  if (
-    state.leafChrome &&
-    state.leafChromeRowEl &&
-    paneId === state.leafChrome.ownerPaneId
-  ) {
-    if (state.leafChrome.chromeUnderMountPaneId) {
-      ensurePaneMount(state, state.leafChrome.chromeUnderMountPaneId)
-    }
-    state.bodyEl.dataset.activePane = paneId
-    state.leafChrome.getRenderer(state.leafChromeRowEl).activate?.()
-    return
+    entry.mountEl.hidden = id !== paneId
   }
 
   const entry = ensurePaneMount(state, paneId)
   entry.mountEl.hidden = false
 
-  const paneMountTarget = entry.paneMountEl ?? entry.mountEl
   if (!entry.mounted) {
-    entry.instance.mount(paneMountTarget)
+    entry.instance.mount(entry.mountEl)
     entry.mounted = true
   }
 

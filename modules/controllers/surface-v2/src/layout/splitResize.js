@@ -1,4 +1,8 @@
-const STORAGE_PREFIX = 'ambitecture.surface-v2.layoutSplit.r1.'
+import {
+  loadSplitFractions,
+  saveSplitFractions
+} from './layoutSplitState.js'
+
 const MIN_PANEL_PX = 80
 
 /**
@@ -25,8 +29,6 @@ export function attachSplitResize (opts) {
   if (panels.length < 2) return
 
   const isHorizontal = axis === 'horizontal'
-  const sizeProp = isHorizontal ? 'width' : 'height'
-  const storageKey = `${STORAGE_PREFIX}${layoutId}.${nodePath}`
 
   const grips = directSplitGrips(container)
   if (grips.length !== panels.length - 1) return
@@ -75,8 +77,16 @@ export function attachSplitResize (opts) {
   }
 
   function applyStoredFractions () {
-    const fractions = loadFractions(panels.length, storageKey)
+    const fractions = loadSplitFractions(layoutId, nodePath, panels.length)
     applyFractionsFlex(panels, fractions)
+  }
+
+  function persistCurrentFractions () {
+    const sizes = readPanelSizesPx()
+    const sum = sizes.reduce((a, b) => a + b, 0)
+    if (sum <= 0) return
+    const fractions = sizes.map(s => s / sum)
+    saveSplitFractions(layoutId, nodePath, fractions)
   }
 
   let isDragging = false
@@ -135,8 +145,7 @@ export function attachSplitResize (opts) {
         grip.removeEventListener('pointerup', onUp)
         grip.removeEventListener('pointercancel', onUp)
         isDragging = false
-        const avail = availablePx()
-        persistFractions(panels, avail, storageKey, isHorizontal)
+        persistCurrentFractions()
         applyStoredFractions()
       }
 
@@ -163,61 +172,12 @@ export function attachSplitResize (opts) {
 }
 
 /**
- * @param {number} count
- * @param {string} key
- * @returns {number[]}
- */
-function loadFractions (count, key) {
-  const equal = 1 / count
-  try {
-    const raw = localStorage.getItem(key)
-    if (raw === null) return Array.from({ length: count }, () => equal)
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed) || parsed.length !== count) {
-      return Array.from({ length: count }, () => equal)
-    }
-    const nums = parsed.map(Number)
-    if (nums.some(n => !Number.isFinite(n) || n <= 0)) {
-      return Array.from({ length: count }, () => equal)
-    }
-    const sum = nums.reduce((a, b) => a + b, 0)
-    if (sum <= 0) return Array.from({ length: count }, () => equal)
-    return nums.map(n => n / sum)
-  } catch {
-    return Array.from({ length: count }, () => equal)
-  }
-}
-
-/**
- * Proportional flex so the split always fills the container (no fixed px on init).
  * @param {HTMLElement[]} panels
- * @param {number[]} fractions
+ * @param {number[]} fractions relative sizes (sum = 1)
  */
 function applyFractionsFlex (panels, fractions) {
   for (let i = 0; i < panels.length; i++) {
     const grow = fractions[i] ?? 1 / panels.length
     panels[i].style.flex = `${grow} 1 0`
-  }
-}
-
-/**
- * @param {HTMLElement[]} panels
- * @param {number} avail
- * @param {string} key
- * @param {boolean} isHorizontal
- */
-function persistFractions (panels, avail, key, isHorizontal) {
-  if (avail <= 0) return
-  const sizes = panels.map(p => {
-    const r = p.getBoundingClientRect()
-    return isHorizontal ? r.width : r.height
-  })
-  const sum = sizes.reduce((a, b) => a + b, 0)
-  if (sum <= 0) return
-  const fractions = sizes.map(s => s / sum)
-  try {
-    localStorage.setItem(key, JSON.stringify(fractions))
-  } catch {
-    /* ignore */
   }
 }

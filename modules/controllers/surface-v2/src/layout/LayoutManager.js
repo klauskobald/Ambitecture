@@ -1,5 +1,9 @@
 import { createPaneRenderer } from './paneRendererRegistry.js'
 import { attachSplitResize } from './splitResize.js'
+import {
+  loadActiveLayoutId,
+  saveActiveLayoutId
+} from './layoutSplitState.js'
 
 /** @typedef {import('./loadLayoutCatalog.js').LayoutNode} LayoutNode */
 /** @typedef {import('./loadLayoutCatalog.js').LayoutDefinition} LayoutDefinition */
@@ -58,10 +62,12 @@ export function init (opts) {
     toolbarEl.appendChild(btn)
   }
 
+  const storedId = loadActiveLayoutId()
   const defaultId =
-    opts.defaultLayoutId && catalog[opts.defaultLayoutId]
+    (storedId && catalog[storedId] && storedId) ||
+    (opts.defaultLayoutId && catalog[opts.defaultLayoutId]
       ? opts.defaultLayoutId
-      : Object.keys(catalog)[0]
+      : Object.keys(catalog)[0])
   if (defaultId) select(defaultId)
 }
 
@@ -74,6 +80,7 @@ export function select (layoutId) {
   if (!def) return
 
   activeLayoutId = layoutId
+  saveActiveLayoutId(layoutId)
   stageEl.replaceChildren()
 
   for (let i = 0; i < def.children.length; i++) {

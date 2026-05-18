@@ -1,9 +1,6 @@
 import { createPaneRenderer } from './paneRendererRegistry.js'
 import { attachSplitResize } from './splitResize.js'
-import {
-  loadActiveLayoutId,
-  saveActiveLayoutId
-} from './layoutSplitState.js'
+import { loadActiveLayoutId, saveActiveLayoutId } from './layoutSplitState.js'
 
 /** @typedef {import('./loadLayoutCatalog.js').LayoutNode} LayoutNode */
 /** @typedef {import('./loadLayoutCatalog.js').LayoutDefinition} LayoutDefinition */
@@ -262,6 +259,15 @@ function ensurePaneMount (state, paneId) {
 }
 
 /**
+ * @param {import('./paneRendererRegistry.js').PaneRenderer} instance
+ * @param {'willBeDeactivated' | 'deactivate' | 'willBeActivated' | 'activate'} phase
+ */
+function invokePanePhase (instance, phase) {
+  const fn = instance[phase]
+  if (typeof fn === 'function') fn.call(instance)
+}
+
+/**
  * @param {HTMLElement} leafEl
  * @param {string} paneId
  */
@@ -272,11 +278,6 @@ function activateLeafPane (leafEl, paneId) {
   if (state.activePaneId === paneId) return
 
   const prevId = state.activePaneId
-  if (prevId) {
-    const prev = state.cache.get(prevId)
-    prev?.instance.deactivate?.()
-  }
-
   state.activePaneId = paneId
 
   for (const btn of leafEl.querySelectorAll('.layout-leaf-toggle')) {
@@ -297,7 +298,20 @@ function activateLeafPane (leafEl, paneId) {
   }
 
   state.bodyEl.dataset.activePane = paneId
-  entry.instance.activate?.()
+
+  if (prevId) {
+    const prev = state.cache.get(prevId)
+    if (prev) invokePanePhase(prev.instance, 'willBeDeactivated')
+  }
+
+  invokePanePhase(entry.instance, 'willBeActivated')
+
+  if (prevId) {
+    const prev = state.cache.get(prevId)
+    if (prev) invokePanePhase(prev.instance, 'deactivate')
+  }
+
+  invokePanePhase(entry.instance, 'activate')
 }
 
 export const LayoutManager = {

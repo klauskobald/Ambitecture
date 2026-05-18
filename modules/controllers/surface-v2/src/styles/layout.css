@@ -52,8 +52,8 @@
 }
 
 /* Root layout tree fills the stage (absolute avoids flex sizing gaps) */
-.layout-stage > .layout-hbox,
-.layout-stage > .layout-vbox {
+.layout-stage>.layout-hbox,
+.layout-stage>.layout-vbox {
   position: absolute;
   inset: 0;
   min-height: 0;
@@ -78,9 +78,9 @@
 }
 
 /* Nested boxes inside a split panel fill that panel */
-.layout-panel > .layout-hbox,
-.layout-panel > .layout-vbox,
-.layout-panel > .layout-leaf {
+.layout-panel>.layout-hbox,
+.layout-panel>.layout-vbox,
+.layout-panel>.layout-leaf {
   flex: 1 1 0;
   width: 100%;
   min-height: 0;
@@ -203,7 +203,7 @@
   box-sizing: border-box;
 }
 
-.layout-stage-pane > .layout-stage-slot {
+.layout-stage-pane>.layout-stage-slot {
   flex: 1 1 0;
   min-height: 0;
   position: relative;
@@ -312,13 +312,11 @@
   cursor: ew-resize;
   margin: 0;
   flex-shrink: 0;
-  background-image: repeating-linear-gradient(
-    to right,
-    var(--color-text-muted) 0,
-    var(--color-text-muted) 2px,
-    transparent 2px,
-    transparent 4px
-  );
+  background-image: repeating-linear-gradient(to right,
+      var(--color-text-muted) 0,
+      var(--color-text-muted) 2px,
+      transparent 2px,
+      transparent 4px);
   background-size: 0.45rem 1.05rem;
   background-position: center;
   background-repeat: no-repeat;
@@ -332,13 +330,11 @@
   cursor: ns-resize;
   margin: 0;
   flex-shrink: 0;
-  background-image: repeating-linear-gradient(
-    to bottom,
-    var(--color-text-muted) 0,
-    var(--color-text-muted) 2px,
-    transparent 2px,
-    transparent 4px
-  );
+  background-image: repeating-linear-gradient(to bottom,
+      var(--color-text-muted) 0,
+      var(--color-text-muted) 2px,
+      transparent 2px,
+      transparent 4px);
   background-size: 1.05rem 0.45rem;
   background-position: center;
   background-repeat: no-repeat;

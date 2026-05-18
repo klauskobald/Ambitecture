@@ -3,8 +3,10 @@ import * as statusDisplay from '../app/statusDisplay.js'
 /**
  * @typedef {object} PaneRenderer
  * @property {(container: HTMLElement) => void} mount
- * @property {() => void} [activate]
+ * @property {() => void} [willBeDeactivated]
  * @property {() => void} [deactivate]
+ * @property {() => void} [willBeActivated]
+ * @property {() => void} [activate]
  */
 
 /** @type {Map<string, () => PaneRenderer>} */
@@ -25,7 +27,10 @@ export function registerPaneRenderer (paneId, factory) {
 export function createPaneRenderer (paneId) {
   const factory = registry.get(paneId)
   if (!factory) {
-    statusDisplay.error(`No pane renderer registered for "${paneId}".`, 'layout')
+    statusDisplay.error(
+      `No pane renderer registered for "${paneId}".`,
+      'layout'
+    )
     throw new Error(`No pane renderer for "${paneId}"`)
   }
   return factory()

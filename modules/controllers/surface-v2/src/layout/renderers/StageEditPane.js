@@ -19,11 +19,11 @@ import { intentGuid } from '../../core/stores.js'
 import { toCSSRGB } from '../../core/color.js'
 import { SelectionManager } from '../../viewport/selectionManager.js'
 import { warn as modalWarn, openModalCard } from '../../core/Modal.js'
+import { sendGraphCommand, sendSaveProject } from '../../core/outboundQueue.js'
 import {
-  sendGraphCommand,
-  sendSaveProject
-} from '../../core/outboundQueue.js'
-import { ArraySorter, DEFAULT_PERFORM_INPUT_SORT_KEY } from '../../core/arraySorter.js'
+  ArraySorter,
+  DEFAULT_PERFORM_INPUT_SORT_KEY
+} from '../../core/arraySorter.js'
 import { collectPerformButtonInputs } from '../../core/performButtonInputs.js'
 
 /** @type {IntentParamsHost | null} */
@@ -100,8 +100,9 @@ export class StageEditPane {
     this._performSortBtn.type = 'button'
     this._performSortBtn.className = 'btn btn-mode-toggle'
     this._performSortBtn.textContent = 'Perform sort'
-    this._performSortBtn.addEventListener('click', () =>
-      void this._onPerformSortClick()
+    this._performSortBtn.addEventListener(
+      'click',
+      () => void this._onPerformSortClick()
     )
     const selectModeBtn = bar.querySelector('[data-mode-id="select"]')
     if (selectModeBtn) {
@@ -237,7 +238,7 @@ export class StageEditPane {
     const sortKey = DEFAULT_PERFORM_INPUT_SORT_KEY
     const sorter = new ArraySorter(raw, sortKey)
 
-    const patchOrderToHub = (ordered) => {
+    const patchOrderToHub = ordered => {
       for (const item of ordered) {
         const guid = String(item.guid ?? '')
         if (!guid) continue
@@ -262,7 +263,8 @@ export class StageEditPane {
 
       const title = document.createElement('p')
       title.className = 'modal-text'
-      title.textContent = 'Drag the grip on each row to set Perform button order'
+      title.textContent =
+        'Drag the grip on each row to set Perform button order'
 
       const listHost = document.createElement('div')
       listHost.className = 'perform-sort-list'

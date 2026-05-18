@@ -3,9 +3,7 @@ import {
   detachStage,
   getControllerSurface
 } from '../../stage/stageCommon.js'
-import {
-  setPerformMode
-} from '../../stage/stageOverlayCoordinator.js'
+import { setPerformMode } from '../../stage/stageOverlayCoordinator.js'
 import { PerformQuickPanelHud } from '../../perform/performQuickPanelHud.js'
 
 export class StagePane {

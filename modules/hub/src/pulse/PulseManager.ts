@@ -2,6 +2,7 @@ import { randomInt } from 'crypto';
 import type { ProjectManager, PulseSetup, PulseSlotMode } from '../ProjectManager';
 import { Logger } from '../Logger';
 import type { HubStatusDispatcher, HubStatusPulsePayload } from '../hubStatusTypes';
+import { parsePulseSyncProjectConfig } from './PulseSyncConfig';
 
 type ActivePulseRunner = {
   setup: PulseSetup;
@@ -116,6 +117,10 @@ export class PulseManager {
       return;
     }
 
+    const syncCarryBpmEnabled = parsePulseSyncProjectConfig(
+      this.projectManager.getPulsesWirePayload(),
+    ).enabled;
+
     if (this.runner && this.runner.setup.guid === guid) {
       this.restartActiveSetup();
       return;
@@ -124,15 +129,26 @@ export class PulseManager {
     if (this.runner) {
       if (this.runner.isRunning) {
         Logger.info(`[pulse] selectSetup(${guid}): switching active pulse`);
+        const carryBpm = syncCarryBpmEnabled ? this.getRunnerBpm() : undefined;
         this.stopTimer();
         this.runner.setup = setup;
         this.runner.currentSlotIdx = 0;
         this.runner.isRunning = true;
+        if (
+          syncCarryBpmEnabled
+          && carryBpm !== undefined
+          && Number.isFinite(carryBpm)
+        ) {
+          this.runner.liveBpm = carryBpm;
+        }
         this.projectManager.setActivePulseGuid(guid);
         this.scheduleNextTick();
         return;
       }
     }
+
+    const carryBpmForStoppedRunner =
+      syncCarryBpmEnabled && this.runner ? this.getRunnerBpm() : undefined;
 
     this.runner = {
       setup,
@@ -141,6 +157,9 @@ export class PulseManager {
       nextTickAtMs: 0,
       tickTimer: undefined,
       msIntoCurrentTick: 0,
+      ...(carryBpmForStoppedRunner !== undefined && Number.isFinite(carryBpmForStoppedRunner)
+        ? { liveBpm: carryBpmForStoppedRunner }
+        : {}),
     };
     this.projectManager.setActivePulseGuid(guid);
     Logger.info(`[pulse] selected setup ${guid} (${setup.name}, ${setup.bpm} BPM, ${setup.meter} meter)`);

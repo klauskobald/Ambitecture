@@ -438,7 +438,7 @@ Perform parameter payloads for intent (e.g. `argsOn` / `argsOff` / `args` as `js
 Hub applies action changes via `graph:delta` and pushes **`projectPatch`** `{ key: "pulses", data: PulsesConfig }` to all controllers when buckets change. On controller register, hub sends an initial `pulses` patch after `graph:init`. Surface: `sendPulseAssignCommand(command)` in `outboundQueue.js`; `projectGraph` topic `pulses`.
 
 **`pulse:control`** (controller → hub): sends `PulseControlCommand` payloads. Commands include:
-- `selectSetup` — `{ setupGuid }`; hub activates that setup (single runner), persists `activePulseGuid`, starts ticking
+- `selectSetup` — `{ setupGuid }`; hub activates that setup (single runner), persists `activePulseGuid`, starts ticking. When **`pulses.sync.enabled`** is true and the selection changes the active setup, the hub sets runner **`liveBpm`** from the effective tempo in use before the switch (live value if present, otherwise the previous setup’s durable BPM) so the new setup does not immediately tick at its YAML `bpm` while waiting for the next `pulse:sync`.
 - `createSetup` — `{ name?, bpm?, slotCount? }`; appends `pulse-{uuid}` to `pulses.setups`
 - `deleteSetup` — `{ setupGuid }`; removes setup; stops pulse if it was active
 - `renameSetup` — `{ setupGuid, name }`

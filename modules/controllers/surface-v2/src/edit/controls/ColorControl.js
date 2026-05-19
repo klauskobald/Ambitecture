@@ -1,9 +1,11 @@
 import { PropertyControl } from './PropertyControl.js'
 import { hslPalette } from '../../ui/palettes/hslPalette.js'
 import { projectGraph } from '../../core/projectGraph.js'
+import { queueIntentUpdate } from '../../core/outboundQueue.js'
 import { toHSL } from '../../core/color.js'
 import { applyDelta } from './controlHelpers.js'
 import { ScalarDragSlider } from '../components/ScalarDragSlider.js'
+import { markStageOverlayActivity } from '../../stage/stageOverlayHost.js'
 
 const HSL_CHANNEL_DEFAULTS = {
   h: { fn: 'ADD', range: /** @type {[number, number]} */ ([-10, 10]),   label: 'ΔH', step: '1',    wrap: true },
@@ -27,6 +29,10 @@ export class ColorControl extends PropertyControl {
     this._wasHslDeltaMode = false
     /** @type {Record<string, Map<string, { h: number, s: number, l: number }>>} per-channel HSL at drag start */
     this._hslBaselineByChannel = {}
+    /** @type {boolean} */
+    this._paletteDragging = false
+    /** @type {{ h: number, s: number, l: number } | null} */
+    this._lastPaletteColor = null
   }
 
   /** @param {HTMLElement} area */
@@ -34,14 +40,16 @@ export class ColorControl extends PropertyControl {
     // Absolute mode: inline HSL palette (always built)
     this._inlineArea = document.createElement('div')
     this._inlineArea.className = 'prop-color-inline'
-    this._paletteInstance = hslPalette.mount(this._inlineArea, rawColor => {
-      const dotKey = /** @type {string} */ (this._descriptor.dotKey)
-      for (const guid of this._currentGuids) {
-        this._updateProperty(guid, dotKey, rawColor)
+    this._paletteInstance = hslPalette.mount(
+      this._inlineArea,
+      rawColor => this._onPaletteInput(rawColor),
+      {
+        onDragStart: () => {
+          this._paletteDragging = true
+        },
+        onDragEnd: () => this._onPaletteDragEnd()
       }
-    })
-    // Save project when user lifts finger/mouse from palette
-    this._inlineArea.addEventListener('pointerup', () => this._saveProject())
+    )
     area.appendChild(this._inlineArea)
 
     // Delta mode: relative sliders — only built for multi-selection
@@ -101,7 +109,7 @@ export class ColorControl extends PropertyControl {
     if (this._inlineArea) this._inlineArea.hidden = isDelta
     if (this._relativeArea) this._relativeArea.hidden = !isDelta
 
-    if (!isDelta && this._paletteInstance) {
+    if (!isDelta && this._paletteInstance && !this._paletteDragging) {
       if (state.mode === 'same' && state.value !== undefined) {
         this._paletteInstance.setColor(state.value)
       }
@@ -117,6 +125,46 @@ export class ColorControl extends PropertyControl {
     }
 
     this._wasHslDeltaMode = isDelta
+  }
+
+  /**
+   * Live runtime stream while scrubbing (hub merge); durable save on drag end.
+   * @param {{ h: number, s: number, l: number }} rawColor
+   */
+  _onPaletteInput (rawColor) {
+    this._lastPaletteColor = rawColor
+    const dotKey = /** @type {string} */ (this._descriptor.dotKey)
+    const activeScene = projectGraph.getActiveSceneName()
+    for (const guid of this._currentGuids) {
+      const updated = projectGraph.applyPerformIntentParamUpdate(
+        guid,
+        dotKey,
+        rawColor,
+        this._allowOverlay
+      )
+      if (updated) queueIntentUpdate(updated)
+      if (
+        this._allowOverlay &&
+        activeScene &&
+        projectGraph.isSceneIntentOverlayed(activeScene, guid, dotKey)
+      ) {
+        this._sceneDirty = true
+      }
+    }
+    markStageOverlayActivity()
+  }
+
+  _onPaletteDragEnd () {
+    if (!this._paletteDragging) return
+    const rawColor = this._lastPaletteColor
+    this._paletteDragging = false
+    if (rawColor) {
+      const dotKey = /** @type {string} */ (this._descriptor.dotKey)
+      for (const guid of this._currentGuids) {
+        this._updateProperty(guid, dotKey, rawColor)
+      }
+    }
+    this._saveProject()
   }
 
   /**
@@ -216,6 +264,8 @@ export class ColorControl extends PropertyControl {
     }
     this._relSliders = []
     this._hslBaselineByChannel = {}
+    this._paletteDragging = false
+    this._lastPaletteColor = null
     this._paletteInstance?.destroy()
     this._paletteInstance = null
   }

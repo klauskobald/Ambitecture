@@ -17,9 +17,12 @@ export const hslPalette = {
   /**
    * @param {HTMLElement} container
    * @param {(color: { h: number, s: number, l: number }) => void} onChange
+   * @param {{ onDragStart?: () => void, onDragEnd?: () => void }} [opts]
    * @returns {{ setColor: (colorObj: unknown) => void, destroy: () => void }}
    */
-  mount (container, onChange) {
+  mount (container, onChange, opts = {}) {
+    const onDragStart = opts.onDragStart
+    const onDragEnd = opts.onDragEnd
     const wrap = document.createElement('div')
     wrap.className = 'palette-hsl'
 
@@ -71,7 +74,8 @@ export const hslPalette = {
     let currentH = 0
     let currentS = 1
     let currentL = 0.5
-    let isDragging = false
+    /** @type {number | null} */
+    let dragPointerId = null
 
     function drawCrosshair () {
       ctx.putImageData(img, 0, 0)
@@ -123,17 +127,39 @@ export const hslPalette = {
       onChange({ h: currentH, s: currentS, l: currentL })
     }
 
+    /** @param {PointerEvent} ev */
+    function endDrag (ev) {
+      if (dragPointerId !== ev.pointerId) return
+      try {
+        canvas.releasePointerCapture(ev.pointerId)
+      } catch {
+        /* ignore */
+      }
+      dragPointerId = null
+      onDragEnd?.()
+      ev.preventDefault()
+    }
+
     canvas.addEventListener('pointerdown', ev => {
-      isDragging = true
+      if (ev.button !== 0) return
+      dragPointerId = ev.pointerId
+      onDragStart?.()
       canvas.setPointerCapture(ev.pointerId)
       pickFromClient(ev.clientX, ev.clientY)
+      ev.preventDefault()
     })
     canvas.addEventListener('pointermove', ev => {
-      if (!isDragging) return
+      if (dragPointerId !== ev.pointerId) return
       pickFromClient(ev.clientX, ev.clientY)
+      ev.preventDefault()
     })
-    canvas.addEventListener('pointerup', () => { isDragging = false })
-    canvas.addEventListener('pointercancel', () => { isDragging = false })
+    canvas.addEventListener('pointerup', endDrag)
+    canvas.addEventListener('pointercancel', endDrag)
+    canvas.addEventListener('lostpointercapture', ev => {
+      if (dragPointerId !== ev.pointerId) return
+      dragPointerId = null
+      onDragEnd?.()
+    })
 
     drawCrosshair()
 

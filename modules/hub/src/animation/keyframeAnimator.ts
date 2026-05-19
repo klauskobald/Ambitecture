@@ -123,6 +123,9 @@ function lerpPlanEndpoints(
  * (centisecond rounding). With `content.lerp`, each segment’s substeps are registered after the **previous**
  * anchor’s keyframe is applied so interpolation runs from that last-applied state toward the next anchor (not
  * pre-queued at cycle start, which could run the segment planner before the prior keyframe had fired).
+ * In manual run mode, `step` / `goto` / `random` use the same lerp when `content.lerp.time` &gt; 0: ramps are
+ * planned from the last **committed** keyframe index (`_lastFiredStepIdx` after the previous jump or lerp
+ * finished), not from a timeline neighbour, so arbitrary targets still interpolate from the real prior step.
  * On target intent leaving active scene: pause (clear timers). Re-enter: restart from cycle 0 (v1).
  *
  * Timescale: wall time = `startWall + nominalMs * timescale` ({@link setTimescale}).
@@ -367,17 +370,34 @@ export class KeyframeAnimator {
         const { steps } = this.parseSteps();
         const targetGuid = this.targetIntentGuid();
         if (!targetGuid || steps.length === 0 || !this._intentAccess || !this._mutateIntent) return;
-        if (this._lastFiredStepIdx < 0) {
-          this._lastFiredStepIdx = 0;
-        }
+        const lastAppliedStepIdx = this._lastFiredStepIdx < 0 ? 0 : this._lastFiredStepIdx;
         const L = steps.length;
-        const nextIdx = ((this._lastFiredStepIdx + offset) % L + L) % L;
-        this._lastFiredStepIdx = nextIdx;
-        const step = steps[nextIdx];
-        if (step) {
-          this.emitOneKeyframe(targetGuid, this._intentAccess, this._mutateIntent, step.args);
+        const nextIdx = ((lastAppliedStepIdx + offset) % L + L) % L;
+        if (nextIdx === lastAppliedStepIdx) {
+          this._lastFiredStepIdx = lastAppliedStepIdx;
+          this._emitManualPausedStatus();
+          break;
         }
-        this._emitManualPausedStatus();
+        this.stripTimers();
+        const lerp = this.parseContentLerp();
+        if (lerp) {
+          this.scheduleManualWallLerpBetweenStepIndices(
+            targetGuid,
+            steps,
+            lastAppliedStepIdx,
+            nextIdx,
+            lerp,
+            this._intentAccess,
+            this._mutateIntent,
+          );
+        } else {
+          this._lastFiredStepIdx = nextIdx;
+          const step = steps[nextIdx];
+          if (step) {
+            this.emitOneKeyframe(targetGuid, this._intentAccess, this._mutateIntent, step.args);
+          }
+          this._emitManualPausedStatus();
+        }
         break;
       }
       case 'goto': {
@@ -385,13 +405,33 @@ export class KeyframeAnimator {
         const { steps } = this.parseSteps();
         const targetGuid = this.targetIntentGuid();
         if (!targetGuid || steps.length === 0 || !this._intentAccess || !this._mutateIntent) return;
+        const lastAppliedStepIdx = this._lastFiredStepIdx < 0 ? 0 : this._lastFiredStepIdx;
         const clamped = Math.max(0, Math.min(steps.length - 1, idx));
-        this._lastFiredStepIdx = clamped;
-        const step = steps[clamped];
-        if (step) {
-          this.emitOneKeyframe(targetGuid, this._intentAccess, this._mutateIntent, step.args);
+        if (clamped === lastAppliedStepIdx) {
+          this._lastFiredStepIdx = lastAppliedStepIdx;
+          this._emitManualPausedStatus();
+          break;
         }
-        this._emitManualPausedStatus();
+        this.stripTimers();
+        const lerp = this.parseContentLerp();
+        if (lerp) {
+          this.scheduleManualWallLerpBetweenStepIndices(
+            targetGuid,
+            steps,
+            lastAppliedStepIdx,
+            clamped,
+            lerp,
+            this._intentAccess,
+            this._mutateIntent,
+          );
+        } else {
+          this._lastFiredStepIdx = clamped;
+          const step = steps[clamped];
+          if (step) {
+            this.emitOneKeyframe(targetGuid, this._intentAccess, this._mutateIntent, step.args);
+          }
+          this._emitManualPausedStatus();
+        }
         break;
       }
       case 'random': {
@@ -400,20 +440,36 @@ export class KeyframeAnimator {
         if (!targetGuid || steps.length === 0 || !this._intentAccess || !this._mutateIntent) return;
         const L = steps.length;
         if (L === 1) {
+          this._lastFiredStepIdx = 0;
           this.emitOneKeyframe(targetGuid, this._intentAccess, this._mutateIntent, steps[0]!.args);
           this._emitManualPausedStatus();
           break;
         }
+        const lastAppliedStepIdx = this._lastFiredStepIdx < 0 ? 0 : this._lastFiredStepIdx;
         let idx: number;
         do {
           idx = Math.floor(Math.random() * L);
-        } while (idx === this._lastFiredStepIdx);
-        this._lastFiredStepIdx = idx;
-        const step = steps[idx];
-        if (step) {
-          this.emitOneKeyframe(targetGuid, this._intentAccess, this._mutateIntent, step.args);
+        } while (idx === lastAppliedStepIdx);
+        this.stripTimers();
+        const lerp = this.parseContentLerp();
+        if (lerp) {
+          this.scheduleManualWallLerpBetweenStepIndices(
+            targetGuid,
+            steps,
+            lastAppliedStepIdx,
+            idx,
+            lerp,
+            this._intentAccess,
+            this._mutateIntent,
+          );
+        } else {
+          this._lastFiredStepIdx = idx;
+          const step = steps[idx];
+          if (step) {
+            this.emitOneKeyframe(targetGuid, this._intentAccess, this._mutateIntent, step.args);
+          }
+          this._emitManualPausedStatus();
         }
-        this._emitManualPausedStatus();
         break;
       }
       default:
@@ -1257,6 +1313,87 @@ export class KeyframeAnimator {
       run(fireWallAbs);
     }, delay);
     this.timers.push(t);
+  }
+
+  private scheduleManualWallLerpBetweenStepIndices(
+    targetGuid: string,
+    steps: { time: number; args?: Record<string, unknown> }[],
+    lastAppliedStepIdx: number,
+    targetStepIdx: number,
+    lerp: {
+      timeMs: number;
+      quantizationEff: number;
+      curveName: unknown;
+      minNominalMs?: number;
+    },
+    intentAccess: IntentAccessFn,
+    mutateIntent: MutateIntentFn,
+  ): void {
+    const prevStep = steps[lastAppliedStepIdx];
+    const nextStep = steps[targetStepIdx];
+    if (!prevStep || !nextStep) {
+      return;
+    }
+
+    const segmentStartMs = Date.now();
+    const span = lerp.timeMs * this.timescale;
+
+    const baseIntent = intentAccess(targetGuid);
+    if (!baseIntent) {
+      this.cancel('Target intent unavailable');
+      return;
+    }
+    const baseRecord = baseIntent as unknown as Record<string, unknown>;
+    const { from: fromResolvedRaw, to: toResolvedRaw } = lerpPlanEndpoints(
+      baseRecord,
+      prevStep.args,
+      nextStep.args,
+    );
+
+    const planOpts: PlanIntermediateLerpOptions = {};
+    if (typeof lerp.minNominalMs === 'number' && Number.isFinite(lerp.minNominalMs)) {
+      planOpts.segmentWallSpanMs = span;
+      planOpts.minGapWallMs = lerp.minNominalMs * this.timescale;
+    }
+
+    const planned = planIntermediateLerpPatches(
+      fromResolvedRaw,
+      toResolvedRaw,
+      lerp.quantizationEff,
+      lerp.curveName,
+      planOpts,
+    );
+
+    const finishManualNavigation = (): void => {
+      if (this.cancelled || !this.inScene) return;
+      this._lastFiredStepIdx = targetStepIdx;
+      this.emitOneKeyframe(targetGuid, intentAccess, mutateIntent, nextStep.args);
+      this._emitManualPausedStatus();
+    };
+
+    if (planned.intermediateDotPatches.length === 0) {
+      finishManualNavigation();
+      return;
+    }
+
+    const denom = planned.n - 1;
+
+    for (let k = 0; k < planned.intermediateDotPatches.length; k++) {
+      const dotPatch = planned.intermediateDotPatches[k];
+      if (dotPatch === undefined) continue;
+      const fireWallAbs = segmentStartMs + (k / denom) * span;
+      const patchRecord = dotPatch as Record<string, unknown>;
+
+      this.pushTimeoutAtFireWall(fireWallAbs, () => {
+        if (this.cancelled || !this.inScene) return;
+        if (Object.keys(patchRecord).length === 0) return;
+        mutateIntent(targetGuid, patchRecord);
+      });
+    }
+
+    this.pushTimeoutAtFireWall(segmentStartMs + span, () => {
+      finishManualNavigation();
+    });
   }
 
   private emitOneKeyframe(

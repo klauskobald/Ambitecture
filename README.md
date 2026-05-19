@@ -58,7 +58,7 @@ Ambitecture is intentionally modular: you can pair many controller types with ma
 - **Bindings** — generic bidirectional binding layer (`binding:subscribe` / `binding:set` / `binding:value`) for controller UI to mirror or push hub-owned live values such as animation timescale.
 - **Function curves** — named easing/attenuation curves shared verbatim across hub and renderers so animation lerps and fixture range falloff look identical wherever they're rendered.
 - **Intent normalization** — hub-side intent registry (`hub/src/intents/`) normalizes per-class data (color → CIE xyY, etc.) before events reach renderers.
-- **Runtime intent merge** — hub-owned `RuntimeIntentStore` merges controller perform patches on top of scene overlays so renderers always see a consistent normalized intent.
+- **Runtime intent overlay** — hub-owned `RuntimeIntentStore` keeps a dot-path **patch bag** on the live active-scene intent row so renderers see a consistent normalized intent; paths not touched by runtime pick up each scene’s saved values after a scene switch.
 - **Hub status** — `hub:status` broadcast and `lock:intent` notifications keep controllers aware of running animations and uneditable intents.
 
 Detailed protocol and runtime internals live in [SYSTEM-ARCHITECTURE.md](SYSTEM-ARCHITECTURE.md).
@@ -212,7 +212,7 @@ Current test files:
 
 - Controllers send authoritative graph mutations as `graph:command` and transient live updates as `runtime:command` (the legacy `intents` message is still accepted but new code should use the graph protocol).
 - Intents carry a stable `guid` so updates can target/replace the same logical intent over time.
-- The hub-side `RuntimeIntentStore` merges the three layers — bare definition, active-scene overlay, and runtime perform patches — and emits normalized renderer events through `RuntimeUpdateDispatcher` and `EventQueue`.
+- The hub-side `RuntimeIntentStore` keeps runtime perform patches as a **patch bag** on the current active-scene row (definition + scene overlay), rebases on scene change, and emits normalized renderer events through `RuntimeUpdateDispatcher` and `EventQueue`.
 - Per-class normalization (e.g., color → CIE 1931 `xyY` for `light` intents) happens in the hub-side intent registry (`hub/src/intents/`) before the event payload is built.
 - Renderers consume queued `events` and apply them through their layer/capability engines, storing active intents by `guid` (allowing multiple intents at the same `layer`). Spatial attenuation uses fixture range and a named function curve from `FnCurve`.
 

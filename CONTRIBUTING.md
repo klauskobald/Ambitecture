@@ -64,6 +64,7 @@ For runtime issues, the `Logger` output from `modules/hub` is usually the most u
   cd modules/hub
   ts-node tests/runtest.ts
   ```
+- After changing `RuntimeIntentStore` scene/rebase behavior, also run `npm run test:runtime-scene-rebase` (loads `tests/unit/fixtures/runtime-scene-rebase.yml`; no live hub).
 - Verify the change end-to-end against a live hub when it touches the WebSocket protocol, graph state, animations, or bindings. There are no mocks — tests are live integration scripts.
 - For UI changes in `surface-v2` or `simulator-2d`, exercise the feature in a real browser session against a running hub. Do not change deprecated `surface-v1`.
 

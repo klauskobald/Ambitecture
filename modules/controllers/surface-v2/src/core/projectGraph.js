@@ -80,6 +80,13 @@ class ProjectGraph {
      * For these, `getEffectiveIntent` must not re-apply `scenes[].overlay` — that YAML is stale vs merged hub rows.
      */
     this._trustHubReconciledIntentRow = new Set()
+    /**
+     * `${sceneName}|${guid}|${dotKey}` tuples whose scene overlay must survive runtime:update echoes.
+     * Held while an edit control streams a runtime preview for an overlayed key — the hub echoes the
+     * patch back and would otherwise strip the matching overlay key in {@link _stripSceneOverlayKeysOverlappedByPatch}.
+     * @type {Set<string>}
+     */
+    this._pinnedOverlayEditKeys = new Set()
 
     this._data = {
       projectName: '',
@@ -633,6 +640,7 @@ class ProjectGraph {
     const nextOverlay = { ...ref.overlay }
     let changed = false
     for (const k of Object.keys(patch)) {
+      if (this._pinnedOverlayEditKeys.has(`${sceneName}|${guid}|${k}`)) continue
       if (Object.prototype.hasOwnProperty.call(nextOverlay, k)) {
         delete nextOverlay[k]
         changed = true
@@ -648,6 +656,26 @@ class ProjectGraph {
     if (!changed) return
     if (Object.keys(nextOverlay).length > 0) ref.overlay = nextOverlay
     else delete ref.overlay
+  }
+
+  /**
+   * Hold a scene overlay key against runtime:update echo stripping while an edit control is
+   * streaming a live preview for it. Must be paired with {@link unpinOverlayForEdit} on drag end.
+   * @param {string} sceneName
+   * @param {string} guid
+   * @param {string} dotKey
+   */
+  pinOverlayForEdit (sceneName, guid, dotKey) {
+    this._pinnedOverlayEditKeys.add(`${sceneName}|${guid}|${dotKey}`)
+  }
+
+  /**
+   * @param {string} sceneName
+   * @param {string} guid
+   * @param {string} dotKey
+   */
+  unpinOverlayForEdit (sceneName, guid, dotKey) {
+    this._pinnedOverlayEditKeys.delete(`${sceneName}|${guid}|${dotKey}`)
   }
 
   // ─── Mutations ────────────────────────────────────────────────────────────────

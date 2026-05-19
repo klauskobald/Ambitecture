@@ -317,9 +317,12 @@
 }
 
 .prop-color-inline .palette-hsl-canvas {
-  width: 100%;
-  height: auto;
   display: block;
+  width: min(100%, calc(120px * 320 / 220));
+  max-width: 100%;
+  height: auto;
+  max-height: 120px;
+  aspect-ratio: 320 / 220;
   cursor: crosshair;
 }
 

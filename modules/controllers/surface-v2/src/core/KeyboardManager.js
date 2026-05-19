@@ -46,7 +46,18 @@ function isTypingContext (el) {
 }
 
 /**
+ * Perform keyboard bindings may combine with Shift only. Meta/Ctrl/Alt must
+ * reach the browser (reload, close tab, etc.).
+ * @param {KeyboardEvent} event
+ * @returns {boolean}
+ */
+function hasNonShiftModifier (event) {
+  return event.metaKey || event.ctrlKey || event.altKey
+}
+
+/**
  * Singleton: binds `input.keyChar` (case-sensitive) to perform triggers.
+ * Only Shift may accompany the key; Meta/Ctrl/Alt are ignored so system shortcuts work.
  * `momentarySwitch`: keydown/keyup via {@link performMomentaryPress} / {@link performMomentaryRelease}.
  * `toggle`: keydown flips highlight-derived `value` on/off (same as PerformControlHost pointer path).
  * Other types: keydown only (ignores `repeat`).
@@ -120,6 +131,7 @@ class KeyboardManager {
   _onKeyDown (event) {
     if (event.defaultPrevented) return
     if (isTypingContext(event.target)) return
+    if (hasNonShiftModifier(event)) return
 
     const keyChar = event.key
     const inputGuid = this._bindings.get(keyChar)
@@ -181,6 +193,7 @@ class KeyboardManager {
    */
   _onKeyUp (event) {
     if (isTypingContext(event.target)) return
+    if (hasNonShiftModifier(event)) return
 
     const keyChar = event.key
     const inputGuid = this._bindings.get(keyChar)

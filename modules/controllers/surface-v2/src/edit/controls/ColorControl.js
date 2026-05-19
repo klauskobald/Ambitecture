@@ -1,6 +1,7 @@
 import { PropertyControl } from './PropertyControl.js'
 import { hslPalette } from '../../ui/palettes/hslPalette.js'
 import { projectGraph } from '../../core/projectGraph.js'
+import { queueIntentUpdate } from '../../core/outboundQueue.js'
 import { toHSL } from '../../core/color.js'
 import { applyDelta } from './controlHelpers.js'
 import { ScalarDragSlider } from '../components/ScalarDragSlider.js'
@@ -32,6 +33,9 @@ export class ColorControl extends PropertyControl {
     this._paletteDragging = false
     /** @type {{ h: number, s: number, l: number } | null} */
     this._lastPaletteColor = null
+    /** Overlay (sceneName, guid) pairs pinned for this drag, so unpin matches pin. */
+    /** @type {Array<{ sceneName: string, guid: string }>} */
+    this._pinnedOverlayDuringDrag = []
   }
 
   /** @param {HTMLElement} area */
@@ -43,9 +47,7 @@ export class ColorControl extends PropertyControl {
       this._inlineArea,
       rawColor => this._onPaletteInput(rawColor),
       {
-        onDragStart: () => {
-          this._paletteDragging = true
-        },
+        onDragStart: () => this._onPaletteDragStart(),
         onDragEnd: () => this._onPaletteDragEnd()
       }
     )
@@ -126,17 +128,40 @@ export class ColorControl extends PropertyControl {
     this._wasHslDeltaMode = isDelta
   }
 
+  _onPaletteDragStart () {
+    this._paletteDragging = true
+    const dotKey = /** @type {string} */ (this._descriptor.dotKey)
+    const activeScene = projectGraph.getActiveSceneName()
+    if (!activeScene) return
+    for (const guid of this._currentGuids) {
+      if (projectGraph.isSceneIntentOverlayed(activeScene, guid, dotKey)) {
+        projectGraph.pinOverlayForEdit(activeScene, guid, dotKey)
+        this._pinnedOverlayDuringDrag.push({ sceneName: activeScene, guid })
+      }
+    }
+  }
+
   /**
-   * Live update while scrubbing (hub merge for shared, like {@link SliderControl._applyAbsoluteValue});
-   * durable save on drag end. Uses `_updateProperty` so overlayed keys stay scene YAML only (no
-   * `runtime:update` echo that stripped overlay and flipped Shared/Overlay).
+   * Live update while scrubbing. For shared intents, `_updateProperty` queues a runtime:command
+   * via `queueIntentUpdate`. For overlayed keys it only mutates the local scene map, so we
+   * additionally stream a runtime:command here for renderer preview — the drag-time pin set
+   * (see {@link _onPaletteDragStart}) keeps the echo from stripping the local overlay.
+   * Durable save fires on drag end.
    * @param {{ h: number, s: number, l: number }} rawColor
    */
   _onPaletteInput (rawColor) {
     this._lastPaletteColor = rawColor
     const dotKey = /** @type {string} */ (this._descriptor.dotKey)
+    const activeScene = projectGraph.getActiveSceneName()
     for (const guid of this._currentGuids) {
+      const isOverlayed =
+        !!activeScene &&
+        this._allowOverlay &&
+        projectGraph.isSceneIntentOverlayed(activeScene, guid, dotKey)
       this._updateProperty(guid, dotKey, rawColor)
+      if (isOverlayed) {
+        queueIntentUpdate({ guid, patch: { [dotKey]: rawColor } })
+      }
     }
     markStageOverlayActivity()
   }
@@ -151,7 +176,17 @@ export class ColorControl extends PropertyControl {
         this._updateProperty(guid, dotKey, rawColor)
       }
     }
+    this._releaseOverlayPins()
     this._saveProject()
+  }
+
+  _releaseOverlayPins () {
+    if (this._pinnedOverlayDuringDrag.length === 0) return
+    const dotKey = /** @type {string} */ (this._descriptor.dotKey)
+    for (const { sceneName, guid } of this._pinnedOverlayDuringDrag) {
+      projectGraph.unpinOverlayForEdit(sceneName, guid, dotKey)
+    }
+    this._pinnedOverlayDuringDrag = []
   }
 
   /**
@@ -246,6 +281,7 @@ export class ColorControl extends PropertyControl {
   }
 
   destroy () {
+    this._releaseOverlayPins()
     for (const entry of this._relSliders) {
       entry.slider.destroy()
     }

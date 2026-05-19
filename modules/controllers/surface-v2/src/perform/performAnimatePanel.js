@@ -278,7 +278,11 @@ export function createPerformAnimatePanel () {
    */
   function makeSpeedDial (guid) {
     const key = `${guid}-timescale`
-    let currentSpeed = 1
+    const timescaleMin = 0.125
+    const timescaleMax = 16
+    const recipMin = 1 / timescaleMax
+    const recipMax = 1 / timescaleMin
+    let currentTimescale = 1
 
     const wrap = document.createElement('div')
     wrap.className = 'perform-animate-speed-wrap'
@@ -286,14 +290,22 @@ export function createPerformAnimatePanel () {
     const knob = new ScalarRadialKnobSvg({
       descriptor: {
         name: 'Speed',
-        range: [0.125, 16],
+        range: [recipMin, recipMax],
         step: 0.01,
         defaultValue: 1,
         stepFunction: 'quadratic'
       },
       intentGuid: guid,
-      readValue: () => currentSpeed,
-      onCommit: domain => sendBindingSet(key, domain)
+      readValue: () => {
+        const ts = currentTimescale
+        if (typeof ts !== 'number' || !Number.isFinite(ts) || ts <= 0) return 1
+        return 1 / ts
+      },
+      onCommit: domain => {
+        const r = Number(domain)
+        if (!Number.isFinite(r) || r <= 0) return
+        sendBindingSet(key, 1 / r)
+      }
     })
     knob.mount(wrap)
 
@@ -303,7 +315,7 @@ export function createPerformAnimatePanel () {
         return
       }
       wrap.classList.remove('perform-animate-speed-wrap--offline')
-      currentSpeed = Number(value)
+      currentTimescale = Number(value)
       knob.syncFromExternal()
     })
 

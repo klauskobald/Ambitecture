@@ -10,9 +10,22 @@ import {
   captureModalChoiceScroll,
   restoreModalChoiceScroll
 } from '../core/modalChoiceScroll.js'
-import { sendPulseAssignCommand } from '../core/outboundQueue.js'
+import {
+  sendActionInputCommand,
+  sendPulseAssignCommand
+} from '../core/outboundQueue.js'
 import { formatLinkedAssignLabel } from './assign/assignInlineLabel.js'
 import { notification } from '../app/notification.js'
+import {
+  applyActionSelection,
+  createEmptyActionSelectionState,
+  renderActionParams
+} from './actionEdit/actionParamsFactory.js'
+import {
+  buildAnimationExecutePatch,
+  canEmitAnimationActionPatch
+} from './actionEdit/animationActionParams.js'
+import { destroyIntentParamWidgets } from './actionEdit/intentActionParams.js'
 
 export class PulseAssignManager {
   /**
@@ -80,16 +93,16 @@ export class PulseAssignManager {
       await this.showControl()
       return
     }
-    if (modalOutcome.kind === 'rename' && typeof modalOutcome.bucketGuid === 'string') {
-      await this._renameBucket(modalOutcome.bucketGuid)
-      await this.showControl()
-      return
-    }
     if (modalOutcome.kind === 'delete' && typeof modalOutcome.bucketGuid === 'string') {
       const deleted = await this._confirmAndDeleteBucket(modalOutcome.bucketGuid)
       if (deleted) {
         await this._waitForBucketRemovedFromGraph(modalOutcome.bucketGuid)
       }
+      await this.showControl()
+      return
+    }
+    if (modalOutcome.kind === 'edit' && typeof modalOutcome.bucketGuid === 'string') {
+      await this._editBucketByGuid(modalOutcome.bucketGuid)
       await this.showControl()
       return
     }
@@ -137,7 +150,7 @@ export class PulseAssignManager {
 
   /**
    * @param {Array<{ guid: string, name: string }>} bucketRows
-   * @returns {Promise<{ kind: string, bucketGuid?: string } | null>}
+   * @returns {Promise<{ kind: 'done' | 'create' | 'delete' | 'edit', bucketGuid?: string } | null>}
    */
   _openAssignBucketsModal (bucketRows) {
     return openModalCard(dismiss => {
@@ -219,16 +232,16 @@ export class PulseAssignManager {
           paintRow(wrap, pending.has(row.guid))
         })
 
-        const renameBtn = document.createElement('button')
-        renameBtn.type = 'button'
-        renameBtn.className =
+        const editBtn = document.createElement('button')
+        editBtn.type = 'button'
+        editBtn.className =
           'input-assign-inline-icon-btn input-assign-inline-icon-btn--edit'
-        renameBtn.style.flex = '0 0 auto'
-        renameBtn.textContent = '✎'
-        renameBtn.setAttribute('aria-label', 'Rename')
-        renameBtn.addEventListener('click', e => {
+        editBtn.style.flex = '0 0 auto'
+        editBtn.textContent = '✎'
+        editBtn.setAttribute('aria-label', 'Edit')
+        editBtn.addEventListener('click', e => {
           e.stopPropagation()
-          finish({ kind: 'rename', bucketGuid: row.guid })
+          finish({ kind: 'edit', bucketGuid: row.guid })
         })
 
         const deleteBtn = document.createElement('button')
@@ -244,7 +257,7 @@ export class PulseAssignManager {
         })
 
         wrap.appendChild(mainBtn)
-        wrap.appendChild(renameBtn)
+        wrap.appendChild(editBtn)
         wrap.appendChild(deleteBtn)
         listEl.appendChild(wrap)
         paintRow(wrap, pending.has(row.guid))
@@ -363,6 +376,167 @@ export class PulseAssignManager {
     return this._contextType === 'animation' || this._contextType === 'scene'
   }
 
+  /**
+   * @param {string} bucketGuid
+   */
+  async _editBucketByGuid (bucketGuid) {
+    const bucket = [...projectGraph.getPulseBuckets()].find(
+      b => typeof b.guid === 'string' && b.guid === bucketGuid
+    )
+    if (!bucket) return
+    const initialName =
+      typeof bucket.name === 'string' && bucket.name.trim().length > 0
+        ? bucket.name.trim()
+        : bucketGuid
+
+    const animationGuid = this._contextGuid
+    const actionGuid =
+      this._contextType === 'animation'
+        ? projectGraph.getPulseBucketAnimationActionGuid(bucketGuid, animationGuid)
+        : ''
+
+    await openModalCard(dismiss => {
+      const card = document.createElement('div')
+      card.className = 'modal input-assign-modal pulse-assign-modal'
+      card.addEventListener('click', e => e.stopPropagation())
+
+      const title = document.createElement('p')
+      title.className = 'modal-text'
+      title.textContent = 'Edit pulse bucket'
+
+      const nameLabel = document.createElement('label')
+      nameLabel.className = 'input-assign-modal__label'
+      nameLabel.textContent = 'Name'
+      const nameInput = document.createElement('input')
+      nameInput.type = 'text'
+      nameInput.className = 'modal-input'
+      nameInput.placeholder = 'bucket name'
+      nameInput.value = initialName
+      nameLabel.appendChild(nameInput)
+
+      const errorEl = document.createElement('p')
+      errorEl.className = 'input-assign-modal__error'
+      errorEl.hidden = true
+
+      /** @type {ReturnType<typeof createEmptyActionSelectionState> | null} */
+      let state = null
+      const paramHost = document.createElement('div')
+      paramHost.className = 'input-assign-modal__param-host'
+
+      if (this._contextType === 'animation' && actionGuid.length > 0) {
+        state = createEmptyActionSelectionState()
+        applyActionSelection(state, [actionGuid])
+
+        const animRec = projectGraph.getAnimations().get(animationGuid)
+        let animName = animationGuid
+        if (animRec && typeof animRec === 'object' && !Array.isArray(animRec)) {
+          const n = /** @type {Record<string, unknown>} */ (animRec).name
+          if (typeof n === 'string' && n.trim().length > 0) animName = n.trim()
+        }
+        const pulseLine = document.createElement('p')
+        pulseLine.className = 'modal-text'
+        pulseLine.textContent = `Pulse: ${initialName} → ${animName}`
+
+        const isAnimTarget =
+          state.activeExecuteType === 'animation' &&
+          state.animationActionGuidForParams.length > 0
+        const needsManualNote = isAnimTarget && !state.hasAnimationCommands
+        let note = null
+        if (needsManualNote) {
+          note = document.createElement('p')
+          note.className = 'modal-text pulse-assign-anim-params-note'
+          note.textContent =
+            'This animation uses auto run mode. Command parameters only apply when the animation is set to manual run mode in the graph.'
+        }
+
+        renderActionParams(paramHost, state, {
+          idPrefix: `pulse-bucket-${bucketGuid}`,
+          typeClass: '',
+          inputTypes: [],
+          intentParamBinding: null
+        })
+
+        card.appendChild(title)
+        card.appendChild(nameLabel)
+        card.appendChild(errorEl)
+        card.appendChild(pulseLine)
+        if (note) {
+          card.appendChild(note)
+        }
+        card.appendChild(paramHost)
+      } else {
+        if (this._contextType === 'animation' && actionGuid.length === 0) {
+          const hint = document.createElement('p')
+          hint.className = 'input-assign-modal__hint'
+          hint.textContent =
+            'Link this bucket to the animation (OK in the assign list) to configure animation parameters.'
+          card.appendChild(title)
+          card.appendChild(nameLabel)
+          card.appendChild(errorEl)
+          card.appendChild(hint)
+        } else {
+          card.appendChild(title)
+          card.appendChild(nameLabel)
+          card.appendChild(errorEl)
+        }
+      }
+
+      const actions = document.createElement('div')
+      actions.className = 'modal-actions'
+      const cancelBtn = document.createElement('button')
+      cancelBtn.type = 'button'
+      cancelBtn.className = 'btn'
+      cancelBtn.textContent = 'Cancel'
+      cancelBtn.addEventListener('click', () => {
+        destroyIntentParamWidgets()
+        dismiss(null)
+      })
+      const saveBtn = document.createElement('button')
+      saveBtn.type = 'button'
+      saveBtn.className = 'btn btn--primary'
+      saveBtn.textContent = 'Save'
+      saveBtn.addEventListener('click', () => {
+        errorEl.hidden = true
+        const nameTrim = nameInput.value.trim()
+        if (!nameTrim) {
+          errorEl.textContent = 'Name is required.'
+          errorEl.hidden = false
+          return
+        }
+        void (async () => {
+          if (nameTrim !== initialName) {
+            sendPulseAssignCommand({
+              command: 'renameBucket',
+              bucketGuid,
+              name: nameTrim
+            })
+            await this._waitForBucketName(bucketGuid, nameTrim)
+          }
+          if (state && canEmitAnimationActionPatch(state)) {
+            const animPatch = buildAnimationExecutePatch(state)
+            if (animPatch) {
+              sendActionInputCommand({
+                command: 'updateAction',
+                actionGuid,
+                patch: { execute: animPatch }
+              })
+            }
+          }
+          destroyIntentParamWidgets()
+          dismiss(true)
+        })()
+      })
+
+      actions.appendChild(cancelBtn)
+      actions.appendChild(saveBtn)
+      card.appendChild(actions)
+
+      requestAnimationFrame(() => nameInput.focus())
+
+      return card
+    })
+  }
+
   _bucketLinksTarget (bucket) {
     return this._contextType === 'scene'
       ? projectGraph.bucketLinksScene(bucket, this._contextGuid)
@@ -399,29 +573,6 @@ export class PulseAssignManager {
           }
     )
     return name
-  }
-
-  /** @param {string} bucketGuid */
-  async _renameBucket (bucketGuid) {
-    const bucket = [...projectGraph.getPulseBuckets()].find(b => b.guid === bucketGuid)
-    if (!bucket) return
-    const current =
-      typeof bucket.name === 'string' && bucket.name.trim().length > 0
-        ? bucket.name.trim()
-        : bucketGuid
-    const values = await modalPrompt(
-      'Rename bucket',
-      [{ label: 'Name', key: 'name', value: current }],
-      { submit: 'Save' }
-    )
-    const name = values?.name?.trim()
-    if (!name || name === current) return
-    sendPulseAssignCommand({
-      command: 'renameBucket',
-      bucketGuid,
-      name
-    })
-    await this._waitForBucketName(bucketGuid, name)
   }
 
   /**

@@ -935,6 +935,14 @@
   font-style: italic;
 }
 
+/* Pulse assign (Perform → Animate): edit modal auto-run hint */
+.pulse-assign-anim-params-note {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin-top: 0.15rem;
+  margin-bottom: 0.15rem;
+}
+
 .perform-pulse-edit__slots {
   display: flex;
   flex-direction: column;

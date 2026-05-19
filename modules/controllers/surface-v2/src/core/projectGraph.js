@@ -340,6 +340,26 @@ class ProjectGraph {
   }
 
   /**
+   * @param {string} bucketGuid
+   * @param {string} animationGuid
+   * @returns {string}
+   */
+  getPulseBucketAnimationActionGuid (bucketGuid, animationGuid) {
+    if (!bucketGuid || !animationGuid) return ''
+    const bucket = this._data.pulses.buckets.find(
+      b => typeof b.guid === 'string' && b.guid === bucketGuid
+    )
+    if (!bucket) return ''
+    const guids = Array.isArray(bucket.actions) ? bucket.actions : []
+    for (const ag of guids) {
+      if (typeof ag !== 'string') continue
+      const action = this._data.actions.get(ag)
+      if (actionExecuteTargetsAnimation(action, animationGuid)) return ag
+    }
+    return ''
+  }
+
+  /**
    * @param {string} animationGuid
    * @returns {Record<string, unknown>[]}
    */

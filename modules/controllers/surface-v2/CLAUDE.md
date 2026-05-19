@@ -109,3 +109,4 @@ Before submitting changes:
 _Add short dated bullets when new framework boundaries or extension points appear._
 
 - **2026-05:** Shared sim via `stageCommon.js`; `stage` / `stage-edit` are normal tab renderers (attach on activate, detach on deactivate). Removed leaf-chrome pairing for stage-edit.
+- **2026-05:** Pulse bucket ↔ animation assignment (`PulseAssignManager`): assign list matches input assign (toggle + ✎ Edit + delete). **Edit** opens one modal for bucket **name** and animation **`execute.params`** (manual runmode), saved with `renameBucket` / `updateAction` as needed.

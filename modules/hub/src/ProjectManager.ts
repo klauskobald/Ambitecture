@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { Config } from './Config';
@@ -273,8 +274,8 @@ export class ProjectManager {
     this.fixturesPath = fixturesPath;
   }
 
-  useProject(name: string, callback: () => void): void {
-    this.reloadProject(name);
+  useProject(spec: string, callback: () => void): void {
+    this.reloadProject(spec);
     callback();
   }
 
@@ -308,8 +309,29 @@ export class ProjectManager {
     return intent;
   }
 
-  private reloadProject(name: string): void {
-    const filePath = this.resolvePath(this.projectsPath, `${name}.yml`);
+  private resolveProjectYamlPath(spec: string): string {
+    const trimmed = spec.trim();
+    if (trimmed.length === 0) {
+      throw new Error('[project] project specifier is empty');
+    }
+    const hasYamlSuffix = trimmed.endsWith('.yml') || trimmed.endsWith('.yaml');
+    const hasSep = trimmed.includes('/') || trimmed.includes('\\');
+    if (hasYamlSuffix || hasSep || path.isAbsolute(trimmed)) {
+      const resolved = path.isAbsolute(trimmed) ? trimmed : path.resolve(process.cwd(), trimmed);
+      if (!fs.existsSync(resolved)) {
+        throw new Error(`[project] file not found: ${resolved}`);
+      }
+      return resolved;
+    }
+    const underProjects = this.resolvePath(this.projectsPath, `${trimmed}.yml`);
+    if (!fs.existsSync(underProjects)) {
+      throw new Error(`[project] file not found: ${underProjects}`);
+    }
+    return underProjects;
+  }
+
+  private reloadProject(spec: string): void {
+    const filePath = this.resolveProjectYamlPath(spec);
     this._projectConfig = new Config(filePath);
     this.project = this._projectConfig.getAll() as Project;
 

@@ -4,7 +4,7 @@ import {
   getEditFixturesUnlocked,
   setEditFixturesUnlocked
 } from '../../viewport/interactionPolicies.js'
-import { attachStageTo, detachStage } from '../../stage/stageCommon.js'
+import { attachStageTo, detachStage, getViewport } from '../../stage/stageCommon.js'
 import { getStageOverlay } from '../../stage/stageOverlayHost.js'
 import {
   setEditMode,
@@ -18,13 +18,26 @@ import { projectGraph } from '../../core/projectGraph.js'
 import { intentGuid } from '../../core/stores.js'
 import { toCSSRGB } from '../../core/color.js'
 import { SelectionManager } from '../../viewport/selectionManager.js'
-import { warn as modalWarn, openModalCard } from '../../core/Modal.js'
-import { sendGraphCommand, sendSaveProject } from '../../core/outboundQueue.js'
+import { warn as modalWarn, openModalCard, pickChoice } from '../../core/Modal.js'
+import {
+  sendGraphCommand,
+  sendSaveProject,
+  sendSceneActivate
+} from '../../core/outboundQueue.js'
 import {
   ArraySorter,
   DEFAULT_PERFORM_INPUT_SORT_KEY
 } from '../../core/arraySorter.js'
 import { collectPerformButtonInputs } from '../../core/performButtonInputs.js'
+import { clientToWorldViaSimCanvas } from '../../viewport/spatialMath.js'
+import { resolveDescriptorsForClass } from '../../core/systemCapabilities.js'
+import { cloneAndSetAtDotPath } from '../../core/dotPath.js'
+
+/** @param {unknown} value @returns {unknown} */
+function cloneDefaultValue (value) {
+  if (value === null || typeof value !== 'object') return value
+  return JSON.parse(JSON.stringify(value))
+}
 
 /** @type {IntentParamsHost | null} */
 let sharedParamsHost = null
@@ -122,7 +135,7 @@ export class StageEditPane {
     setEditMode()
     setEditDoubleTapHandlers(
       guid => getParamsHost().openForIntentGuid(guid),
-      () => {}
+      detail => void this._onDoubleTapEmptyStage(detail)
     )
 
     const overlay = getStageOverlay()
@@ -149,6 +162,122 @@ export class StageEditPane {
   _toggleFixtureLock () {
     setEditFixturesUnlocked(!getEditFixturesUnlocked())
     this._refreshFixtureLockButton()
+  }
+
+  /**
+   * @param {{ clientX: number, clientY: number }} detail
+   */
+  async _onDoubleTapEmptyStage (detail) {
+    const activeScene = projectGraph.getActiveSceneName()
+    if (!activeScene) {
+      void modalWarn('Select or create a scene before adding an intent.')
+      return
+    }
+
+    const spatial = projectGraph.getSpatial()
+    const viewport = getViewport()
+    const simRect = viewport?.getSimCanvasRect() ?? null
+    if (!spatial || !simRect) return
+
+    const m = clientToWorldViaSimCanvas(
+      detail.clientX,
+      detail.clientY,
+      spatial,
+      simRect
+    )
+    if (!m) {
+      void modalWarn('Tap inside the simulator view to place an intent.')
+      return
+    }
+
+    const choice = await pickChoice('New intent', [
+      { value: 'light', label: 'Light' },
+      { value: 'master', label: 'Master' }
+    ])
+    if (!choice || (choice !== 'light' && choice !== 'master')) return
+
+    const descriptors = resolveDescriptorsForClass(choice)
+    if (!descriptors || descriptors.length === 0) {
+      void modalWarn(
+        `No properties configured for intent class "${choice}" (systemCapabilities).`
+      )
+      return
+    }
+
+    const cryptoApi = globalThis.crypto
+    const suffix =
+      cryptoApi?.randomUUID?.() ??
+      `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const intentGuid = `${choice}-${suffix}`
+    const world = { wx: m.wx, wy: 0, wz: m.wz }
+    const value = this._createIntentRecord(choice, intentGuid, descriptors, world)
+    if (!value) return
+
+    projectGraph.putIntentRecord(value)
+    projectGraph.appendControllerIntentRef(intentGuid)
+    projectGraph.toggleSceneIntent(activeScene, intentGuid)
+
+    sendGraphCommand({
+      op: 'upsert',
+      entityType: 'intent',
+      guid: intentGuid,
+      value,
+      persistence: 'runtimeAndDurable'
+    })
+
+    const controllerGuid = projectGraph.getControllerGuid()
+    if (controllerGuid) {
+      sendGraphCommand({
+        op: 'patch',
+        entityType: 'controller',
+        guid: controllerGuid,
+        patch: { intents: projectGraph.getControllerIntentRefs() },
+        persistence: 'runtimeAndDurable'
+      })
+    }
+
+    sendSaveProject('scenes', projectGraph.getScenesData())
+    const sceneGuid = projectGraph.getSceneGuid(activeScene)
+    if (sceneGuid) sendSceneActivate(sceneGuid)
+
+    getStageOverlay()?.markRenderActivity()
+    getParamsHost().openForIntentGuid(intentGuid)
+  }
+
+  /**
+   * @param {string} intentClass
+   * @param {string} guid
+   * @param {unknown[]} descriptors
+   * @param {{ wx: number, wy: number, wz: number }} world
+   * @returns {Record<string, unknown> | null}
+   */
+  _createIntentRecord (intentClass, guid, descriptors, world) {
+    /** @type {Record<string, unknown>} */
+    let value = {
+      guid,
+      class: intentClass,
+      position: [world.wx, world.wy, world.wz],
+      params: {}
+    }
+
+    for (const descriptor of descriptors) {
+      const d = /** @type {Record<string, unknown>} */ (descriptor)
+      const dotKey = typeof d.dotKey === 'string' ? d.dotKey : ''
+      if (!dotKey || !d.isMandatory || d.defaultValue === undefined) continue
+      value = cloneAndSetAtDotPath(value, dotKey, cloneDefaultValue(d.defaultValue))
+    }
+
+    if (value.name === undefined) {
+      value = cloneAndSetAtDotPath(
+        value,
+        'name',
+        intentClass === 'master' ? 'Master' : 'Light'
+      )
+    }
+    if (intentClass === 'master' && value.radius === undefined) {
+      value = cloneAndSetAtDotPath(value, 'radius', 0)
+    }
+    return value
   }
 
   _refreshFixtureLockButton () {

@@ -77,7 +77,14 @@ Pick a config profile via `.env`:
 
 ```bash
 cp .env.DEMO .env    # points CONFIG_PATH at config.DEMO/
-npm run dev
+npm run dev          # loads project `test` (hub default)
+npm run dev test2    # loads `test2.yml` under projectsPath (same pattern for `npm run start`)
+```
+
+To open a project by file path, pass it as the first argument (must contain `/`, `\`, or end with `.yml` / `.yaml`; relative paths resolve from the hub process cwd, usually `modules/hub/`).
+
+```bash
+npm run dev ../../var/projects/test2.yml
 ```
 
 ### `modules/renderers/dmx-ts`

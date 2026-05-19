@@ -40,6 +40,16 @@ import { PulseSyncHandler } from './handlers/PulseSyncHandler';
 import { parsePulseTapTempoConfig } from './pulse/PulseTapTempoConfig';
 import { PulseSync } from './pulse/PulseSync';
 
+const DEFAULT_HUB_PROJECT = 'test';
+
+function projectSpecifierFromArgv(): string | undefined {
+  const first = process.argv[2];
+  if (first === undefined || first.length === 0 || first.startsWith('-')) {
+    return undefined;
+  }
+  return first;
+}
+
 const serverConfig = new Config('server');
 const systemConfig = new Config('system', true);
 const port = serverConfig.get<number>('LISTEN_PORT');
@@ -361,7 +371,8 @@ router.register('binding:subscribe', bindingHandler);
 router.register('binding:set', bindingHandler);
 router.register('animation:edit', new AnimationEditHandler(registry, animationManager));
 
-graphStore.useProject(serverConfig.get<string>('defaultProject'), () => {
+const initialProjectSpec = projectSpecifierFromArgv() ?? DEFAULT_HUB_PROJECT;
+graphStore.useProject(initialProjectSpec, () => {
   pulseManager.initializeFromProject();
   pushConfigsToModules();
 });

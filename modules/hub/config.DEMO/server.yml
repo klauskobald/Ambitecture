@@ -4,6 +4,4 @@ LISTEN_HOST: 0.0.0.0
 projectsPath: ../../var/projects
 fixturesPath: ../../var/fixtures
 
-defaultProject: test
-
 rateLimitEventsPerSecond: 50

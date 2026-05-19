@@ -27,8 +27,8 @@ export class ProjectGraphStore {
     private animationManager?: AnimationManager,
   ) { }
 
-  useProject(name: string, callback: () => void): void {
-    this.projectManager.useProject(name, () => {
+  useProject(spec: string, callback: () => void): void {
+    this.projectManager.useProject(spec, () => {
       this.revision += 1;
       this.runtimeMerge?.clearRuntimeIntentMergeCache();
       this.animationManager?.stopAll('project reloaded');

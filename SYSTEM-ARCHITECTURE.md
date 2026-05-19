@@ -142,7 +142,7 @@ Renderer data authority model:
 
 - **Pane router** (`src/app/router.js`): Three panes — **Perform**, **Edit**, **Setup** — each lazily imported, mounted once, and cycled via `activate()`/`deactivate()` lifecycle. No full page reloads or teardown on switch.
 - **Pane host resize** (`src/app/paneHostResize.js`): Drag-to-resize the lower pane region; persists last height per pane. Enables the Perform pane to host a resizable Animate panel under the perform HUD.
-- **Touch overlay** (`src/viewport/overlayCanvas.js`): Transparent canvas stacked on top of the simulator iframe. Handles pointer events for intent/fixture dragging, draws a finger-trail, intent radius circles, out-of-zone markers, and selection bubbles. Supports modality via **interaction policies** and an optional **SelectionManager**.
+- **Touch overlay** (`src/viewport/overlayCanvas.js`): Transparent canvas stacked on top of the simulator iframe. Handles pointer events for intent/fixture dragging, draws a finger-trail, intent radius circles, out-of-zone markers, and selection bubbles. Supports modality via **interaction policies** and an optional **SelectionManager**. In **Stage edit** (default edit policy, no `SelectionManager`), a second tap on empty canvas within the double-tap window runs `Modal.pickChoice` (Light \| Master), then mirrors **surface-v1** edit-pane sequencing: `projectGraph.putIntentRecord`, append controller ref, `toggleSceneIntent`, `graph:command` intent upsert, **controller `intents` patch before** `saveProject` scenes and `sendSceneActivate` (so the hub’s follow-up `projectPatch` intents list already includes the new ref and `reconcileIntents` does not prune the row), then opens intent params (`StageEditPane` → `stageOverlayCoordinator.setEditDoubleTapHandlers`).
 - **Interaction policies** (`src/viewport/interactionPolicies.js`): `performPolicy` (allowance-gated drag, also gated by `intentLockRegistry` so locked intents are not draggable), `editPolicy` (all intents and fixtures draggable), `noopPolicy` (no interaction). Policy switches per pane via `overlay.setPolicy()`.
 - **SelectionManager** (`src/viewport/selectionManager.js`): Generic bubble-overlay system — renders bubbles at world positions for any set of objects, detects taps within a hit radius, and calls an `onTap` callback. The manager holds no selection state — that belongs to the caller (e.g., allowances graph in `stores.js`). Can be enabled/disabled on the overlay canvas.
 - **Project graph** (`src/core/projectGraph.js`): Controller-side graph replica with a path-scoped subscription model. Initializes from hub `graph:init`, stores entities by stable `guid`, applies `graph:delta`, derives scene/fixture/spatial views, and notifies UI subscribers. Subscribers register against named slices (`intents`, `actions`, `inputs`, `scenes`, etc.) and are batched per delta so multi-field changes (e.g., scene + linked input) fire once.
@@ -657,9 +657,10 @@ Fixture profile `params` is class-specific (for example `screen` uses `params.al
 
 - `projectsPath: ../../var/projects`
 - `fixturesPath: ../../var/fixtures`
-- `defaultProject: test`
 
-At runtime, the hub loads `defaultProject` and treats its zone structure as authoritative scene assignment data. When a renderer connects (or when project/fixture data updates), the hub transfers relevant zone info plus referenced fixture profiles to matching renderer(s) by `rendererGUID`.
+At startup the hub loads project **`test`** by default (`modules/hub/src/index.ts`, `DEFAULT_HUB_PROJECT`). Pass a different project as the first CLI argument after the entry script (for example `npm run dev test2` from `modules/hub`, which forwards the name to Node). The value is either a basename under `projectsPath` (`.yml` added) or a path to a `.yml` / `.yaml` file; see `ProjectManager.resolveProjectYamlPath`.
+
+At runtime, the hub treats the loaded project's zone structure as authoritative scene assignment data. When a renderer connects (or when project/fixture data updates), the hub transfers relevant zone info plus referenced fixture profiles to matching renderer(s) by `rendererGUID`.
 
 ---
 

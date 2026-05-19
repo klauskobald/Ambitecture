@@ -96,6 +96,7 @@ const graphStore = new ProjectGraphStore(
   runtimeUpdateDispatcher,
   runtimeIntentStore,
   animationManager,
+  () => resolveRuntimeReferences(systemConfig.getOrDefault<unknown>('systemCapabilities', {})),
 );
 
 const buildActiveSceneEventsMsg = (): { msg: string | null; eventCount: number } => {

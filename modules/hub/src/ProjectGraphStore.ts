@@ -15,6 +15,7 @@ import { transformIntentToNormalized, validateAndFixIntentPosition } from './int
 import { Logger } from './Logger';
 import { applyDotPathPatch, cloneRecord } from './dotPath';
 import { ActionInputManager } from './ActionInputManager';
+import { composeDefaultAnimationExecuteParams } from './inputAssignment/composeAnimationExecuteParams';
 
 export class ProjectGraphStore {
   private revision = 0;
@@ -25,6 +26,7 @@ export class ProjectGraphStore {
     private runtimeMerge?: RuntimeUpdateDispatcher,
     private runtimeIntentStore?: RuntimeIntentStore,
     private animationManager?: AnimationManager,
+    private getSystemCapabilities: () => unknown = () => ({}),
   ) { }
 
   useProject(spec: string, callback: () => void): void {
@@ -445,18 +447,50 @@ export class ProjectGraphStore {
         companionName = existingName;
       }
     }
+    const runmode =
+      animRow && typeof animRow.runmode === 'string' && animRow.runmode.length > 0
+        ? animRow.runmode
+        : 'auto';
     const existingExecuteParams =
       existingCompanion?.execute &&
       typeof existingCompanion.execute === 'object' &&
       !Array.isArray(existingCompanion.execute)
         ? (existingCompanion.execute as Record<string, unknown>).params
         : undefined;
+    const paramsRec =
+      existingExecuteParams !== undefined &&
+      typeof existingExecuteParams === 'object' &&
+      !Array.isArray(existingExecuteParams)
+        ? (existingExecuteParams as Record<string, unknown>)
+        : undefined;
+    let execute: ActionDefinition['execute'];
+    if (runmode !== 'manual') {
+      execute = { type: 'animation', guid: command.guid };
+    } else {
+      const hasCommand =
+        typeof paramsRec?.['command'] === 'string' && paramsRec['command'].length > 0;
+      if (hasCommand) {
+        execute = {
+          type: 'animation',
+          guid: command.guid,
+          params: cloneRecord(paramsRec),
+        };
+      } else {
+        const defaults = composeDefaultAnimationExecuteParams(
+          this.getSystemCapabilities(),
+          command.guid,
+          g => this.projectManager.getAnimationByGuid(g),
+        );
+        execute =
+          defaults !== undefined
+            ? { type: 'animation', guid: command.guid, params: defaults }
+            : { type: 'animation', guid: command.guid };
+      }
+    }
     const companionAction: ActionDefinition = {
       guid: sharedAnimationAndActionGuid,
       name: companionName,
-      execute: existingExecuteParams !== undefined && typeof existingExecuteParams === 'object' && !Array.isArray(existingExecuteParams)
-        ? { type: 'animation', guid: command.guid, params: existingExecuteParams as Record<string, unknown> }
-        : { type: 'animation', guid: command.guid },
+      execute,
     };
     const actions = this.projectManager.getActionsWirePayload().filter(a => a.guid !== sharedAnimationAndActionGuid);
     actions.push(companionAction);

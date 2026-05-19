@@ -35,7 +35,8 @@ export const hslPalette = {
 
     const labels = document.createElement('div')
     labels.className = 'palette-hsl-labels'
-    labels.innerHTML = '<span>0°</span><span>120°</span><span><em>H</em></span><span>240°</span><span>360°</span>'
+    labels.innerHTML =
+      '<span>0°</span><span>120°</span><span><em>H</em></span><span>240°</span><span>360°</span>'
     wrap.appendChild(labels)
 
     container.appendChild(wrap)
@@ -62,7 +63,7 @@ export const hslPalette = {
         const h = (px / (CANVAS_W - 1)) * 360
         const { r, g, b } = hslToRGB01(h, s, l)
         const i = (py * CANVAS_W + px) * 4
-        img.data[i]     = Math.round(r * 255)
+        img.data[i] = Math.round(r * 255)
         img.data[i + 1] = Math.round(g * 255)
         img.data[i + 2] = Math.round(b * 255)
         img.data[i + 3] = 255
@@ -186,12 +187,33 @@ function hslToRGB01 (h, s, l) {
   const c = (1 - Math.abs(2 * l - 1)) * s
   const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
   const m = l - c / 2
-  let r = 0, g = 0, b = 0
-  if (h < 60)       { r = c; g = x; b = 0 }
-  else if (h < 120) { r = x; g = c; b = 0 }
-  else if (h < 180) { r = 0; g = c; b = x }
-  else if (h < 240) { r = 0; g = x; b = c }
-  else if (h < 300) { r = x; g = 0; b = c }
-  else              { r = c; g = 0; b = x }
+  let r = 0,
+    g = 0,
+    b = 0
+  if (h < 60) {
+    r = c
+    g = x
+    b = 0
+  } else if (h < 120) {
+    r = x
+    g = c
+    b = 0
+  } else if (h < 180) {
+    r = 0
+    g = c
+    b = x
+  } else if (h < 240) {
+    r = 0
+    g = x
+    b = c
+  } else if (h < 300) {
+    r = x
+    g = 0
+    b = c
+  } else {
+    r = c
+    g = 0
+    b = x
+  }
   return { r: r + m, g: g + m, b: b + m }
 }

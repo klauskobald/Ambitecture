@@ -105,7 +105,13 @@ export class IntentParamsHost {
    * @param {Set<string>} guids
    */
   open (descriptors, guids) {
-    if (!this._ensureOverlay() || !this._body || !this._title || !this._overlayEl) return
+    if (
+      !this._ensureOverlay() ||
+      !this._body ||
+      !this._title ||
+      !this._overlayEl
+    )
+      return
 
     this._lastDescriptors = descriptors
     this._overlayEl.hidden = false
@@ -150,7 +156,9 @@ export class IntentParamsHost {
   openForIntentGuid (guid) {
     const intent = projectGraph.getEffectiveIntent(guid)
     if (!intent || typeof intent !== 'object' || Array.isArray(intent)) return
-    const cls = String(/** @type {Record<string, unknown>} */ (intent).class ?? '')
+    const cls = String(
+      /** @type {Record<string, unknown>} */ (intent).class ?? ''
+    )
     if (!cls) return
     const descriptors = resolveDescriptorsForClass(cls)
     if (!descriptors) return
@@ -176,8 +184,11 @@ export class IntentParamsHost {
     let cls = null
     for (const g of guids) {
       const intent = projectGraph.getEffectiveIntent(g)
-      if (!intent || typeof intent !== 'object' || Array.isArray(intent)) return null
-      const c = String(/** @type {Record<string, unknown>} */ (intent).class ?? '')
+      if (!intent || typeof intent !== 'object' || Array.isArray(intent))
+        return null
+      const c = String(
+        /** @type {Record<string, unknown>} */ (intent).class ?? ''
+      )
       if (!c) return null
       if (cls === null) cls = c
       else if (cls !== c) return null

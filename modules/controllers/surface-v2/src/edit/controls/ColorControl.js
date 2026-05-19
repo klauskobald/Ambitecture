@@ -1,7 +1,6 @@
 import { PropertyControl } from './PropertyControl.js'
 import { hslPalette } from '../../ui/palettes/hslPalette.js'
 import { projectGraph } from '../../core/projectGraph.js'
-import { queueIntentUpdate } from '../../core/outboundQueue.js'
 import { toHSL } from '../../core/color.js'
 import { applyDelta } from './controlHelpers.js'
 import { ScalarDragSlider } from '../components/ScalarDragSlider.js'
@@ -128,28 +127,16 @@ export class ColorControl extends PropertyControl {
   }
 
   /**
-   * Live runtime stream while scrubbing (hub merge); durable save on drag end.
+   * Live update while scrubbing (hub merge for shared, like {@link SliderControl._applyAbsoluteValue});
+   * durable save on drag end. Uses `_updateProperty` so overlayed keys stay scene YAML only (no
+   * `runtime:update` echo that stripped overlay and flipped Shared/Overlay).
    * @param {{ h: number, s: number, l: number }} rawColor
    */
   _onPaletteInput (rawColor) {
     this._lastPaletteColor = rawColor
     const dotKey = /** @type {string} */ (this._descriptor.dotKey)
-    const activeScene = projectGraph.getActiveSceneName()
     for (const guid of this._currentGuids) {
-      const updated = projectGraph.applyPerformIntentParamUpdate(
-        guid,
-        dotKey,
-        rawColor,
-        this._allowOverlay
-      )
-      if (updated) queueIntentUpdate(updated)
-      if (
-        this._allowOverlay &&
-        activeScene &&
-        projectGraph.isSceneIntentOverlayed(activeScene, guid, dotKey)
-      ) {
-        this._sceneDirty = true
-      }
+      this._updateProperty(guid, dotKey, rawColor)
     }
     markStageOverlayActivity()
   }

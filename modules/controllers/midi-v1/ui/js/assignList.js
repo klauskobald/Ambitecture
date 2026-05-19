@@ -14,6 +14,9 @@ export function createAssignList (opts) {
   /** @type {HTMLElement | null} */
   let listFooter = null
 
+  /** @type {HTMLElement | null} */
+  let emptyHint = null
+
   /** Cache of last-seen (input, result) per assignment guid, so re-renders keep the last value. */
   /** @type {Map<string, { input: number | null, result: number | null }>} */
   const lastActivity = new Map()
@@ -143,6 +146,23 @@ export function createAssignList (opts) {
       createBtn.addEventListener('click', () => opts.onCreate())
       listFooter.appendChild(createBtn)
       opts.listWrap.appendChild(listFooter)
+    }
+
+    const isEmpty = listEl.childElementCount === 0
+    if (!isEmpty && emptyHint) {
+      emptyHint.remove()
+      emptyHint = null
+    } else if (isEmpty && opts.listWrap && !emptyHint) {
+      emptyHint = document.createElement('p')
+      emptyHint.className = 'list-empty'
+      emptyHint.textContent = hasFilter
+        ? 'No assignments yet — press Create to add one.'
+        : 'Select an intent to create a new assignment.'
+      opts.listWrap.insertBefore(emptyHint, listFooter ?? null)
+    } else if (isEmpty && emptyHint) {
+      emptyHint.textContent = hasFilter
+        ? 'No assignments yet — press Create to add one.'
+        : 'Select an intent to create a new assignment.'
     }
   }
 

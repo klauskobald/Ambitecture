@@ -52,6 +52,15 @@ body {
   padding: var(--space-2) var(--space-2) var(--space-3);
 }
 
+.list-empty {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: var(--space-4);
+  color: var(--color-muted);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
 .list-footer__create {
   width: 100%;
 }

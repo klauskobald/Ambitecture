@@ -10,7 +10,8 @@ import {
   setEditMode,
   setPerformMode,
   setEditDoubleTapHandlers,
-  clearEditDoubleTapHandlers
+  clearEditDoubleTapHandlers,
+  setStageEditExitSelectModeHandler
 } from '../../stage/stageOverlayCoordinator.js'
 import { IntentParamsHost } from '../../stage/IntentParamsHost.js'
 import { selectionState } from '../../edit/selectionState.js'
@@ -137,6 +138,7 @@ export class StageEditPane {
       guid => getParamsHost().openForIntentGuid(guid),
       detail => void this._onDoubleTapEmptyStage(detail)
     )
+    setStageEditExitSelectModeHandler(() => this._exitSelectModeIfActive())
 
     const overlay = getStageOverlay()
     overlay?.resize()
@@ -150,6 +152,7 @@ export class StageEditPane {
   deactivate () {
     this._exitCurrentMode()
     clearEditDoubleTapHandlers()
+    setStageEditExitSelectModeHandler(null)
     getParamsHost().close()
     setPerformMode()
     if (this._selectionUnsub) {
@@ -356,6 +359,12 @@ export class StageEditPane {
     overlay?.markRenderActivity()
   }
 
+  _exitSelectModeIfActive () {
+    if (this._activeMode === 'select') {
+      this._exitCurrentMode()
+    }
+  }
+
   async _onPerformSortClick () {
     const raw = collectPerformButtonInputs()
     if (raw.length === 0) {
@@ -502,10 +511,10 @@ export class StageEditPane {
         const guid = intentGuid(obj)
         selectionState.toggleGuid(guid)
         const guids = selectionState.getGuids()
-        if (guids.size === 1) {
-          getParamsHost().openForSelection(guids)
-        } else if (guids.size === 0) {
+        if (guids.size === 0) {
           getParamsHost().close()
+        } else {
+          getParamsHost().openForSelection(guids)
         }
       },
       drawBubble (ctx, px, py, _id, obj) {

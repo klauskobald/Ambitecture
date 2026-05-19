@@ -4,6 +4,12 @@ import { projectGraph } from '../core/projectGraph.js'
 import { intentName } from '../core/stores.js'
 import { resolveDescriptorsForClass } from '../core/systemCapabilities.js'
 import { findLayoutTagHost } from './layoutTagHost.js'
+import {
+  runCopySelectedIntents,
+  runDeleteSelectedIntents
+} from '../edit/intentBulkActions.js'
+import { exitStageEditSelectModeIfActive } from './stageOverlayCoordinator.js'
+import { getStageOverlay } from './stageOverlayHost.js'
 
 export class IntentParamsHost {
   constructor () {
@@ -15,6 +21,12 @@ export class IntentParamsHost {
     this._title = null
     /** @type {PropertyPanel | null} */
     this._panel = null
+    /** @type {HTMLElement | null} */
+    this._footer = null
+    /** @type {HTMLButtonElement | null} */
+    this._copyBtn = null
+    /** @type {HTMLButtonElement | null} */
+    this._deleteBtn = null
     /** @type {Set<string>} */
     this._currentGuids = new Set()
     /** @type {unknown[]} */
@@ -62,8 +74,28 @@ export class IntentParamsHost {
     this._body = document.createElement('div')
     this._body.className = 'stage-edit-params-overlay__body'
 
+    this._footer = document.createElement('div')
+    this._footer.className = 'stage-edit-params-overlay__footer'
+
+    this._copyBtn = document.createElement('button')
+    this._copyBtn.type = 'button'
+    this._copyBtn.className = 'btn stage-edit-params-overlay__action'
+    this._copyBtn.textContent = 'Copy'
+    this._copyBtn.addEventListener('click', () => void this._onFooterCopy())
+
+    this._deleteBtn = document.createElement('button')
+    this._deleteBtn.type = 'button'
+    this._deleteBtn.className =
+      'btn stage-edit-params-overlay__action stage-edit-params-overlay__action--danger'
+    this._deleteBtn.textContent = 'Delete'
+    this._deleteBtn.addEventListener('click', () => void this._onFooterDelete())
+
+    this._footer.appendChild(this._copyBtn)
+    this._footer.appendChild(this._deleteBtn)
+
     this._overlayEl.appendChild(header)
     this._overlayEl.appendChild(this._body)
+    this._overlayEl.appendChild(this._footer)
     host.appendChild(this._overlayEl)
     return true
   }
@@ -95,7 +127,6 @@ export class IntentParamsHost {
 
   close () {
     if (!this._overlayEl) return
-    const hadSingle = this._currentGuids.size === 1
     this._overlayEl.hidden = true
     this._overlayEl.setAttribute('aria-hidden', 'true')
     if (this._panel) {
@@ -112,7 +143,7 @@ export class IntentParamsHost {
       this._graphUnsub = null
     }
     this._currentGuids = new Set()
-    if (hadSingle) selectionState.clearAll()
+    selectionState.clearAll()
   }
 
   /** @param {string} guid */
@@ -166,6 +197,30 @@ export class IntentParamsHost {
     this._panel = new PropertyPanel(this._lastDescriptors, guids.size, guids)
     this._body.appendChild(this._panel.buildElement())
     this._panel.refresh(guids)
+    this._refreshFooterActions()
+  }
+
+  _refreshFooterActions () {
+    const n = this._currentGuids.size
+    const enabled = n > 0
+    if (this._copyBtn) this._copyBtn.disabled = !enabled
+    if (this._deleteBtn) this._deleteBtn.disabled = !enabled
+  }
+
+  async _onFooterCopy () {
+    const ok = await runCopySelectedIntents()
+    if (!ok) return
+    exitStageEditSelectModeIfActive()
+    if (this.isOpen()) this.close()
+    getStageOverlay()?.markRenderActivity()
+  }
+
+  async _onFooterDelete () {
+    const ok = await runDeleteSelectedIntents()
+    if (!ok) return
+    exitStageEditSelectModeIfActive()
+    if (this.isOpen()) this.close()
+    getStageOverlay()?.markRenderActivity()
   }
 
   _refreshTitle () {
@@ -193,6 +248,7 @@ export class IntentParamsHost {
     this._currentGuids = guids
     this._panel.refresh(guids)
     this._refreshTitle()
+    this._refreshFooterActions()
   }
 
   _onSelectionChange () {
@@ -214,6 +270,9 @@ export class IntentParamsHost {
       this._overlayEl = null
       this._body = null
       this._title = null
+      this._footer = null
+      this._copyBtn = null
+      this._deleteBtn = null
     }
     if (wasOpen && guids.size > 0) {
       this.open(desc, guids)

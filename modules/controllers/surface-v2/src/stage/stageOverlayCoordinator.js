@@ -7,8 +7,11 @@ let mode = 'perform'
 /** @type {((guid: string) => void) | null} */
 let doubleTapIntentHandler = null
 
-/** @type {((detail: { clientX: number, clientY: number }) => void) | null} */
+/** @type {(() => void) | null} */
 let doubleTapEmptyHandler = null
+
+/** @type {(() => void) | null} */
+let exitSelectModeHandler = null
 
 function applyOverlayPolicy () {
   const overlay = getStageOverlay()
@@ -52,6 +55,19 @@ export function clearEditDoubleTapHandlers () {
   doubleTapIntentHandler = null
   doubleTapEmptyHandler = null
   if (mode === 'edit') applyOverlayPolicy()
+}
+
+/**
+ * Stage edit pane registers this so intent bulk actions (copy/delete in params overlay)
+ * can leave Select mode the same way v1 did after drawer actions.
+ * @param {(() => void) | null} fn
+ */
+export function setStageEditExitSelectModeHandler (fn) {
+  exitSelectModeHandler = fn ?? null
+}
+
+export function exitStageEditSelectModeIfActive () {
+  exitSelectModeHandler?.()
 }
 
 export function refreshOverlayPolicy () {

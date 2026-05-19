@@ -3,6 +3,7 @@ import type { ProjectManager, PulseSetup, PulseSlotMode } from '../ProjectManage
 import { Logger } from '../Logger';
 import type { HubStatusDispatcher, HubStatusPulsePayload } from '../hubStatusTypes';
 import { parsePulseSyncProjectConfig } from './PulseSyncConfig';
+import { resolvePulseSetupSpeed } from './pulseSetupSpeed';
 
 type ActivePulseRunner = {
   setup: PulseSetup;
@@ -20,7 +21,8 @@ type ActivePulseRunner = {
  * Hub-side pulse orchestration. Maintains a single active pulse setup with
  * a per-slot action dispatcher. Each slot references one reusable bucket in
  * `pulses.buckets`. One timeout per tick: after each fire, next tick is
- * `Date.now() + 60000/bpm` using current BPM. BPM changes do not touch timers.
+ * `Date.now() + 60000/(bpm*speed)` using current BPM and setup {@link PulseSetup.speed}.
+ * BPM / speed changes do not touch the pending timer.
  */
 export class PulseManager {
   private runner?: ActivePulseRunner;
@@ -97,12 +99,17 @@ export class PulseManager {
   }
 
   /**
-   * Compute milliseconds per tick based on BPM and meter.
-   * Quarter note = 1 beat; meter is beats per measure.
-   * Tick = one slot = one quarter note = (60000 / BPM) ms.
+   * Compute milliseconds per tick from musical BPM and setup speed.
+   * Tick = one slot = one quarter note at effective rate `bpm * speed`.
    */
-  private computeTickIntervalMs(bpm: number, _meter: number): number {
-    return Math.round(60000 / bpm);
+  private computeTickIntervalMs(bpm: number, setup: PulseSetup): number {
+    const speed = resolvePulseSetupSpeed(setup);
+    const safeBpm = Number.isFinite(bpm) && bpm > 0 ? bpm : 120;
+    const eff = safeBpm * speed;
+    if (!Number.isFinite(eff) || eff <= 0) {
+      return Math.round(60000 / 120);
+    }
+    return Math.round(60000 / eff);
   }
 
   /**
@@ -228,7 +235,7 @@ export class PulseManager {
       this.runner.setup = setup;
     }
     this.runner.liveBpm = bpm;
-    const periodMs = this.computeTickIntervalMs(bpm, this.runner.setup.meter);
+    const periodMs = this.computeTickIntervalMs(bpm, this.runner.setup);
     Logger.info(`[pulse] live tempo ${bpm} BPM (${periodMs}ms/tick, timer unchanged)`);
   }
 
@@ -302,7 +309,7 @@ export class PulseManager {
     this.runner.currentSlotIdx = 0;
     this.runner.msIntoCurrentTick = 0;
 
-    const periodMs = this.computeTickIntervalMs(this.getRunnerBpm(), this.runner.setup.meter);
+    const periodMs = this.computeTickIntervalMs(this.getRunnerBpm(), this.runner.setup);
     Logger.info(`[pulse] started (${this.runner.setup.name}, ${periodMs}ms/tick)`);
     this.scheduleNextTick();
   }
@@ -353,7 +360,7 @@ export class PulseManager {
     this.tickRound();
     const periodMs = this.computeTickIntervalMs(
       this.getRunnerBpm(),
-      this.runner.setup.meter,
+      this.runner.setup,
     );
     this.scheduleTickAt(Date.now() + periodMs);
   }
@@ -364,7 +371,7 @@ export class PulseManager {
     }
     const periodMs = this.computeTickIntervalMs(
       this.getRunnerBpm(),
-      this.runner.setup.meter,
+      this.runner.setup,
     );
     return Date.now() + periodMs;
   }
@@ -522,6 +529,7 @@ export class PulseManager {
     const bpm = this.runner?.setup.guid === setupGuid
       ? this.getRunnerBpm()
       : (setup?.bpm ?? 120);
+    const speed = resolvePulseSetupSpeed(setup);
     const bpmLabel = Number.isFinite(bpm) ? bpm.toFixed(1) : '120.0';
     const slotsTotal = setup?.slots.length ?? 0;
     const name = setup?.name ?? setupGuid;
@@ -536,7 +544,7 @@ export class PulseManager {
       setupGuid,
       status,
       message: { text },
-      data: { bpm, slotIdx, slotsTotal },
+      data: { bpm, slotIdx, slotsTotal, speed },
     };
   }
 

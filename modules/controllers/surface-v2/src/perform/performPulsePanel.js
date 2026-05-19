@@ -9,7 +9,7 @@ import {
   subscribePulsePlayState,
   isPulseActive
 } from '../core/pulsePlayRegistry.js'
-import { formatPulseBpmDisplay } from '../core/pulseFormat.js'
+import { formatPulseBpmDisplay, clampPulseSetupSpeed, formatPulseSpeedLabel } from '../core/pulseFormat.js'
 import { createPulseEditPane } from './performPulseEditPane.js'
 import { createPerformPulseSyncColumn } from './performPulseSyncColumn.js'
 import { prompt as modalPrompt } from '../core/Modal.js'
@@ -20,14 +20,17 @@ import { prompt as modalPrompt } from '../core/Modal.js'
  * @param {number} slotsTotal
  * @param {number} firedSlotIdx
  * @param {number} bpm
+ * @param {number} speed
  * @returns {HTMLElement}
  */
-function renderSlotMeter (slotsTotal, firedSlotIdx, bpm) {
+function renderSlotMeter (slotsTotal, firedSlotIdx, bpm, speed) {
   const meter = document.createElement('div')
   meter.className = 'perform-pulse-meter'
+  const s =
+    typeof speed === 'number' && Number.isFinite(speed) && speed > 0 ? speed : 1
   const beatMs =
     typeof bpm === 'number' && Number.isFinite(bpm) && bpm > 0
-      ? (60 / bpm) * 1000
+      ? (60 / (bpm * s)) * 1000
       : 500
   meter.style.setProperty('--pulse-beat-period', `${beatMs}ms`)
   for (let i = 0; i < slotsTotal; i += 1) {
@@ -131,8 +134,9 @@ export function createPerformPulsePanel () {
         const guid = typeof s.guid === 'string' ? s.guid : ''
         const name = typeof s.name === 'string' ? s.name : ''
         const bpm = typeof s.bpm === 'number' ? s.bpm : 0
+        const speed = typeof s.speed === 'number' ? s.speed : 1
         const slots = Array.isArray(s.slots) ? s.slots.length : 0
-        return `${guid}:${name}:${bpm}:${slots}`
+        return `${guid}:${name}:${bpm}:${speed}:${slots}`
       })
       .join('|')
   }
@@ -149,19 +153,42 @@ export function createPerformPulsePanel () {
       bpmEl.textContent = `${formatPulseBpmDisplay(displayBpmForSetup(guid, setup))} bpm`
     }
     const statusHost = rowEl.querySelector('.perform-pulse-row__status')
-    if (!statusHost) return
-    if (status.isActive && status.slotsTotal > 0) {
-      statusHost.replaceChildren(
-        renderSlotMeter(status.slotsTotal, status.slotIdx, status.bpm)
-      )
-    } else if (status.message) {
-      statusHost.replaceChildren()
-      const text = document.createElement('span')
-      text.className = 'perform-pulse-row__status-text'
-      text.textContent = status.message
-      statusHost.appendChild(text)
-    } else {
-      statusHost.replaceChildren()
+    if (statusHost) {
+      if (status.isActive && status.slotsTotal > 0) {
+        statusHost.replaceChildren(
+          renderSlotMeter(
+            status.slotsTotal,
+            status.slotIdx,
+            status.bpm,
+            status.speed
+          )
+        )
+      } else if (status.message) {
+        statusHost.replaceChildren()
+        const text = document.createElement('span')
+        text.className = 'perform-pulse-row__status-text'
+        text.textContent = status.message
+        statusHost.appendChild(text)
+      } else {
+        statusHost.replaceChildren()
+      }
+    }
+    const speedVal = rowEl.querySelector('.perform-pulse-row__speed-value')
+    const minusBtn = rowEl.querySelector('.perform-pulse-speed-btn--minus')
+    const plusBtn = rowEl.querySelector('.perform-pulse-speed-btn--plus')
+    if (setup && speedVal) {
+      const sp =
+        typeof setup.speed === 'number' && Number.isFinite(setup.speed)
+          ? setup.speed
+          : 1
+      const clamped = clampPulseSetupSpeed(sp)
+      speedVal.textContent = formatPulseSpeedLabel(clamped)
+      if (minusBtn instanceof HTMLButtonElement) {
+        minusBtn.disabled = clamped <= 0.25
+      }
+      if (plusBtn instanceof HTMLButtonElement) {
+        plusBtn.disabled = clamped >= 4
+      }
     }
   }
 
@@ -214,6 +241,67 @@ export function createPerformPulsePanel () {
     statusEl.className = 'perform-pulse-row__status'
     label.appendChild(statusEl)
 
+    const speedWrap = document.createElement('div')
+    speedWrap.className = 'perform-pulse-row__speed'
+    speedWrap.setAttribute('role', 'group')
+    speedWrap.setAttribute('aria-label', `Pulse speed for ${name}`)
+
+    const minusBtn = document.createElement('button')
+    minusBtn.type = 'button'
+    minusBtn.className =
+      'btn perform-pulse-speed-btn perform-pulse-speed-btn--minus'
+    minusBtn.setAttribute('aria-label', 'Slower pulse (half speed step)')
+    minusBtn.textContent = '−'
+    minusBtn.addEventListener('click', event => {
+      event.preventDefault()
+      event.stopPropagation()
+      const rec = projectGraph.getPulseSetup(guid)
+      const raw =
+        rec && typeof rec.speed === 'number' && Number.isFinite(rec.speed)
+          ? rec.speed
+          : 1
+      const cur = clampPulseSetupSpeed(raw)
+      sendPulseControlCommand({
+        command: 'setSetupSpeed',
+        setupGuid: guid,
+        speed: clampPulseSetupSpeed(cur * 0.5)
+      })
+    })
+
+    const speedVal = document.createElement('span')
+    speedVal.className = 'perform-pulse-row__speed-value'
+    const sp0 =
+      typeof setup.speed === 'number' && Number.isFinite(setup.speed)
+        ? setup.speed
+        : 1
+    speedVal.textContent = formatPulseSpeedLabel(clampPulseSetupSpeed(sp0))
+
+    const plusBtn = document.createElement('button')
+    plusBtn.type = 'button'
+    plusBtn.className =
+      'btn perform-pulse-speed-btn perform-pulse-speed-btn--plus'
+    plusBtn.setAttribute('aria-label', 'Faster pulse (double speed step)')
+    plusBtn.textContent = '+'
+    plusBtn.addEventListener('click', event => {
+      event.preventDefault()
+      event.stopPropagation()
+      const rec = projectGraph.getPulseSetup(guid)
+      const raw =
+        rec && typeof rec.speed === 'number' && Number.isFinite(rec.speed)
+          ? rec.speed
+          : 1
+      const cur = clampPulseSetupSpeed(raw)
+      sendPulseControlCommand({
+        command: 'setSetupSpeed',
+        setupGuid: guid,
+        speed: clampPulseSetupSpeed(cur * 2)
+      })
+    })
+
+    speedWrap.appendChild(minusBtn)
+    speedWrap.appendChild(speedVal)
+    speedWrap.appendChild(plusBtn)
+
     const selectBtn = document.createElement('button')
     selectBtn.type = 'button'
     selectBtn.className = 'perform-pulse-select'
@@ -237,6 +325,7 @@ export function createPerformPulsePanel () {
 
     el.appendChild(editBtn)
     el.appendChild(label)
+    el.appendChild(speedWrap)
     el.appendChild(selectBtn)
     syncRowState(el)
     return el

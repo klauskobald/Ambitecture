@@ -7,6 +7,7 @@ import {
   PulseSyncRestartMode,
 } from '../ProjectManager';
 import { Logger } from '../Logger';
+import { clampPulseSetupSpeed } from './pulseSetupSpeed';
 
 const MIN_SLOT_COUNT = 1;
 const MAX_SLOT_COUNT = 32;
@@ -20,6 +21,7 @@ export type PulseControlCommand =
   | { command: 'deleteSetup'; setupGuid: string }
   | { command: 'renameSetup'; setupGuid: string; name: string }
   | { command: 'setSetupBpm'; setupGuid: string; bpm: number }
+  | { command: 'setSetupSpeed'; setupGuid: string; speed: number }
   | { command: 'setSetupSlotCount'; setupGuid: string; count: number }
   | { command: 'setSetupMode'; setupGuid: string; mode: PulseSlotMode }
   | { command: 'assignSlotBucket'; setupGuid: string; slotIdx: number; bucketGuid: string | null }
@@ -71,6 +73,8 @@ export class PulseSetupManager {
         return this.renameSetup(command.setupGuid, command.name);
       case 'setSetupBpm':
         return this.setSetupBpm(command.setupGuid, command.bpm);
+      case 'setSetupSpeed':
+        return this.setSetupSpeed(command.setupGuid, command.speed);
       case 'setSetupSlotCount':
         return this.setSetupSlotCount(command.setupGuid, command.count);
       case 'setSetupMode':
@@ -148,6 +152,17 @@ export class PulseSetupManager {
       return { pulsesChanged: false };
     }
     setup.bpm = this.clampBpm(bpm);
+    this.persistPulses();
+    return { pulsesChanged: true, setupGuid };
+  }
+
+  private setSetupSpeed(setupGuid: string, speed: number): PulseControlResult {
+    const setup = this.projectManager.getPulseSetup(setupGuid);
+    if (!setup) {
+      Logger.warn(`[pulse] setSetupSpeed: unknown setup ${setupGuid}`);
+      return { pulsesChanged: false };
+    }
+    setup.speed = clampPulseSetupSpeed(speed);
     this.persistPulses();
     return { pulsesChanged: true, setupGuid };
   }

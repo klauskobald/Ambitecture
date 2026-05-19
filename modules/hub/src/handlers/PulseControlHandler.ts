@@ -29,6 +29,10 @@ function isPulseControlCommand(payload: unknown): payload is PulseControlCommand
       return typeof p['setupGuid'] === 'string'
         && p['setupGuid'].length > 0
         && typeof p['bpm'] === 'number';
+    case 'setSetupSpeed':
+      return typeof p['setupGuid'] === 'string'
+        && p['setupGuid'].length > 0
+        && typeof p['speed'] === 'number';
     case 'setSetupSlotCount':
       return typeof p['setupGuid'] === 'string'
         && p['setupGuid'].length > 0

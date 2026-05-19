@@ -219,6 +219,11 @@ export interface PulseSetup {
   name: string;
   bpm: number;
   meter: number;
+  /**
+   * Multiplier on incoming tempo for tick interval (1 = default, 2 = twice as fast).
+   * Effective tick period uses `bpm * speed` in the denominator.
+   */
+  speed?: number;
   /** Slot order after each tick; `random` applies when {@link meter} > 2. */
   mode?: PulseSlotMode;
   slots: PulseSlot[];

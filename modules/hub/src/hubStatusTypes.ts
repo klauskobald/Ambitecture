@@ -17,7 +17,7 @@ export type HubStatusPulsePayload = {
   setupGuid: string;
   status: 'started' | 'stopped';
   message: { text: string };
-  data: { bpm: number; slotIdx: number; slotsTotal: number };
+  data: { bpm: number; slotIdx: number; slotsTotal: number; speed: number };
 };
 
 /** `hub:status` when an external controller sent `pulse:sync` (applied or not). */

@@ -659,6 +659,34 @@
   white-space: nowrap;
 }
 
+.perform-pulse-row__speed {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.12rem;
+}
+
+.perform-pulse-speed-btn {
+  min-width: 1.65rem;
+  padding: 0.2rem 0.3rem;
+  font-size: 0.8rem;
+  line-height: 1;
+  touch-action: manipulation;
+}
+
+.perform-pulse-speed-btn:disabled {
+  opacity: 0.45;
+}
+
+.perform-pulse-row__speed-value {
+  min-width: 1.85rem;
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
 .perform-subnav-tap {
   flex: 0 0 auto;
   margin-right: 0.15rem;

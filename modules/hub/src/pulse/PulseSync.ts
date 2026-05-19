@@ -3,6 +3,7 @@ import { ProjectManager } from '../ProjectManager';
 import { PulseManager } from './PulseManager';
 import { PulseTapTempoConfig } from './PulseTapTempoConfig';
 import { parsePulseSyncProjectConfig } from './PulseSyncConfig';
+import { resolvePulseSetupSpeed } from './pulseSetupSpeed';
 
 export type PulseSyncKind = 'onset' | 'bar';
 
@@ -81,7 +82,8 @@ export class PulseSync {
       (syncProject.restart === 'bar' && payload.kind === 'bar')
       || (syncProject.restart === 'onset' && payload.kind === 'onset');
 
-    const periodMs = 60000 / smoothedBpm;
+    const speed = resolvePulseSetupSpeed(setup);
+    const periodMs = 60000 / (smoothedBpm * speed);
     let beatIndex = Math.ceil(
       (receivedAtMs + SYNC_SCHEDULE_LEAD_MS - beatAtHubMs) / periodMs,
     );

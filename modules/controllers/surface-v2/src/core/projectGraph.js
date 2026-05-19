@@ -2133,6 +2133,11 @@ function normalizePulsesConfig (data) {
           const modeRaw = row.mode
           const mode =
             modeRaw === 'backward' || modeRaw === 'random' ? modeRaw : 'forward'
+          const speedRaw = row.speed
+          const speed =
+            typeof speedRaw === 'number' && Number.isFinite(speedRaw)
+              ? Math.min(4, Math.max(0.25, speedRaw))
+              : 1
           const slots = Array.isArray(row.slots)
             ? row.slots.map(slot => {
                 if (!slot || typeof slot !== 'object' || Array.isArray(slot)) {
@@ -2151,7 +2156,7 @@ function normalizePulsesConfig (data) {
                 return normalized
               })
             : []
-          return { guid, name, bpm, meter, mode, slots }
+          return { guid, name, bpm, meter, mode, speed, slots }
         })
         .filter(
           /** @returns {row is Record<string, unknown>} */ row => row !== null

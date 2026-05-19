@@ -13,6 +13,9 @@ let isRunning = false
 let bpm = 120
 
 /** @type {number} */
+let pulseSpeed = 1
+
+/** @type {number} */
 let slotIdx = 0
 
 /** @type {number} */
@@ -40,6 +43,7 @@ export function resetPulsePlayState () {
   activeSetupGuid = null
   isRunning = false
   bpm = 120
+  pulseSpeed = 1
   slotIdx = 0
   slotsTotal = 0
   statusMessage = ''
@@ -62,6 +66,11 @@ export function applyHubPulseStatus (payload) {
   if (data && typeof data === 'object' && !Array.isArray(data)) {
     const d = /** @type {Record<string, unknown>} */ (data)
     if (typeof d.bpm === 'number' && Number.isFinite(d.bpm)) bpm = d.bpm
+    if (typeof d.speed === 'number' && Number.isFinite(d.speed)) {
+      pulseSpeed = d.speed
+    } else {
+      pulseSpeed = 1
+    }
     if (typeof d.slotIdx === 'number' && Number.isFinite(d.slotIdx)) slotIdx = d.slotIdx
     if (typeof d.slotsTotal === 'number' && Number.isFinite(d.slotsTotal)) {
       slotsTotal = d.slotsTotal
@@ -89,12 +98,13 @@ export function getActivePulseSetupGuid () {
 
 /**
  * @param {string} setupGuid
- * @returns {{ bpm: number, slotIdx: number, slotsTotal: number, message: string, isActive: boolean }}
+ * @returns {{ bpm: number, speed: number, slotIdx: number, slotsTotal: number, message: string, isActive: boolean }}
  */
 export function getPulseSlotStatus (setupGuid) {
   const isActive = isPulseActive(setupGuid)
   return {
     bpm,
+    speed: pulseSpeed,
     slotIdx: isActive ? slotIdx : 0,
     slotsTotal: isActive ? slotsTotal : 0,
     message: isActive ? statusMessage : '',

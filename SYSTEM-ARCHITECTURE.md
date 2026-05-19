@@ -136,7 +136,7 @@ Renderer data authority model:
 
 **Agents:** **`controllers/surface-v1/` is deprecated and frozen** — do not edit. Active operator UI is **`controllers/surface-v2/`** (see [`surface-v2/CLAUDE.md`](modules/controllers/surface-v2/CLAUDE.md)). The `surface-v1` section below is historical reference for patterns already ported or still being ported to v2.
 
-**`controllers/surface-v2/`** — Current operator controller (configurable layout shell, pane renderers, hub WebSocket). See [`modules/controllers/surface-v2/CLAUDE.md`](modules/controllers/surface-v2/CLAUDE.md).
+**`controllers/surface-v2/`** — Current operator controller (configurable layout shell, pane renderers, hub WebSocket). See [`modules/controllers/surface-v2/CLAUDE.md`](modules/controllers/surface-v2/CLAUDE.md). Perform **keyboard** shortcuts: [`surface-v2/src/core/KeyboardManager.js`](modules/controllers/surface-v2/src/core/KeyboardManager.js) (started from [`surface-v2/src/app/main.js`](modules/controllers/surface-v2/src/app/main.js) after hub connect) binds `KeyboardEvent.key` to perform-strip inputs that have `keyChar` (`collectPerformButtonInputs()`), sends `action:trigger` like pointer taps, and uses [`performKeyboardVisual.js`](modules/controllers/surface-v2/src/core/performKeyboardVisual.js) for pulse/hold chrome; `toggle` uses the same on/off `value` derivation as `PerformControlHost` (hub-backed highlight via `createButtonForInput`).
 
 **`controllers/surface-v1/`** — **DEPRECATED (do not edit).** Legacy primary operator controller. Architecture built around a **pane-based SPA** with lazy-loading panes, a touch overlay canvas, and a resizable multi-pane bottom region:
 
@@ -892,7 +892,7 @@ Mandatory actions/inputs rules:
 - Do not add new Perform HUD knobs by modifying `PerformQuickPanelHud` source. Set `quickPanel: true` on the descriptor in `system.yml → systemCapabilities.intentProperties`.
 - Do not add new input param kinds only on one side. When adding a new `kind` to `system.yml`, implement the coercion in `hub/src/inputAssignment/composeInputParams.ts → applyParamKind()` **and** the form parse/stringify in `surface-v2/src/edit/inputAssign/paramKindHandlers.js → parseParamFromForm()`.
 - Do not build new headless controllers from scratch. Start from `controllers/starter/` — it has the correct registration flow, graph replica, `action:trigger` send path, and `runtime:command` position path.
-- Do not bind keys to actions by attaching ad-hoc `keydown` listeners. Add `params.key` to the input via `InputAssignManager` and let `KeyboardManager` route the event through `performMomentaryRegistry` / `action:trigger`.
+- Do not bind keys to actions by attaching ad-hoc `keydown` listeners. Set the input’s `keyChar` via `InputAssignManager` and let `KeyboardManager` route the event through `performMomentaryRegistry` / `action:trigger`.
 - Do not subscribe to the project graph by reading the whole snapshot on every change. Use `projectGraph.subscribe(paths, callback)` — register against the slices you care about (`intents`, `inputs`, `actions`, `scenes`, etc.) so multi-field deltas batch.
 
 Mandatory dot-key rules:

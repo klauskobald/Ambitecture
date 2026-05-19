@@ -1,5 +1,6 @@
 import { loadAppConfig, applyLayoutCssVars } from './config.js'
 import { connectStageHub } from './hubConnection.js'
+import { keyboardManager } from '../core/KeyboardManager.js'
 import { LayoutManager } from '../layout/LayoutManager.js'
 import { registerPaneRenderer } from '../layout/paneRendererRegistry.js'
 import { initStageCommon } from '../stage/stageCommon.js'
@@ -55,6 +56,7 @@ async function main () {
   })
 
   connectStageHub(appCfg)
+  keyboardManager.start()
 
   window.LayoutManager = LayoutManager
 }

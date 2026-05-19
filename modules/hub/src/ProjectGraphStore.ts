@@ -525,7 +525,7 @@ export class ProjectGraphStore {
             op: 'patch',
             entityType: 'animation',
             guid: command.guid,
-            patch: { content: { steps } },
+            patch: { 'content.steps': steps },
             persistence,
           }),
         );

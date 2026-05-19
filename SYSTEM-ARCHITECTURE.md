@@ -313,6 +313,8 @@ Current controller/hub state sync uses a GUID-addressed graph/control protocol:
 
 Use `graph:command` for scene activation, controller state, durable edits, saves, and final committed graph changes. Use `runtime:command` for live data streams such as intent dragging, controller-generated loops, MIDI/sensor values, temporary overrides, and future realtime entity updates. Runtime traffic is latest-wins/coalesced by entity and must not block or rerender graph/control UI such as scene buttons. Use `binding:*` for controller UI that needs to mirror or push hub-owned live values (animation timescale, edit state); never replicate hub state by polling.
 
+**`graph:delta` patch keys** are applied as dot paths on both hub and controller replicas (`setAtDotPath` / `cloneAndSetAtDotPath`). A patch entry whose key is a single segment such as `content` replaces that whole object — partial updates under `content` must use nested keys (for example `content.steps`), never `{ content: { steps } }` alone, or siblings like `content.length` are dropped on receivers.
+
 Hub-owned runtime intent merge state lives in **`RuntimeIntentStore`** (`hub/src/RuntimeIntentStore.ts`). Controllers send compact `runtime:command` patches; the hub merges them on top of the active scene overlay and bare definition, normalizes the result through the **intent registry** (`hub/src/intents/`), and emits renderer events. Controllers do not perform this merge — they apply inbound `runtime:update` for sync only.
 
 Example `graph:command` (scene activation by GUID):

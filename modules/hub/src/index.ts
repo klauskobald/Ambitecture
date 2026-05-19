@@ -97,6 +97,7 @@ const graphStore = new ProjectGraphStore(
   runtimeIntentStore,
   animationManager,
   () => resolveRuntimeReferences(systemConfig.getOrDefault<unknown>('systemCapabilities', {})),
+  pulseSetupManager,
 );
 
 const buildActiveSceneEventsMsg = (): { msg: string | null; eventCount: number } => {

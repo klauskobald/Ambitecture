@@ -1,4 +1,5 @@
 import { ProjectManager, ControllerIntent, FixtureMoveUpdate, ActionDefinition, AnimationDefinition } from './ProjectManager';
+import type { PulseSetupManager } from './pulse/PulseSetupManager';
 import type { RuntimeUpdateDispatcher } from './RuntimeUpdateDispatcher';
 import type { RuntimeIntentStore } from './RuntimeIntentStore';
 import type { AnimationManager } from './animation/AnimationManager';
@@ -27,6 +28,7 @@ export class ProjectGraphStore {
     private runtimeIntentStore?: RuntimeIntentStore,
     private animationManager?: AnimationManager,
     private getSystemCapabilities: () => unknown = () => ({}),
+    private pulseSetupManager?: PulseSetupManager,
   ) { }
 
   useProject(spec: string, callback: () => void): void {
@@ -34,6 +36,7 @@ export class ProjectGraphStore {
       this.revision += 1;
       this.runtimeMerge?.clearRuntimeIntentMergeCache();
       this.animationManager?.stopAll('project reloaded');
+      this.pulseSetupManager?.ensureLoadedProjectPulseDefaults();
       callback();
     });
   }

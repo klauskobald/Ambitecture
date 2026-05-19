@@ -35,6 +35,30 @@ export type PulseControlResult = {
 export class PulseSetupManager {
   constructor(private projectManager: ProjectManager) {}
 
+  /**
+   * After project load: ensure `pulses.setups` has at least one row and `activePulseGuid`
+   * references an existing setup (defaults to the first setup when missing or stale).
+   */
+  ensureLoadedProjectPulseDefaults(): { pulsesChanged: boolean } {
+    const config = this.projectManager.ensurePulsesConfig();
+    if (config.setups.length === 0) {
+      const created = this.build({ command: 'createSetup' });
+      if (created.setupGuid) {
+        this.projectManager.setActivePulseGuid(created.setupGuid);
+      }
+      return { pulsesChanged: created.pulsesChanged };
+    }
+    const active = this.projectManager.getActivePulseGuid();
+    if (!active || !this.projectManager.getPulseSetup(active)) {
+      const g = config.setups[0]?.guid;
+      if (typeof g === 'string' && g.length > 0) {
+        this.projectManager.setActivePulseGuid(g);
+        return { pulsesChanged: true };
+      }
+    }
+    return { pulsesChanged: false };
+  }
+
   build(command: PulseControlCommand): PulseControlResult {
     switch (command.command) {
       case 'selectSetup':

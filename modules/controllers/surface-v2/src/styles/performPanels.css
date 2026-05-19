@@ -687,6 +687,56 @@
   color: var(--color-text);
 }
 
+.layout-leaf-header > .perform-subnav-filter {
+  margin-left: auto;
+}
+
+.perform-subnav-filter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.35rem;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(12rem, 42vw);
+  min-height: 1.8rem;
+  margin: 0 0 0 0.25rem;
+  padding: 0 0.4rem 0 0.3rem;
+  border: 1px solid var(--color-paused);
+  border-radius: 4px;
+  background: var(--color-paused-dim);
+  color: var(--color-paused);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.perform-subnav-filter[hidden] {
+  display: none;
+}
+
+.perform-subnav-filter:focus-visible {
+  background: transparent;
+  outline: none;
+}
+
+.perform-subnav-filter__icon {
+  flex: 0 0 auto;
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.perform-subnav-filter__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .perform-subnav-tap {
   flex: 0 0 auto;
   margin-right: 0.15rem;

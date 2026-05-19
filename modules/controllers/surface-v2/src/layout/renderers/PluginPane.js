@@ -5,6 +5,10 @@ import {
   togglePerformIntentFilter
 } from '../../core/performIntentFilter.js'
 import {
+  enterPerformIntentFilterPane,
+  leavePerformIntentFilterPane
+} from '../../perform/performIntentFilterChip.js'
+import {
   buildPluginIframeSrc,
   resolvePluginByGuid
 } from '../../plugins/pluginRegistry.js'
@@ -29,10 +33,13 @@ export class PluginPane {
     this._unsubscribeFilter = null
     /** @type {(() => void) | null} */
     this._unsubscribeDiscovery = null
+    /** @type {HTMLElement | null} */
+    this._mountEl = null
   }
 
   /** @param {HTMLElement} container */
   mount (container) {
+    this._mountEl = container
     container.classList.add('layout-perform-pane', 'layout-plugin-pane')
 
     const panel = document.createElement('div')
@@ -51,6 +58,7 @@ export class PluginPane {
   }
 
   activate () {
+    if (this._mountEl) enterPerformIntentFilterPane(this._mountEl)
     this._syncIframeSrc()
     this._unsubscribeFilter = subscribePerformIntentFilter(() => {
       this._syncIframeSrc()
@@ -69,6 +77,7 @@ export class PluginPane {
   }
 
   deactivate () {
+    leavePerformIntentFilterPane()
     this._unsubscribeFilter?.()
     this._unsubscribeFilter = null
     this._unsubscribeDiscovery?.()

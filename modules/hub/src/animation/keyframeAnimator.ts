@@ -120,8 +120,9 @@ function lerpPlanEndpoints(
  * eased ramps between successive keyframes. Config is **only** read from `definition.content` (required
  * object): `repeat`, `length`, `steps`, `lerp`. `content.length` (seconds, finite &gt; 0) is required;
  * at least two steps are stored; the earliest step is pinned to `time: 0` and the latest to `time: length`
- * (centisecond rounding). With `content.lerp`, each segment’s substeps are scheduled individually via
- * `pushTimeoutAtFireWall` when that segment’s lerp window starts, not as a single batch for the whole loop.
+ * (centisecond rounding). With `content.lerp`, each segment’s substeps are registered after the **previous**
+ * anchor’s keyframe is applied so interpolation runs from that last-applied state toward the next anchor (not
+ * pre-queued at cycle start, which could run the segment planner before the prior keyframe had fired).
  * On target intent leaving active scene: pause (clear timers). Re-enter: restart from cycle 0 (v1).
  *
  * Timescale: wall time = `startWall + nominalMs * timescale` ({@link setTimescale}).
@@ -243,6 +244,8 @@ export class KeyframeAnimator {
   private _lastFiredStepIdx = -1;
   /** Re-enters the cycle scheduler from a given cycle + step; set in start(). */
   private _resumeFn?: (cIdx: number, startStepIdx: number) => void;
+  /** After `setTimescale` while the last keyframe of a cycle was the last anchor fired, re-queue wrap lerp into step 0. */
+  private _lerpRebootstrapWrapFromCycleIdx: number | undefined;
   /** Stored by start() so activateManualMode() can re-emit step 0. */
   private _intentAccess?: IntentAccessFn;
   private _mutateIntent?: MutateIntentFn;
@@ -282,7 +285,15 @@ export class KeyframeAnimator {
     this.timescale = factor;
     this._runStartWall = now - currentLogicalMs * factor;
     this.stripTimers();
-    this._resumeFn(this._lastFiredCycleIdx, this._lastFiredStepIdx + 1);
+    const { steps: stepsForResume } = this.parseSteps();
+    const Lr = stepsForResume.length;
+    const nextStepIdx = this._lastFiredStepIdx + 1;
+    if (Lr > 0 && nextStepIdx >= Lr) {
+      this._lerpRebootstrapWrapFromCycleIdx = this._lastFiredCycleIdx;
+      this._resumeFn(this._lastFiredCycleIdx + 1, 0);
+    } else {
+      this._resumeFn(this._lastFiredCycleIdx, Math.max(0, nextStepIdx));
+    }
   }
 
   private wallFromAnimStart(logicalMsFromAnimStart: number): number {
@@ -1277,6 +1288,7 @@ export class KeyframeAnimator {
 
   start(intentAccess: IntentAccessFn, mutateIntent: MutateIntentFn): void {
     this.cancelled = false;
+    this._lerpRebootstrapWrapFromCycleIdx = undefined;
     this._manualModeActive = false;
     this._intentAccess = intentAccess;
     this._mutateIntent = mutateIntent;
@@ -1415,15 +1427,16 @@ export class KeyframeAnimator {
           fromIdx: number,
           toIdx: number,
           wrapToNextCycle: boolean,
+          anchorCycleForPrevStep: number,
         ): void => {
           const prevStep = steps[fromIdx];
           const nextStep = steps[toIdx];
           if (!prevStep || !nextStep) return;
 
-          const prevMsOffset = cIdx * period + prevStep.time;
+          const prevMsOffset = anchorCycleForPrevStep * period + prevStep.time;
           const nextMsOffset = wrapToNextCycle
-            ? (cIdx + 1) * period + nextStep.time
-            : cIdx * period + nextStep.time;
+            ? (anchorCycleForPrevStep + 1) * period + nextStep.time
+            : anchorCycleForPrevStep * period + nextStep.time;
 
           const prevAnchorWallAbs = this.wallFromAnimStart(prevMsOffset);
           const nextAnchorWallAbs = this.wallFromAnimStart(nextMsOffset);
@@ -1518,12 +1531,16 @@ export class KeyframeAnimator {
 
         const L = steps.length;
 
-        // On restart, skip lerp segments before startStepIdx; always schedule wrap segment.
-        for (let i = startStepIdx; i < L - 1; i++) {
-          scheduleLerpSegmentWhenWindowStarts(i, i + 1, false);
+        const reboundWrap = this._lerpRebootstrapWrapFromCycleIdx;
+        if (reboundWrap !== undefined) {
+          this._lerpRebootstrapWrapFromCycleIdx = undefined;
+          if (L >= 2) {
+            scheduleLerpSegmentWhenWindowStarts(L - 1, 0, true, reboundWrap);
+          }
         }
-        if (L >= 2) {
-          scheduleLerpSegmentWhenWindowStarts(L - 1, 0, true);
+
+        if (startStepIdx > 0 && startStepIdx < L) {
+          scheduleLerpSegmentWhenWindowStarts(startStepIdx - 1, startStepIdx, false, cIdx);
         }
 
         for (let i = startStepIdx; i < L; i++) {
@@ -1535,6 +1552,11 @@ export class KeyframeAnimator {
             this._lastFiredCycleIdx = cIdx;
             this._lastFiredStepIdx = stepIdx;
             this.emitOneKeyframe(targetGuid, intentAccess, mutateIntent, step.args);
+            if (L >= 2 && stepIdx < L - 1) {
+              scheduleLerpSegmentWhenWindowStarts(stepIdx, stepIdx + 1, false, cIdx);
+            } else if (L >= 2 && stepIdx === L - 1) {
+              scheduleLerpSegmentWhenWindowStarts(L - 1, 0, true, cIdx);
+            }
           });
         }
 

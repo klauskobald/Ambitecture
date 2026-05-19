@@ -454,10 +454,10 @@ class ProjectGraph {
 
   /**
    * Animations that share a runner `action` guid (companion row from hub) — safe to `action:trigger`.
-   * @returns {Array<{ guid: string, name: string, class: string, targetIntent: string }>}
+   * @returns {Array<{ guid: string, name: string, class: string, targetIntents: string[] }>}
    */
   getPlayableAnimationsList () {
-    /** @type {Array<{ guid: string, name: string, class: string, targetIntent: string }>} */
+    /** @type {Array<{ guid: string, name: string, class: string, targetIntents: string[] }>} */
     const out = []
     for (const [guid, row] of this._data.animations) {
       const action = this._data.actions.get(guid)
@@ -465,13 +465,8 @@ class ProjectGraph {
       const name =
         typeof row.name === 'string' && row.name.length > 0 ? row.name : guid
       const cls = typeof row.class === 'string' ? row.class : ''
-      const targetIntent =
-        typeof row.targetIntent === 'string'
-          ? row.targetIntent
-          : typeof row.intent === 'string'
-          ? row.intent
-          : ''
-      out.push({ guid, name, class: cls, targetIntent })
+      const targetIntents = normalizePlayableAnimationTargetIntents(row)
+      out.push({ guid, name, class: cls, targetIntents })
     }
     out.sort((a, b) => a.name.localeCompare(b.name))
     return out
@@ -2094,6 +2089,32 @@ function actionTargets (action, targetType, targetGuid) {
   const ex = action.execute
   if (!ex || typeof ex !== 'object' || Array.isArray(ex)) return false
   return ex.type === targetType && ex.guid === targetGuid
+}
+
+/**
+ * @param {Record<string, unknown>} row
+ * @returns {string[]}
+ */
+function normalizePlayableAnimationTargetIntents (row) {
+  if (Array.isArray(row.targetIntents)) {
+    /** @type {string[]} */
+    const out = []
+    const seen = new Set()
+    for (const item of row.targetIntents) {
+      if (typeof item !== 'string') continue
+      const g = item.trim()
+      if (!g || seen.has(g)) continue
+      seen.add(g)
+      out.push(g)
+    }
+    return out
+  }
+  const legacy =
+    (typeof row.targetIntent === 'string' && row.targetIntent.length > 0
+      ? row.targetIntent
+      : undefined) ??
+    (typeof row.intent === 'string' && row.intent.length > 0 ? row.intent : undefined)
+  return legacy ? [legacy] : []
 }
 
 /**

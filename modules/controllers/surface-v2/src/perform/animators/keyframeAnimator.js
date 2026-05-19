@@ -6,6 +6,7 @@ import { ScalarDragSlider } from '../../edit/components/ScalarDragSlider.js'
 import { IntentParamsSelect } from '../../edit/components/intentParamsSelect.js'
 import { resolveDescriptorsForClass } from '../../core/systemCapabilities.js'
 import { projectGraph } from '../../core/projectGraph.js'
+import { normalizeAnimationTargetIntents } from '../animationTargetIntents.js'
 
 /** Per-animation cleanup so reopening the pane drops the prior callback and edit session. */
 const activeBindings = new Map()
@@ -39,7 +40,10 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
       activeBindings.delete(otherGuid)
     }
 
-    const targetIntentGuid = String(record.targetIntent ?? record.intent ?? '')
+    const targetIntentGuid =
+      normalizeAnimationTargetIntents(
+        /** @type {Record<string, unknown>} */ (record)
+      )[0] ?? ''
 
     const bindingKey = `${guid}-editState`
 

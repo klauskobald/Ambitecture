@@ -8,6 +8,7 @@ import { Logger } from '../Logger';
 import type { RuntimeUpdate } from '../RuntimeProtocol';
 import type { BindingManager } from '../BindingManager';
 import { cloneRecord, diffRecordsToPatch } from '../dotPath';
+import { resolveAnimationTargetIntents } from './resolveAnimationTargetIntents';
 /**
  * Companion runner actions share the animation row's guid (`action:trigger` passes that guid).
  */
@@ -17,7 +18,7 @@ export function companionActionGuid(animationGuid: string): string {
 
 type ActiveRunner = {
   plugin: AnimatorPlugin;
-  targetIntentGuid: string;
+  targetIntentGuids: string[];
   lastInScene: boolean;
   timescale: number;
   lastLocation?: [number, number];
@@ -179,12 +180,9 @@ export class AnimationManager {
       return;
     }
 
-    const target =
-      (typeof record['targetIntent'] === 'string' && record['targetIntent'].length > 0)
-        ? record['targetIntent']
-        : (typeof record['intent'] === 'string' ? record['intent'] : undefined);
-    if (!target) {
-      Logger.warn(`[animation] missing targetIntent for ${animationGuid}`);
+    const targets = resolveAnimationTargetIntents(record);
+    if (targets.length === 0) {
+      Logger.warn(`[animation] missing targetIntents for ${animationGuid}`);
       return;
     }
 
@@ -208,7 +206,7 @@ export class AnimationManager {
         break;
     }
 
-    const inScene = this.projectManager.isIntentInActiveScene(target);
+    const inScene = targets.some(t => this.projectManager.isIntentInActiveScene(t));
     let effectiveTimescale = 1;
     if (opts.timescale !== undefined) {
       if (typeof opts.timescale !== 'number' || !Number.isFinite(opts.timescale) || opts.timescale <= 0) {
@@ -235,7 +233,7 @@ export class AnimationManager {
 
     const runnerBase: ActiveRunner = {
       plugin,
-      targetIntentGuid: target,
+      targetIntentGuids: targets,
       lastInScene: inScene,
       timescale: effectiveTimescale,
       ...(opts.location !== undefined ? { lastLocation: opts.location } : {}),
@@ -437,7 +435,9 @@ export class AnimationManager {
    */
   notifyActiveSceneIntentMembershipChanged(location?: [number, number]): void {
     for (const [guid, runner] of [...this.runners]) {
-      const now = this.projectManager.isIntentInActiveScene(runner.targetIntentGuid);
+      const now = runner.targetIntentGuids.some(t =>
+        this.projectManager.isIntentInActiveScene(t),
+      );
       const prev = runner.lastInScene;
       if (prev === now) {
         continue;
@@ -459,16 +459,14 @@ export class AnimationManager {
   /** When an intent row is removed from the project, stop animations targeting it. */
   onIntentRemovedFromProject(intentGuid: string): void {
     for (const [guid, runner] of [...this.runners]) {
-      if (runner.targetIntentGuid === intentGuid) {
+      if (runner.targetIntentGuids.includes(intentGuid)) {
         this.stopRunner(guid, 'target intent removed');
       }
     }
     for (const guid of [...this.edits.keys()]) {
       const def = this.projectManager.getAnimationByGuid(guid) as Record<string, unknown> | undefined;
-      const target = typeof def?.['targetIntent'] === 'string' ? def['targetIntent']
-        : typeof def?.['intent'] === 'string' ? def['intent']
-          : undefined;
-      if (target === intentGuid) {
+      const editTargets = resolveAnimationTargetIntents(def);
+      if (editTargets.includes(intentGuid)) {
         this.exitEditMode(guid);
       }
     }

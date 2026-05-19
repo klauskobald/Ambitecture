@@ -22,6 +22,11 @@ import {
   setPerformIntentFilter,
   subscribePerformIntentFilter
 } from '../core/performIntentFilter.js'
+import {
+  addAnimationTargetIntent,
+  formatAnimationTargetsSummary,
+  resolveIntentName
+} from './animationTargetIntents.js'
 
 /**
  * @returns {{
@@ -79,7 +84,7 @@ export function createPerformAnimatePanel () {
     const intentFilter = getPerformIntentFilter()
     return (
       anims
-        .map(a => `${a.guid}:${a.name}:${a.class}:${a.targetIntent ?? ''}`)
+        .map(a => `${a.guid}:${a.name}:${a.class}:${a.targetIntents.join(',')}`)
         .join('|') + `#${intentFilter ?? ''}`
     )
   }
@@ -125,7 +130,7 @@ export function createPerformAnimatePanel () {
     const intentFilter = getPerformIntentFilter()
     const allAnims = projectGraph.getPlayableAnimationsList()
     const anims = intentFilter
-      ? allAnims.filter(a => a.targetIntent === intentFilter)
+      ? allAnims.filter(a => a.targetIntents.includes(intentFilter))
       : allAnims
     const key = listKey(anims)
     if (key === lastListKey) {
@@ -141,20 +146,22 @@ export function createPerformAnimatePanel () {
         ? `No animations targeting ${resolveIntentName(intentFilter)}.`
         : 'No animations in project.'
       list.appendChild(empty)
-      if (intentFilter) list.appendChild(makeFilteredIntentCreateButton(intentFilter))
+      if (intentFilter) list.appendChild(makeFilteredIntentActionRow(intentFilter))
       return
     }
     for (const row of anims) {
       list.appendChild(makeRow(row))
     }
-    if (intentFilter) list.appendChild(makeFilteredIntentCreateButton(intentFilter))
+    if (intentFilter) list.appendChild(makeFilteredIntentActionRow(intentFilter))
   }
 
   /**
    * @param {string} targetIntentGuid
-   * @returns {HTMLButtonElement}
+   * @returns {HTMLDivElement}
    */
-  function makeFilteredIntentCreateButton (targetIntentGuid) {
+  function makeFilteredIntentActionRow (targetIntentGuid) {
+    const row = document.createElement('div')
+    row.className = 'perform-animate-empty__actions'
     const createBtn = document.createElement('button')
     createBtn.type = 'button'
     createBtn.className = 'btn perform-animate-empty__create'
@@ -162,11 +169,20 @@ export function createPerformAnimatePanel () {
     createBtn.addEventListener('click', () => {
       void createAnimationForFilteredIntent(targetIntentGuid)
     })
-    return createBtn
+    const pickBtn = document.createElement('button')
+    pickBtn.type = 'button'
+    pickBtn.className = 'btn perform-animate-empty__pick'
+    pickBtn.textContent = 'Pick existing'
+    pickBtn.addEventListener('click', () => {
+      void pickExistingAnimationForFilteredIntent(targetIntentGuid)
+    })
+    row.appendChild(createBtn)
+    row.appendChild(pickBtn)
+    return row
   }
 
   /**
-   * @param {{ guid: string, name: string, class: string, targetIntent: string }} row
+   * @param {{ guid: string, name: string, class: string, targetIntents: string[] }} row
    */
   function makeRow (row) {
     const el = document.createElement('div')
@@ -262,7 +278,10 @@ export function createPerformAnimatePanel () {
     const speedDial = makeSpeedDial(row.guid)
     const intentEl = document.createElement('span')
     intentEl.className = 'perform-animate-row__intent'
-    intentEl.textContent = resolveIntentName(row.targetIntent)
+    intentEl.textContent = formatAnimationTargetsSummary(row.targetIntents)
+    intentEl.title = row.targetIntents
+      .map(g => resolveIntentName(g))
+      .join(', ')
 
     el.appendChild(editBtn)
     el.appendChild(label)
@@ -368,7 +387,7 @@ export function createPerformAnimatePanel () {
       guid,
       class: choice,
       name: intentName,
-      targetIntent: targetIntentGuid
+      targetIntents: [targetIntentGuid]
     }
     sendGraphCommand({
       op: 'upsert',
@@ -385,15 +404,35 @@ export function createPerformAnimatePanel () {
     })
   }
 
-  return { panel, getIntentFilter, setIntentFilter, subscribeFilter }
-}
+  /**
+   * @param {string} targetIntentGuid
+   * @returns {Promise<void>}
+   */
+  async function pickExistingAnimationForFilteredIntent (targetIntentGuid) {
+    const candidates = projectGraph
+      .getPlayableAnimationsList()
+      .filter(a => !a.targetIntents.includes(targetIntentGuid))
+    if (candidates.length === 0) {
+      await modalWarn('No other animations to assign.')
+      return
+    }
+    const options = candidates.map(row => {
+      const viewer = getAnimatorViewer(row.class)
+      const classLabel = viewer ? viewer.getName() : row.class
+      const targetsLabel = formatAnimationTargetsSummary(row.targetIntents, {
+        maxNames: 1
+      })
+      return {
+        value: row.guid,
+        label: `${row.name} (${classLabel}) → ${targetsLabel}`
+      }
+    })
+    const choice = await pickChoice('Pick animation', options, {
+      scrollKey: 'animate.pick-existing'
+    })
+    if (!choice) return
+    addAnimationTargetIntent(choice, targetIntentGuid)
+  }
 
-/** @param {string} guid */
-function resolveIntentName (guid) {
-  if (!guid) return ''
-  const intent = /** @type {Record<string, unknown> | undefined} */ (
-    projectGraph.getIntents().get(guid)
-  )
-  const name = intent?.name
-  return typeof name === 'string' && name ? name : guid
+  return { panel, getIntentFilter, setIntentFilter, subscribeFilter }
 }

@@ -8,6 +8,12 @@ import { SelectPopup } from '../edit/components/selectPopup.js'
 import * as Modal from '../core/Modal.js'
 import { InputAssignManager } from '../edit/InputAssignManager.js'
 import { PulseAssignManager } from '../edit/PulseAssignManager.js'
+import {
+  formatAnimationTargetsSummary,
+  formatAnimationTargetsTitle,
+  normalizeAnimationTargetIntents
+} from './animationTargetIntents.js'
+import { openAnimationTargetsPicker } from './performAnimateTargetsPicker.js'
 
 /**
  * Reads `systemCapabilities.animationCommonProperties.runmode` on each call so
@@ -57,7 +63,7 @@ function readAnimationRunmodeCaps () {
 /**
  * Edit pane for a single animation record.
  * Positioned absolute over the full pane-host (covers subnav).
- * Top row: back | runmode + name | input assign | target intent | delete.
+ * Top row: back | runmode + name | input assign | target intents | delete.
  * Body: content fields from systemCapabilities display.
  *
  * @param {{ onClose: () => void }} opts
@@ -101,8 +107,9 @@ export function createAnimationEditPane ({ onClose }) {
   const assignHost = document.createElement('div')
   assignHost.className = 'perform-animate-edit__assign'
 
-  const intentSpan = document.createElement('span')
-  intentSpan.className = 'perform-animate-edit__intent'
+  const targetsBtn = document.createElement('button')
+  targetsBtn.type = 'button'
+  targetsBtn.className = 'perform-animate-edit__targets btn'
 
   const deleteBtn = document.createElement('button')
   deleteBtn.type = 'button'
@@ -112,7 +119,7 @@ export function createAnimationEditPane ({ onClose }) {
   topRow.appendChild(backBtn)
   topRow.appendChild(nameCluster)
   topRow.appendChild(assignHost)
-  topRow.appendChild(intentSpan)
+  topRow.appendChild(targetsBtn)
   topRow.appendChild(deleteBtn)
 
   // ── body: content fields ───────────────────────────────────────────────────
@@ -153,6 +160,15 @@ export function createAnimationEditPane ({ onClose }) {
     runmodeBtn.title = `Run mode: ${runmodeDisplayLabel(rm)}`
   }
 
+  function applyTargetsLabel () {
+    if (!lastOpenRecord) return
+    const guids = normalizeAnimationTargetIntents(lastOpenRecord)
+    targetsBtn.textContent = formatAnimationTargetsSummary(guids, { maxNames: 2 })
+    const title = formatAnimationTargetsTitle(guids)
+    targetsBtn.title = title
+    targetsBtn.setAttribute('aria-label', `Target intents: ${title}`)
+  }
+
   function renderAssignRow () {
     if (!lastOpenRecord || !currentGuid) return
     assignHost.replaceChildren()
@@ -182,11 +198,27 @@ export function createAnimationEditPane ({ onClose }) {
     if (!el.hidden && currentGuid && lastOpenRecord) {
       const row = projectGraph.getAnimations().get(currentGuid)
       if (row && typeof row === 'object' && !Array.isArray(row)) {
-        lastOpenRecord.runmode = /** @type {Record<string, unknown>} */ (row).runmode
+        const rec = /** @type {Record<string, unknown>} */ (row)
+        lastOpenRecord.runmode = rec.runmode
+        if (Array.isArray(rec.targetIntents)) {
+          lastOpenRecord.targetIntents = rec.targetIntents
+        }
       }
       applyRunmodeLabel()
+      applyTargetsLabel()
       renderAssignRow()
     }
+  })
+
+  projectGraph.subscribe(['intents:def'], () => {
+    if (!el.hidden && lastOpenRecord) applyTargetsLabel()
+  })
+
+  targetsBtn.addEventListener('click', () => {
+    if (!lastOpenRecord || !currentGuid) return
+    void openAnimationTargetsPicker(currentGuid, lastOpenRecord).then(() => {
+      applyTargetsLabel()
+    })
   })
 
   /** @param {Record<string, unknown>} record */
@@ -227,8 +259,7 @@ export function createAnimationEditPane ({ onClose }) {
       renderAssignRow()
     }
 
-    const intentGuid = String(record.targetIntent ?? record.intent ?? '')
-    intentSpan.textContent = resolveIntentName(intentGuid)
+    applyTargetsLabel()
     deleteBtn.onclick = async () => {
       const animationName = String(record.name ?? currentGuid)
       const ok = await Modal.confirm(`Delete animation "${animationName}"?`, {

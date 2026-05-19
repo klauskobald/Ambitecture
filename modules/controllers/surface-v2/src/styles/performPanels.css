@@ -63,8 +63,19 @@
   color: var(--color-text-muted);
 }
 
-.perform-animate-empty__create {
-  align-self: center;
+.perform-animate-empty__actions {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 0.35rem 0.5rem;
+}
+
+.perform-animate-empty__create,
+.perform-animate-empty__pick {
+  flex: 1 1 auto;
+  min-width: 6rem;
 }
 
 .perform-animate-row {
@@ -358,15 +369,19 @@
   outline: none;
 }
 
-.perform-animate-edit__intent {
+.perform-animate-edit__targets {
   flex: 0 1 auto;
   min-width: 0;
-  max-width: 8rem;
+  max-width: 10rem;
   font-size: 0.72rem;
   color: var(--color-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  padding: 0.2rem 0.45rem;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
 }
 
 .perform-animate-edit__delete {

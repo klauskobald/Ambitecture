@@ -10,6 +10,51 @@ import { InputAssignManager } from '../edit/InputAssignManager.js'
 import { PulseAssignManager } from '../edit/PulseAssignManager.js'
 
 /**
+ * Reads `systemCapabilities.animationCommonProperties.runmode` on each call so
+ * options exist after capabilities arrive (the pane is created before register finishes).
+ * @returns {{ options: string[], defaultValue: string }}
+ */
+function readAnimationRunmodeCaps () {
+  const caps = getCapabilities()
+  const commonCaps =
+    caps && !Array.isArray(caps.animationCommonProperties)
+      ? caps.animationCommonProperties
+      : null
+  const runmodeRaw =
+    commonCaps &&
+    typeof commonCaps === 'object' &&
+    !Array.isArray(commonCaps)
+      ? /** @type {Record<string, unknown>} */ (commonCaps).runmode
+      : null
+  const runmodeDescriptor =
+    runmodeRaw &&
+    typeof runmodeRaw === 'object' &&
+    !Array.isArray(runmodeRaw)
+      ? /** @type {Record<string, unknown>} */ (runmodeRaw)
+      : null
+  let options = []
+  if (runmodeDescriptor && Array.isArray(runmodeDescriptor.options)) {
+    options = runmodeDescriptor.options.filter(
+      opt => typeof opt === 'string' && opt.length > 0
+    )
+  }
+  if (options.length === 0) {
+    options = ['auto', 'manual']
+  }
+  const yamlDefault =
+    runmodeDescriptor && typeof runmodeDescriptor.defaultValue === 'string'
+      ? runmodeDescriptor.defaultValue.trim()
+      : ''
+  const defaultValue =
+    yamlDefault.length > 0 && options.includes(yamlDefault)
+      ? yamlDefault
+      : typeof options[0] === 'string'
+        ? options[0]
+        : 'auto'
+  return { options, defaultValue }
+}
+
+/**
  * Edit pane for a single animation record.
  * Positioned absolute over the full pane-host (covers subnav).
  * Top row: back | runmode + name | input assign | target intent | delete.
@@ -39,19 +84,6 @@ export function createAnimationEditPane ({ onClose }) {
 
   const nameCluster = document.createElement('div')
   nameCluster.className = 'perform-animate-edit__name-cluster'
-
-  const caps = getCapabilities()
-  const commonCaps = caps && !Array.isArray(caps.animationCommonProperties) ? caps.animationCommonProperties : null
-  const runmodeDescriptor = commonCaps && typeof commonCaps === 'object' ? commonCaps.runmode : null
-  const runmodeOptions = Array.isArray(runmodeDescriptor?.options)
-    ? runmodeDescriptor.options.filter(opt => typeof opt === 'string' && opt.length > 0)
-    : []
-  const runmodeDefault =
-    typeof runmodeDescriptor?.defaultValue === 'string' && runmodeDescriptor.defaultValue.length > 0
-      ? runmodeDescriptor.defaultValue
-      : typeof runmodeOptions[0] === 'string'
-        ? runmodeOptions[0]
-        : 'auto'
 
   const runmodeBtn = document.createElement('button')
   runmodeBtn.type = 'button'
@@ -99,16 +131,18 @@ export function createAnimationEditPane ({ onClose }) {
 
   /** @param {unknown} opt */
   function runmodeDisplayLabel (opt) {
-    const s = typeof opt === 'string' && opt.length > 0 ? opt : runmodeDefault
+    const { defaultValue } = readAnimationRunmodeCaps()
+    const s = typeof opt === 'string' && opt.length > 0 ? opt : defaultValue
     return s.charAt(0).toUpperCase() + s.slice(1)
   }
 
   /** @param {Record<string, unknown> | null | undefined} record */
   function resolveRunmode (record) {
+    const { options, defaultValue } = readAnimationRunmodeCaps()
     const raw = record?.runmode
     const fromRecord = typeof raw === 'string' && raw.length > 0 ? raw : ''
-    if (fromRecord && runmodeOptions.includes(fromRecord)) return fromRecord
-    return runmodeDefault
+    if (fromRecord && options.includes(fromRecord)) return fromRecord
+    return defaultValue
   }
 
   function applyRunmodeLabel () {
@@ -177,9 +211,10 @@ export function createAnimationEditPane ({ onClose }) {
     applyRunmodeLabel()
     runmodeBtn.onclick = async () => {
       const current = resolveRunmode(record)
+      const { options } = readAnimationRunmodeCaps()
       const choice = await Modal.pickChoice(
         'Run mode',
-        runmodeOptions.map(opt => ({
+        options.map(opt => ({
           value: opt,
           label: runmodeDisplayLabel(opt)
         })),
@@ -226,6 +261,9 @@ export function createAnimationEditPane ({ onClose }) {
   /** @param {Record<string, unknown>} record */
   function renderBody (record) {
     body.replaceChildren()
+    const paramsWrap = document.createElement('div')
+    paramsWrap.className = 'perform-animate-edit__params'
+
     const guid = currentGuid
     const cls = String(record.class ?? '')
     const viewer = getAnimatorViewer(cls)
@@ -271,8 +309,10 @@ export function createAnimationEditPane ({ onClose }) {
           }
         )
 
-      body.appendChild(makeFieldRow(label, null, widget))
+      paramsWrap.appendChild(makeFieldRow(label, null, widget))
     }
+
+    body.appendChild(paramsWrap)
 
     const editSection = viewer?.renderEditSection?.(record)
     if (editSection) body.appendChild(editSection)

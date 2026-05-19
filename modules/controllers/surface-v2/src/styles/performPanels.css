@@ -11,7 +11,7 @@
   touch-action: manipulation;
 }
 
-.layout-perform-pane > .perform-subpane {
+.layout-perform-pane>.perform-subpane {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
@@ -988,11 +988,218 @@
 .perform-animate-edit__body {
   flex: 1 1 auto;
   overflow-y: auto;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, var(--animate-edit-cell-width));
+  display: flex;
+  flex-direction: column;
   gap: var(--animate-edit-cell-gap);
   padding: var(--animate-edit-cell-padding);
   align-content: start;
+  min-height: 0;
+}
+
+.perform-animate-edit__params {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, var(--animate-edit-cell-width));
+  gap: var(--animate-edit-cell-gap);
+  align-content: start;
+  width: 100%;
+}
+
+.animator-edit-section {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 0.35rem;
+  padding: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+.animator-edit-section .intent-params-select__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.animator-edit-section .intent-params-row {
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0;
+  padding: 0.5rem 0.65rem;
+  box-sizing: border-box;
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.animator-edit-section .augmented-select__row {
+  gap: 0.85rem;
+}
+
+.animator-edit-section .augmented-select__key {
+  flex: 0 0 auto;
+  max-width: min(46%, 12rem);
+  min-width: 5.5rem;
+}
+
+.animator-edit-section .intent-params-select__add {
+  margin-top: 0.35rem;
+  margin-left: 0.1rem;
+}
+
+.animator-edit-section__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.animator-edit-section__top-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+  flex: 1 1 auto;
+  width: 100%;
+}
+
+.animator-edit-section__controls-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.animator-edit-section__cluster {
+  display: inline-flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+
+.animator-edit-section__time-cluster {
+  display: inline-flex;
+  position: relative;
+  box-sizing: border-box;
+  flex: 1 1 12rem;
+  min-width: min(100%, 9rem);
+  max-width: 100%;
+  align-items: center;
+  padding: 0 1rem;
+}
+
+.animator-edit-section__time-cluster .animator-edit-section__time-slider-wrap {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+}
+
+.animator-edit-section__time-slider-wrap .prop-slider-wrapper {
+  width: 100%;
+  min-width: 0;
+}
+
+.animator-edit-section__time-bound {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  z-index: 1;
+  pointer-events: none;
+  min-width: 1rem;
+  font-size: 0.65rem;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+}
+
+.animator-edit-section__time-bound--start {
+  left: 0.2rem;
+}
+
+.animator-edit-section__time-bound--end {
+  right: 0.2rem;
+  text-align: right;
+}
+
+.animator-edit-section__header {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.animator-edit-section__nav {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 0 0 auto;
+}
+
+.animator-edit-section__nav-btn.btn {
+  padding: 0.3rem 0.55rem;
+  font-size: 0.72rem;
+}
+
+.animator-edit-section__counter {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  padding: 0 0.2rem;
+}
+
+.animator-edit-section__body {
+  min-width: 0;
+}
+
+.animator-edit-section__dump-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.animator-edit-section__step-params {
+  width: 100%;
+  min-width: 0;
+}
+
+.animator-edit-section__dump-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  padding-top: 0.15rem;
+}
+
+.animator-edit-section__dump-advanced.btn {
+  flex: 0 0 auto;
+}
+
+.animator-edit-section__dump-remove.btn {
+  border-color: #c44;
+  color: #c44;
+  background: transparent;
+  min-width: 2rem;
+  padding: 0.3rem 0.45rem;
+}
+
+.animator-edit-section__dump-remove.btn:disabled {
+  opacity: 0.45;
+}
+
+.animator-edit-section__note {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  padding: 0.35rem 0;
 }
 
 .perform-animate-field {

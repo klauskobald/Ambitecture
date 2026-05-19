@@ -2,7 +2,7 @@ import { AnimatorViewer } from './AnimatorViewer.js'
 import { subscribeBinding } from '../../core/bindingRegistry.js'
 import { sendAnimationEdit, sendBindingSet } from '../../core/outboundQueue.js'
 import { editText, warn as modalWarn } from '../../core/Modal.js'
-import { ScalarRadialKnobSvg } from '../../edit/components/ScalarRadialKnobSvg.js'
+import { ScalarDragSlider } from '../../edit/components/ScalarDragSlider.js'
 import { IntentParamsSelect } from '../../edit/components/intentParamsSelect.js'
 import { resolveDescriptorsForClass } from '../../core/systemCapabilities.js'
 import { projectGraph } from '../../core/projectGraph.js'
@@ -68,9 +68,6 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
     header.className = 'animator-edit-section__header'
     header.textContent = 'Keyframe edit'
 
-    const tools = document.createElement('div')
-    tools.className = 'animator-edit-section__tools'
-
     const body = document.createElement('div')
     body.className = 'animator-edit-section__body'
 
@@ -104,12 +101,24 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
       destroyStepParamsUi?.()
       destroyStepParamsUi = null
       body.replaceChildren()
+
+      const prevSlider = topLeft.querySelector(
+        '.animator-edit-section__time-slider-wrap'
+      )
+      if (
+        prevSlider &&
+        typeof /** @type {{ _destroyStepTime?: () => void }} */ (prevSlider)
+          ._destroyStepTime === 'function'
+      ) {
+        /** @type {{ _destroyStepTime: () => void }} */ (prevSlider)._destroyStepTime()
+      }
+
       const nav = document.createElement('div')
       nav.className = 'animator-edit-section__nav'
 
       const prevBtn = document.createElement('button')
       prevBtn.type = 'button'
-      prevBtn.className = 'animator-edit-section__nav-btn'
+      prevBtn.className = 'animator-edit-section__nav-btn btn'
       prevBtn.textContent = 'Prev'
       prevBtn.disabled = idx <= 0
       prevBtn.addEventListener('click', () => {
@@ -117,7 +126,7 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
       })
       const nextBtn = document.createElement('button')
       nextBtn.type = 'button'
-      nextBtn.className = 'animator-edit-section__nav-btn'
+      nextBtn.className = 'animator-edit-section__nav-btn btn'
       nextBtn.textContent = 'Next'
       nextBtn.disabled = total === 0 || idx >= total - 1
       nextBtn.addEventListener('click', () => {
@@ -132,7 +141,7 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
 
       const addBtn = document.createElement('button')
       addBtn.type = 'button'
-      addBtn.className = 'animator-edit-section__nav-btn'
+      addBtn.className = 'animator-edit-section__nav-btn btn'
       addBtn.textContent = 'Add'
       addBtn.disabled = total <= 0
       addBtn.addEventListener('click', () => {
@@ -144,7 +153,7 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
 
       const mergeBtn = document.createElement('button')
       mergeBtn.type = 'button'
-      mergeBtn.className = 'animator-edit-section__nav-btn'
+      mergeBtn.className = 'animator-edit-section__nav-btn btn'
       mergeBtn.textContent = 'Merge'
       mergeBtn.title = 'Apply intent changes into this step (newer values win)'
       mergeBtn.disabled = total <= 0
@@ -158,7 +167,7 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
       const removeBtn = document.createElement('button')
       removeBtn.type = 'button'
       removeBtn.className =
-        'animator-edit-section__nav-btn animator-edit-section__dump-remove'
+        'animator-edit-section__nav-btn animator-edit-section__dump-remove btn'
       removeBtn.textContent = '❌'
       removeBtn.disabled = total <= 2
       removeBtn.addEventListener('click', e => {
@@ -169,16 +178,44 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
         })
       })
 
-      const timeKnob = makeStepTimeKnob(state, idx, total, bindingKey, guid)
-      if (timeKnob) {
-        tools.replaceChildren(addBtn, mergeBtn, timeKnob)
-      } else {
-        tools.replaceChildren(addBtn, mergeBtn)
-      }
+      const timeSliderWrap = makeStepTimeSlider(state, idx, total, bindingKey)
 
       nav.appendChild(prevBtn)
       nav.appendChild(counter)
       nav.appendChild(nextBtn)
+
+      const toolCluster = document.createElement('div')
+      toolCluster.className =
+        'animator-edit-section__cluster animator-edit-section__cluster--tools'
+      toolCluster.appendChild(addBtn)
+      toolCluster.appendChild(mergeBtn)
+
+      const navCluster = document.createElement('div')
+      navCluster.className =
+        'animator-edit-section__cluster animator-edit-section__cluster--nav'
+      navCluster.appendChild(nav)
+
+      const controlsRow = document.createElement('div')
+      controlsRow.className = 'animator-edit-section__controls-row'
+      controlsRow.appendChild(toolCluster)
+      controlsRow.appendChild(navCluster)
+
+      if (timeSliderWrap) {
+        const timeCluster = document.createElement('span')
+        timeCluster.className = 'animator-edit-section__time-cluster'
+        const prevBound = document.createElement('span')
+        prevBound.className =
+          'animator-edit-section__time-bound animator-edit-section__time-bound--start'
+        prevBound.textContent = formatStepTimeLabel(state?.prevStepTimeSec)
+        const nextBound = document.createElement('span')
+        nextBound.className =
+          'animator-edit-section__time-bound animator-edit-section__time-bound--end'
+        nextBound.textContent = formatStepTimeLabel(state?.nextStepTimeSec)
+        timeCluster.appendChild(prevBound)
+        timeCluster.appendChild(timeSliderWrap)
+        timeCluster.appendChild(nextBound)
+        controlsRow.appendChild(timeCluster)
+      }
 
       const dumpWrap = document.createElement('div')
       dumpWrap.className = 'animator-edit-section__dump-wrap'
@@ -231,12 +268,16 @@ export class KeyframeAnimatorViewer extends AnimatorViewer {
         void openStepContentEditor(state, bindingKey)
       })
 
-      dumpWrap.appendChild(paramsHost)
-      dumpWrap.appendChild(jsonBtn)
-      dumpWrap.appendChild(removeBtn)
+      const dumpFooter = document.createElement('div')
+      dumpFooter.className = 'animator-edit-section__dump-footer'
+      dumpFooter.appendChild(jsonBtn)
+      dumpFooter.appendChild(removeBtn)
 
-      topLeft.replaceChildren(header, tools)
-      top.replaceChildren(topLeft, nav)
+      dumpWrap.appendChild(paramsHost)
+      dumpWrap.appendChild(dumpFooter)
+
+      topLeft.replaceChildren(header, controlsRow)
+      top.replaceChildren(topLeft)
       body.appendChild(dumpWrap)
 
       lastRenderedIdx = idx
@@ -350,10 +391,9 @@ function stepContentFromStateAndArgs (state, argsDraft) {
  * @param {number} idx
  * @param {number} total
  * @param {string} bindingKey
- * @param {string} animationGuid
  * @returns {HTMLElement | null}
  */
-function makeStepTimeKnob (state, idx, total, bindingKey, animationGuid) {
+function makeStepTimeSlider (state, idx, total, bindingKey) {
   if (total <= 2) return null
   if (idx <= 0 || idx >= total - 1) return null
 
@@ -369,24 +409,20 @@ function makeStepTimeKnob (state, idx, total, bindingKey, animationGuid) {
   let currentTime = Number.isFinite(currentTimeRaw) ? currentTimeRaw : fallback
   currentTime = Math.max(min, Math.min(max, currentTime))
 
-  const timeKnobHint =
-    'Moves the time between the previous and next step'
+  const hint = 'Moves the time between the previous and next step (seconds)'
   const wrap = document.createElement('div')
-  wrap.className =
-    'perform-animate-speed-wrap perform-animate-speed-wrap--keyframe-step'
-  const knob = new ScalarRadialKnobSvg({
-    descriptor: {
-      name: 'Time',
-      range: [min, max],
-      step: 0.01,
-      defaultValue: fallback
+  wrap.className = 'animator-edit-section__time-slider-wrap'
+
+  const slider = new ScalarDragSlider({
+    min,
+    max,
+    step: 0.01,
+    value: currentTime,
+    defaultDomainValue: fallback,
+    onInput: v => {
+      currentTime = Math.max(min, Math.min(max, roundToHundredths(v)))
     },
-    intentGuid: String(animationGuid),
-    readValue: () => currentTime,
-    hint: timeKnobHint,
-    onCommit: domain => {
-      const rounded = roundToHundredths(domain)
-      currentTime = Math.max(min, Math.min(max, rounded))
+    onCommit: () => {
       sendBindingSet(bindingKey, {
         currentStepIndex: Number(state?.currentStepIndex) || 0,
         currentStepContent: {
@@ -398,13 +434,19 @@ function makeStepTimeKnob (state, idx, total, bindingKey, animationGuid) {
         },
         editAction: 'set'
       })
-    },
-    showInnerSvgTitle: false
+    }
   })
-  knob.mount(wrap)
-  const knobRoot = wrap.firstElementChild
-  if (knobRoot instanceof HTMLElement) knobRoot.title = timeKnobHint
-  requestAnimationFrame(() => knob.syncFromExternal())
+  slider.mount(wrap)
+  const track = wrap.querySelector('.prop-slider-track')
+  if (track instanceof HTMLElement) {
+    track.title = hint
+    track.setAttribute('aria-label', 'Step time')
+  }
+  wrap._destroyStepTime = () => {
+    slider.destroy()
+    delete wrap._destroyStepTime
+  }
+  requestAnimationFrame(() => slider.setDomainValue(currentTime))
   return wrap
 }
 
@@ -415,6 +457,16 @@ function makeStepTimeKnob (state, idx, total, bindingKey, animationGuid) {
 function roundToHundredths (value) {
   if (!Number.isFinite(value)) return 0
   return Math.round(value * 100) / 100
+}
+
+/**
+ * @param {unknown} sec
+ * @returns {string}
+ */
+function formatStepTimeLabel (sec) {
+  const n = Number(sec)
+  if (!Number.isFinite(n)) return '—'
+  return roundToHundredths(n).toFixed(2)
 }
 
 /**

@@ -144,13 +144,19 @@ function readConfig(testconfig: Record<string, unknown>): AnimationTestConfig {
   };
 }
 
+function roundTimeMsToHundredthSecond(timeMs: number): number {
+  if (!Number.isFinite(timeMs)) return 0;
+  return Math.round(timeMs / 10) * 10;
+}
+
 /**
- * Steps the hub `keyframeAnimator` actually fires: sorted by `time`, then those with `time <= length` (seconds).
- * Matches hub keyframeAnimator `parseSteps` when `content.length` is set.
+ * Steps the hub `keyframeAnimator` actually fires: stable-sorted by `time`, then those whose
+ * centisecond-rounded time is <= centisecond-rounded `content.length` (same rule as hub `parseSteps`).
  */
 function effectiveKeyframeSteps(config: AnimationTestConfig): AnimationKeyframeStep[] {
+  const lengthMsRounded = roundTimeMsToHundredthSecond(config.length * 1000);
   const sorted = [...config.steps].sort((a, b) => (a.time === b.time ? 0 : a.time - b.time));
-  return sorted.filter(s => s.time <= config.length);
+  return sorted.filter(s => roundTimeMsToHundredthSecond(s.time * 1000) <= lengthMsRounded);
 }
 
 function registerController(ws: WebSocket, location: [number, number]): void {
@@ -276,7 +282,7 @@ export async function main(
   const effectiveStepsForHub = effectiveKeyframeSteps(config);
   if (effectiveStepsForHub.length === 0) {
     throw new Error(
-      '004-animation: no keyframe steps satisfy time <= length; increase length or lower step times (same rule as hub keyframeAnimator).',
+      '004-animation: no keyframe steps satisfy the centisecond-rounded time <= length rule; increase length or lower step times (same rule as hub keyframeAnimator).',
     );
   }
 

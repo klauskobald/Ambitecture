@@ -120,7 +120,9 @@ function lerpPlanEndpoints(
  * eased ramps between successive keyframes. Config is **only** read from `definition.content` (required
  * object): `repeat`, `length`, `steps`, `lerp`. `content.length` (seconds, finite &gt; 0) is required;
  * at least two steps are stored; the earliest step is pinned to `time: 0` and the latest to `time: length`
- * (centisecond rounding). With `content.lerp`, each segment’s substeps are registered after the **previous**
+ * (centisecond rounding). `parseSteps` uses the same centisecond rounding for each step time and the
+ * cycle length when deciding which steps belong in a loop and for `cycleLengthMs`, so the last pinned
+ * keyframe is never omitted when raw float seconds disagree slightly with rounded ms. With `content.lerp`, each segment’s substeps are registered after the **previous**
  * anchor’s keyframe is applied so interpolation runs from that last-applied state toward the next anchor (not
  * pre-queued at cycle start, which could run the segment planner before the prior keyframe had fired).
  * In manual run mode, `step` / `goto` / `random` use the same lerp when `content.lerp.time` &gt; 0: ramps are
@@ -1272,17 +1274,24 @@ export class KeyframeAnimator {
       };
     }
 
+    const lengthMsRounded = this.roundTimeMsToHundredthSecond(lengthMs);
+
     const steps: { time: number; args?: Record<string, unknown> }[] = [];
     const stepSourceIndices: number[] = [];
     for (let i = 0; i < sorted.length; i++) {
       const row = sorted[i];
       const sourceIndex = sortedIndices[i];
       if (!row || typeof sourceIndex !== 'number') continue;
-      if (row.time > lengthMs) continue;
-      steps.push(row);
+      const timeRounded = this.roundTimeMsToHundredthSecond(row.time);
+      if (timeRounded > lengthMsRounded) continue;
+      steps.push(
+        row.args !== undefined
+          ? { time: timeRounded, args: row.args }
+          : { time: timeRounded },
+      );
       stepSourceIndices.push(sourceIndex);
     }
-    const cycleLengthMs = lengthMs;
+    const cycleLengthMs = lengthMsRounded;
 
     return {
       steps,

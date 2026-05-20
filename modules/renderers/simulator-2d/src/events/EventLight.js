@@ -6,23 +6,17 @@ class EventLight extends EventBase {
             typeof intent.alpha === 'number' && Number.isFinite(intent.alpha)
                 ? Math.max(0, Math.min(1, intent.alpha))
                 : 1;
-        const blend =
-            intent.blend === 'ALPHA' || intent.blend === 'MULTIPLY'
-                ? intent.blend
-                : 'ADD';
         if (
             colorData &&
             typeof colorData.x === 'number' &&
             typeof colorData.y === 'number' &&
             typeof colorData.Y === 'number'
         ) {
-            const layerColor = new Color(
-                colorData.x,
-                colorData.y,
-                Math.max(0, Math.min(1, colorData.Y))
-            );
-            const mixed = Color.black().blend(layerColor, blend, alpha);
-            const { r, g, b } = mixed.toRGB();
+            const { r, g, b } = Color.fromXYY({
+                x: colorData.x,
+                y: colorData.y,
+                Y: Math.max(0, Math.min(1, colorData.Y * alpha))
+            }).toRGB();
             this._fillColor = `rgb(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)})`;
         } else {
             this._fillColor = '#333';

@@ -23,6 +23,8 @@ class CanvasRenderer {
 
     this._events = new Map()
     this._eventDrawConfig = bootConfig.EVENT_DRAW
+    /** @type {EventsHandler | null} */
+    this._eventsHandler = null
 
     /** @type {number | null} */
     this._rafId = null
@@ -113,6 +115,11 @@ class CanvasRenderer {
     this.fixtures = fixtures
   }
 
+  /** @param {EventsHandler} eventsHandler */
+  setEventsHandler (eventsHandler) {
+    this._eventsHandler = eventsHandler
+  }
+
   setIntentLayers (intentsByLayer) {
     this._events = new Map()
     // Insert in ascending layer order so that map iteration during draw()
@@ -146,6 +153,10 @@ class CanvasRenderer {
     }
 
     this._drawGrid()
+
+    if (this._eventsHandler) {
+      this._eventsHandler.reapplyCurrentIntents()
+    }
 
     for (const fixture of this.fixtures) {
       fixture.update(nowSec)

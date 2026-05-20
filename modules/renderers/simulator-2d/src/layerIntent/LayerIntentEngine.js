@@ -3,49 +3,9 @@ class LayerIntentEngine {
     this._intentsByLayer = new Map()
     this._resolvers = new Map()
 
-    this.registerResolver('light.color.xyY', (context, intentsByLayer, withSpatialFactor = true) => {
-      const layers = [...intentsByLayer.entries()]
-        .filter(([, intent]) => intent.intentType === 'light')
-        .sort(([, a], [, b]) => a.layer - b.layer)
-
-      let mixed = Color.black()
-      for (const [, intent] of layers) {
-        const colorData = intent.payload?.color
-        if (!colorData) continue
-        if (
-          typeof colorData.x !== 'number' ||
-          typeof colorData.y !== 'number' ||
-          typeof colorData.Y !== 'number'
-        ) {
-          continue
-        }
-
-        const spatialFactor = withSpatialFactor ? this._computeSpatialFactor(
-          context.fixture,
-          context.fixtureWorldPos,
-          intent.position,
-          context.fixture.range,
-          intent.radius,
-          intent.radiusFunction
-        ) : 1
-        // Spatial factor folds into the blend alpha (not Y), so that ALPHA / MULTIPLY
-        // also fade out where the intent does not reach. Outside the radius
-        // effectiveAlpha = 0 → upper layer is fully transparent and the lower layer
-        // passes through. For ADD this is algebraically equivalent to the previous
-        // (Y * spatialFactor) approach.
-        const effectiveAlpha = Math.max(
-          0,
-          Math.min(1, (intent.alpha ?? 1) * spatialFactor)
-        )
-        const layerColor = new Color(
-          colorData.x,
-          colorData.y,
-          Math.max(0, Math.min(1, colorData.Y))
-        )
-        mixed = mixed.blend(layerColor, intent.blend || 'ADD', effectiveAlpha)
-      }
-      return mixed
-    })
+    this.registerResolver('light.color.xyY', (context, intentsByLayer, withSpatialFactor = true) =>
+      this._sampleLightColor(context, intentsByLayer, withSpatialFactor)
+    )
 
     this.registerResolver('light.strobe', (context, intentsByLayer) =>
       this._sampleSpatialAdditive(
@@ -167,6 +127,106 @@ class LayerIntentEngine {
       return Math.max(0, Math.min(1, value))
     }
     return 1
+  }
+
+  _sampleLightColor (context, intentsByLayer, withSpatialFactor) {
+    const lightEntries = [...intentsByLayer.entries()].filter(
+      ([, intent]) => intent.intentType === 'light'
+    )
+
+    const byLayer = new Map()
+    for (const [guid, intent] of lightEntries) {
+      const layer = intent.layer
+      if (!byLayer.has(layer)) byLayer.set(layer, [])
+      byLayer.get(layer).push({ guid, intent })
+    }
+
+    let mixed = Color.black()
+    for (const layerNum of [...byLayer.keys()].sort((a, b) => a - b)) {
+      const peers = byLayer.get(layerNum)
+      peers.sort((a, b) => a.guid.localeCompare(b.guid))
+
+      let peerR = 0
+      let peerG = 0
+      let peerB = 0
+      const layerAlphas = []
+      const layerIntents = []
+
+      for (const { intent } of peers) {
+        const colorData = intent.payload?.color
+        if (!colorData) continue
+        if (
+          typeof colorData.x !== 'number' ||
+          typeof colorData.y !== 'number' ||
+          typeof colorData.Y !== 'number'
+        ) {
+          continue
+        }
+
+        const spatialFactor = withSpatialFactor
+          ? this._computeSpatialFactor(
+              context.fixture,
+              context.fixtureWorldPos,
+              intent.position,
+              context.fixture.range,
+              intent.radius,
+              intent.radiusFunction
+            )
+          : 1
+        // Spatial factor folds into the blend alpha (not Y), so that ALPHA / MULTIPLY
+        // also fade out where the intent does not reach. Outside the radius
+        // effectiveAlpha = 0 → upper layer is fully transparent and the lower layer
+        // passes through. For ADD this is algebraically equivalent to the previous
+        // (Y * spatialFactor) approach.
+        const effectiveAlpha = Math.max(
+          0,
+          Math.min(1, (intent.alpha ?? 1) * spatialFactor)
+        )
+        const layerColor = new Color(
+          colorData.x,
+          colorData.y,
+          Math.max(0, Math.min(1, colorData.Y))
+        )
+        const lin = layerColor.toLinearRGB()
+        peerR += lin.r * effectiveAlpha
+        peerG += lin.g * effectiveAlpha
+        peerB += lin.b * effectiveAlpha
+        layerAlphas.push(effectiveAlpha)
+        layerIntents.push(intent)
+      }
+
+      if (layerAlphas.length === 0) continue
+
+      const layerMixed = Color.fromLinearRGB(
+        Math.min(1, peerR),
+        Math.min(1, peerG),
+        Math.min(1, peerB)
+      )
+
+      const interLayerBlend = this._resolveLayerBlendMode(layerIntents)
+      const interLayerAlpha = this._aggregateInterLayerAlpha(
+        layerAlphas,
+        interLayerBlend
+      )
+      mixed = mixed.blend(layerMixed, interLayerBlend, interLayerAlpha)
+    }
+    return mixed
+  }
+
+  _resolveLayerBlendMode (intents) {
+    if (intents.length === 0) return 'ADD'
+    const sorted = [...intents].sort((a, b) =>
+      (a.guid ?? '').localeCompare(b.guid ?? '')
+    )
+    const firstBlend = sorted[0].blend || 'ADD'
+    const allSame = intents.every(i => (i.blend || 'ADD') === firstBlend)
+    return allSame ? firstBlend : sorted[0].blend || 'ADD'
+  }
+
+  _aggregateInterLayerAlpha (alphas, blend) {
+    if (alphas.length === 0) return 0
+    if (blend === 'ADD') return 1
+    return Math.max(...alphas)
   }
 
   _isPositionInZone (pos, bbox) {

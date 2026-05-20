@@ -6,7 +6,8 @@
   "scripts": {
     "start": "ts-node src/index.ts",
     "dev": "node --watch --watch-path=src --require ts-node/register src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:layer-intent-color": "ts-node tests/unit/layerIntentColorCompositing.ts"
   },
   "repository": {
     "type": "git",

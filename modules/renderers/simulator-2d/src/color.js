@@ -5,16 +5,35 @@ class Color {
         this.Y = Y;
     }
 
-    toRGB() {
+    toLinearRGB() {
         const { x, y, Y } = this;
         if (y === 0) return { r: 0, g: 0, b: 0 };
 
         const X = (Y / y) * x;
         const Z = (Y / y) * (1 - x - y);
 
-        const rLin =  3.2406 * X - 1.5372 * Y - 0.4986 * Z;
-        const gLin = -0.9689 * X + 1.8758 * Y + 0.0415 * Z;
-        const bLin =  0.0557 * X - 0.2040 * Y + 1.0570 * Z;
+        return {
+            r: Math.max(0, 3.2406 * X - 1.5372 * Y - 0.4986 * Z),
+            g: Math.max(0, -0.9689 * X + 1.8758 * Y + 0.0415 * Z),
+            b: Math.max(0, 0.0557 * X - 0.2040 * Y + 1.0570 * Z),
+        };
+    }
+
+    static fromLinearRGB(r, g, b) {
+        const rLin = Math.max(0, r);
+        const gLin = Math.max(0, g);
+        const bLin = Math.max(0, b);
+        const X = 0.4124564 * rLin + 0.3575761 * gLin + 0.1804375 * bLin;
+        const Y = 0.2126729 * rLin + 0.7151522 * gLin + 0.0721750 * bLin;
+        const Z = 0.0193339 * rLin + 0.1191920 * gLin + 0.9503041 * bLin;
+        const sum = X + Y + Z;
+        const x = sum > 0 ? X / sum : 0.3127;
+        const y = sum > 0 ? Y / sum : 0.3290;
+        return new Color(x, y, Math.max(0, Math.min(1, Y)));
+    }
+
+    toRGB() {
+        const { r: rLin, g: gLin, b: bLin } = this.toLinearRGB();
 
         const gamma = v => {
             const c = Math.max(0, Math.min(1, v));

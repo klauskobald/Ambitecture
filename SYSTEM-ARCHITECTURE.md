@@ -837,7 +837,7 @@ Hub resolves execute items: scene → activates scene (optional animation side e
 - `layer` is a top-level intent field that controls compositing priority.
 - `name` is a top-level human-readable label shown in controller UI.
 - `radius` is a top-level spatial radius in world units, rendered as a circle on the controller overlay canvas.
-- `light.color.xyY` is composited in ascending layer order using each intent's `blend` (`ADD`, `ALPHA`, `MULTIPLY`) and `alpha`.
+- `light.color.xyY` uses two-phase compositing by numeric `layer`: intents on the same layer are combined by adding linear sRGB (each channel scaled by `effectiveAlpha` = intent `alpha` × spatial falloff), then converted back to `xyY` for the layer group. Layer groups are then folded in ascending layer order using that layer's `blend` (`ADD`, `ALPHA`, `MULTIPLY`) and an inter-layer alpha (`max` of peer `effectiveAlpha` for `ALPHA` / `MULTIPLY`; `1` for `ADD`). When peers on one layer disagree on `blend`, the lowest `guid` (lexicographic) sets the inter-layer mode. (Same-layer `Color.blend` `ADD` in `xyY` is not used for peers because `Y`-weighted chromaticity skews HSL primaries — green dominates red at equal lightness.)
 - `light.strobe` accumulates in ascending layer order with the same spatial falloff as color (fixture range curve × intent radius curve when `radius` is set); intent **`alpha` does not scale strobe**—`alpha` applies only to color mixing.
 - `master.brightness` and `master.blackout` resolve from the highest layer that carries a typed value.
 - Spatial attenuation uses fixture range and a named function curve (`linear`, `quadratic`, `cubic`, `sqrt`, `smoothstep`, `hard`), defaulting to `quadratic`. `hard` is full strength inside the radius and zero outside (no falloff).

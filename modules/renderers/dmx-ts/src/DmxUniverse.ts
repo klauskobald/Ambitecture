@@ -18,6 +18,13 @@ type DmxConstructor = new () => DmxInstance;
 const DmxLib = require('dmx') as DmxConstructor;
 type DmxWriteError = Error & { code?: string; disconnect?: boolean };
 
+/** npm `dmx` null driver logs the universe Buffer on every update — avoid it for headless dev. */
+const NULL_DRIVER_HANDLE: UniverseHandle = {
+    update() { },
+    stop() { },
+    close() { },
+};
+
 export class DmxUniverse {
     private universe: UniverseHandle | null = null;
     private channels: Record<number, number> = {};
@@ -33,6 +40,11 @@ export class DmxUniverse {
     }
 
     initialize(): void {
+        if (Config.dmxDriver === 'null') {
+            this.universe = NULL_DRIVER_HANDLE;
+            Logger.info('[dmx] null driver — channel updates kept in memory only (no hardware output)');
+            return;
+        }
         const frameRate = Config.dmxFrameRate;
 
         this.tryInitializeUniverse();

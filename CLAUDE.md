@@ -62,6 +62,10 @@ For what each module does and how they communicate, see SYSTEM-ARCHITECTURE.md.
 
 ## Dev Commands
 
+### PM2 (full stack)
+
+From the repo root: `./start.sh` / `./stop.sh` (PM2 in [`ecosystem.config.cjs`](ecosystem.config.cjs); per-module `.env` like `npm run dev`). See [`pm2/README.md`](pm2/README.md).
+
 ### `modules/hub`
 
 ```bash

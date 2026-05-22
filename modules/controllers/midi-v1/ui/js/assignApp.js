@@ -3,6 +3,7 @@ import { createAssignList } from './assignList.js'
 import { createAssignModal } from './assignModal.js'
 import './viewers/noteAndControl.js'
 import './viewers/noteOnOff.js'
+import './viewers/noteOnOffToggle.js'
 
 const filterParam = new URLSearchParams(window.location.search).get('filter')
 const filterIntentGuid =

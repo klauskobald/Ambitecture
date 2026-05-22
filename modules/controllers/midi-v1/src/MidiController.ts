@@ -13,6 +13,7 @@ import {
 import { ReceiverBase } from './receivers/ReceiverBase';
 import { ReceiverNoteAndControl } from './receivers/ReceiverNoteAndControl';
 import { ReceiverNoteOnOff } from './receivers/ReceiverNoteOnOff';
+import { ReceiverNoteOnOffToggle } from './receivers/ReceiverNoteOnOffToggle';
 import { TargetBase } from './targets/TargetBase';
 import { TargetIntent } from './targets/TargetIntent';
 import { PluginServer } from './PluginServer';
@@ -165,6 +166,14 @@ export class MidiController {
         );
       case 'noteOnOff':
         return ReceiverNoteOnOff.build(assignment, targets, this.logger, onActivity);
+      case 'noteOnOffToggle':
+        return ReceiverNoteOnOffToggle.build(
+          assignment,
+          targets,
+          this.logger,
+          onActivity,
+          onEngaged,
+        );
       default:
         this.logger.warn(`assignment ${assignment.guid}: unknown class "${assignment.class}"`);
         return null;

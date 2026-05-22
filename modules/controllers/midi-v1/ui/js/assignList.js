@@ -25,6 +25,10 @@ export function createAssignList (opts) {
   /** @type {Set<string>} */
   const engagedGuids = new Set()
 
+  /** noteOnOffToggle: latched on until next tap (plugin UI persistent blue frame). */
+  /** @type {Set<string>} */
+  const latchedGuids = new Set()
+
   function rowSummary (a) {
     const s = typeof a.summary === 'string' ? a.summary.trim() : ''
     if (s) return s
@@ -97,6 +101,9 @@ export function createAssignList (opts) {
     for (const g of [...engagedGuids]) {
       if (!knownGuids.has(g)) engagedGuids.delete(g)
     }
+    for (const g of [...latchedGuids]) {
+      if (!knownGuids.has(g)) latchedGuids.delete(g)
+    }
     listEl.innerHTML = ''
     for (const raw of opts.session.assignments) {
       if (!raw || typeof raw !== 'object') continue
@@ -107,6 +114,7 @@ export function createAssignList (opts) {
       const li = document.createElement('li')
       li.className = 'list__item'
       if (engagedGuids.has(guid)) li.classList.add('list__item--engaged')
+      if (latchedGuids.has(guid)) li.classList.add('list__item--latched')
       li.dataset.assignmentGuid = guid
       const summaryEl = document.createElement('div')
       summaryEl.className = 'list__summary'
@@ -216,14 +224,25 @@ export function createAssignList (opts) {
    */
   function setAssignmentEngaged (assignmentGuid, engaged) {
     if (typeof assignmentGuid !== 'string' || !assignmentGuid) return
-    if (engaged) engagedGuids.add(assignmentGuid)
-    else engagedGuids.delete(assignmentGuid)
+    const a = lookupAssignment(assignmentGuid)
+    const isToggle = a?.class === 'noteOnOffToggle'
+    if (isToggle) {
+      if (engaged) latchedGuids.add(assignmentGuid)
+      else latchedGuids.delete(assignmentGuid)
+    } else {
+      if (engaged) engagedGuids.add(assignmentGuid)
+      else engagedGuids.delete(assignmentGuid)
+    }
     const root = opts.listEl
     if (!root) return
     const item = root.querySelector(
       `li.list__item[data-assignment-guid="${CSS.escape(assignmentGuid)}"]`
     )
     if (!item) return
+    if (isToggle) {
+      item.classList.toggle('list__item--latched', engaged)
+      return
+    }
     item.classList.toggle('list__item--engaged', engaged)
   }
 

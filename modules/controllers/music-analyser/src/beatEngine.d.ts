@@ -6,6 +6,20 @@ export type BeatSyncEvent = {
   reason: 'onset' | 'bar';
 };
 
+export type BeatEngineOptions = {
+  syncToleranceSec: number;
+  onsetMinGapSec: number;
+  onsetFluxWindow: number;
+  onsetFluxSigma: number;
+  odfBufferDurationSec: number;
+  bpmUpdateIntervalMs: number;
+  syncBarBeats: number;
+  initialBpm: number;
+  bpmMin: number;
+  bpmMax: number;
+  bpmSmoothNewWeight: number;
+};
+
 export type BeatEngineHandlers = {
   onSync: (event: BeatSyncEvent) => void;
   onBeat?: (event: {
@@ -24,7 +38,10 @@ export type BeatEngineHandlers = {
   onError?: (err: Error) => void;
 };
 
-export function createBeatEngine(handlers: BeatEngineHandlers): {
+export function createBeatEngine(
+  handlers: BeatEngineHandlers,
+  options?: Partial<BeatEngineOptions>,
+): {
   start: () => void;
   stop: () => void;
 };

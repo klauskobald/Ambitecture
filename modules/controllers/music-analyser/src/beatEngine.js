@@ -1,5 +1,9 @@
 const recorder = require('node-record-lpcm16')
 const Meyda = require('meyda')
+const {
+  DEFAULT_BEAT_ENGINE_OPTIONS,
+  loadBeatEngineConfig
+} = require('./beatEngineConfig')
 
 const SAMPLE_RATE = 44100
 const BUFFER_SIZE = 512
@@ -8,16 +12,6 @@ const HOP_DURATION_SEC = BUFFER_SIZE / SAMPLE_RATE
 
 Meyda.bufferSize = BUFFER_SIZE
 Meyda.sampleRate = SAMPLE_RATE
-
-const ODF_BUFFER_DURATION_SEC = 6
-const MAX_ODF_SAMPLES = Math.floor(ODF_BUFFER_DURATION_SEC / HOP_DURATION_SEC)
-
-const SYNC_TOLERANCE_SEC = 0.045
-const ONSET_MIN_GAP_SEC = 0.12
-const ONSET_FLUX_WINDOW = 48
-const ONSET_FLUX_SIGMA = 1.4
-const BPM_UPDATE_INTERVAL_MS = 1000
-const SYNC_BAR_BEATS = 4
 
 function roundSec (n) {
   return Math.round(n * 1000) / 1000
@@ -64,15 +58,24 @@ function halfWaveRectifiedSpectralFlux (currentSpectrum, previousSpectrum) {
  *   onBpm?: (event: { t: number, audioT: number, bpm: number, prevBpm: number }) => void,
  *   onError?: (err: Error) => void,
  * }} handlers
+ * @param {import('./beatEngine').BeatEngineOptions} [optionOverrides]
  * @returns {{ start: () => void, stop: () => void }}
  */
-function createBeatEngine (handlers) {
+function createBeatEngine (handlers, optionOverrides = {}) {
+  const cfg = {
+    ...DEFAULT_BEAT_ENGINE_OPTIONS,
+    ...loadBeatEngineConfig(),
+    ...optionOverrides
+  }
+
+  const maxOdfSamples = Math.floor(cfg.odfBufferDurationSec / HOP_DURATION_SEC)
+
   let odfHistory = []
   let pcmRemainder = Buffer.alloc(0)
   let previousAmpSpectrum = null
 
   let audioTimeSec = 0
-  let currentLiveBPM = 120
+  let currentLiveBPM = cfg.initialBpm
   let beatGridOriginSec = null
   let lastEmittedBeatIndex = -1
   let lastOnsetAudioTimeSec = -Infinity
@@ -112,7 +115,7 @@ function createBeatEngine (handlers) {
       source
     })
     beatsSinceLastSync += 1
-    if (beatsSinceLastSync >= SYNC_BAR_BEATS) {
+    if (beatsSinceLastSync >= cfg.syncBarBeats) {
       notifySync(beatAudioTimeSec, 0, 'bar')
     }
   }
@@ -138,11 +141,11 @@ function createBeatEngine (handlers) {
     if (!(curr > prev && curr > next)) return false
 
     const onsetAudioTimeSec = audioTimeSec - HOP_DURATION_SEC
-    if (onsetAudioTimeSec - lastOnsetAudioTimeSec < ONSET_MIN_GAP_SEC) return false
+    if (onsetAudioTimeSec - lastOnsetAudioTimeSec < cfg.onsetMinGapSec) return false
 
-    const windowStart = Math.max(0, len - ONSET_FLUX_WINDOW)
+    const windowStart = Math.max(0, len - cfg.onsetFluxWindow)
     const window = odfHistory.slice(windowStart, len - 1)
-    const threshold = mean(window) + ONSET_FLUX_SIGMA * stddev(window)
+    const threshold = mean(window) + cfg.onsetFluxSigma * stddev(window)
     if (curr < threshold) return false
 
     lastOnsetAudioTimeSec = onsetAudioTimeSec
@@ -159,7 +162,7 @@ function createBeatEngine (handlers) {
 
     const nearest = nearestBeatAudioTimeSec(onsetAudioTimeSec)
     const phaseErrorSec = onsetAudioTimeSec - nearest
-    if (Math.abs(phaseErrorSec) > SYNC_TOLERANCE_SEC) return false
+    if (Math.abs(phaseErrorSec) > cfg.syncToleranceSec) return false
 
     beatGridOriginSec += phaseErrorSec
     const period = beatPeriodSec()
@@ -184,7 +187,7 @@ function createBeatEngine (handlers) {
   }
 
   function calculateLiveTempo () {
-    if (odfHistory.length < MAX_ODF_SAMPLES / 2) return
+    if (odfHistory.length < maxOdfSamples / 2) return
 
     const N = odfHistory.length
     const r = new Float32Array(N)
@@ -197,8 +200,8 @@ function createBeatEngine (handlers) {
       r[lag] = sum
     }
 
-    const minLag = Math.floor(60 / 180 / HOP_DURATION_SEC)
-    const maxLag = Math.floor(60 / 60 / HOP_DURATION_SEC)
+    const minLag = Math.floor(60 / cfg.bpmMax / HOP_DURATION_SEC)
+    const maxLag = Math.floor(60 / cfg.bpmMin / HOP_DURATION_SEC)
 
     let maxVal = -1
     let bestLag = -1
@@ -213,7 +216,8 @@ function createBeatEngine (handlers) {
     if (bestLag !== -1) {
       const detectedPeriod = bestLag * HOP_DURATION_SEC
       const rawBpm = 60 / detectedPeriod
-      currentLiveBPM = currentLiveBPM * 0.8 + rawBpm * 0.2
+      const keepWeight = 1 - cfg.bpmSmoothNewWeight
+      currentLiveBPM = currentLiveBPM * keepWeight + rawBpm * cfg.bpmSmoothNewWeight
     }
   }
 
@@ -253,7 +257,7 @@ function createBeatEngine (handlers) {
     audioTimeSec += HOP_DURATION_SEC
 
     odfHistory.push(spectralFlux)
-    if (odfHistory.length > MAX_ODF_SAMPLES) {
+    if (odfHistory.length > maxOdfSamples) {
       odfHistory.shift()
     }
 
@@ -265,7 +269,7 @@ function createBeatEngine (handlers) {
     schedulePastBeats()
 
     const now = Date.now()
-    if (now - lastBpmUpdateTime >= BPM_UPDATE_INTERVAL_MS) {
+    if (now - lastBpmUpdateTime >= cfg.bpmUpdateIntervalMs) {
       const prevBpm = currentLiveBPM
       calculateLiveTempo()
       onBpmChanged(prevBpm)

@@ -102,12 +102,18 @@ export class MusicAnalyserController {
     if (this.beatEngine) {
       return;
     }
-    this.beatEngine = createBeatEngine({
-      onSync: event => this.onBeatSync(event),
-      onError: err => this.logger.error('beat engine error', err),
-    });
+    const beat = this.config.beatEngine;
+    this.beatEngine = createBeatEngine(
+      {
+        onSync: event => this.onBeatSync(event),
+        onError: err => this.logger.error('beat engine error', err),
+      },
+      beat,
+    );
     this.beatEngine.start();
-    this.logger.info('beat engine listening');
+    this.logger.info(
+      `beat engine listening (bpm ${beat.bpmMin}–${beat.bpmMax}, bar every ${beat.syncBarBeats} beats)`,
+    );
   }
 
   private onBeatSync(event: BeatSyncEvent): void {

@@ -1,4 +1,6 @@
 import dotenv from 'dotenv';
+import type { BeatEngineOptions } from './beatEngine';
+import { loadBeatEngineConfig } from './beatEngineConfig';
 
 export interface MusicAnalyserConfig {
   hubUrl: string;
@@ -7,6 +9,7 @@ export interface MusicAnalyserConfig {
   location: [number, number];
   /** Fallback when project YAML has no transmit.minIntervalSeconds */
   transmitMinIntervalSeconds: number;
+  beatEngine: BeatEngineOptions;
 }
 
 function requiredEnv(key: string): string {
@@ -52,5 +55,6 @@ export function loadConfig(): MusicAnalyserConfig {
       'TRANSMIT_MIN_INTERVAL_SECONDS',
       optionalEnv('TRANSMIT_MIN_INTERVAL_SECONDS', '4'),
     ),
+    beatEngine: loadBeatEngineConfig(),
   };
 }

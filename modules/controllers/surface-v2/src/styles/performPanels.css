@@ -1502,6 +1502,12 @@
   touch-action: none;
 }
 
+.perform-scene-auto-reset-toggle {
+  min-width: 3rem;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
 .perform-input--pressed {
   background: var(--color-accent-dim);
   border-color: var(--color-accent);

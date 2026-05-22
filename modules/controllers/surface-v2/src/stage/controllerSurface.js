@@ -1,6 +1,10 @@
 import { OverlayCanvas } from '../viewport/overlayCanvas.js'
 import { projectGraph } from '../core/projectGraph.js'
 import { sendSceneActivate } from '../core/outboundQueue.js'
+import {
+  isSceneAutoResetOnLoadEnabled,
+  subscribeSceneAutoResetOnLoadChange
+} from '../perform/sceneAutoResetPreference.js'
 
 /**
  * Touch overlay, perform HUD host, and runtime reset chrome above the simulator iframe.
@@ -77,6 +81,10 @@ export class ControllerSurface {
 
     const syncRuntimeOverlayResetUi = () => {
       if (!this._resetWrap) return
+      if (isSceneAutoResetOnLoadEnabled()) {
+        this._resetWrap.hidden = true
+        return
+      }
       const guids = projectGraph.getRuntimeOverlayGuidsInScene()
       const active = projectGraph.getActiveSceneName()
       this._resetWrap.hidden =
@@ -91,6 +99,7 @@ export class ControllerSurface {
       sendSceneActivate(guid, { runtimeMergeClear: 'scene' })
     })
     projectGraph.subscribe(['runtimeOverlayHints', 'scenes'], syncRuntimeOverlayResetUi)
+    subscribeSceneAutoResetOnLoadChange(syncRuntimeOverlayResetUi)
     syncRuntimeOverlayResetUi()
   }
 }

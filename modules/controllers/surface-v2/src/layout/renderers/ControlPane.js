@@ -2,6 +2,7 @@ import { createPerformControlPanel } from '../../perform/performControlPanel.js'
 import { PerformControlHost } from '../../perform/performControlHost.js'
 import { projectGraph } from '../../core/projectGraph.js'
 import { subscribeAnimationPlayState } from '../../core/animationPlayRegistry.js'
+import { subscribeSceneAutoResetOnLoadChange } from '../../perform/sceneAutoResetPreference.js'
 
 export class ControlPane {
   constructor () {
@@ -12,6 +13,8 @@ export class ControlPane {
     this._unsubscribe = null
     /** @type {(() => void) | null} */
     this._unsubscribeAnimationPlayState = null
+    /** @type {(() => void) | null} */
+    this._unsubscribeSceneAutoReset = null
   }
 
   /** @param {HTMLElement} container */
@@ -32,6 +35,9 @@ export class ControlPane {
     this._unsubscribeAnimationPlayState = subscribeAnimationPlayState(() => {
       this._render()
     })
+    this._unsubscribeSceneAutoReset = subscribeSceneAutoResetOnLoadChange(() => {
+      this._render()
+    })
   }
 
   deactivate () {
@@ -39,6 +45,8 @@ export class ControlPane {
     this._unsubscribe = null
     this._unsubscribeAnimationPlayState?.()
     this._unsubscribeAnimationPlayState = null
+    this._unsubscribeSceneAutoReset?.()
+    this._unsubscribeSceneAutoReset = null
   }
 
   _render () {

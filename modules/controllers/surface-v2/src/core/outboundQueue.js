@@ -1,4 +1,5 @@
 import { intentGuid, fixtureId } from './stores.js'
+import { sceneActivateOptsWithAutoReset } from '../perform/sceneAutoResetPreference.js'
 
 /** @type {WebSocket | null} */
 let activeWs = null
@@ -95,13 +96,14 @@ function sendRuntimeCommands (commands, ws, location) {
 export function sendSceneActivate (sceneGuid, opts = {}) {
   if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation)
     return
+  const mergedOpts = sceneActivateOptsWithAutoReset(opts)
   const patch = /** @type {Record<string, unknown>} */ ({
     activeSceneGuid: sceneGuid
   })
-  const rmc = opts.runtimeMergeClear
+  const rmc = mergedOpts.runtimeMergeClear
   if (rmc === 'all' || rmc === 'scene') {
     patch.runtimeMergeClear = rmc
-  } else if (opts.clearRuntimeIntentMerge) {
+  } else if (mergedOpts.clearRuntimeIntentMerge) {
     patch.runtimeMergeClear = 'scene'
   }
   activeWs.send(

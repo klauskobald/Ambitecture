@@ -15,6 +15,7 @@ import { ControlPane } from '../layout/renderers/ControlPane.js'
 import { PulsePane } from '../layout/renderers/PulsePane.js'
 import { AnimationPane } from '../layout/renderers/AnimationPane.js'
 import { PluginPane } from '../layout/renderers/PluginPane.js'
+import { initSceneAutoResetOnLoad } from '../perform/sceneAutoResetOnLoad.js'
 
 async function main () {
   const appCfg = await loadAppConfig()
@@ -55,6 +56,7 @@ async function main () {
     onLayoutRebuild: () => rebindIntentParamsHost()
   })
 
+  initSceneAutoResetOnLoad()
   connectStageHub(appCfg)
   keyboardManager.start()
 

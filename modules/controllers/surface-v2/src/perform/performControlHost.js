@@ -10,6 +10,7 @@ import {
   performMomentaryPress,
   performMomentaryRelease
 } from '../core/performMomentaryRegistry.js'
+import { createSceneAutoResetToggleButton } from './performSceneAutoResetToggle.js'
 
 /**
  * Renders perform button inputs into a mount element (v1 PerformPane control strip).
@@ -28,8 +29,16 @@ export class PerformControlHost {
   render (mount) {
     const activeInputs = this._activeDisplayInputs()
     const activeGuids = new Set()
+    let insertedAutoResetToggle = false
 
     for (const input of activeInputs) {
+      if (
+        !insertedAutoResetToggle &&
+        getActionTargetType(input) === 'scene'
+      ) {
+        mount.appendChild(createSceneAutoResetToggleButton())
+        insertedAutoResetToggle = true
+      }
       const guid = String(input.guid ?? '')
       if (!guid) continue
       activeGuids.add(guid)
@@ -212,4 +221,18 @@ export class PerformControlHost {
     const raw = collectPerformButtonInputs()
     return new ArraySorter(raw, DEFAULT_PERFORM_INPUT_SORT_KEY).getItemsSorted()
   }
+}
+
+/**
+ * @param {Record<string, unknown>} inputData
+ * @returns {string | null}
+ */
+function getActionTargetType (inputData) {
+  const ags = inputActionGuidList(inputData)
+  if (ags.length === 0) return null
+  const action = projectGraph.getActions().get(ags[0])
+  if (!action) return null
+  const ex = action.execute
+  if (!ex || typeof ex !== 'object' || Array.isArray(ex)) return null
+  return typeof ex.type === 'string' ? ex.type : null
 }

@@ -10,6 +10,26 @@ export function isExcludedFromParamsEditor (d) {
 }
 
 /**
+ * @param {unknown} raw
+ * @returns {{ key: string, name: string }[] | null}
+ */
+function normalizeComponents (raw) {
+  if (!Array.isArray(raw) || raw.length === 0) return null
+  /** @type {{ key: string, name: string }[]} */
+  const out = []
+  for (const c of raw) {
+    if (!c || typeof c !== 'object' || Array.isArray(c)) continue
+    const rec = /** @type {Record<string, unknown>} */ (c)
+    if (rec.key === undefined || rec.key === null) continue
+    const key = String(rec.key)
+    const name =
+      typeof rec.name === 'string' && rec.name ? rec.name : key
+    out.push({ key, name })
+  }
+  return out.length > 0 ? out : null
+}
+
+/**
  * @param {string} intentClass
  * @param {unknown} systemCapabilities
  * @returns {{ dotKey: string, name: string }[]}
@@ -40,12 +60,30 @@ export function listDotKeysForIntentClass (intentClass, systemCapabilities) {
     if (!dotKey) continue
     const name =
       typeof rec.name === 'string' && rec.name ? rec.name : dotKey
+    const components = normalizeComponents(rec.components)
+    if (components) {
+      const baseLabel = name.trim() || dotKey
+      for (const c of components) {
+        out.push({
+          dotKey: `${dotKey}.${c.key}`,
+          name: `${baseLabel} ${c.name}`
+        })
+      }
+      continue
+    }
     const dtype = typeof rec.type === 'string' ? rec.type : ''
     if (dtype === 'vector3') {
       const baseLabel = name.trim() || dotKey
       out.push({ dotKey: `${dotKey}.0`, name: `${baseLabel} X` })
       out.push({ dotKey: `${dotKey}.1`, name: `${baseLabel} Y` })
       out.push({ dotKey: `${dotKey}.2`, name: `${baseLabel} Z` })
+      continue
+    }
+    if (dtype === 'color') {
+      const baseLabel = name.trim() || dotKey
+      out.push({ dotKey: `${dotKey}.h`, name: `${baseLabel} Hue` })
+      out.push({ dotKey: `${dotKey}.s`, name: `${baseLabel} Saturation` })
+      out.push({ dotKey: `${dotKey}.l`, name: `${baseLabel} Lightness` })
       continue
     }
     out.push({ dotKey, name })

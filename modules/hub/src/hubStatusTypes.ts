@@ -24,7 +24,7 @@ export type HubStatusPulsePayload = {
 export type HubStatusPulseSyncRxPayload = {
   kind: 'pulseSyncRx';
   message: { text: string };
-  data: { syncKind: 'onset' | 'bar'; atMs: number };
+  data: { syncKind: 'onset' | 'bar'; atMs: number; bpm: number };
 };
 
 export type HubStatusPayload =
@@ -55,12 +55,15 @@ export class HubStatusDispatcher {
 
   broadcastPulseSyncRx(
     syncKind: 'onset' | 'bar',
+    bpm: number,
     location?: [number, number],
   ): void {
+    const safeBpm = Number.isFinite(bpm) && bpm > 0 ? bpm : 0;
+    const bpmLabel = safeBpm > 0 ? safeBpm.toFixed(1) : '?';
     const payload: HubStatusPulseSyncRxPayload = {
       kind: 'pulseSyncRx',
-      message: { text: `sync ${syncKind}` },
-      data: { syncKind, atMs: Date.now() },
+      message: { text: `sync ${syncKind} @ ${bpmLabel} BPM` },
+      data: { syncKind, atMs: Date.now(), bpm: safeBpm },
     };
     this.broadcastHubStatus(payload, location);
   }

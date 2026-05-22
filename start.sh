@@ -11,4 +11,4 @@ if [ -z "$HUB_PROJECT" ]; then
 fi
 
 pm2 start ecosystem.config.js --update-env
-pm2 logs 
+# pm2 logs 

@@ -21,7 +21,8 @@ import {
 } from '../core/pulsePlayRegistry.js'
 import {
   isPulseSyncRxHubStatus,
-  notifyPulseSyncReceived
+  notifyPulseSyncReceived,
+  readPulseSyncRxBpm
 } from '../core/pulseSyncActivity.js'
 import { applyBindingValue, resubscribeAll } from '../core/bindingRegistry.js'
 import { markStageOverlayActivity } from '../stage/stageOverlayHost.js'
@@ -199,7 +200,7 @@ export function connectStageHub (appCfg) {
         case 'hub:status': {
           const statusPayload = message.payload
           if (isPulseSyncRxHubStatus(statusPayload)) {
-            notifyPulseSyncReceived()
+            notifyPulseSyncReceived(readPulseSyncRxBpm(statusPayload))
             break
           }
           applyHubAnimationStatus(statusPayload)

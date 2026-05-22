@@ -2,6 +2,7 @@ import { projectGraph } from '../core/projectGraph.js'
 import { sendPulseControlCommand } from '../core/outboundQueue.js'
 import { pickChoice } from '../core/Modal.js'
 import { subscribePulseSyncReceived } from '../core/pulseSyncActivity.js'
+import { formatPulseBpmDisplay } from '../core/pulseFormat.js'
 import { ScalarRadialKnobSvg } from '../edit/components/ScalarRadialKnobSvg.js'
 
 /** @type {ReadonlyArray<{ wire: 'never' | 'bar' | 'onset', label: string }>} */
@@ -21,7 +22,7 @@ function restartLabelForWire (wire) {
 }
 
 /**
- * Slim toolbar: `SYNC` · restart [value] · lerp [knob] (one row from 400px up).
+ * Slim toolbar: row 1 — on/off · `Sync` · BPM; row 2 — restart [value] beside lerp [knob].
  *
  * @returns {{ el: HTMLElement, refresh: () => void }}
  */
@@ -37,6 +38,11 @@ export function createPerformPulseSyncColumn () {
   title.className = 'perform-pulse-sync-col__title'
   title.textContent = 'Sync'
 
+  const titleBpm = document.createElement('span')
+  titleBpm.className = 'perform-pulse-sync-col__title-bpm'
+  titleBpm.setAttribute('aria-hidden', 'true')
+  titleBpm.hidden = true
+
   const enabledToggle = document.createElement('button')
   enabledToggle.type = 'button'
   enabledToggle.className =
@@ -47,13 +53,24 @@ export function createPerformPulseSyncColumn () {
     sendPulseControlCommand({ command: 'setSyncConfig', enabled: !enabled })
   })
 
-  heading.appendChild(title)
   heading.appendChild(enabledToggle)
+  heading.appendChild(title)
+  heading.appendChild(titleBpm)
 
-  function blinkSyncTitle () {
-    title.classList.remove('perform-pulse-sync-col__title--rx')
-    void title.offsetWidth
-    title.classList.add('perform-pulse-sync-col__title--rx')
+  function restartRxFlash (el) {
+    el.classList.remove('perform-pulse-sync-col__title--rx')
+    void el.offsetWidth
+    el.classList.add('perform-pulse-sync-col__title--rx')
+  }
+
+  /** @param {number | undefined} bpm */
+  function blinkSyncTitle (bpm) {
+    restartRxFlash(title)
+    if (typeof bpm === 'number' && Number.isFinite(bpm) && bpm > 0) {
+      titleBpm.textContent = formatPulseBpmDisplay(bpm)
+      titleBpm.hidden = false
+      restartRxFlash(titleBpm)
+    }
   }
 
   subscribePulseSyncReceived(blinkSyncTitle)
@@ -120,9 +137,13 @@ export function createPerformPulseSyncColumn () {
   lerpGroup.appendChild(lerpLabel)
   lerpGroup.appendChild(knobWrap)
 
+  const controlsRow = document.createElement('div')
+  controlsRow.className = 'perform-pulse-sync-col__controls-row'
+  controlsRow.appendChild(restartGroup)
+  controlsRow.appendChild(lerpGroup)
+
   el.appendChild(heading)
-  el.appendChild(restartGroup)
-  el.appendChild(lerpGroup)
+  el.appendChild(controlsRow)
 
   function refresh () {
     const { enabled, restart, lerp } = projectGraph.getPulseSync()

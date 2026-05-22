@@ -66,7 +66,7 @@ export class PulseSyncHandler implements MessageHandler {
       return;
     }
 
-    this.hubStatus.broadcastPulseSyncRx(message.payload.kind);
+    this.hubStatus.broadcastPulseSyncRx(message.payload.kind, message.payload.bpm);
     this.pulseSync.apply(message.payload);
   }
 }

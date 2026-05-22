@@ -437,11 +437,9 @@
 .perform-pulse-sync-col {
   flex: 0 1 auto;
   display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: center;
-  align-content: flex-start;
-  gap: 0.2rem 0.35rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.22rem;
   width: 100%;
   min-width: 0;
   max-width: 100%;
@@ -463,9 +461,22 @@
 
 .perform-pulse-sync-col__heading {
   display: inline-flex;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   align-items: center;
   gap: 0.25rem;
+  min-width: 0;
+  width: 100%;
+}
+
+.perform-pulse-sync-col__controls-row {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  width: 100%;
   min-width: 0;
 }
 
@@ -476,6 +487,17 @@
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  color: var(--color-text-muted);
+  line-height: 1.2;
+}
+
+.perform-pulse-sync-col__title-bpm {
+  flex: 0 0 auto;
+  margin: 0;
+  font-size: 0.62rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
   color: var(--color-text-muted);
   line-height: 1.2;
 }
@@ -522,7 +544,8 @@
 }
 
 .perform-pulse-sync-col__group--lerp {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 .perform-pulse-sync-col__label {

@@ -112,6 +112,10 @@ export class PulseControlHandler implements MessageHandler {
       }
     }
 
+    if (cmd.command === 'setSyncConfig' && cmd.enabled === false) {
+      this.pulseManager.clearSyncSharedLiveBpm();
+    }
+
     if (result.pulsesChanged) {
       this.broadcastPulsesPatch();
       if (result.setupGuid) {

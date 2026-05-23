@@ -3,7 +3,6 @@ import { ProjectManager } from '../ProjectManager';
 import { PulseManager } from './PulseManager';
 import { PulseTapTempoConfig } from './PulseTapTempoConfig';
 import { parsePulseSyncProjectConfig } from './PulseSyncConfig';
-import { resolvePulseSetupSpeed } from './pulseSetupSpeed';
 
 export type PulseSyncKind = 'onset' | 'bar';
 
@@ -52,12 +51,6 @@ export class PulseSync {
       }
     }
 
-    const setupGuid = this.resolveSetupGuid();
-    if (!setupGuid) {
-      Logger.warn('[pulse] pulse:sync ignored — no pulse setup to sync');
-      return;
-    }
-
     const receivedAtMs = Date.now();
     const oneWayDelayMs = Math.max(0, (receivedAtMs - payload.sentAtMs) / 2);
     const beatAtHubMs = payload.beatAtMs + oneWayDelayMs;
@@ -67,9 +60,9 @@ export class PulseSync {
       Math.max(this.config.minBpm, payload.bpm),
     );
 
-    const setup = this.projectManager.getPulseSetup(setupGuid);
-    const durableBpm = setup?.bpm ?? targetBpm;
-    const currentLiveBpm = this.pulseManager.getLiveBpm(setupGuid) ?? durableBpm;
+    const referenceBpm = this.pulseManager.getReferenceBpmForSyncLerp();
+    const fallbackBpm = this.resolveFallbackDurableBpm() ?? targetBpm;
+    const currentLiveBpm = referenceBpm ?? fallbackBpm;
     const smoothedBpm = Math.min(
       this.config.maxBpm,
       Math.max(
@@ -78,45 +71,61 @@ export class PulseSync {
       ),
     );
 
+    this.pulseManager.setSyncSharedLiveBpm(smoothedBpm);
+
     const restartFromSlotZero =
       (syncProject.restart === 'bar' && payload.kind === 'bar')
       || (syncProject.restart === 'onset' && payload.kind === 'onset');
 
-    const speed = resolvePulseSetupSpeed(setup);
-    const periodMs = 60000 / (smoothedBpm * speed);
-    let beatIndex = Math.ceil(
-      (receivedAtMs + SYNC_SCHEDULE_LEAD_MS - beatAtHubMs) / periodMs,
-    );
-    if (!Number.isFinite(beatIndex) || beatIndex < 0) {
-      beatIndex = 0;
+    if (this.pulseManager.getRunningSetupGuids().length === 0) {
+      const setupGuid = this.resolveFocusSetupGuid();
+      if (!setupGuid) {
+        Logger.warn('[pulse] pulse:sync ignored — no pulse setup to sync');
+        return;
+      }
+      this.ensureRunner(setupGuid);
     }
-    const nextTickAtMs = beatAtHubMs + beatIndex * periodMs;
-
-    this.ensureRunner(setupGuid);
 
     if (payload.kind === 'bar') {
-      this.pulseManager.applyAlignedSync(smoothedBpm, nextTickAtMs, restartFromSlotZero);
+      this.pulseManager.applyAlignedSyncToAllRunning(
+        smoothedBpm,
+        beatAtHubMs,
+        SYNC_SCHEDULE_LEAD_MS,
+        restartFromSlotZero,
+      );
     } else {
       if (restartFromSlotZero) {
-        this.pulseManager.resetSlotIndexToZero();
+        this.pulseManager.resetSlotIndexToZeroOnAllRunning();
       }
-      this.pulseManager.updateLiveTempo(smoothedBpm);
+      this.pulseManager.updateSyncLiveTempoOnAllRunning(smoothedBpm);
     }
 
     this.onPulsesBroadcast();
   }
 
-  private resolveSetupGuid(): string | undefined {
+  private resolveFallbackDurableBpm(): number | undefined {
+    const focus = this.resolveFocusSetupGuid();
+    if (!focus) return undefined;
+    return this.projectManager.getPulseSetup(focus)?.bpm;
+  }
+
+  private resolveFocusSetupGuid(): string | undefined {
     const active = this.projectManager.getActivePulseGuid();
     if (active && this.projectManager.getPulseSetup(active)) {
       return active;
     }
-    return this.pulseManager.getActiveSetupGuid()
-      ?? this.projectManager.getPulsesWirePayload().setups[0]?.guid;
+    const running = this.pulseManager.getRunningSetupGuids();
+    if (running.length > 0) {
+      return running[0];
+    }
+    return this.projectManager.getPulsesWirePayload().setups[0]?.guid;
   }
 
   private ensureRunner(setupGuid: string): void {
     if (this.pulseManager.isSetupRunning(setupGuid)) {
+      return;
+    }
+    if (this.pulseManager.getRunningSetupGuids().length > 0) {
       return;
     }
     this.pulseManager.selectSetupForSync(setupGuid);

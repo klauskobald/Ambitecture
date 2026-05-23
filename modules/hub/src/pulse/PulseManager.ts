@@ -23,6 +23,8 @@ type ActivePulseRunner = {
  */
 export class PulseManager {
   private readonly runners = new Map<string, ActivePulseRunner>();
+  /** Single lerped musical BPM from `pulse:sync` when project sync is enabled. */
+  private syncSharedLiveBpm: number | undefined;
   private onTriggerAction?: (actionGuid: string) => void;
   private hubStatus?: HubStatusDispatcher;
 
@@ -74,11 +76,58 @@ export class PulseManager {
   }
 
   private getRunnerBpm(runner: ActivePulseRunner): number {
+    if (this.syncSharedLiveBpm !== undefined) {
+      return this.syncSharedLiveBpm;
+    }
     const live = runner.liveBpm;
     if (typeof live === 'number' && Number.isFinite(live)) {
       return live;
     }
     return runner.setup.bpm;
+  }
+
+  /** BPM used as the “current” side of sync lerp (shared live tempo when set). */
+  getReferenceBpmForSyncLerp(): number | undefined {
+    if (this.syncSharedLiveBpm !== undefined) {
+      return this.syncSharedLiveBpm;
+    }
+    for (const [, runner] of this.runners) {
+      if (runner.isRunning) {
+        return this.getRunnerBpm(runner);
+      }
+    }
+    const focus = this.projectManager.getActivePulseGuid();
+    if (focus) {
+      const setup = this.projectManager.getPulseSetup(focus);
+      if (setup) return setup.bpm;
+    }
+    const first = this.projectManager.getPulsesWirePayload().setups[0];
+    return first?.bpm;
+  }
+
+  setSyncSharedLiveBpm(bpm: number): void {
+    if (!Number.isFinite(bpm) || bpm <= 0) return;
+    this.syncSharedLiveBpm = bpm;
+  }
+
+  clearSyncSharedLiveBpm(): void {
+    this.syncSharedLiveBpm = undefined;
+    for (const runner of this.runners.values()) {
+      delete runner.liveBpm;
+    }
+  }
+
+  getSyncSharedLiveBpm(): number | undefined {
+    return this.syncSharedLiveBpm;
+  }
+
+  /** @returns {string[]} guids of setups currently ticking. */
+  getRunningSetupGuids(): string[] {
+    const guids: string[] = [];
+    for (const [guid, runner] of this.runners) {
+      if (runner.isRunning) guids.push(guid);
+    }
+    return guids;
   }
 
   private resolveActiveSetup(setupGuid: string): PulseSetup | undefined {
@@ -207,69 +256,142 @@ export class PulseManager {
   }
 
   /**
-   * Set BPM and schedule the next tick at an absolute wall-clock time (phase-aligned sync).
+   * Phase-align every running setup to the shared sync BPM (per-setup speed for tick period).
    */
-  applyAlignedSync(bpm: number, nextTickAtMs: number, restartFromSlotZero = false): void {
-    const setupGuid = this.projectManager.getActivePulseGuid() ?? this.getActiveSetupGuid();
-    if (!setupGuid) {
-      Logger.warn('[pulse] applyAlignedSync called but no pulse is active');
+  applyAlignedSyncToAllRunning(
+    bpm: number,
+    beatAtHubMs: number,
+    scheduleLeadMs: number,
+    restartFromSlotZero = false,
+  ): void {
+    this.setSyncSharedLiveBpm(bpm);
+    const running = this.getRunningSetupGuids();
+    if (running.length === 0) {
+      const focus = this.projectManager.getActivePulseGuid() ?? this.getActiveSetupGuid();
+      if (!focus) {
+        Logger.warn('[pulse] applyAlignedSyncToAllRunning: no setup to sync');
+        return;
+      }
+      this.applyAlignedSyncOne(focus, bpm, beatAtHubMs, scheduleLeadMs, restartFromSlotZero, true);
       return;
     }
+    const receivedAtMs = Date.now();
+    for (const setupGuid of running) {
+      const nextTickAtMs = this.computeAlignedNextTickAtMs(
+        bpm,
+        setupGuid,
+        beatAtHubMs,
+        receivedAtMs,
+        scheduleLeadMs,
+      );
+      this.applyAlignedSyncOne(
+        setupGuid,
+        bpm,
+        beatAtHubMs,
+        scheduleLeadMs,
+        restartFromSlotZero,
+        false,
+        nextTickAtMs,
+      );
+    }
+    Logger.info(
+      `[pulse] aligned sync BPM=${bpm} to ${running.length} running setup(s)`
+        + (restartFromSlotZero ? ' (slot 0)' : ''),
+    );
+  }
+
+  private computeAlignedNextTickAtMs(
+    bpm: number,
+    setupGuid: string,
+    beatAtHubMs: number,
+    receivedAtMs: number,
+    scheduleLeadMs: number,
+  ): number {
+    const setup = this.projectManager.getPulseSetup(setupGuid);
+    const speed = resolvePulseSetupSpeed(setup);
+    const periodMs = 60000 / (bpm * speed);
+    let beatIndex = Math.ceil(
+      (receivedAtMs + scheduleLeadMs - beatAtHubMs) / periodMs,
+    );
+    if (!Number.isFinite(beatIndex) || beatIndex < 0) {
+      beatIndex = 0;
+    }
+    return beatAtHubMs + beatIndex * periodMs;
+  }
+
+  private applyAlignedSyncOne(
+    setupGuid: string,
+    bpm: number,
+    beatAtHubMs: number,
+    scheduleLeadMs: number,
+    restartFromSlotZero: boolean,
+    logTiming: boolean,
+    nextTickAtMsOverride?: number,
+  ): void {
     const runner = this.runners.get(setupGuid);
     if (!runner) {
-      Logger.warn('[pulse] applyAlignedSync called but no pulse runner exists');
+      Logger.warn(`[pulse] applyAlignedSyncOne: no runner for ${setupGuid}`);
       return;
     }
     const setup = this.projectManager.getPulseSetup(setupGuid);
     if (setup) {
       runner.setup = setup;
     }
-    runner.liveBpm = bpm;
+    delete runner.liveBpm;
     runner.isRunning = true;
     if (restartFromSlotZero) {
       runner.currentSlotIdx = 0;
       runner.msIntoCurrentTick = 0;
     }
-    Logger.info(
-      `[pulse] aligned sync BPM=${bpm} nextTick in ${Math.max(0, nextTickAtMs - Date.now())}ms`
-        + (restartFromSlotZero ? ' (slot 0)' : ''),
+    const nextTickAtMs = nextTickAtMsOverride ?? this.computeAlignedNextTickAtMs(
+      bpm,
+      setupGuid,
+      beatAtHubMs,
+      Date.now(),
+      scheduleLeadMs,
     );
+    if (logTiming) {
+      Logger.info(
+        `[pulse] aligned sync BPM=${bpm} nextTick in ${Math.max(0, nextTickAtMs - Date.now())}ms`
+          + (restartFromSlotZero ? ' (slot 0)' : ''),
+      );
+    }
     this.scheduleTickAt(setupGuid, nextTickAtMs);
   }
 
   /**
-   * Update live analyser tempo; does not reschedule the pending tick.
+   * Apply shared sync BPM to all running setups without rescheduling ticks.
    */
-  updateLiveTempo(bpm: number, setupGuid?: string): void {
-    const guid = setupGuid ?? this.projectManager.getActivePulseGuid() ?? this.getActiveSetupGuid();
-    if (!guid) {
-      Logger.warn('[pulse] updateLiveTempo called but no pulse is active');
-      return;
+  updateSyncLiveTempoOnAllRunning(bpm: number): void {
+    this.setSyncSharedLiveBpm(bpm);
+    const running = this.getRunningSetupGuids();
+    for (const setupGuid of running) {
+      const runner = this.runners.get(setupGuid);
+      if (!runner) continue;
+      delete runner.liveBpm;
+      const setup = this.projectManager.getPulseSetup(setupGuid);
+      if (setup) {
+        runner.setup = setup;
+      }
+      const periodMs = this.computeTickIntervalMs(bpm, runner.setup);
+      Logger.info(
+        `[pulse] live sync tempo ${bpm} BPM for ${setupGuid} (${periodMs}ms/tick, timer unchanged)`,
+      );
     }
-    const runner = this.runners.get(guid);
-    if (!runner) {
-      Logger.warn('[pulse] updateLiveTempo called but no pulse runner exists');
-      return;
+    if (running.length === 0) {
+      Logger.info(`[pulse] live sync tempo ${bpm} BPM (no running setups)`);
     }
-    const setup = this.projectManager.getPulseSetup(guid);
-    if (setup) {
-      runner.setup = setup;
-    }
-    runner.liveBpm = bpm;
-    const periodMs = this.computeTickIntervalMs(bpm, runner.setup);
-    Logger.info(`[pulse] live tempo ${bpm} BPM (${periodMs}ms/tick, timer unchanged)`);
   }
 
   /**
-   * Reset slot cursor only (e.g. onset restart policy) without stopping the tick chain.
+   * Reset slot cursor on every running setup (onset/bar restart policy).
    */
-  resetSlotIndexToZero(setupGuid?: string): void {
-    const guid = setupGuid ?? this.projectManager.getActivePulseGuid() ?? this.getActiveSetupGuid();
-    if (!guid) return;
-    const runner = this.runners.get(guid);
-    if (!runner) return;
-    runner.currentSlotIdx = 0;
-    runner.msIntoCurrentTick = 0;
+  resetSlotIndexToZeroOnAllRunning(): void {
+    for (const [, runner] of this.runners) {
+      if (!runner.isRunning) continue;
+      runner.currentSlotIdx = 0;
+      runner.msIntoCurrentTick = 0;
+    }
   }
 
   private restartSetup(setupGuid: string): void {
@@ -303,6 +425,7 @@ export class PulseManager {
     }
     runner.setup.bpm = bpm;
     delete runner.liveBpm;
+    this.clearSyncSharedLiveBpm();
     Logger.info(`[pulse] BPM set to ${bpm} (setup ${guid})`);
   }
 
@@ -675,8 +798,11 @@ export class PulseManager {
     return active;
   }
 
-  getLiveBpm(setupGuid?: string): number | undefined {
-    const guid = setupGuid ?? this.getActiveSetupGuid();
+  getLiveBpm(_setupGuid?: string): number | undefined {
+    if (this.syncSharedLiveBpm !== undefined) {
+      return this.syncSharedLiveBpm;
+    }
+    const guid = _setupGuid ?? this.getActiveSetupGuid();
     if (!guid) return undefined;
     const runner = this.runners.get(guid);
     return runner?.liveBpm;

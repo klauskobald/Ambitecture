@@ -361,6 +361,7 @@ export function createPulseEditPane ({ onClose }) {
     sendPulseControlCommand({
       command: 'setSlotActive',
       setupGuid: currentGuid,
+      active,
       slotIdx,
       active
     })

@@ -160,11 +160,14 @@ export function createPulseEditPane ({ onClose }) {
     body.replaceChildren()
     currentBpm = readBpmFromSetup(setup)
 
-    const bpmCluster = document.createElement('div')
-    bpmCluster.className = 'perform-pulse-edit__bpm-cluster'
+    const paramsRow = document.createElement('div')
+    paramsRow.className = 'perform-pulse-edit__params-row'
+
+    const tempoParam = document.createElement('div')
+    tempoParam.className = 'perform-pulse-edit__param perform-pulse-edit__param--tempo'
 
     const tempoLabel = document.createElement('span')
-    tempoLabel.className = 'perform-pulse-edit__tempo-label'
+    tempoLabel.className = 'perform-pulse-edit__param-label'
     tempoLabel.textContent = 'Tempo'
 
     const tapBtn = createPulseTapButton({
@@ -196,18 +199,19 @@ export function createPulseEditPane ({ onClose }) {
         })
       },
       showInnerSvgTitle: false,
-      hint: 'BPM'
+      hint: ''
     })
     bpmKnob.mount(knobWrap)
 
-    bpmCluster.appendChild(tempoLabel)
-    bpmCluster.appendChild(knobWrap)
-    bpmCluster.appendChild(tapBtn)
-    body.appendChild(bpmCluster)
+    tempoParam.appendChild(tempoLabel)
+    tempoParam.appendChild(knobWrap)
+    tempoParam.appendChild(tapBtn)
+    paramsRow.appendChild(tempoParam)
 
-    const slotsField = document.createElement('label')
-    slotsField.className = 'perform-pulse-edit__field'
+    const slotsParam = document.createElement('label')
+    slotsParam.className = 'perform-pulse-edit__param perform-pulse-edit__param--slots'
     const slotsLabel = document.createElement('span')
+    slotsLabel.className = 'perform-pulse-edit__param-label'
     slotsLabel.textContent = 'Slots'
     const slotsInput = document.createElement('input')
     slotsInput.type = 'number'
@@ -226,20 +230,20 @@ export function createPulseEditPane ({ onClose }) {
         count: next
       })
     })
-    slotsField.appendChild(slotsLabel)
-    slotsField.appendChild(slotsInput)
-    body.appendChild(slotsField)
+    slotsParam.appendChild(slotsLabel)
+    slotsParam.appendChild(slotsInput)
+    paramsRow.appendChild(slotsParam)
 
     const meter =
       typeof setup.meter === 'number' && Number.isFinite(setup.meter)
         ? setup.meter
         : 4
     if (meter > 2) {
-      const modeField = document.createElement('div')
-      modeField.className =
-        'perform-pulse-edit__field perform-pulse-edit__field--mode'
+      const modeParam = document.createElement('div')
+      modeParam.className = 'perform-pulse-edit__param perform-pulse-edit__param--mode'
 
       const modeLabel = document.createElement('span')
+      modeLabel.className = 'perform-pulse-edit__param-label'
       modeLabel.textContent = 'Mode'
 
       const modeValue = document.createElement('button')
@@ -268,10 +272,12 @@ export function createPulseEditPane ({ onClose }) {
         })
       })
 
-      modeField.appendChild(modeLabel)
-      modeField.appendChild(modeValue)
-      body.appendChild(modeField)
+      modeParam.appendChild(modeLabel)
+      modeParam.appendChild(modeValue)
+      paramsRow.appendChild(modeParam)
     }
+
+    body.appendChild(paramsRow)
 
     const slotList = document.createElement('div')
     slotList.className = 'perform-pulse-edit__slots'

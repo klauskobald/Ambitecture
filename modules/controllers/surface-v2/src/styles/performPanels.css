@@ -783,17 +783,41 @@
   touch-action: manipulation;
 }
 
-.perform-pulse-edit__bpm-cluster {
+.perform-pulse-edit__params-row {
   display: flex;
   flex-direction: row;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.55rem 1rem;
 }
 
-.perform-pulse-edit__tempo-label {
-  flex: 0 0 3.5rem;
+.perform-pulse-edit__param {
+  display: inline-flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.perform-pulse-edit__param-label {
+  flex: 0 0 auto;
   font-size: 0.78rem;
   color: var(--color-text-muted);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.perform-pulse-edit__param--slots .perform-pulse-edit__input {
+  flex: 0 0 auto;
+  width: 3rem;
+  min-height: 2rem;
+  padding: 0.3rem 0.4rem;
+}
+
+.perform-pulse-edit__bpm-knob .quick-panel-knob__caption {
+  display: none;
 }
 
 .perform-pulse-edit__bpm-knob {
@@ -969,19 +993,6 @@
   flex-direction: column;
   gap: 0.65rem;
   padding: 0.65rem 0.5rem;
-}
-
-.perform-pulse-edit__field {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.78rem;
-}
-
-.perform-pulse-edit__field>span {
-  flex: 0 0 3.5rem;
-  color: var(--color-text-muted);
 }
 
 .perform-pulse-edit__mode-value {

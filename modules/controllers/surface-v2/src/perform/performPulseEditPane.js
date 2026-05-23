@@ -51,7 +51,11 @@ function chipForPulseBucketAction (action) {
     raw && typeof raw === 'object' && !Array.isArray(raw)
       ? /** @type {Record<string, unknown>} */ (raw)
       : null
-  if (ex?.type === 'scene' && typeof ex.guid === 'string' && ex.guid.length > 0) {
+  if (
+    ex?.type === 'scene' &&
+    typeof ex.guid === 'string' &&
+    ex.guid.length > 0
+  ) {
     const scene = projectGraph.getScenesData().find(s => s.guid === ex.guid)
     const text =
       typeof scene?.name === 'string' && scene.name.length > 0
@@ -164,7 +168,8 @@ export function createPulseEditPane ({ onClose }) {
     paramsRow.className = 'perform-pulse-edit__params-row'
 
     const tempoParam = document.createElement('div')
-    tempoParam.className = 'perform-pulse-edit__param perform-pulse-edit__param--tempo'
+    tempoParam.className =
+      'perform-pulse-edit__param perform-pulse-edit__param--tempo'
 
     const tempoLabel = document.createElement('span')
     tempoLabel.className = 'perform-pulse-edit__param-label'
@@ -209,7 +214,8 @@ export function createPulseEditPane ({ onClose }) {
     paramsRow.appendChild(tempoParam)
 
     const slotsParam = document.createElement('label')
-    slotsParam.className = 'perform-pulse-edit__param perform-pulse-edit__param--slots'
+    slotsParam.className =
+      'perform-pulse-edit__param perform-pulse-edit__param--slots'
     const slotsLabel = document.createElement('span')
     slotsLabel.className = 'perform-pulse-edit__param-label'
     slotsLabel.textContent = 'Slots'
@@ -240,7 +246,8 @@ export function createPulseEditPane ({ onClose }) {
         : 4
     if (meter > 2) {
       const modeParam = document.createElement('div')
-      modeParam.className = 'perform-pulse-edit__param perform-pulse-edit__param--mode'
+      modeParam.className =
+        'perform-pulse-edit__param perform-pulse-edit__param--mode'
 
       const modeLabel = document.createElement('span')
       modeLabel.className = 'perform-pulse-edit__param-label'
@@ -320,8 +327,8 @@ export function createPulseEditPane ({ onClose }) {
       labelBtn.className = 'perform-pulse-edit__slot-label'
       const bucketLabel = resolveBucketLabel(bucketGuid)
       labelBtn.textContent = bucketLabel
-        ? `Slot ${i + 1}: ${bucketLabel}`
-        : `Slot ${i + 1}`
+        ? `${i + 1}: ${bucketLabel}`
+        : `${i + 1}`
       labelBtn.addEventListener('click', () => {
         void pickSlotBucket(i)
       })
@@ -390,13 +397,10 @@ export function createPulseEditPane ({ onClose }) {
 
     const options = buckets.map(b => {
       const guid = String(b.guid ?? '')
-      const name =
-        typeof b.name === 'string' && b.name ? b.name : guid
+      const name = typeof b.name === 'string' && b.name ? b.name : guid
       const members = bucketMemberChips(b)
       const summary =
-        members.length > 0
-          ? members.map(c => c.text).join(', ')
-          : 'empty'
+        members.length > 0 ? members.map(c => c.text).join(', ') : 'empty'
       return {
         value: guid,
         label: name,
@@ -413,9 +417,7 @@ export function createPulseEditPane ({ onClose }) {
         button.style.justifyContent = 'flex-start'
         button.style.textAlign = 'left'
 
-        const bucket = buckets.find(
-          b => String(b.guid ?? '') === option.value
-        )
+        const bucket = buckets.find(b => String(b.guid ?? '') === option.value)
         const members = bucket ? bucketMemberChips(bucket) : []
 
         const chipsEl = document.createElement('div')

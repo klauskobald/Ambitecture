@@ -7,6 +7,7 @@ class ConfigHandler {
     this.onConfigApplied = null
     this.fixtureClasses = {
       dmx_light_static: DmxLightStatic,
+      dmx_basic_static: DmxBasicStatic,
       screen: Screen
     }
   }

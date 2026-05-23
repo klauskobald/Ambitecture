@@ -1,5 +1,6 @@
 import { randomInt } from 'crypto';
-import type { ProjectManager, PulseSetup, PulseSlotMode } from '../ProjectManager';
+import type { ProjectManager, PulseSetup, PulseSlotMode, SnapshotPulseState } from '../ProjectManager';
+import type { PulseSetupManager } from './PulseSetupManager';
 import { Logger } from '../Logger';
 import type { HubStatusDispatcher, HubStatusPulsePayload } from '../hubStatusTypes';
 import { parsePulseSyncProjectConfig } from './PulseSyncConfig';
@@ -267,12 +268,6 @@ export class PulseManager {
     this.setSyncSharedLiveBpm(bpm);
     const running = this.getRunningSetupGuids();
     if (running.length === 0) {
-      const focus = this.projectManager.getActivePulseGuid() ?? this.getActiveSetupGuid();
-      if (!focus) {
-        Logger.warn('[pulse] applyAlignedSyncToAllRunning: no setup to sync');
-        return;
-      }
-      this.applyAlignedSyncOne(focus, bpm, beatAtHubMs, scheduleLeadMs, restartFromSlotZero, true);
       return;
     }
     const receivedAtMs = Date.now();
@@ -816,5 +811,78 @@ export class PulseManager {
       if (runner.isRunning) return true;
     }
     return false;
+  }
+
+  /** Snapshot capture: actively playing runners only. */
+  captureRunnerStates(): SnapshotPulseState[] {
+    const states: SnapshotPulseState[] = [];
+    for (const guid of this.getRunningSetupGuids()) {
+      const runner = this.runners.get(guid);
+      if (!runner) continue;
+      states.push({
+        guid,
+        speed: resolvePulseSetupSpeed(runner.setup),
+      });
+    }
+    return states;
+  }
+
+  /**
+   * Snapshot recall: stop running setups not in `states`, then apply each stored row.
+   * Does not restart setups that are already running with the desired state.
+   */
+  recallSnapshotPulses(states: SnapshotPulseState[], pulseSetupManager: PulseSetupManager): void {
+    const storedGuids = new Set(states.map(s => s.guid));
+    for (const [guid, runner] of this.runners) {
+      if (runner.isRunning && !storedGuids.has(guid)) {
+        this.stopSetup(guid);
+      }
+    }
+    for (const state of states) {
+      pulseSetupManager.build({
+        command: 'setSetupSpeed',
+        setupGuid: state.guid,
+        speed: state.speed,
+      });
+      this.syncActiveSetupFromProject();
+      const runner = this.runners.get(state.guid);
+      if (runner?.isRunning) {
+        const setup = this.projectManager.getPulseSetup(state.guid);
+        if (setup && runner) {
+          runner.setup = setup;
+        }
+      } else {
+        this.ensureSetupRunning(state.guid);
+      }
+    }
+  }
+
+  /** Start ticking when idle; no-op when already running (avoids slot reset). */
+  private ensureSetupRunning(guid: string): void {
+    const setup = this.projectManager.getPulseSetup(guid);
+    if (!setup) {
+      Logger.warn(`[pulse] ensureSetupRunning: unknown setup ${guid}`);
+      return;
+    }
+    const existing = this.runners.get(guid);
+    if (existing?.isRunning) {
+      return;
+    }
+    if (existing) {
+      existing.setup = setup;
+      this.projectManager.setActivePulseGuid(guid);
+      this.startRunner(guid);
+      return;
+    }
+    this.runners.set(guid, {
+      setup,
+      isRunning: false,
+      currentSlotIdx: 0,
+      nextTickAtMs: 0,
+      tickTimer: undefined,
+      msIntoCurrentTick: 0,
+    });
+    this.projectManager.setActivePulseGuid(guid);
+    this.startRunner(guid);
   }
 }

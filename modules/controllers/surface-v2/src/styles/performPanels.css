@@ -1579,3 +1579,128 @@
   padding: var(--page-padding);
   color: var(--color-text-muted);
 }
+
+/* ── Snapshot pane ─────────────────────────────────────────────── */
+
+.perform-subpane--snapshot {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: var(--page-padding);
+  overflow: auto;
+}
+
+.perform-snapshot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.perform-snapshot-footer {
+  margin-top: 0.15rem;
+}
+
+.perform-snapshot-empty {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.perform-snapshot-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg-raised);
+}
+
+.perform-snapshot-row > .perform-animate-toggle {
+  flex: 0 0 auto;
+}
+
+.perform-snapshot-row__label {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 0.35rem;
+  font-size: 0.78rem;
+  line-height: 1.2;
+}
+
+.perform-snapshot-row__name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.perform-snapshot-row__recall {
+  color: var(--color-text-muted);
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.perform-snapshot-row__actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0.35rem;
+  margin-left: auto;
+}
+
+.perform-snapshot-row__btn {
+  font-size: 0.8125rem;
+  padding: 0.2rem 0.5rem;
+}
+
+.perform-snapshot-row__assign {
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: none;
+}
+
+.perform-snapshot-assign-row.input-assign-inline-row {
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: none;
+}
+
+.perform-snapshot-assign-button.intent-toggle {
+  min-width: 7rem;
+  white-space: nowrap;
+}
+
+.perform-snapshot-modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.perform-snapshot-modal__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.perform-snapshot-modal__toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.perform-snapshot-modal__toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.perform-snapshot-assign-row {
+  flex: 0 0 auto;
+}

@@ -9,6 +9,7 @@ import { RuntimeUpdate } from '../RuntimeProtocol';
 import { RuntimeUpdateDispatcher } from '../RuntimeUpdateDispatcher';
 import { ActionExecuteItem } from '../ProjectManager';
 import type { AnimationManager } from '../animation/AnimationManager';
+import type { SnapshotManager } from '../snapshot/SnapshotManager';
 import { planAnimationTrigger } from './actionExecute/animationTriggerExecutor';
 import {
   executeParamsFromItem,
@@ -108,6 +109,7 @@ export class ActionHandler implements MessageHandler {
     private publishMutation: (source: WebSocket | undefined, result: GraphMutationResult, location?: [number, number]) => void,
     private runtimeUpdateDispatcher: RuntimeUpdateDispatcher,
     private animationManager?: AnimationManager,
+    private snapshotManager?: SnapshotManager,
   ) { }
 
   handle(ws: WebSocket, message: WsMessage, _registry: ConnectionRegistry): void {
@@ -161,6 +163,9 @@ export class ActionHandler implements MessageHandler {
         handled += this.executeAnimationItem(item, location, triggerArgs);
         break;
       }
+      case 'snapshot':
+        handled += this.executeSnapshotItem(item, location, undefined);
+        break;
       case 'intent': {
         const update = this.intentExecuteItemToRuntimeUpdate(item, actionGuid, triggerArgs ?? {});
         if (update) {
@@ -220,6 +225,9 @@ export class ActionHandler implements MessageHandler {
         break;
       case 'animation':
         handled += this.executeAnimationItem(item, message.location, message.payload.args);
+        break;
+      case 'snapshot':
+        handled += this.executeSnapshotItem(item, message.location, ws);
         break;
       default:
         Logger.warn(`[action] unsupported execute type "${item.type}" on ${action.guid ?? message.payload.actionGuid}`);
@@ -371,6 +379,27 @@ export class ActionHandler implements MessageHandler {
   private recordOrUndefined(value: unknown): Record<string, unknown> | undefined {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
     return value as Record<string, unknown>;
+  }
+
+  private executeSnapshotItem(
+    item: ActionExecuteItem,
+    location?: [number, number],
+    sourceWs?: WebSocket,
+  ): number {
+    if (item.type !== 'snapshot' || typeof item.guid !== 'string' || item.guid.length === 0) {
+      Logger.warn('[action] invalid snapshot execute item');
+      return 0;
+    }
+    if (!this.snapshotManager) {
+      Logger.warn('[action] snapshotManager not configured');
+      return 0;
+    }
+    const result = this.snapshotManager.recall(item.guid, location, 'runtime');
+    if (sourceWs) {
+      this.sendResultToSource(sourceWs, result);
+    }
+    this.publishMutation(sourceWs, result, location);
+    return 1;
   }
 
   private sendResultToSource(ws: WebSocket, result: GraphMutationResult): void {

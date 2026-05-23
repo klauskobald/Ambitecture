@@ -182,6 +182,45 @@ export function sendPulseControlCommand (command) {
   }))
 }
 
+/**
+ * @param {{ name: string, recall: { scene: boolean, pulse: boolean, animations: boolean }, guid?: string }} payload
+ */
+export function sendSnapshotCapture (payload) {
+  if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation)
+    return
+  activeWs.send(JSON.stringify({
+    message: {
+      type: 'snapshot:capture',
+      location: activeLocation,
+      payload
+    }
+  }))
+}
+
+/**
+ * @param {string} guid
+ * @param {{ name?: string, recall?: { scene: boolean, pulse: boolean, animations: boolean } }} patch
+ */
+export function sendSnapshotMetadataPatch (guid, patch) {
+  sendGraphCommand({
+    op: 'patch',
+    entityType: 'snapshot',
+    guid,
+    patch,
+    persistence: 'runtimeAndDurable'
+  })
+}
+
+/** @param {string} guid */
+export function sendSnapshotRemove (guid) {
+  sendGraphCommand({
+    op: 'remove',
+    entityType: 'snapshot',
+    guid,
+    persistence: 'runtimeAndDurable'
+  })
+}
+
 /** @param {{ setupGuid: string, atMs?: number }} payload */
 export function sendPulseTap (payload) {
   if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation)

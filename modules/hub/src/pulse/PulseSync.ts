@@ -77,15 +77,6 @@ export class PulseSync {
       (syncProject.restart === 'bar' && payload.kind === 'bar')
       || (syncProject.restart === 'onset' && payload.kind === 'onset');
 
-    if (this.pulseManager.getRunningSetupGuids().length === 0) {
-      const setupGuid = this.resolveFocusSetupGuid();
-      if (!setupGuid) {
-        Logger.warn('[pulse] pulse:sync ignored — no pulse setup to sync');
-        return;
-      }
-      this.ensureRunner(setupGuid);
-    }
-
     if (payload.kind === 'bar') {
       this.pulseManager.applyAlignedSyncToAllRunning(
         smoothedBpm,
@@ -119,15 +110,5 @@ export class PulseSync {
       return running[0];
     }
     return this.projectManager.getPulsesWirePayload().setups[0]?.guid;
-  }
-
-  private ensureRunner(setupGuid: string): void {
-    if (this.pulseManager.isSetupRunning(setupGuid)) {
-      return;
-    }
-    if (this.pulseManager.getRunningSetupGuids().length > 0) {
-      return;
-    }
-    this.pulseManager.selectSetupForSync(setupGuid);
   }
 }

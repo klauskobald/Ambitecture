@@ -39,6 +39,8 @@ import { PulseTapHandler } from './handlers/PulseTapHandler';
 import { PulseSyncHandler } from './handlers/PulseSyncHandler';
 import { parsePulseTapTempoConfig } from './pulse/PulseTapTempoConfig';
 import { PulseSync } from './pulse/PulseSync';
+import { SnapshotManager } from './snapshot/SnapshotManager';
+import { SnapshotCaptureHandler } from './handlers/SnapshotCaptureHandler';
 
 const DEFAULT_HUB_PROJECT = 'test';
 
@@ -98,6 +100,13 @@ const graphStore = new ProjectGraphStore(
   animationManager,
   () => resolveRuntimeReferences(systemConfig.getOrDefault<unknown>('systemCapabilities', {})),
   pulseSetupManager,
+);
+const snapshotManager = new SnapshotManager(
+  projectManager,
+  graphStore,
+  pulseManager,
+  pulseSetupManager,
+  animationManager,
 );
 
 const buildActiveSceneEventsMsg = (): { msg: string | null; eventCount: number } => {
@@ -315,9 +324,15 @@ const actionHandler = new ActionHandler(
   publishGraphMutation,
   runtimeUpdateDispatcher,
   animationManager,
+  snapshotManager,
 );
 router.register('action:input', actionHandler);
 router.register('action:trigger', actionHandler);
+router.register('snapshot:capture', new SnapshotCaptureHandler(
+  registry,
+  snapshotManager,
+  publishGraphMutation,
+));
 router.register('pulse:assign', new PulseAssignHandler(
   registry,
   graphStore,

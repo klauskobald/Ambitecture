@@ -14,6 +14,7 @@ import { ScenesPane } from '../layout/renderers/ScenesPane.js'
 import { ControlPane } from '../layout/renderers/ControlPane.js'
 import { PulsePane } from '../layout/renderers/PulsePane.js'
 import { AnimationPane } from '../layout/renderers/AnimationPane.js'
+import { SnapshotPane } from '../layout/renderers/SnapshotPane.js'
 import { PluginPane } from '../layout/renderers/PluginPane.js'
 import { initSceneAutoResetOnLoad } from '../perform/sceneAutoResetOnLoad.js'
 
@@ -35,6 +36,7 @@ async function main () {
   registerPaneRenderer('control', ControlPane)
   registerPaneRenderer('pulse', PulsePane)
   registerPaneRenderer('animation', AnimationPane)
+  registerPaneRenderer('snapshot', SnapshotPane)
   registerPaneRenderer(
     'plugin',
     PluginPane,

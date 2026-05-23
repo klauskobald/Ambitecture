@@ -5,6 +5,7 @@ import {
   InputDefinition,
   inputActionGuids,
   isCompanionAnimationRunnerAction,
+  isCompanionSnapshotRunnerAction,
   ProjectManager,
   Scene,
 } from './ProjectManager';
@@ -298,7 +299,8 @@ export class ActionInputManager {
       if (!ag) continue;
       commands.push(...this.scrubActionGuidFromAllInputs(ag));
       const keepCompanionRunner =
-        targetType === 'animation' && isCompanionAnimationRunnerAction(action, targetGuid);
+        (targetType === 'animation' && isCompanionAnimationRunnerAction(action, targetGuid))
+        || (targetType === 'snapshot' && isCompanionSnapshotRunnerAction(action, targetGuid));
       if (!keepCompanionRunner) {
         commands.push(this.removeActionCommand(ag));
       }
@@ -518,8 +520,10 @@ export class ActionInputManager {
       const action = this.projectManager.getActionByGuid(actionGuidToRemove);
       if (
         action
-        && targetType === 'animation'
-        && isCompanionAnimationRunnerAction(action, targetGuid)
+        && (
+          (targetType === 'animation' && isCompanionAnimationRunnerAction(action, targetGuid))
+          || (targetType === 'snapshot' && isCompanionSnapshotRunnerAction(action, targetGuid))
+        )
       ) {
         return commands;
       }
@@ -593,6 +597,20 @@ export class ActionInputManager {
     return [this.removeActionCommand(animationGuid)];
   }
 
+  buildSnapshotCleanupCommands(snapshotGuid: string): GraphCommand[] {
+    const actionsTouchingSnapshot = this.projectManager.getActionsWirePayload()
+      .filter(action => actionTargets(action, 'snapshot', snapshotGuid));
+
+    const commands: GraphCommand[] = [];
+    for (const action of actionsTouchingSnapshot) {
+      const ag = action.guid;
+      if (!ag) continue;
+      commands.push(...this.scrubActionGuidFromAllInputs(ag));
+      commands.push(this.removeActionCommand(ag));
+    }
+    return commands;
+  }
+
   private actionTargetsScene(action: ActionDefinition, sceneGuid: string): boolean {
     return actionTargets(action, 'scene', sceneGuid);
   }
@@ -625,6 +643,8 @@ export class ActionInputManager {
     switch (targetType) {
       case 'scene':
         return this.projectManager.getSceneByGuid(targetGuid)?.name ?? targetGuid;
+      case 'snapshot':
+        return this.projectManager.getSnapshotByGuid(targetGuid)?.name ?? targetGuid;
       case 'intent':
         return this.projectManager.getIntentDefinition(targetGuid)?.name ?? targetGuid;
       default:
@@ -646,6 +666,7 @@ export class ActionInputManager {
       scenes: this.projectManager.getScenesWirePayload(),
       actions: this.projectManager.getActionsWirePayload(),
       animations: this.projectManager.getAnimationsWirePayload(),
+      snapshots: this.projectManager.getSnapshotsWirePayload(),
     } as Record<string, unknown>;
 
     const scan = (value: unknown, path: string[]): boolean => {

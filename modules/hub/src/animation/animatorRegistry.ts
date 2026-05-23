@@ -23,6 +23,8 @@ export interface AnimatorPlugin {
   }): void;
   exitEditMode(): void;
   reconcileStoredStepsAfterGraphMutation(): boolean;
+  /** Whether this runner is actively playing and should be included in snapshot capture. */
+  isCapturableForSnapshot(): boolean;
 }
 
 export type AnimatorConstructor = new (

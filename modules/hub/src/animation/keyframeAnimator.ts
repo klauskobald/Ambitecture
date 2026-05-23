@@ -327,6 +327,12 @@ export class KeyframeAnimator {
     });
   }
 
+  isCapturableForSnapshot(): boolean {
+    if (this.cancelled || !this.inScene) return false;
+    if (this._manualModeActive) return false;
+    return this.timers.length > 0;
+  }
+
   /**
    * Apply run mode after start(). Must be called after start() has stored intent access.
    * `auto` (default): no-op — the runner plays normally.

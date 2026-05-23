@@ -31,7 +31,7 @@ import {
  * - `intents:def` — intent definition rows (graph:init, config, graph:delta entity intent, reconcileIntents)
  * - `intents:runtime` — runtime intent patches (`runtime:update` from animation, perform-drag, …)
  * - `fixtures` — `_fixtures` map and zone-derived data
- * - `actions` / `inputs` / `animations` — entity maps
+ * - `actions` / `inputs` / `animations` / `snapshots` — entity maps
  * - `controller` — controller state, intentRefs, intentConfig, interaction policies
  * - `runtimeOverlayHints` — hub hint `runtimeOverlayGuidsInScene`
  * - `project` — projectName, controllerGuid, zones, zoneToRenderer, capabilities
@@ -44,6 +44,7 @@ import {
  *   'actions' |
  *   'inputs' |
  *   'animations' |
+ *   'snapshots' |
  *   'controller' |
  *   'discovery' (hub plugin UI advertisements; no graph mutation) |
  *   'runtimeOverlayHints' |
@@ -105,6 +106,9 @@ class ProjectGraph {
       }),
       /** Hub `entities.animation` from `graph:init` + `graph:delta` entityType `animation`. */
       animations: /** @type {Map<string, Record<string, unknown>>} */ (
+        new Map()
+      ),
+      snapshots: /** @type {Map<string, Record<string, unknown>>} */ (
         new Map()
       ),
       activeSceneGuid: /** @type {string | null} */ (null),
@@ -453,6 +457,22 @@ class ProjectGraph {
     return this._data.animations
   }
 
+  /** @returns {Map<string, Record<string, unknown>>} */
+  getSnapshots () {
+    return this._data.snapshots
+  }
+
+  /**
+   * @returns {Array<Record<string, unknown>>}
+   */
+  getSnapshotsList () {
+    return [...this._data.snapshots.values()].sort((a, b) => {
+      const an = typeof a.name === 'string' ? a.name : ''
+      const bn = typeof b.name === 'string' ? b.name : ''
+      return an.localeCompare(bn)
+    })
+  }
+
   /**
    * Animations that share a runner `action` guid (companion row from hub) — safe to `action:trigger`.
    * @returns {Array<{ guid: string, name: string, class: string, targetIntents: string[] }>}
@@ -528,6 +548,11 @@ class ProjectGraph {
   /** @param {string} sceneName @returns {string | null} */
   getSceneGuid (sceneName) {
     return this._data.scenes.find(s => s.name === sceneName)?.guid ?? null
+  }
+
+  /** @returns {string | null} */
+  getActiveSceneGuid () {
+    return this._data.activeSceneGuid
   }
 
   /** @returns {string | null} */
@@ -1229,6 +1254,18 @@ class ProjectGraph {
           )
         }
       }
+
+      const rawSnapshots = Array.isArray(p?.snapshots)
+        ? /** @type {unknown[]} */ (p.snapshots)
+        : []
+      this._data.snapshots.clear()
+      for (const raw of rawSnapshots) {
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue
+        const record = /** @type {Record<string, unknown>} */ (raw)
+        const guid = typeof record.guid === 'string' ? record.guid : ''
+        if (!guid) continue
+        this._data.snapshots.set(guid, { ...record, guid })
+      }
     }, [
       'project',
       'scenes',
@@ -1238,6 +1275,7 @@ class ProjectGraph {
       'inputs',
       'pulses',
       'animations',
+      'snapshots',
       'controller',
       'runtimeOverlayHints'
     ])
@@ -1325,6 +1363,10 @@ class ProjectGraph {
             this._applyEntityDelta(this._data.animations, guid, op, delta)
             this._notify('animations')
             break
+          case 'snapshot':
+            this._applyEntityDelta(this._data.snapshots, guid, op, delta)
+            this._notify('snapshots')
+            break
           case 'project':
             // _applyProjectDelta touches activeSceneGuid + runtimeOverlayHints.
             this._applyProjectDelta(delta)
@@ -1411,6 +1453,17 @@ class ProjectGraph {
       this._data.scenes = rawScenes.map(normalizeScene).filter(s => s.name)
       this._data.actions = normalizeEntityMap(p.actions)
       this._data.inputs = normalizeEntityMap(p.inputs)
+      const rawSnapshots = Array.isArray(p.snapshots)
+        ? /** @type {unknown[]} */ (p.snapshots)
+        : []
+      this._data.snapshots.clear()
+      for (const raw of rawSnapshots) {
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue
+        const record = /** @type {Record<string, unknown>} */ (raw)
+        const guid = typeof record.guid === 'string' ? record.guid : ''
+        if (!guid) continue
+        this._data.snapshots.set(guid, { ...record, guid })
+      }
       if (p.pulses !== undefined) {
         this._data.pulses = normalizePulsesConfig(p.pulses)
       }
@@ -1464,7 +1517,7 @@ class ProjectGraph {
       this._spatial = this._computeSpatial()
       this._zoneBoxes = this._computeZoneBoxes()
       this._fixtures = this._computeFixtures()
-    }, ['project', 'scenes', 'fixtures', 'actions', 'inputs', 'pulses', 'controller'])
+    }, ['project', 'scenes', 'fixtures', 'actions', 'inputs', 'pulses', 'snapshots', 'controller'])
   }
 
   // ─── Serialization ────────────────────────────────────────────────────────────
@@ -1479,6 +1532,7 @@ class ProjectGraph {
       actions: [...this._data.actions.values()],
       inputs: [...this._data.inputs.values()],
       animations: [...this._data.animations.values()],
+      snapshots: [...this._data.snapshots.values()],
       activeSceneGuid: this._data.activeSceneGuid,
       runtimeOverlayGuidsInScene: [...this._data.runtimeOverlayGuidsInScene],
       controller: {
@@ -2130,6 +2184,19 @@ function companionAnimationRunnerAction (action, animationGuid) {
   const ex = action.execute
   if (!ex || typeof ex !== 'object' || Array.isArray(ex)) return false
   return ex.type === 'animation' && ex.guid === animationGuid
+}
+
+/**
+ * @param {Record<string, unknown>} action
+ * @param {string} snapshotGuid
+ * @returns {boolean}
+ */
+function companionSnapshotRunnerAction (action, snapshotGuid) {
+  const actionGuid = typeof action.guid === 'string' ? action.guid : ''
+  if (actionGuid !== snapshotGuid) return false
+  const ex = action.execute
+  if (!ex || typeof ex !== 'object' || Array.isArray(ex)) return false
+  return ex.type === 'snapshot' && ex.guid === snapshotGuid
 }
 
 /**

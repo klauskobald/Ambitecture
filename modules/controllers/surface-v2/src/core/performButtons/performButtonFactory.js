@@ -1,5 +1,6 @@
 import { PerformButtonScene } from './PerformButtonScene.js'
 import { PerformButtonAnimation } from './PerformButtonAnimation.js'
+import { PerformButtonSnapshot } from './PerformButtonSnapshot.js'
 import { PerformButtonIntent } from './PerformButtonIntent.js'
 import { PerformButtonToggle } from './PerformButtonToggle.js'
 import { PerformButtonMomentarySwitch } from './PerformButtonMomentarySwitch.js'
@@ -31,6 +32,8 @@ export function createButtonForInput (inputGuid, inputData, buttonElement) {
       return new PerformButtonScene(inputGuid, inputData, buttonElement)
     case 'animation':
       return new PerformButtonAnimation(inputGuid, inputData, buttonElement)
+    case 'snapshot':
+      return new PerformButtonSnapshot(inputGuid, inputData, buttonElement)
     case 'intent':
       return new PerformButtonIntent(inputGuid, inputData, buttonElement)
     default:

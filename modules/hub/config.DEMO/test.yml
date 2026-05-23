@@ -457,3 +457,6 @@ testParams:
           args:
             "position.2": 2
 
+  007-snapshot.ts:
+    location: [0, 0]
+

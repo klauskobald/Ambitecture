@@ -1,4 +1,4 @@
-import type { ProjectManager, ControllerIntent } from '../ProjectManager';
+import type { ProjectManager, ControllerIntent, SnapshotAnimationState } from '../ProjectManager';
 import type { RuntimeIntentStore } from '../RuntimeIntentStore';
 import type { RuntimeUpdateDispatcher } from '../RuntimeUpdateDispatcher';
 import { HubStatusDispatcher, type HubStatusAnimationPayload } from '../hubStatusTypes';
@@ -504,5 +504,49 @@ export class AnimationManager {
     const plugin = this.edits.get(animationGuid);
     if (!plugin) return false;
     return plugin.reconcileStoredStepsAfterGraphMutation();
+  }
+
+  hasOpenEditMode(): boolean {
+    return this.edits.size > 0;
+  }
+
+  captureRunnerStates(): SnapshotAnimationState[] {
+    const states: SnapshotAnimationState[] = [];
+    for (const [guid, runner] of this.runners) {
+      if (!runner.plugin.isCapturableForSnapshot()) continue;
+      states.push({
+        guid,
+        timescale: runner.timescale,
+      });
+    }
+    return states;
+  }
+
+  /**
+   * Snapshot recall: stop runners not in `states`, then apply each stored row without
+   * re-instantiating animations that are already playing.
+   */
+  recallSnapshotAnimations(states: SnapshotAnimationState[], location?: [number, number]): void {
+    const storedGuids = new Set(states.map(s => s.guid));
+    const stopOpts = location !== undefined ? { location } : undefined;
+    for (const guid of [...this.runners.keys()]) {
+      if (!storedGuids.has(guid)) {
+        this.stop(guid, stopOpts);
+      }
+    }
+    for (const state of states) {
+      const existing = this.runners.get(state.guid);
+      if (existing?.plugin.isCapturableForSnapshot()) {
+        this.setTimescale(state.guid, state.timescale);
+      } else {
+        const opts: { location?: [number, number]; timescale?: number } = {
+          timescale: state.timescale,
+        };
+        if (location !== undefined) {
+          opts.location = location;
+        }
+        this.trigger(state.guid, opts);
+      }
+    }
   }
 }

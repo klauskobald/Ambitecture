@@ -81,16 +81,22 @@ export interface ActionAnimationExecuteItem {
   guid: string;
 }
 
+export interface ActionSnapshotExecuteItem {
+  type: 'snapshot';
+  guid: string;
+}
+
 export type ActionExecuteItem =
   | ActionSceneExecuteItem
   | ActionIntentExecuteItem
   | ActionAnimationExecuteItem
+  | ActionSnapshotExecuteItem
   | ActionUnknownExecuteItem;
 
 export interface ActionDefinition {
   guid?: string;
   name: string;
-  /** Single target per action (`scene` | `intent` | `animation`). */
+  /** Single target per action (`scene` | `intent` | `animation` | `snapshot`). */
   execute: ActionExecuteItem;
 }
 
@@ -207,6 +213,63 @@ export function isCompanionAnimationRunnerAction(
   return record['type'] === 'animation' && record['guid'] === animationGuid;
 }
 
+export function isCompanionSnapshotRunnerAction(
+  action: ActionDefinition,
+  snapshotGuid: string,
+): boolean {
+  const actionGuid = typeof action.guid === 'string' ? action.guid : '';
+  if (actionGuid !== snapshotGuid) return false;
+  const ex = action.execute;
+  if (!ex || typeof ex !== 'object' || Array.isArray(ex)) return false;
+  const record = ex as Record<string, unknown>;
+  return record['type'] === 'snapshot' && record['guid'] === snapshotGuid;
+}
+
+export interface SnapshotPulseState {
+  guid: string;
+  speed: number;
+}
+
+export interface SnapshotAnimationState {
+  guid: string;
+  timescale: number;
+}
+
+export interface SnapshotRecallFlags {
+  scene: boolean;
+  pulse: boolean;
+  animations: boolean;
+}
+
+export interface SnapshotDefinition {
+  guid?: string;
+  name: string;
+  recall: SnapshotRecallFlags;
+  activeSceneGuid: string;
+  pulses: SnapshotPulseState[];
+  animations: SnapshotAnimationState[];
+}
+
+/** Drop invalid snapshot runner rows, strip non-canonical fields, and remove legacy `isRunning` rows. */
+function sanitizeSnapshotStoredRow(snap: SnapshotDefinition): void {
+  snap.pulses = (snap.pulses ?? []).flatMap(row => {
+    const raw = row as unknown as Record<string, unknown>;
+    if ('isRunning' in raw) return [];
+    const guid = typeof raw['guid'] === 'string' ? raw['guid'] : '';
+    const speed = raw['speed'];
+    if (!guid || typeof speed !== 'number' || !Number.isFinite(speed)) return [];
+    return [{ guid, speed }];
+  });
+  snap.animations = (snap.animations ?? []).flatMap(row => {
+    const raw = row as unknown as Record<string, unknown>;
+    if ('isRunning' in raw) return [];
+    const guid = typeof raw['guid'] === 'string' ? raw['guid'] : '';
+    const timescale = raw['timescale'];
+    if (!guid || typeof timescale !== 'number' || !Number.isFinite(timescale)) return [];
+    return [{ guid, timescale }];
+  });
+}
+
 export interface PulseBucket {
   guid?: string;
   name?: string;
@@ -264,6 +327,7 @@ interface Project {
   pulses?: PulsesConfig;
   activeSceneGuid?: string;
   activePulseGuid?: string;
+  snapshots?: SnapshotDefinition[];
   zones: Zone[];
   controller?: ControllerDef[];
   graphEntities?: Record<string, Record<string, unknown>>;
@@ -582,6 +646,10 @@ export class ProjectManager {
     for (const anim of this.project.animations ?? []) {
       ensureGuid(anim as unknown as Record<string, unknown>, 'animation');
     }
+    for (const snap of this.project.snapshots ?? []) {
+      ensureGuid(snap as unknown as Record<string, unknown>, 'snapshot');
+      sanitizeSnapshotStoredRow(snap);
+    }
     for (const setup of this.project.pulses?.setups ?? []) {
       ensureGuid(setup as unknown as Record<string, unknown>, 'pulse');
     }
@@ -610,6 +678,7 @@ export class ProjectManager {
       'pulses',
       'activeSceneGuid',
       'activePulseGuid',
+      'snapshots',
       'zones',
       'controller',
     ]);
@@ -866,6 +935,7 @@ export class ProjectManager {
       'pulses',
       'activeSceneGuid',
       'activePulseGuid',
+      'snapshots',
       'zones',
       'controller',
     ]);
@@ -974,13 +1044,15 @@ export class ProjectManager {
       return [];
     }
     this.activeSceneName = sceneName;
-    if (this.project && persistDurable) {
+    if (this.project) {
       if (scene.guid) {
         this.project.activeSceneGuid = scene.guid;
       } else {
         delete this.project.activeSceneGuid;
       }
-      this._scheduleSave();
+      if (persistDurable) {
+        this._scheduleSave();
+      }
     }
     const intents = this.getActiveSceneIntents();
     Logger.info(
@@ -1002,8 +1074,31 @@ export class ProjectManager {
   }
 
   getActiveSceneGuid(): string | null {
-    if (!this.activeSceneName || !this.project?.scenes) return null;
-    return this.project.scenes.find(s => s.name === this.activeSceneName)?.guid ?? null;
+    const scenes = this.project?.scenes;
+    if (!scenes || scenes.length === 0) return null;
+
+    const stored = this.project?.activeSceneGuid;
+    if (typeof stored === 'string' && stored.length > 0) {
+      const byGuid = scenes.find(s => s.guid === stored);
+      if (byGuid?.guid) {
+        if (this.activeSceneName !== byGuid.name) {
+          this.activeSceneName = byGuid.name;
+        }
+        return byGuid.guid;
+      }
+    }
+
+    if (this.activeSceneName) {
+      const byName = scenes.find(s => s.name === this.activeSceneName);
+      if (byName?.guid) {
+        if (this.project && this.project.activeSceneGuid !== byName.guid) {
+          this.project.activeSceneGuid = byName.guid;
+        }
+        return byName.guid;
+      }
+    }
+
+    return scenes[0]?.guid ?? null;
   }
 
   getActiveSceneIntents(): ControllerIntent[] {
@@ -1134,6 +1229,14 @@ export class ProjectManager {
 
   getAnimationsWirePayload(): AnimationDefinition[] {
     return this.project?.animations ?? [];
+  }
+
+  getSnapshotsWirePayload(): SnapshotDefinition[] {
+    return this.project?.snapshots ?? [];
+  }
+
+  getSnapshotByGuid(guid: string): SnapshotDefinition | undefined {
+    return (this.project?.snapshots ?? []).find(s => s.guid === guid);
   }
 
   getAnimationByGuid(guid: string): AnimationDefinition | undefined {
@@ -1276,6 +1379,7 @@ export class ProjectManager {
 
     const scenes = this.project.scenes ?? [];
     const actions = this.project.actions ?? [];
+    const snapshots = this.project.snapshots ?? [];
     const inputs = match?.inputs ?? [];
     Logger.info(`[project] buildControllerConfig(${guid}): ${this.runtimeZones.length} zone(s), ${intents.length} intent(s), ${scenes.length} scene(s)`);
     return {
@@ -1285,6 +1389,7 @@ export class ProjectManager {
       intents,
       scenes,
       actions,
+      snapshots,
       inputs,
       activeSceneGuid: this.getActiveSceneGuid(),
       ...passThrough,

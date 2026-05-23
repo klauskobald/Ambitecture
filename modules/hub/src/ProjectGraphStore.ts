@@ -1,4 +1,4 @@
-import { ProjectManager, ControllerIntent, FixtureMoveUpdate, ActionDefinition, AnimationDefinition } from './ProjectManager';
+import { ProjectManager, ControllerIntent, FixtureMoveUpdate, ActionDefinition, AnimationDefinition, SnapshotDefinition } from './ProjectManager';
 import type { PulseSetupManager } from './pulse/PulseSetupManager';
 import type { RuntimeUpdateDispatcher } from './RuntimeUpdateDispatcher';
 import type { RuntimeIntentStore } from './RuntimeIntentStore';
@@ -46,6 +46,7 @@ export class ProjectGraphStore {
     const intents = Array.isArray(config['intents']) ? config['intents'] : [];
     const zones = Array.isArray(config['zones']) ? config['zones'] : [];
     const scenes = Array.isArray(config['scenes']) ? config['scenes'] : [];
+    const snapshots = Array.isArray(config['snapshots']) ? config['snapshots'] : [];
     const actions = Array.isArray(config['actions']) ? config['actions'] : [];
     const inputs = Array.isArray(config['inputs']) ? config['inputs'] : [];
     const zoneToRenderer = config['zoneToRenderer'] && typeof config['zoneToRenderer'] === 'object'
@@ -81,6 +82,7 @@ export class ProjectGraphStore {
       zones,
       intents,
       scenes,
+      snapshots,
       actions,
       inputs,
       controllerState: this.projectManager.getControllerState(guid),
@@ -162,6 +164,8 @@ export class ProjectGraphStore {
         return this.applyControllerCommand(command);
       case 'animation':
         return this.applyAnimationCommand(command);
+      case 'snapshot':
+        return this.applySnapshotCommand(command);
       default:
         return this.applyOpaqueCommand(command);
     }
@@ -538,6 +542,131 @@ export class ProjectGraphStore {
       rendererEvents: [],
       rendererConfigChangedFor: [],
       durableChanged,
+    };
+  }
+
+  getRevision(): number {
+    return this.revision;
+  }
+
+  applySnapshotUpsert(snapshot: SnapshotDefinition): GraphMutationResult {
+    const guid = typeof snapshot.guid === 'string' ? snapshot.guid : '';
+    if (guid.length === 0) {
+      return emptyMutationResult(this.revision);
+    }
+    const snapshotDelta = this.makeDelta({
+      op: 'upsert',
+      entityType: 'snapshot',
+      guid,
+      value: snapshot as unknown as Record<string, unknown>,
+      persistence: 'runtimeAndDurable',
+    });
+    const snapName = typeof snapshot.name === 'string' && snapshot.name.length > 0
+      ? snapshot.name
+      : guid;
+    const existingCompanion = this.projectManager.getActionByGuid(guid);
+    const companionName = typeof existingCompanion?.name === 'string' && existingCompanion.name.length > 0
+      ? existingCompanion.name
+      : `Recall ${snapName}`;
+    const companionAction: ActionDefinition = {
+      guid,
+      name: companionName,
+      execute: { type: 'snapshot', guid },
+    };
+    const actions = this.projectManager.getActionsWirePayload().filter(a => a.guid !== guid);
+    actions.push(companionAction);
+    this.projectManager.setProjectData('actions', actions);
+    const actionDelta = this.makeDelta({
+      op: 'upsert',
+      entityType: 'action',
+      guid,
+      value: companionAction as unknown as Record<string, unknown>,
+      persistence: 'runtimeAndDurable',
+    });
+    return {
+      revision: this.revision,
+      controllerDeltas: [snapshotDelta, actionDelta],
+      rendererEvents: [],
+      rendererConfigChangedFor: [],
+      durableChanged: true,
+    };
+  }
+
+  applySnapshotMetadataPatch(
+    guid: string,
+    patch: Record<string, unknown>,
+  ): GraphMutationResult {
+    const delta = this.makeDelta({
+      op: 'patch',
+      entityType: 'snapshot',
+      guid,
+      patch,
+      persistence: 'runtimeAndDurable',
+    });
+    return {
+      revision: this.revision,
+      controllerDeltas: [delta],
+      rendererEvents: [],
+      rendererConfigChangedFor: [],
+      durableChanged: true,
+    };
+  }
+
+  private applySnapshotCommand(command: GraphCommand): GraphMutationResult {
+    const snapshots = this.projectManager.getSnapshotsWirePayload();
+    const cleanupCommands = command.op === 'remove'
+      ? this.actionInputManager?.buildSnapshotCleanupCommands(command.guid) ?? []
+      : [];
+    const nextSnapshots = command.op === 'remove'
+      ? snapshots.filter(s => s.guid !== command.guid)
+      : snapshots.map(s => {
+        if (s.guid !== command.guid) return s;
+        const base = cloneRecord(s as unknown as Record<string, unknown>);
+        const next = command.patch || command.remove
+          ? applyDotPathPatch(base, command.patch ?? {}, command.remove)
+          : cloneRecord(command.value ?? base);
+        next['guid'] = command.guid;
+        return next as unknown as SnapshotDefinition;
+      });
+    const existing = snapshots.some(s => s.guid === command.guid);
+    if (!existing && command.op !== 'remove') {
+      const value = cloneRecord(command.value ?? { guid: command.guid });
+      value['guid'] = command.guid;
+      nextSnapshots.push(value as unknown as SnapshotDefinition);
+    }
+    this.projectManager.setProjectData('snapshots', nextSnapshots);
+    const delta = this.makeDelta({ ...command, persistence: command.persistence ?? 'runtimeAndDurable' });
+    const cleanupResults = cleanupCommands.map(cleanupCommand => this.applyGraphCommand(cleanupCommand));
+    let companionDeltas: GraphDelta[] = [];
+    if (command.op !== 'remove' && !existing) {
+      const row = nextSnapshots.find(s => s.guid === command.guid);
+      if (row) {
+        const snapName = typeof row.name === 'string' && row.name.length > 0 ? row.name : command.guid;
+        const companionAction: ActionDefinition = {
+          guid: command.guid,
+          name: `Recall ${snapName}`,
+          execute: { type: 'snapshot', guid: command.guid },
+        };
+        const actions = this.projectManager.getActionsWirePayload().filter(a => a.guid !== command.guid);
+        actions.push(companionAction);
+        this.projectManager.setProjectData('actions', actions);
+        companionDeltas = [
+          this.makeDelta({
+            op: 'upsert',
+            entityType: 'action',
+            guid: command.guid,
+            value: companionAction as unknown as Record<string, unknown>,
+            persistence: 'runtimeAndDurable',
+          }),
+        ];
+      }
+    }
+    return {
+      revision: this.revision,
+      controllerDeltas: [delta, ...companionDeltas, ...cleanupResults.flatMap(r => r.controllerDeltas)],
+      rendererEvents: cleanupResults.flatMap(r => r.rendererEvents),
+      rendererConfigChangedFor: cleanupResults.flatMap(r => r.rendererConfigChangedFor),
+      durableChanged: true,
     };
   }
 

@@ -15,7 +15,7 @@
         "overlayFingerFillRgba": "rgba(255, 255, 255, 0.22)",
         "overlayFingerStrokeRgba": "rgba(255, 255, 255, 0.75)",
         "overlayLineWidthPx": 2,
-        "overlayTrailFadeMs": 450,
+        "overlayTrailFadeMs": 150,
         "animateEditCellWidthPx": 120,
         "animateEditCellGapPx": 4,
         "animateEditCellPaddingPx": 4,
@@ -27,7 +27,7 @@
     },
     "LAYOUT_MANAGER": {
         "2cols": {
-            "label": "2c",
+            "label": "1l+1r",
             "children": [
                 {
                     "type": "hbox",
@@ -36,15 +36,49 @@
                         {
                             "type": "leaf",
                             "panes": [
-                                { "class": "stage", "label": "Stage" }
+                                {
+                                    "class": "stage",
+                                    "label": "Perform"
+                                },
+                                {
+                                    "class": "stage-edit",
+                                    "label": "Edit"
+                                },
+                                {
+                                    "class": "scenes",
+                                    "label": "Scenes"
+                                }
                             ]
                         },
                         {
                             "type": "leaf",
+                            "tags": [
+                                "stage-edit"
+                            ],
                             "panes": [
-                                { "class": "control", "label": "Control" },
-                                { "class": "pulse", "label": "Pulse" },
-                                { "class": "animation", "label": "Animate" }
+                                {
+                                    "class": "control",
+                                    "label": "Control"
+                                },
+                                {
+                                    "class": "pulse",
+                                    "label": "Pulse"
+                                },
+                                {
+                                    "class": "animation",
+                                    "label": "Animate"
+                                },
+                                {
+                                    "class": "snapshot",
+                                    "label": "Snapshot"
+                                },
+                                {
+                                    "class": "plugin",
+                                    "args": [
+                                        "midi-setup-1"
+                                    ],
+                                    "label": "Midi"
+                                }
                             ]
                         }
                     ]
@@ -52,7 +86,7 @@
             ]
         },
         "1row.left-3rows.right": {
-            "label": "1r+3r",
+            "label": "1l+3r",
             "children": [
                 {
                     "type": "hbox",
@@ -61,30 +95,123 @@
                         {
                             "type": "leaf",
                             "panes": [
-                                { "class": "stage", "label": "Stage" }
+                                {
+                                    "class": "stage",
+                                    "label": "Perform"
+                                },
+                                {
+                                    "class": "stage-edit",
+                                    "label": "Edit"
+                                },
+                                {
+                                    "class": "scenes",
+                                    "label": "Scenes"
+                                }
                             ]
                         },
                         {
                             "type": "vbox",
+                            "tags": [
+                                "stage-edit"
+                            ],
                             "resizable": true,
                             "children": [
                                 {
                                     "type": "leaf",
                                     "panes": [
-                                        { "class": "control", "label": "Control" }
+                                        {
+                                            "class": "control",
+                                            "label": "Control"
+                                        }
                                     ]
                                 },
                                 {
                                     "type": "leaf",
                                     "panes": [
-                                        { "class": "pulse", "label": "Pulse" }
+                                        {
+                                            "class": "pulse",
+                                            "label": "Pulse"
+                                        },
+                                        {
+                                            "class": "snapshot",
+                                            "label": "Snapshot"
+                                        }
                                     ]
                                 },
                                 {
                                     "type": "leaf",
                                     "panes": [
-                                        { "class": "animation", "label": "Animate" }
+                                        {
+                                            "class": "animation",
+                                            "label": "Animate"
+                                        },
+                                        {
+                                            "class": "plugin",
+                                            "args": [
+                                                "midi-setup-1"
+                                            ],
+                                            "label": "Midi"
+                                        }
                                     ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        "2rows": {
+            "label": "1t+1b",
+            "children": [
+                {
+                    "type": "vbox",
+                    "resizable": true,
+                    "children": [
+                        {
+                            "type": "leaf",
+                            "panes": [
+                                {
+                                    "class": "stage",
+                                    "label": "Perform"
+                                },
+                                {
+                                    "class": "stage-edit",
+                                    "label": "Edit"
+                                },
+                                {
+                                    "class": "scenes",
+                                    "label": "Scenes"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "leaf",
+                            "tags": [
+                                "stage-edit"
+                            ],
+                            "panes": [
+                                {
+                                    "class": "control",
+                                    "label": "Control"
+                                },
+                                {
+                                    "class": "pulse",
+                                    "label": "Pulse"
+                                },
+                                {
+                                    "class": "animation",
+                                    "label": "Animate"
+                                },
+                                {
+                                    "class": "snapshot",
+                                    "label": "Snapshot"
+                                },
+                                {
+                                    "class": "plugin",
+                                    "args": [
+                                        "midi-setup-1"
+                                    ],
+                                    "label": "Midi"
                                 }
                             ]
                         }

@@ -32,9 +32,8 @@ export class PulseTapTempo {
       return;
     }
 
-    const activeGuid = this.pulseManager.getActiveSetupGuid();
-    if (activeGuid !== setupGuid) {
-      this.pulseManager.selectSetup(setupGuid);
+    if (!this.pulseManager.isSetupRunning(setupGuid)) {
+      this.pulseManager.startSetup(setupGuid);
     }
 
     const now = atMs ?? Date.now();
@@ -77,7 +76,7 @@ export class PulseTapTempo {
       Math.max(this.config.minBpm, smoothed),
     );
 
-    this.pulseManager.setBPM(nextBpm);
+    this.pulseManager.setBPM(nextBpm, setupGuid);
     this.schedulePersist(setupGuid, nextBpm);
   }
 
@@ -92,7 +91,7 @@ export class PulseTapTempo {
         bpm,
       });
       if (result.pulsesChanged) {
-        this.pulseManager.syncActiveSetupFromProject();
+        this.pulseManager.syncSetupFromProject(setupGuid);
         this.onPersisted();
       }
     }, this.config.persistDebounceMs);

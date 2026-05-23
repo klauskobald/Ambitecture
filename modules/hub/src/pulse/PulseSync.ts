@@ -69,7 +69,7 @@ export class PulseSync {
 
     const setup = this.projectManager.getPulseSetup(setupGuid);
     const durableBpm = setup?.bpm ?? targetBpm;
-    const currentLiveBpm = this.pulseManager.getLiveBpm() ?? durableBpm;
+    const currentLiveBpm = this.pulseManager.getLiveBpm(setupGuid) ?? durableBpm;
     const smoothedBpm = Math.min(
       this.config.maxBpm,
       Math.max(
@@ -107,16 +107,16 @@ export class PulseSync {
   }
 
   private resolveSetupGuid(): string | undefined {
-    const runnerGuid = this.pulseManager.getActiveSetupGuid();
-    if (runnerGuid) {
-      return runnerGuid;
+    const active = this.projectManager.getActivePulseGuid();
+    if (active && this.projectManager.getPulseSetup(active)) {
+      return active;
     }
-    return this.projectManager.getActivePulseGuid();
+    return this.pulseManager.getActiveSetupGuid()
+      ?? this.projectManager.getPulsesWirePayload().setups[0]?.guid;
   }
 
   private ensureRunner(setupGuid: string): void {
-    const activeGuid = this.pulseManager.getActiveSetupGuid();
-    if (activeGuid === setupGuid) {
+    if (this.pulseManager.isSetupRunning(setupGuid)) {
       return;
     }
     this.pulseManager.selectSetupForSync(setupGuid);

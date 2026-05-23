@@ -1,28 +1,16 @@
 /**
- * Tracks active pulse setup and slot position from hub `hub:status` (kind === 'pulse').
- * Used by Perform → Pulse list UI.
+ * Tracks pulse setup play state from hub `hub:status` (kind === 'pulse').
+ * Multiple setups may run concurrently. Used by Perform → Pulse list UI.
  */
 
+/** @type {Set<string>} */
+const runningSetupGuids = new Set()
+
 /** @type {string | null} */
-let activeSetupGuid = null
+let focusedSetupGuid = null
 
-/** @type {boolean} */
-let isRunning = false
-
-/** @type {number} */
-let bpm = 120
-
-/** @type {number} */
-let pulseSpeed = 1
-
-/** @type {number} */
-let slotIdx = 0
-
-/** @type {number} */
-let slotsTotal = 0
-
-/** @type {string} */
-let statusMessage = ''
+/** @type {Map<string, { bpm: number, speed: number, slotIdx: number, slotsTotal: number, message: string }>} */
+const slotStateByGuid = new Map()
 
 /** @type {Set<() => void>} */
 const listeners = new Set()
@@ -39,14 +27,12 @@ function notify () {
 
 /** Drop local pulse hints (e.g. after reconnect without snapshot). */
 export function resetPulsePlayState () {
-  if (!activeSetupGuid && !isRunning && statusMessage === '') return
-  activeSetupGuid = null
-  isRunning = false
-  bpm = 120
-  pulseSpeed = 1
-  slotIdx = 0
-  slotsTotal = 0
-  statusMessage = ''
+  if (runningSetupGuids.size === 0 && !focusedSetupGuid && slotStateByGuid.size === 0) {
+    return
+  }
+  runningSetupGuids.clear()
+  focusedSetupGuid = null
+  slotStateByGuid.clear()
   notify()
 }
 
@@ -60,16 +46,28 @@ export function applyHubPulseStatus (payload) {
   const guid = typeof p.setupGuid === 'string' ? p.setupGuid : ''
   if (!guid) return
   const status = typeof p.status === 'string' ? p.status : ''
-  activeSetupGuid = guid
-  isRunning = status === 'started'
+  if (status === 'started') {
+    runningSetupGuids.add(guid)
+    focusedSetupGuid = guid
+  } else if (status === 'stopped') {
+    runningSetupGuids.delete(guid)
+    slotStateByGuid.delete(guid)
+    if (focusedSetupGuid === guid) {
+      focusedSetupGuid = runningSetupGuids.values().next().value ?? null
+    }
+    notify()
+    return
+  }
   const data = p.data
+  let bpm = 120
+  let pulseSpeed = 1
+  let slotIdx = 0
+  let slotsTotal = 0
   if (data && typeof data === 'object' && !Array.isArray(data)) {
     const d = /** @type {Record<string, unknown>} */ (data)
     if (typeof d.bpm === 'number' && Number.isFinite(d.bpm)) bpm = d.bpm
     if (typeof d.speed === 'number' && Number.isFinite(d.speed)) {
       pulseSpeed = d.speed
-    } else {
-      pulseSpeed = 1
     }
     if (typeof d.slotIdx === 'number' && Number.isFinite(d.slotIdx)) slotIdx = d.slotIdx
     if (typeof d.slotsTotal === 'number' && Number.isFinite(d.slotsTotal)) {
@@ -77,23 +75,29 @@ export function applyHubPulseStatus (payload) {
     }
   }
   const msg = p.message
+  let statusMessage = ''
   if (msg && typeof msg === 'object' && !Array.isArray(msg)) {
     const text = typeof (/** @type {Record<string,unknown>} */ (msg)).text === 'string'
       ? /** @type {Record<string,unknown>} */ (msg).text
       : ''
     statusMessage = text
   }
+  slotStateByGuid.set(guid, { bpm, speed: pulseSpeed, slotIdx, slotsTotal, message: statusMessage })
   notify()
 }
 
 /** @param {string} setupGuid */
 export function isPulseActive (setupGuid) {
-  return isRunning && activeSetupGuid === setupGuid
+  return runningSetupGuids.has(setupGuid)
 }
 
 /** @returns {string | null} */
 export function getActivePulseSetupGuid () {
-  return activeSetupGuid
+  if (focusedSetupGuid && runningSetupGuids.has(focusedSetupGuid)) {
+    return focusedSetupGuid
+  }
+  const first = runningSetupGuids.values().next().value
+  return typeof first === 'string' ? first : focusedSetupGuid
 }
 
 /**
@@ -102,12 +106,13 @@ export function getActivePulseSetupGuid () {
  */
 export function getPulseSlotStatus (setupGuid) {
   const isActive = isPulseActive(setupGuid)
+  const stored = slotStateByGuid.get(setupGuid)
   return {
-    bpm,
-    speed: pulseSpeed,
-    slotIdx: isActive ? slotIdx : 0,
-    slotsTotal: isActive ? slotsTotal : 0,
-    message: isActive ? statusMessage : '',
+    bpm: stored?.bpm ?? 120,
+    speed: stored?.speed ?? 1,
+    slotIdx: isActive ? (stored?.slotIdx ?? 0) : 0,
+    slotsTotal: isActive ? (stored?.slotsTotal ?? 0) : 0,
+    message: isActive ? (stored?.message ?? '') : '',
     isActive
   }
 }

@@ -14,6 +14,8 @@ function isPulseControlCommand(payload: unknown): payload is PulseControlCommand
   const p = payload as Record<string, unknown>;
   switch (p['command']) {
     case 'selectSetup':
+    case 'startSetup':
+    case 'stopSetup':
       return typeof p['setupGuid'] === 'string' && p['setupGuid'].length > 0;
     case 'createSetup':
       return (p['name'] === undefined || typeof p['name'] === 'string')
@@ -85,32 +87,38 @@ export class PulseControlHandler implements MessageHandler {
 
     const cmd = message.payload;
 
-    if (cmd.command === 'selectSetup') {
-      this.pulseManager.selectSetup(cmd.setupGuid);
+    if (cmd.command === 'selectSetup' || cmd.command === 'startSetup') {
+      this.pulseManager.startSetup(cmd.setupGuid);
+      return;
+    }
+
+    if (cmd.command === 'stopSetup') {
+      this.pulseManager.stopSetup(cmd.setupGuid);
       return;
     }
 
     if (cmd.command === 'deleteSetup') {
-      const activeGuid = this.pulseManager.getActiveSetupGuid();
-      if (activeGuid === cmd.setupGuid) {
-        this.pulseManager.stop();
-      }
+      this.pulseManager.removeSetup(cmd.setupGuid);
     }
 
     const result = this.pulseSetupManager.build(cmd);
 
     if (result.setupGuid && cmd.command === 'setSetupBpm') {
-      if (this.pulseManager.getActiveSetupGuid() === result.setupGuid) {
+      if (this.pulseManager.isSetupRunning(result.setupGuid)) {
         const setup = this.projectManager.getPulseSetup(result.setupGuid);
         if (setup) {
-          this.pulseManager.setBPM(setup.bpm);
+          this.pulseManager.setBPM(setup.bpm, result.setupGuid);
         }
       }
     }
 
     if (result.pulsesChanged) {
       this.broadcastPulsesPatch();
-      this.pulseManager.syncActiveSetupFromProject();
+      if (result.setupGuid) {
+        this.pulseManager.syncSetupFromProject(result.setupGuid);
+      } else {
+        this.pulseManager.syncActiveSetupFromProject();
+      }
     }
   }
 

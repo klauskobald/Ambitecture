@@ -134,10 +134,14 @@ export class RegisterHandler implements MessageHandler {
       }));
       Logger.info(`[register] pushed projectPatch pulses to controller ${guid}`);
 
-      const pulseSnapshot = this.pulseManager?.getStatusSnapshot();
-      if (pulseSnapshot && this.hubStatus) {
-        this.hubStatus.sendPulseStatusTo(ws, pulseSnapshot);
-        Logger.info(`[register] pushed hub:status pulse snapshot to controller ${guid}`);
+      const pulseSnapshots = this.pulseManager?.getStatusSnapshots() ?? [];
+      if (pulseSnapshots.length > 0 && this.hubStatus) {
+        for (const pulseSnapshot of pulseSnapshots) {
+          this.hubStatus.sendPulseStatusTo(ws, pulseSnapshot);
+        }
+        Logger.info(
+          `[register] pushed ${pulseSnapshots.length} hub:status pulse snapshot(s) to controller ${guid}`,
+        );
       }
 
       const capabilitiesRaw = this.systemConfig.getOrDefault<unknown>('systemCapabilities', null);

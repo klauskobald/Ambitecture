@@ -18,14 +18,11 @@ type ActivePulseRunner = {
 };
 
 /**
- * Hub-side pulse orchestration. Maintains a single active pulse setup with
- * a per-slot action dispatcher. Each slot references one reusable bucket in
- * `pulses.buckets`. One timeout per tick: after each fire, next tick is
- * `Date.now() + 60000/(bpm*speed)` using current BPM and setup {@link PulseSetup.speed}.
- * BPM / speed changes do not touch the pending timer.
+ * Hub-side pulse orchestration. Each setup may run its own tick loop independently.
+ * Slots reference buckets in `pulses.buckets`; tick interval uses `bpm * speed`.
  */
 export class PulseManager {
-  private runner?: ActivePulseRunner;
+  private readonly runners = new Map<string, ActivePulseRunner>();
   private onTriggerAction?: (actionGuid: string) => void;
   private hubStatus?: HubStatusDispatcher;
 
@@ -48,54 +45,63 @@ export class PulseManager {
   initializeFromProject(): void {
     const activePulseGuid = this.projectManager.getActivePulseGuid();
     if (activePulseGuid) {
-      this.selectSetup(activePulseGuid);
+      this.startSetup(activePulseGuid);
     }
   }
 
   /**
-   * Re-read the active setup and buckets from project YAML after `pulse:assign` / `pulse:control`.
+   * Re-read one setup from project YAML after `pulse:assign` / `pulse:control`.
    */
-  syncActiveSetupFromProject(): void {
-    if (!this.runner) return;
-    const guid = this.runner.setup.guid;
-    if (!guid) return;
-    const setup = this.projectManager.getPulseSetup(guid);
+  syncSetupFromProject(setupGuid: string): void {
+    const runner = this.runners.get(setupGuid);
+    if (!runner) return;
+    const setup = this.projectManager.getPulseSetup(setupGuid);
     if (!setup) {
-      Logger.warn(`[pulse] syncActiveSetupFromProject: setup ${guid} no longer exists`);
+      Logger.warn(`[pulse] syncSetupFromProject: setup ${setupGuid} no longer exists`);
       return;
     }
-    this.runner.setup = setup;
-    if (this.runner.currentSlotIdx >= setup.slots.length) {
-      this.runner.currentSlotIdx = 0;
+    runner.setup = setup;
+    if (runner.currentSlotIdx >= setup.slots.length) {
+      runner.currentSlotIdx = 0;
     }
   }
 
-  private getRunnerBpm(): number {
-    if (!this.runner) {
-      return 120;
+  /** Re-sync every runner that is loaded (running or idle). */
+  syncActiveSetupFromProject(): void {
+    for (const guid of this.runners.keys()) {
+      this.syncSetupFromProject(guid);
     }
-    const live = this.runner.liveBpm;
+  }
+
+  private getRunnerBpm(runner: ActivePulseRunner): number {
+    const live = runner.liveBpm;
     if (typeof live === 'number' && Number.isFinite(live)) {
       return live;
     }
-    return this.runner.setup.bpm;
+    return runner.setup.bpm;
   }
 
-  private resolveActiveSetup(): PulseSetup | undefined {
-    if (!this.runner) return undefined;
-    const guid = this.runner.setup.guid;
+  private resolveActiveSetup(setupGuid: string): PulseSetup | undefined {
+    const runner = this.runners.get(setupGuid);
+    if (!runner) return undefined;
+    const guid = runner.setup.guid;
     if (!guid) return undefined;
     return this.projectManager.getPulseSetup(guid);
   }
 
-  getStatusSnapshot(): HubStatusPulsePayload | undefined {
-    if (!this.runner || !this.runner.isRunning) {
-      return undefined;
+  getStatusSnapshots(): HubStatusPulsePayload[] {
+    const snapshots: HubStatusPulsePayload[] = [];
+    for (const [setupGuid, runner] of this.runners) {
+      if (!runner.isRunning) continue;
+      const payload = this.buildPulseStatusPayload(setupGuid, 'started', runner.currentSlotIdx, runner);
+      snapshots.push(payload);
     }
-    const setup = this.runner.setup;
-    const setupGuid = setup.guid ?? '';
-    if (!setupGuid) return undefined;
-    return this.buildPulseStatusPayload(setupGuid, 'started', this.runner.currentSlotIdx);
+    return snapshots;
+  }
+
+  /** @deprecated Prefer {@link getStatusSnapshots}. */
+  getStatusSnapshot(): HubStatusPulsePayload | undefined {
+    return this.getStatusSnapshots()[0];
   }
 
   /**
@@ -113,64 +119,58 @@ export class PulseManager {
   }
 
   /**
-   * Activate a pulse setup by guid. The current pulse (if running) completes
-   * its current tick before the new setup takes over. If already on this setup,
-   * restarts from slot 0. Persists the active pulse guid to the project and starts the pulse.
+   * Start (or restart) a pulse setup without stopping other running setups.
    */
-  selectSetup(guid: string): void {
+  startSetup(guid: string): void {
     const setup = this.projectManager.getPulseSetup(guid);
     if (!setup) {
       Logger.warn(`[pulse] unknown pulse setup ${guid}`);
       return;
     }
 
-    const syncCarryBpmEnabled = parsePulseSyncProjectConfig(
-      this.projectManager.getPulsesWirePayload(),
-    ).enabled;
-
-    if (this.runner && this.runner.setup.guid === guid) {
-      this.restartActiveSetup();
+    const existing = this.runners.get(guid);
+    if (existing?.isRunning) {
+      this.restartSetup(guid);
       return;
     }
 
-    if (this.runner) {
-      if (this.runner.isRunning) {
-        Logger.info(`[pulse] selectSetup(${guid}): switching active pulse`);
-        const carryBpm = syncCarryBpmEnabled ? this.getRunnerBpm() : undefined;
-        this.stopTimer();
-        this.runner.setup = setup;
-        this.runner.currentSlotIdx = 0;
-        this.runner.isRunning = true;
-        if (
-          syncCarryBpmEnabled
-          && carryBpm !== undefined
-          && Number.isFinite(carryBpm)
-        ) {
-          this.runner.liveBpm = carryBpm;
-        }
-        this.projectManager.setActivePulseGuid(guid);
-        this.scheduleNextTick();
-        return;
-      }
+    if (existing) {
+      existing.setup = setup;
+      this.projectManager.setActivePulseGuid(guid);
+      this.startRunner(guid);
+      return;
     }
 
-    const carryBpmForStoppedRunner =
-      syncCarryBpmEnabled && this.runner ? this.getRunnerBpm() : undefined;
-
-    this.runner = {
+    this.runners.set(guid, {
       setup,
       isRunning: false,
       currentSlotIdx: 0,
       nextTickAtMs: 0,
       tickTimer: undefined,
       msIntoCurrentTick: 0,
-      ...(carryBpmForStoppedRunner !== undefined && Number.isFinite(carryBpmForStoppedRunner)
-        ? { liveBpm: carryBpmForStoppedRunner }
-        : {}),
-    };
+    });
     this.projectManager.setActivePulseGuid(guid);
     Logger.info(`[pulse] selected setup ${guid} (${setup.name}, ${setup.bpm} BPM, ${setup.meter} meter)`);
-    this.start();
+    this.startRunner(guid);
+  }
+
+  /**
+   * Legacy alias: starts the setup without stopping others (same as {@link startSetup}).
+   */
+  selectSetup(guid: string): void {
+    this.startSetup(guid);
+  }
+
+  /**
+   * Stop one pulse setup; other setups keep running.
+   */
+  stopSetup(guid: string): void {
+    const runner = this.runners.get(guid);
+    if (!runner) {
+      Logger.warn(`[pulse] stopSetup called but setup ${guid} is not loaded`);
+      return;
+    }
+    this.stopRunner(guid);
   }
 
   /**
@@ -184,15 +184,24 @@ export class PulseManager {
       return;
     }
 
-    this.stopTimer();
-    this.runner = {
-      setup,
-      isRunning: false,
-      currentSlotIdx: 0,
-      nextTickAtMs: 0,
-      tickTimer: undefined,
-      msIntoCurrentTick: 0,
-    };
+    const existing = this.runners.get(guid);
+    if (existing) {
+      this.stopTimerFor(guid);
+      existing.setup = setup;
+      existing.isRunning = false;
+      existing.currentSlotIdx = 0;
+      existing.nextTickAtMs = 0;
+      existing.msIntoCurrentTick = 0;
+    } else {
+      this.runners.set(guid, {
+        setup,
+        isRunning: false,
+        currentSlotIdx: 0,
+        nextTickAtMs: 0,
+        tickTimer: undefined,
+        msIntoCurrentTick: 0,
+      });
+    }
     this.projectManager.setActivePulseGuid(guid);
     Logger.info(`[pulse] selected setup for sync ${guid} (${setup.name})`);
   }
@@ -201,177 +210,211 @@ export class PulseManager {
    * Set BPM and schedule the next tick at an absolute wall-clock time (phase-aligned sync).
    */
   applyAlignedSync(bpm: number, nextTickAtMs: number, restartFromSlotZero = false): void {
-    if (!this.runner) {
+    const setupGuid = this.projectManager.getActivePulseGuid() ?? this.getActiveSetupGuid();
+    if (!setupGuid) {
       Logger.warn('[pulse] applyAlignedSync called but no pulse is active');
       return;
     }
-    const setup = this.projectManager.getPulseSetup(this.runner.setup.guid ?? '');
-    if (setup) {
-      this.runner.setup = setup;
+    const runner = this.runners.get(setupGuid);
+    if (!runner) {
+      Logger.warn('[pulse] applyAlignedSync called but no pulse runner exists');
+      return;
     }
-    this.runner.liveBpm = bpm;
-    this.runner.isRunning = true;
+    const setup = this.projectManager.getPulseSetup(setupGuid);
+    if (setup) {
+      runner.setup = setup;
+    }
+    runner.liveBpm = bpm;
+    runner.isRunning = true;
     if (restartFromSlotZero) {
-      this.runner.currentSlotIdx = 0;
-      this.runner.msIntoCurrentTick = 0;
+      runner.currentSlotIdx = 0;
+      runner.msIntoCurrentTick = 0;
     }
     Logger.info(
       `[pulse] aligned sync BPM=${bpm} nextTick in ${Math.max(0, nextTickAtMs - Date.now())}ms`
         + (restartFromSlotZero ? ' (slot 0)' : ''),
     );
-    this.scheduleTickAt(nextTickAtMs);
+    this.scheduleTickAt(setupGuid, nextTickAtMs);
   }
 
   /**
    * Update live analyser tempo; does not reschedule the pending tick.
    */
-  updateLiveTempo(bpm: number): void {
-    if (!this.runner) {
+  updateLiveTempo(bpm: number, setupGuid?: string): void {
+    const guid = setupGuid ?? this.projectManager.getActivePulseGuid() ?? this.getActiveSetupGuid();
+    if (!guid) {
       Logger.warn('[pulse] updateLiveTempo called but no pulse is active');
       return;
     }
-    const setup = this.projectManager.getPulseSetup(this.runner.setup.guid ?? '');
-    if (setup) {
-      this.runner.setup = setup;
+    const runner = this.runners.get(guid);
+    if (!runner) {
+      Logger.warn('[pulse] updateLiveTempo called but no pulse runner exists');
+      return;
     }
-    this.runner.liveBpm = bpm;
-    const periodMs = this.computeTickIntervalMs(bpm, this.runner.setup);
+    const setup = this.projectManager.getPulseSetup(guid);
+    if (setup) {
+      runner.setup = setup;
+    }
+    runner.liveBpm = bpm;
+    const periodMs = this.computeTickIntervalMs(bpm, runner.setup);
     Logger.info(`[pulse] live tempo ${bpm} BPM (${periodMs}ms/tick, timer unchanged)`);
   }
 
   /**
    * Reset slot cursor only (e.g. onset restart policy) without stopping the tick chain.
    */
-  resetSlotIndexToZero(): void {
-    if (!this.runner) return;
-    this.runner.currentSlotIdx = 0;
-    this.runner.msIntoCurrentTick = 0;
+  resetSlotIndexToZero(setupGuid?: string): void {
+    const guid = setupGuid ?? this.projectManager.getActivePulseGuid() ?? this.getActiveSetupGuid();
+    if (!guid) return;
+    const runner = this.runners.get(guid);
+    if (!runner) return;
+    runner.currentSlotIdx = 0;
+    runner.msIntoCurrentTick = 0;
   }
 
-  private restartActiveSetup(): void {
-    if (!this.runner) return;
-    this.stopTimer();
-    this.runner.currentSlotIdx = 0;
-    this.runner.msIntoCurrentTick = 0;
-    this.runner.isRunning = true;
-    this.scheduleNextTick();
-    Logger.info(`[pulse] restarted setup ${this.runner.setup.guid ?? '?'}`);
+  private restartSetup(setupGuid: string): void {
+    const runner = this.runners.get(setupGuid);
+    if (!runner) return;
+    this.stopTimerFor(setupGuid);
+    runner.currentSlotIdx = 0;
+    runner.msIntoCurrentTick = 0;
+    runner.isRunning = true;
+    this.scheduleNextTick(setupGuid);
+    Logger.info(`[pulse] restarted setup ${setupGuid}`);
   }
 
   /**
-   * Set BPM on the active setup. Does not reschedule the pending tick.
+   * Set BPM on a setup. Does not reschedule the pending tick.
    */
-  setBPM(bpm: number): void {
-    if (!this.runner) {
+  setBPM(bpm: number, setupGuid?: string): void {
+    const guid = setupGuid ?? this.projectManager.getActivePulseGuid() ?? this.getActiveSetupGuid();
+    if (!guid) {
       Logger.warn('[pulse] setBPM called but no pulse is active');
       return;
     }
-    const setup = this.projectManager.getPulseSetup(this.runner.setup.guid ?? '');
-    if (setup) {
-      this.runner.setup = setup;
+    const runner = this.runners.get(guid);
+    if (!runner) {
+      Logger.warn('[pulse] setBPM called but no pulse runner exists');
+      return;
     }
-    this.runner.setup.bpm = bpm;
-    delete this.runner.liveBpm;
-    Logger.info(`[pulse] BPM set to ${bpm}`);
+    const setup = this.projectManager.getPulseSetup(guid);
+    if (setup) {
+      runner.setup = setup;
+    }
+    runner.setup.bpm = bpm;
+    delete runner.liveBpm;
+    Logger.info(`[pulse] BPM set to ${bpm} (setup ${guid})`);
   }
 
   /**
-   * Set meter (beats per measure) on the active setup.
+   * Set meter (beats per measure) on a setup.
    */
-  setMeter(meter: number): void {
-    if (!this.runner) {
-      Logger.warn('[pulse] setMeter called but no pulse is active');
+  setMeter(meter: number, setupGuid?: string): void {
+    const guid = setupGuid ?? this.projectManager.getActivePulseGuid() ?? this.getActiveSetupGuid();
+    if (!guid) return;
+    const runner = this.runners.get(guid);
+    if (!runner) {
+      Logger.warn('[pulse] setMeter called but no pulse runner exists');
       return;
     }
-    this.runner.setup.meter = meter;
+    runner.setup.meter = meter;
     Logger.info(`[pulse] meter set to ${meter}`);
   }
 
-  /**
-   * Start pulse ticking. If already running, this is a no-op.
-   */
-  start(): void {
-    if (!this.runner) {
-      Logger.warn('[pulse] start called but no pulse is selected');
+  private startRunner(setupGuid: string): void {
+    const runner = this.runners.get(setupGuid);
+    if (!runner) {
+      Logger.warn('[pulse] start called but setup is not loaded');
       return;
     }
-    if (this.runner.isRunning) {
+    if (runner.isRunning) {
       Logger.info('[pulse] already running');
       return;
     }
 
-    const setup = this.projectManager.getPulseSetup(this.runner.setup.guid ?? '');
+    const setup = this.projectManager.getPulseSetup(setupGuid);
     if (setup) {
-      this.runner.setup = setup;
+      runner.setup = setup;
     }
 
-    this.runner.isRunning = true;
-    this.runner.currentSlotIdx = 0;
-    this.runner.msIntoCurrentTick = 0;
+    runner.isRunning = true;
+    runner.currentSlotIdx = 0;
+    runner.msIntoCurrentTick = 0;
 
-    const periodMs = this.computeTickIntervalMs(this.getRunnerBpm(), this.runner.setup);
-    Logger.info(`[pulse] started (${this.runner.setup.name}, ${periodMs}ms/tick)`);
-    this.scheduleNextTick();
+    const periodMs = this.computeTickIntervalMs(this.getRunnerBpm(runner), runner.setup);
+    Logger.info(`[pulse] started (${runner.setup.name}, ${periodMs}ms/tick)`);
+    this.scheduleNextTick(setupGuid);
   }
 
   /**
-   * Stop pulse ticking. Clears any pending timer.
+   * Stop pulse ticking for one setup.
    */
   stop(): void {
-    if (!this.runner) {
+    const guid = this.getActiveSetupGuid();
+    if (!guid) {
       Logger.warn('[pulse] stop called but no pulse is active');
       return;
     }
-    this.stopTimer();
-    this.runner.isRunning = false;
-    this.broadcastPulseStatus('stopped', this.runner.currentSlotIdx);
-    Logger.info('[pulse] stopped');
+    this.stopSetup(guid);
   }
 
-  private stopTimer(): void {
-    if (!this.runner) return;
-    if (this.runner.tickTimer !== undefined) {
-      clearTimeout(this.runner.tickTimer);
-      this.runner.tickTimer = undefined;
+  private stopRunner(setupGuid: string): void {
+    const runner = this.runners.get(setupGuid);
+    if (!runner) return;
+    this.stopTimerFor(setupGuid);
+    runner.isRunning = false;
+    this.broadcastPulseStatus(setupGuid, 'stopped', runner.currentSlotIdx);
+    Logger.info(`[pulse] stopped setup ${setupGuid}`);
+  }
+
+  private stopTimerFor(setupGuid: string): void {
+    const runner = this.runners.get(setupGuid);
+    if (!runner) return;
+    if (runner.tickTimer !== undefined) {
+      clearTimeout(runner.tickTimer);
+      runner.tickTimer = undefined;
     }
   }
 
   /**
    * Wait until {@link nextTickAtMs}, then fire one tick and schedule the next from current BPM.
    */
-  private scheduleTickAt(nextTickAtMs: number): void {
-    if (!this.runner || !this.runner.isRunning) {
+  private scheduleTickAt(setupGuid: string, nextTickAtMs: number): void {
+    const runner = this.runners.get(setupGuid);
+    if (!runner || !runner.isRunning) {
       return;
     }
 
-    this.stopTimer();
-    this.runner.nextTickAtMs = nextTickAtMs;
+    this.stopTimerFor(setupGuid);
+    runner.nextTickAtMs = nextTickAtMs;
     const delayMs = Math.max(0, nextTickAtMs - Date.now());
-    this.runner.tickTimer = setTimeout(() => {
-      this.onTickTimerFired();
+    runner.tickTimer = setTimeout(() => {
+      this.onTickTimerFired(setupGuid);
     }, delayMs);
   }
 
-  private onTickTimerFired(): void {
-    if (!this.runner || !this.runner.isRunning) {
+  private onTickTimerFired(setupGuid: string): void {
+    const runner = this.runners.get(setupGuid);
+    if (!runner || !runner.isRunning) {
       return;
     }
-    this.runner.tickTimer = undefined;
-    this.tickRound();
+    runner.tickTimer = undefined;
+    this.tickRound(setupGuid);
     const periodMs = this.computeTickIntervalMs(
-      this.getRunnerBpm(),
-      this.runner.setup,
+      this.getRunnerBpm(runner),
+      runner.setup,
     );
-    this.scheduleTickAt(Date.now() + periodMs);
+    this.scheduleTickAt(setupGuid, Date.now() + periodMs);
   }
 
-  private computeNextTickAtMsFromNow(): number {
-    if (!this.runner) {
+  private computeNextTickAtMsFromNow(setupGuid: string): number {
+    const runner = this.runners.get(setupGuid);
+    if (!runner) {
       return Date.now();
     }
     const periodMs = this.computeTickIntervalMs(
-      this.getRunnerBpm(),
-      this.runner.setup,
+      this.getRunnerBpm(runner),
+      runner.setup,
     );
     return Date.now() + periodMs;
   }
@@ -379,12 +422,18 @@ export class PulseManager {
   /**
    * Add an action GUID to the bucket assigned to a slot.
    */
-  addSlotAction(slotIdx: number, actionGuid: string): void {
-    if (!this.runner) {
+  addSlotAction(slotIdx: number, actionGuid: string, setupGuid?: string): void {
+    const guid = setupGuid ?? this.getActiveSetupGuid();
+    if (!guid) {
       Logger.warn('[pulse] addSlotAction called but no pulse is active');
       return;
     }
-    const bucket = this.bucketForSlot(this.runner.setup, slotIdx);
+    const runner = this.runners.get(guid);
+    if (!runner) {
+      Logger.warn('[pulse] addSlotAction called but no pulse runner exists');
+      return;
+    }
+    const bucket = this.bucketForSlot(runner.setup, slotIdx);
     if (!bucket) {
       return;
     }
@@ -401,12 +450,18 @@ export class PulseManager {
   /**
    * Remove an action GUID from the bucket assigned to a slot.
    */
-  removeSlotAction(slotIdx: number, actionGuid: string): void {
-    if (!this.runner) {
+  removeSlotAction(slotIdx: number, actionGuid: string, setupGuid?: string): void {
+    const guid = setupGuid ?? this.getActiveSetupGuid();
+    if (!guid) {
       Logger.warn('[pulse] removeSlotAction called but no pulse is active');
       return;
     }
-    const bucket = this.bucketForSlot(this.runner.setup, slotIdx);
+    const runner = this.runners.get(guid);
+    if (!runner) {
+      Logger.warn('[pulse] removeSlotAction called but no pulse runner exists');
+      return;
+    }
+    const bucket = this.bucketForSlot(runner.setup, slotIdx);
     if (!bucket) {
       return;
     }
@@ -422,44 +477,45 @@ export class PulseManager {
   }
 
   /** Play / restart: fire current slot once, then schedule next tick from current BPM. */
-  private scheduleNextTick(): void {
-    if (!this.runner || !this.runner.isRunning) {
+  private scheduleNextTick(setupGuid: string): void {
+    const runner = this.runners.get(setupGuid);
+    if (!runner || !runner.isRunning) {
       return;
     }
 
-    this.stopTimer();
-    this.tickRound();
-    this.scheduleTickAt(this.computeNextTickAtMsFromNow());
+    this.stopTimerFor(setupGuid);
+    this.tickRound(setupGuid);
+    this.scheduleTickAt(setupGuid, this.computeNextTickAtMsFromNow(setupGuid));
   }
 
   /**
    * Execute one tick: dispatch all actions in the current slot's bucket, advance slot index.
    */
-  private tickRound(): void {
-    if (!this.runner || !this.runner.isRunning) {
+  private tickRound(setupGuid: string): void {
+    const runner = this.runners.get(setupGuid);
+    if (!runner || !runner.isRunning) {
       return;
     }
 
-    const setup = this.resolveActiveSetup();
+    const setup = this.resolveActiveSetup(setupGuid);
     if (!setup) {
       return;
     }
-    this.runner.setup = setup;
+    runner.setup = setup;
 
-    const slotIdx = this.runner.currentSlotIdx;
+    const slotIdx = runner.currentSlotIdx;
     const slot = setup.slots[slotIdx];
     if (slot?.active === true) {
       const actionGuids = this.projectManager.getPulseSlotActionGuids(setup, slotIdx);
       for (const actionGuid of actionGuids) {
-        this.dispatchActionItem(actionGuid);
+        this.dispatchActionItem(actionGuid, setupGuid);
       }
     }
 
-    this.broadcastPulseStatus('started', slotIdx);
+    this.broadcastPulseStatus(setupGuid, 'started', slotIdx);
 
-    const slotsTotal = setup.slots.length;
-    this.runner.currentSlotIdx = this.advanceSlotIdx(setup, slotIdx);
-    this.runner.msIntoCurrentTick = 0;
+    runner.currentSlotIdx = this.advanceSlotIdx(setup, slotIdx);
+    runner.msIntoCurrentTick = 0;
   }
 
   private resolveSlotAdvanceMode(setup: PulseSetup): PulseSlotMode {
@@ -503,20 +559,29 @@ export class PulseManager {
   /**
    * Dispatch a single action by GUID via the registered callback.
    */
-  private dispatchActionItem(actionGuid: string): void {
+  private dispatchActionItem(actionGuid: string, setupGuid: string): void {
     if (!this.onTriggerAction) {
       Logger.warn(`[pulse] action trigger callback not set; action ${actionGuid} cannot fire`);
       return;
     }
     this.onTriggerAction(actionGuid);
-    Logger.debug(`[pulse] triggered action ${actionGuid} from slot ${this.runner?.currentSlotIdx ?? '?'}`);
+    const runner = this.runners.get(setupGuid);
+    Logger.debug(`[pulse] triggered action ${actionGuid} from slot ${runner?.currentSlotIdx ?? '?'}`);
   }
 
-  private broadcastPulseStatus(status: 'started' | 'stopped', slotIdx: number): void {
-    if (!this.hubStatus || !this.runner) return;
-    const setupGuid = this.runner.setup.guid ?? '';
-    if (!setupGuid) return;
-    const payload = this.buildPulseStatusPayload(setupGuid, status, slotIdx);
+  private broadcastPulseStatus(
+    setupGuid: string,
+    status: 'started' | 'stopped',
+    slotIdx: number,
+  ): void {
+    if (!this.hubStatus) return;
+    const runner = this.runners.get(setupGuid);
+    const payload = this.buildPulseStatusPayload(
+      setupGuid,
+      status,
+      slotIdx,
+      runner,
+    );
     this.hubStatus.broadcastPulseStatus(payload);
   }
 
@@ -524,10 +589,11 @@ export class PulseManager {
     setupGuid: string,
     status: 'started' | 'stopped',
     slotIdx: number,
+    runner?: ActivePulseRunner,
   ): HubStatusPulsePayload {
-    const setup = this.runner?.setup ?? this.projectManager.getPulseSetup(setupGuid);
-    const bpm = this.runner?.setup.guid === setupGuid
-      ? this.getRunnerBpm()
+    const setup = runner?.setup ?? this.projectManager.getPulseSetup(setupGuid);
+    const bpm = runner?.setup.guid === setupGuid
+      ? (runner ? this.getRunnerBpm(runner) : (setup?.bpm ?? 120))
       : (setup?.bpm ?? 120);
     const speed = resolvePulseSetupSpeed(setup);
     const bpmLabel = Number.isFinite(bpm) ? bpm.toFixed(1) : '120.0';
@@ -580,20 +646,49 @@ export class PulseManager {
   }
 
   /**
-   * Query active pulse setup guid, or undefined if none.
+   * Drop a setup runner (e.g. after delete). Stops ticking if needed.
    */
-  getActiveSetupGuid(): string | undefined {
-    return this.runner?.setup.guid;
+  removeSetup(setupGuid: string): void {
+    if (this.runners.has(setupGuid)) {
+      this.stopSetup(setupGuid);
+      this.runners.delete(setupGuid);
+    }
   }
 
-  getLiveBpm(): number | undefined {
-    return this.runner?.liveBpm;
+  isSetupRunning(setupGuid: string): boolean {
+    return this.runners.get(setupGuid)?.isRunning ?? false;
   }
 
   /**
-   * Query whether the pulse is currently ticking.
+   * Query focused pulse setup guid (project `activePulseGuid`, else first running).
+   */
+  getActiveSetupGuid(): string | undefined {
+    const active = this.projectManager.getActivePulseGuid();
+    if (active && this.runners.has(active)) {
+      return active;
+    }
+    for (const [guid, runner] of this.runners) {
+      if (runner.isRunning) {
+        return guid;
+      }
+    }
+    return active;
+  }
+
+  getLiveBpm(setupGuid?: string): number | undefined {
+    const guid = setupGuid ?? this.getActiveSetupGuid();
+    if (!guid) return undefined;
+    const runner = this.runners.get(guid);
+    return runner?.liveBpm;
+  }
+
+  /**
+   * Query whether any pulse is currently ticking.
    */
   isRunning(): boolean {
-    return this.runner?.isRunning ?? false;
+    for (const runner of this.runners.values()) {
+      if (runner.isRunning) return true;
+    }
+    return false;
   }
 }

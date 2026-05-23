@@ -1,5 +1,5 @@
 /**
- * Perform → Pulse subpane: list pulse setups, select active pulse, edit setup/slots.
+ * Perform → Pulse subpane: list pulse setups with play / stop (`pulse:control` startSetup / stopSetup).
  */
 
 import { projectGraph } from '../core/projectGraph.js'
@@ -147,7 +147,6 @@ export function createPerformPulsePanel () {
     if (!guid) return
     const setup = projectGraph.getPulseSetup(guid)
     const status = getPulseSlotStatus(guid)
-    rowEl.classList.toggle('perform-pulse-row--active', status.isActive)
     const bpmEl = rowEl.querySelector('.perform-pulse-row__head .perform-pulse-row__bpm')
     if (bpmEl && setup) {
       bpmEl.textContent = `${formatPulseBpmDisplay(displayBpmForSetup(guid, setup))} bpm`
@@ -171,6 +170,24 @@ export function createPerformPulsePanel () {
         statusHost.appendChild(text)
       } else {
         statusHost.replaceChildren()
+      }
+    }
+    const toggle = rowEl.querySelector('.perform-pulse-toggle')
+    if (toggle) {
+      const playing = isPulseActive(guid)
+      const name =
+        rowEl.querySelector('.perform-pulse-row__name')?.textContent ?? guid
+      rowEl.classList.toggle('perform-pulse-row--active', playing)
+      toggle.classList.toggle('perform-pulse-toggle--stop', playing)
+      toggle.classList.toggle('perform-pulse-toggle--play', !playing)
+      if (playing) {
+        toggle.setAttribute('aria-label', `Stop pulse ${name}`)
+        toggle.setAttribute('aria-pressed', 'true')
+        toggle.textContent = '■'
+      } else {
+        toggle.setAttribute('aria-label', `Play pulse ${name}`)
+        toggle.setAttribute('aria-pressed', 'false')
+        toggle.textContent = '▶'
       }
     }
     const speedVal = rowEl.querySelector('.perform-pulse-row__speed-value')
@@ -302,23 +319,25 @@ export function createPerformPulsePanel () {
     speedWrap.appendChild(speedVal)
     speedWrap.appendChild(plusBtn)
 
-    const selectBtn = document.createElement('button')
-    selectBtn.type = 'button'
-    selectBtn.className = 'perform-pulse-select'
-    selectBtn.setAttribute('aria-label', `Select pulse ${name}`)
-    selectBtn.textContent = '▶'
-    selectBtn.addEventListener('pointerdown', event => {
+    const toggle = document.createElement('button')
+    toggle.type = 'button'
+    toggle.className = 'perform-pulse-toggle perform-pulse-toggle--play'
+    toggle.addEventListener('pointerdown', event => {
       event.preventDefault()
-      selectBtn.classList.add('perform-input--pressed')
-      sendPulseControlCommand({ command: 'selectSetup', setupGuid: guid })
+      toggle.classList.add('perform-input--pressed')
+      if (isPulseActive(guid)) {
+        sendPulseControlCommand({ command: 'stopSetup', setupGuid: guid })
+      } else {
+        sendPulseControlCommand({ command: 'startSetup', setupGuid: guid })
+      }
     })
-    selectBtn.addEventListener('pointerup', () => {
-      selectBtn.classList.remove('perform-input--pressed')
+    toggle.addEventListener('pointerup', () => {
+      toggle.classList.remove('perform-input--pressed')
     })
-    selectBtn.addEventListener('pointercancel', () => {
-      selectBtn.classList.remove('perform-input--pressed')
+    toggle.addEventListener('pointercancel', () => {
+      toggle.classList.remove('perform-input--pressed')
     })
-    selectBtn.addEventListener('click', event => {
+    toggle.addEventListener('click', event => {
       event.preventDefault()
       event.stopPropagation()
     })
@@ -326,7 +345,7 @@ export function createPerformPulsePanel () {
     el.appendChild(editBtn)
     el.appendChild(label)
     el.appendChild(speedWrap)
-    el.appendChild(selectBtn)
+    el.appendChild(toggle)
     syncRowState(el)
     return el
   }

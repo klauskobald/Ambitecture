@@ -849,7 +849,7 @@
   }
 }
 
-.perform-pulse-select,
+.perform-pulse-toggle,
 .perform-pulse-edit-btn {
   flex: 0 0 auto;
   width: 2.25rem;
@@ -868,11 +868,24 @@
   cursor: pointer;
 }
 
-.perform-pulse-select {
+.perform-pulse-toggle--play {
   padding-left: 0.2rem;
 }
 
-.perform-pulse-select:focus-visible,
+.perform-pulse-toggle--stop {
+  font-size: 0.75rem;
+  background: var(--color-accent-dim);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.perform-pulse-toggle.perform-input--pressed {
+  background: var(--color-accent-dim);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.perform-pulse-toggle:focus-visible,
 .perform-pulse-edit-btn:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;

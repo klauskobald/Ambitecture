@@ -17,6 +17,8 @@ const DEFAULT_SLOT_COUNT = 4;
 
 export type PulseControlCommand =
   | { command: 'selectSetup'; setupGuid: string }
+  | { command: 'startSetup'; setupGuid: string }
+  | { command: 'stopSetup'; setupGuid: string }
   | { command: 'createSetup'; name?: string; bpm?: number; slotCount?: number }
   | { command: 'deleteSetup'; setupGuid: string }
   | { command: 'renameSetup'; setupGuid: string; name: string }
@@ -64,6 +66,8 @@ export class PulseSetupManager {
   build(command: PulseControlCommand): PulseControlResult {
     switch (command.command) {
       case 'selectSetup':
+      case 'startSetup':
+      case 'stopSetup':
         return { pulsesChanged: false, setupGuid: command.setupGuid };
       case 'createSetup':
         return this.createSetup(command.name, command.bpm, command.slotCount);

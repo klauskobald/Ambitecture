@@ -1,6 +1,6 @@
 import type { PulseSetup } from '../ProjectManager';
 
-const MIN_SPEED = 0.25;
+const MIN_SPEED = 1 / 128;
 const MAX_SPEED = 4;
 
 export function clampPulseSetupSpeed(value: number): number {

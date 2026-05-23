@@ -20,8 +20,8 @@ export function clampPulseBpm (bpm) {
   return Math.min(300, Math.max(20, bpm))
 }
 
-const PULSE_SPEED_MIN = 0.25
-const PULSE_SPEED_MAX = 4
+export const PULSE_SPEED_MIN = 1 / 128
+export const PULSE_SPEED_MAX = 4
 
 /**
  * @param {number} speed
@@ -35,22 +35,29 @@ export function clampPulseSetupSpeed (speed) {
 }
 
 /**
+ * Speed is stepped in half/double → values are (approximately) powers of two.
+ * @param {number} s clamped speed
+ * @returns {number | null} exponent n where s ≈ 2^n
+ */
+function pulseSpeedPowerOfTwoExponent (s) {
+  if (s <= 0 || !Number.isFinite(s)) return null
+  const n = Math.round(Math.log2(s))
+  const candidate = 2 ** n
+  const relErr = Math.abs(s - candidate) / Math.max(s, candidate)
+  return relErr < 1e-5 ? n : null
+}
+
+/**
  * @param {number} speed
  * @returns {string}
  */
 export function formatPulseSpeedLabel (speed) {
   const s = clampPulseSetupSpeed(speed)
-  if (s === 0.25) {
-    return '1/4x'
-  }
-  if (s === 0.5) {
-    return '1/2x'
-  }
-  if (s === 1) {
-    return '1x'
-  }
-  if (Number.isInteger(s) && s >= 2 && s <= 4) {
-    return `${s}x`
+  const n = pulseSpeedPowerOfTwoExponent(s)
+  if (n !== null) {
+    if (n === 0) return '1x'
+    if (n < 0) return `1/${2 ** -n}x`
+    return `${2 ** n}x`
   }
   const t = Math.round(s * 1000) / 1000
   return `${t}x`

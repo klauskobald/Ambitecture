@@ -1,4 +1,5 @@
 import { intentGuid, fixtureId } from './stores.js'
+import { clampPulseSetupSpeed } from './pulseFormat.js'
 import {
   applyDotPathPatch,
   cloneAndDeleteAtDotPath,
@@ -2185,7 +2186,7 @@ function normalizePulsesConfig (data) {
           const speedRaw = row.speed
           const speed =
             typeof speedRaw === 'number' && Number.isFinite(speedRaw)
-              ? Math.min(4, Math.max(0.25, speedRaw))
+              ? clampPulseSetupSpeed(speedRaw)
               : 1
           const slots = Array.isArray(row.slots)
             ? row.slots.map(slot => {

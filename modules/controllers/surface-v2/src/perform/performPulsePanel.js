@@ -9,7 +9,13 @@ import {
   subscribePulsePlayState,
   isPulseActive
 } from '../core/pulsePlayRegistry.js'
-import { formatPulseBpmDisplay, clampPulseSetupSpeed, formatPulseSpeedLabel } from '../core/pulseFormat.js'
+import {
+  formatPulseBpmDisplay,
+  clampPulseSetupSpeed,
+  formatPulseSpeedLabel,
+  PULSE_SPEED_MIN,
+  PULSE_SPEED_MAX
+} from '../core/pulseFormat.js'
 import { createPulseEditPane } from './performPulseEditPane.js'
 import { createPerformPulseSyncColumn } from './performPulseSyncColumn.js'
 import { prompt as modalPrompt } from '../core/Modal.js'
@@ -201,10 +207,10 @@ export function createPerformPulsePanel () {
       const clamped = clampPulseSetupSpeed(sp)
       speedVal.textContent = formatPulseSpeedLabel(clamped)
       if (minusBtn instanceof HTMLButtonElement) {
-        minusBtn.disabled = clamped <= 0.25
+        minusBtn.disabled = clamped <= PULSE_SPEED_MIN
       }
       if (plusBtn instanceof HTMLButtonElement) {
-        plusBtn.disabled = clamped >= 4
+        plusBtn.disabled = clamped >= PULSE_SPEED_MAX
       }
     }
   }

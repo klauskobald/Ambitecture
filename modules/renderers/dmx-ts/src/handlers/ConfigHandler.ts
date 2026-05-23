@@ -22,6 +22,10 @@ export interface FixtureProfile {
     };
 }
 
+export interface FixtureTrim {
+    brightness?: number;
+}
+
 export interface ConfiguredFixture {
     name: string;
     fixtureProfile: FixtureProfile;
@@ -29,6 +33,8 @@ export interface ConfiguredFixture {
     range: number;
     /** Class-specific instance binding (e.g. `dmxBaseChannel` for DMX fixtures). */
     params: Record<string, unknown>;
+    /** Per-instance output calibration; omitted keys use renderer defaults. */
+    trim?: FixtureTrim;
     target?: [number, number, number];
     rotation?: [number, number, number];
     /** Resolved synchronously from `fixtureProfile.class` when config is applied. */
@@ -70,6 +76,18 @@ function isTuple6(v: unknown): v is [number, number, number, number, number, num
     );
 }
 
+function parseFixtureTrim(raw: unknown): FixtureTrim | undefined {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+        return undefined;
+    }
+    const o = raw as Record<string, unknown>;
+    const trim: FixtureTrim = {};
+    if (typeof o['brightness'] === 'number' && Number.isFinite(o['brightness'])) {
+        trim.brightness = o['brightness'];
+    }
+    return Object.keys(trim).length > 0 ? trim : undefined;
+}
+
 function parseConfiguredFixture(raw: unknown, zoneName: string): ConfiguredFixtureDraft | null {
     if (!raw || typeof raw !== 'object') {
         Logger.warn(`[config] invalid fixture entry in zone "${zoneName}"`);
@@ -109,6 +127,10 @@ function parseConfiguredFixture(raw: unknown, zoneName: string): ConfiguredFixtu
     }
     if (o['rotation'] !== undefined && isTuple3(o['rotation'])) {
         out.rotation = o['rotation'];
+    }
+    const trim = parseFixtureTrim(o['trim']);
+    if (trim !== undefined) {
+        out.trim = trim;
     }
     return out;
 }

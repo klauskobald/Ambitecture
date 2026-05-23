@@ -29,6 +29,14 @@ export abstract class DmxFixtureBase implements IFixtureClass {
         return null;
     }
 
+    protected getTrimBrightness(fixture: ConfiguredFixture): number {
+        const value = fixture.trim?.brightness;
+        if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+            return value;
+        }
+        return 1;
+    }
+
     protected writeFunction(
         fixture: ConfiguredFixture,
         functionName: string,

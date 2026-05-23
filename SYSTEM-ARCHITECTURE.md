@@ -653,7 +653,7 @@ Fixture profile `params` is class-specific (for example `screen` uses `params.al
 - Zone: `Zone 1`
 - Bound renderer: `rendererGUID: renderer-1234567890`
 - Fixture instance: references fixture profile `rgb_simple`
-- Fixture spatial data includes `location`, `target` (or `rotation`), and `range`; DMX binding uses `params.dmxBaseChannel`.
+- Fixture spatial data includes `location`, `target` (or `rotation`), and `range`; DMX binding uses `params.dmxBaseChannel`. Optional per-instance **`trim.brightness`** (default `1`) scales renderer output brightness (multiplied with master / dimmer).
 - Range falloff curve is configured under `params.rangeFunction` (or alias `params.rangeFn`), not a top-level fixture field.
 
 ### Default project loading and sync

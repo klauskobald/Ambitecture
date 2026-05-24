@@ -12,7 +12,10 @@ const DEFAULT_BEAT_ENGINE_OPTIONS = {
   initialBpm: 120,
   bpmMin: 60,
   bpmMax: 180,
-  bpmSmoothNewWeight: 0.2
+  bpmSmoothNewWeight: 0.2,
+  audioSilenceThreshold: 0.01,
+  silentBpm: 1,
+  silenceTimeoutSec: 10
 }
 
 function envTrimmed (key) {
@@ -48,6 +51,16 @@ function parseUnitInterval (key, fallback) {
   return value
 }
 
+function parseNonNegativeNumber (key, fallback) {
+  const raw = envTrimmed(key)
+  if (raw === undefined) return fallback
+  const value = Number(raw)
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`${key} must be a non-negative number (got "${raw}")`)
+  }
+  return value
+}
+
 /**
  * Beat/onset detection tuning from environment (optional).
  * @returns {BeatEngineOptions}
@@ -79,7 +92,19 @@ function loadBeatEngineConfig () {
     bpmMin,
     bpmMax,
     bpmSmoothNewWeight:
-      parseUnitInterval('BEAT_BPM_SMOOTH_NEW_WEIGHT', DEFAULT_BEAT_ENGINE_OPTIONS.bpmSmoothNewWeight)
+      parseUnitInterval('BEAT_BPM_SMOOTH_NEW_WEIGHT', DEFAULT_BEAT_ENGINE_OPTIONS.bpmSmoothNewWeight),
+    audioSilenceThreshold:
+      parseNonNegativeNumber(
+        'AUDIO_SILENCE_THRESHOLD',
+        DEFAULT_BEAT_ENGINE_OPTIONS.audioSilenceThreshold
+      ),
+    silentBpm:
+      parsePositiveNumber('BEAT_SILENT_BPM', DEFAULT_BEAT_ENGINE_OPTIONS.silentBpm),
+    silenceTimeoutSec:
+      parsePositiveNumber(
+        'AUDIO_SILENCE_TIMEOUT_SEC',
+        DEFAULT_BEAT_ENGINE_OPTIONS.silenceTimeoutSec
+      )
   }
 }
 

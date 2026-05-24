@@ -21,6 +21,10 @@ function roundBpm (n) {
   return Math.round(n * 10) / 10
 }
 
+function roundLevel (n) {
+  return Math.round(n * 100000) / 100000
+}
+
 function mean (arr) {
   if (arr.length === 0) return 0
   return arr.reduce((s, v) => s + v, 0) / arr.length
@@ -31,6 +35,15 @@ function stddev (arr) {
   const m = mean(arr)
   const variance = arr.reduce((s, v) => s + (v - m) ** 2, 0) / arr.length
   return Math.sqrt(variance)
+}
+
+function frameRms (frame) {
+  if (frame.length === 0) return 0
+  let sum = 0
+  for (let i = 0; i < frame.length; i++) {
+    sum += frame[i] * frame[i]
+  }
+  return Math.sqrt(sum / frame.length)
 }
 
 function pcm16BufferToFloat32 (pcmBytes) {
@@ -81,9 +94,22 @@ function createBeatEngine (handlers, optionOverrides = {}) {
   let lastOnsetAudioTimeSec = -Infinity
   let lastBpmUpdateTime = 0
   let beatsSinceLastSync = 0
+  let smoothedAudioLevel = 0
+  let lastFrameRms = 0
+  let isSilent = false
+  let belowThresholdSinceMs = null
+  let lastSilentSyncTime = 0
+  let lastAudioLevelReportTime = 0
 
   let recording = null
   let inputStream = null
+
+  const AUDIO_LEVEL_SMOOTHING = 0.92
+  const silenceTimeoutMs = cfg.silenceTimeoutSec * 1000
+
+  function syncBpm () {
+    return isSilent ? cfg.silentBpm : currentLiveBPM
+  }
 
   function beatPeriodSec () {
     return 60 / currentLiveBPM
@@ -99,11 +125,86 @@ function createBeatEngine (handlers, optionOverrides = {}) {
     handlers.onSync({
       t: Date.now(),
       audioT: roundSec(anchorAudioTimeSec),
-      bpm: roundBpm(currentLiveBPM),
+      bpm: roundBpm(syncBpm()),
       phaseAdjustMs: Math.round(phaseAdjustSec * 1000),
       reason
     })
     beatsSinceLastSync = 0
+  }
+
+  function enterSilentMode () {
+    isSilent = true
+    beatGridOriginSec = null
+    lastEmittedBeatIndex = -1
+    beatsSinceLastSync = 0
+    notifySync(audioTimeSec, 0, 'bar')
+    lastSilentSyncTime = Date.now()
+  }
+
+  function exitSilentMode () {
+    isSilent = false
+    belowThresholdSinceMs = null
+    beatGridOriginSec = null
+    lastEmittedBeatIndex = -1
+    beatsSinceLastSync = 0
+    lastOnsetAudioTimeSec = -Infinity
+  }
+
+  function belowThresholdDurationMs (now) {
+    if (belowThresholdSinceMs === null) return 0
+    return now - belowThresholdSinceMs
+  }
+
+  function reportAudioLevel () {
+    const now = Date.now()
+    handlers.onAudioLevel?.({
+      rms: roundLevel(lastFrameRms),
+      smoothed: roundLevel(smoothedAudioLevel),
+      threshold: cfg.audioSilenceThreshold,
+      silent: isSilent,
+      belowThresholdMs: belowThresholdDurationMs(now)
+    })
+    lastAudioLevelReportTime = now
+  }
+
+  function maybeReportAudioLevel () {
+    const now = Date.now()
+    if (now - lastAudioLevelReportTime < cfg.bpmUpdateIntervalMs) return
+    reportAudioLevel()
+  }
+
+  function updateSilenceState (frame) {
+    const rms = frameRms(frame)
+    const now = Date.now()
+    lastFrameRms = rms
+    smoothedAudioLevel =
+      smoothedAudioLevel * AUDIO_LEVEL_SMOOTHING + rms * (1 - AUDIO_LEVEL_SMOOTHING)
+
+    if (rms >= cfg.audioSilenceThreshold) {
+      belowThresholdSinceMs = null
+      if (isSilent) {
+        exitSilentMode()
+        reportAudioLevel()
+      }
+      return
+    }
+
+    if (belowThresholdSinceMs === null) {
+      belowThresholdSinceMs = now
+    }
+
+    if (!isSilent && belowThresholdDurationMs(now) >= silenceTimeoutMs) {
+      enterSilentMode()
+      reportAudioLevel()
+    }
+  }
+
+  function maybeNotifySilentSync () {
+    if (!isSilent) return
+    const now = Date.now()
+    if (now - lastSilentSyncTime < cfg.bpmUpdateIntervalMs) return
+    notifySync(audioTimeSec, 0, 'bar')
+    lastSilentSyncTime = now
   }
 
   function notifyBeat (beatAudioTimeSec, beatIndex, source) {
@@ -239,6 +340,14 @@ function createBeatEngine (handlers, optionOverrides = {}) {
   }
 
   function processAudioFrame (frame) {
+    updateSilenceState(frame)
+    if (isSilent) {
+      audioTimeSec += HOP_DURATION_SEC
+      maybeNotifySilentSync()
+      maybeReportAudioLevel()
+      return
+    }
+
     const features = Meyda.extract(['amplitudeSpectrum'], frame)
     if (!features) return
 
@@ -275,6 +384,8 @@ function createBeatEngine (handlers, optionOverrides = {}) {
       onBpmChanged(prevBpm)
       lastBpmUpdateTime = now
     }
+
+    maybeReportAudioLevel()
   }
 
   function start () {

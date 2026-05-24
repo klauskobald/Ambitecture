@@ -22,10 +22,15 @@ type ActivePulseRunner = {
  * Hub-side pulse orchestration. Each setup may run its own tick loop independently.
  * Slots reference buckets in `pulses.buckets`; tick interval uses `bpm * speed`.
  */
+/** Incoming `pulse:sync` BPM at or below this pauses ticking without stopping runners. */
+export const PULSE_SYNC_PAUSE_BPM_THRESHOLD = 10;
+
 export class PulseManager {
   private readonly runners = new Map<string, ActivePulseRunner>();
   /** Single lerped musical BPM from `pulse:sync` when project sync is enabled. */
   private syncSharedLiveBpm: number | undefined;
+  /** Timers cleared while sync BPM is at or below {@link PULSE_SYNC_PAUSE_BPM_THRESHOLD}. */
+  private syncPausedForLowBpm = false;
   private onTriggerAction?: (actionGuid: string) => void;
   private hubStatus?: HubStatusDispatcher;
 
@@ -120,6 +125,34 @@ export class PulseManager {
 
   getSyncSharedLiveBpm(): number | undefined {
     return this.syncSharedLiveBpm;
+  }
+
+  isSyncPausedForLowBpm(): boolean {
+    return this.syncPausedForLowBpm;
+  }
+
+  /**
+   * Pause ticking for all running setups (e.g. analyser silent BPM). Runners stay
+   * `isRunning`; no `hub:status` stopped broadcast.
+   */
+  pauseRunningForSyncLowBpm(): void {
+    if (this.syncPausedForLowBpm) {
+      return;
+    }
+    this.syncPausedForLowBpm = true;
+    for (const guid of this.getRunningSetupGuids()) {
+      this.stopTimerFor(guid);
+    }
+    Logger.info(
+      `[pulse] paused (sync BPM ≤ ${PULSE_SYNC_PAUSE_BPM_THRESHOLD}); runners kept active`,
+    );
+  }
+
+  /** @returns whether pause was active before clear. */
+  clearSyncPausedForLowBpm(): boolean {
+    const was = this.syncPausedForLowBpm;
+    this.syncPausedForLowBpm = false;
+    return was;
   }
 
   /** @returns {string[]} guids of setups currently ticking. */
@@ -499,7 +532,7 @@ export class PulseManager {
    */
   private scheduleTickAt(setupGuid: string, nextTickAtMs: number): void {
     const runner = this.runners.get(setupGuid);
-    if (!runner || !runner.isRunning) {
+    if (!runner || !runner.isRunning || this.syncPausedForLowBpm) {
       return;
     }
 

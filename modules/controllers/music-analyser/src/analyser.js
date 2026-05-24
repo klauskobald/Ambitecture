@@ -20,6 +20,11 @@ const engine = createBeatEngine(
     onBpm (event) {
       emitEvent({ type: 'bpm', ...event })
     },
+    onAudioLevel (level) {
+      console.error(
+        `rms=${level.rms} smoothed=${level.smoothed} threshold=${level.threshold} silent=${level.silent} belowMs=${level.belowThresholdMs}`
+      )
+    },
     onError (err) {
       console.error('Microphone stream error:', err)
       process.exit(1)

@@ -6,6 +6,14 @@ export type BeatSyncEvent = {
   reason: 'onset' | 'bar';
 };
 
+export type AudioLevelEvent = {
+  rms: number;
+  smoothed: number;
+  threshold: number;
+  silent: boolean;
+  belowThresholdMs: number;
+};
+
 export type BeatEngineOptions = {
   syncToleranceSec: number;
   onsetMinGapSec: number;
@@ -18,10 +26,17 @@ export type BeatEngineOptions = {
   bpmMin: number;
   bpmMax: number;
   bpmSmoothNewWeight: number;
+  /** RMS below this (0–1) treats input as silent. */
+  audioSilenceThreshold: number;
+  /** BPM sent on pulse:sync while input is below {@link audioSilenceThreshold}. */
+  silentBpm: number;
+  /** Seconds below threshold before entering silent mode. */
+  silenceTimeoutSec: number;
 };
 
 export type BeatEngineHandlers = {
   onSync: (event: BeatSyncEvent) => void;
+  onAudioLevel?: (event: AudioLevelEvent) => void;
   onBeat?: (event: {
     t: number;
     audioT: number;

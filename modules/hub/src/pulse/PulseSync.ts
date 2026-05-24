@@ -1,7 +1,7 @@
 import { Logger } from '../Logger';
 import { ProjectManager } from '../ProjectManager';
-import { PulseManager } from './PulseManager';
 import { PulseTapTempoConfig } from './PulseTapTempoConfig';
+import { PULSE_SYNC_PAUSE_BPM_THRESHOLD, PulseManager } from './PulseManager';
 import { parsePulseSyncProjectConfig } from './PulseSyncConfig';
 
 export type PulseSyncKind = 'onset' | 'bar';
@@ -44,6 +44,13 @@ export class PulseSync {
       return;
     }
 
+    if (payload.bpm < PULSE_SYNC_PAUSE_BPM_THRESHOLD) {
+      this.pulseManager.pauseRunningForSyncLowBpm();
+      return;
+    }
+
+    const resumeFromLowBpmPause = this.pulseManager.clearSyncPausedForLowBpm();
+
     if (payload.kind === 'onset') {
       const phaseMs = Math.abs(payload.phaseAdjustMs ?? Number.POSITIVE_INFINITY);
       if (phaseMs > ONSET_PHASE_RESCHEDULE_MAX_MS) {
@@ -76,6 +83,17 @@ export class PulseSync {
     const restartFromSlotZero =
       (syncProject.restart === 'bar' && payload.kind === 'bar')
       || (syncProject.restart === 'onset' && payload.kind === 'onset');
+
+    if (resumeFromLowBpmPause) {
+      this.pulseManager.applyAlignedSyncToAllRunning(
+        smoothedBpm,
+        beatAtHubMs,
+        SYNC_SCHEDULE_LEAD_MS,
+        restartFromSlotZero,
+      );
+      this.onPulsesBroadcast();
+      return;
+    }
 
     if (payload.kind === 'bar') {
       this.pulseManager.applyAlignedSyncToAllRunning(

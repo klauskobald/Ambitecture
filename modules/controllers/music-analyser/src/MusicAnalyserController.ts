@@ -1,5 +1,5 @@
 import { createBeatEngine } from './beatEngine';
-import type { BeatSyncEvent } from './beatEngine';
+import type { AudioLevelEvent, BeatSyncEvent } from './beatEngine';
 import { MusicAnalyserConfig } from './Config';
 import { GraphInitPayload, PulseSyncPayload, WsMessage } from './GraphProtocol';
 import { HubSocket } from './HubSocket';
@@ -106,6 +106,7 @@ export class MusicAnalyserController {
     this.beatEngine = createBeatEngine(
       {
         onSync: event => this.onBeatSync(event),
+        onAudioLevel: level => this.onAudioLevel(level),
         onError: err => this.logger.error('beat engine error', err),
       },
       beat,
@@ -113,6 +114,12 @@ export class MusicAnalyserController {
     this.beatEngine.start();
     this.logger.info(
       `beat engine listening (bpm ${beat.bpmMin}–${beat.bpmMax}, bar every ${beat.syncBarBeats} beats)`,
+    );
+  }
+
+  private onAudioLevel(level: AudioLevelEvent): void {
+    this.logger.info(
+      `audio rms=${level.rms} smoothed=${level.smoothed} threshold=${level.threshold} silent=${level.silent} belowMs=${level.belowThresholdMs}`,
     );
   }
 

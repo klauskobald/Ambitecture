@@ -1,4 +1,4 @@
-import { toHSL } from '../../core/color.js'
+import { toHSL, hslToRGB255, hslToXYY } from '../../core/color.js'
 
 const CANVAS_W = 320
 const CANVAS_H = 220
@@ -33,11 +33,16 @@ export const hslPalette = {
     canvas.style.touchAction = 'none'
     wrap.appendChild(canvas)
 
-    const labels = document.createElement('div')
-    labels.className = 'palette-hsl-labels'
-    labels.innerHTML =
-      '<span>0°</span><span>120°</span><span><em>H</em></span><span>240°</span><span>360°</span>'
-    wrap.appendChild(labels)
+    const values = document.createElement('div')
+    values.className = 'palette-hsl-values'
+    const hslLine = document.createElement('div')
+    hslLine.className = 'palette-hsl-values-line'
+    const rgbLine = document.createElement('div')
+    rgbLine.className = 'palette-hsl-values-line'
+    const xyyLine = document.createElement('div')
+    xyyLine.className = 'palette-hsl-values-line'
+    values.append(hslLine, rgbLine, xyyLine)
+    wrap.appendChild(values)
 
     container.appendChild(wrap)
 
@@ -78,6 +83,20 @@ export const hslPalette = {
     /** @type {number | null} */
     let dragPointerId = null
 
+    function formatHslComponent (n) {
+      return Number(n.toFixed(2)).toString()
+    }
+
+    function updateValueReadout () {
+      const { r, g, b } = hslToRGB255(currentH, currentS, currentL)
+      const { x, y, Y } = hslToXYY(currentH, currentS, currentL)
+      hslLine.textContent =
+        `H:${Math.round(currentH)} S:${formatHslComponent(currentS)} L:${formatHslComponent(currentL)}`
+      rgbLine.textContent = `R:${r} G:${g} B:${b}`
+      xyyLine.textContent =
+        `x:${x.toFixed(4)} y:${y.toFixed(4)} Y:${Y.toFixed(4)}`
+    }
+
     function drawCrosshair () {
       ctx.putImageData(img, 0, 0)
       const px = (currentH / 360) * (CANVAS_W - 1)
@@ -101,6 +120,7 @@ export const hslPalette = {
       ctx.arc(px, py, 7, 0, Math.PI * 2)
       ctx.stroke()
       ctx.restore()
+      updateValueReadout()
     }
 
     /**

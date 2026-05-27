@@ -157,3 +157,48 @@ function rgbToHSL (r, g, b) {
   }
   return { h: h * 360, s, l }
 }
+
+/**
+ * HSL → 8-bit sRGB channels.
+ * @param {number} h @param {number} s @param {number} l
+ * @returns {{ r: number, g: number, b: number }}
+ */
+export function hslToRGB255 (h, s, l) {
+  const { r, g, b } = hslToSRGB(h, s, l)
+  return {
+    r: Math.round(clamp01(r) * 255),
+    g: Math.round(clamp01(g) * 255),
+    b: Math.round(clamp01(b) * 255)
+  }
+}
+
+/**
+ * HSL → CIE xyY (D65), same path as hub/src/color.ts hslToXYY.
+ * @param {number} h @param {number} s @param {number} l
+ * @returns {{ x: number, y: number, Y: number }}
+ */
+export function hslToXYY (h, s, l) {
+  const { r, g, b } = hslToSRGB(h, s, l)
+  return sRGB01ToXYY(r, g, b)
+}
+
+/** @param {number} r @param {number} g @param {number} b  (sRGB 0-1) */
+function sRGB01ToXYY (r, g, b) {
+  const rLin = linearizeSRGBChannel(r * 255)
+  const gLin = linearizeSRGBChannel(g * 255)
+  const bLin = linearizeSRGBChannel(b * 255)
+  const X = 0.4124564 * rLin + 0.3575761 * gLin + 0.1804375 * bLin
+  const Y = 0.2126729 * rLin + 0.7151522 * gLin + 0.0721750 * bLin
+  const Z = 0.0193339 * rLin + 0.1191920 * gLin + 0.9503041 * bLin
+  const sum = X + Y + Z
+  const x = sum > 0 ? X / sum : 0.3127
+  const y = sum > 0 ? Y / sum : 0.3290
+  return { x, y, Y }
+}
+
+/** @param {number} c  (0-255) */
+function linearizeSRGBChannel (c) {
+  const normalized = c / 255
+  if (normalized <= 0.04045) return normalized / 12.92
+  return Math.pow((normalized + 0.055) / 1.055, 2.4)
+}

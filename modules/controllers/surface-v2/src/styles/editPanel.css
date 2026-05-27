@@ -313,17 +313,48 @@
 }
 
 .prop-color-inline .palette-hsl {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.65rem;
   width: 100%;
+  container-type: inline-size;
 }
 
 .prop-color-inline .palette-hsl-canvas {
   display: block;
+  flex: 0 0 auto;
   width: min(100%, calc(120px * 320 / 220));
   max-width: 100%;
   height: auto;
   max-height: 120px;
   aspect-ratio: 320 / 220;
   cursor: crosshair;
+}
+
+.prop-color-inline .palette-hsl-values {
+  flex: 1 1 auto;
+  min-width: 10.25rem;
+  margin-left: auto;
+  align-self: center;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.7rem;
+  line-height: 1.35;
+  color: var(--color-text-muted, rgba(255, 255, 255, 0.65));
+  letter-spacing: 0.02em;
+  text-align: right;
+}
+
+.prop-color-inline .palette-hsl-values-line {
+  white-space: nowrap;
+}
+
+@container (max-width: 19.5rem) {
+  .prop-color-inline .palette-hsl-values {
+    flex-basis: 100%;
+    margin-left: 0;
+    text-align: left;
+  }
 }
 
 /* ── Relative HSL sliders ────────────────────────────────────────────────── */

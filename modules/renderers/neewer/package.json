@@ -8,6 +8,8 @@
     "start": "ts-node src/index.ts",
     "dev": "node --watch --watch-path=src --require ts-node/register src/index.ts",
     "typecheck": "tsc --noEmit",
+    "test:neewer-hue": "ts-node tests/unit/neewerHue.test.ts",
+    "test:strobe": "ts-node tests/unit/strobeScheduler.test.ts",
     "discover": "ts-node scripts/discover.ts"
   },
   "dependencies": {

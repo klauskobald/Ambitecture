@@ -5,6 +5,7 @@ import { ConfigHandler, ConfiguredFixture, ConfiguredZone } from './ConfigHandle
 import { EventQueue } from '../EventQueue';
 import { FixtureIntentSnapshot, RendererEvent } from '../fixtures/IFixtureClass';
 import { FixtureSampleContext, LayerIntentEngine } from '../layerIntent/LayerIntentEngine';
+import { strobeRegistry } from '../StrobeRegistry';
 
 interface WsMessage {
     type: string;
@@ -38,6 +39,9 @@ export class EventsHandler {
     }
 
     reapplyCurrentIntents(): void {
+        // A fresh config may change strobe params or drop fixtures; tear every timer down and
+        // let applyAllFixtures re-arm the ones still strobing with their current config.
+        strobeRegistry.stopAll();
         const zones = this.configHandler.getZones();
         if (zones.length === 0) return;
         this.applyAllFixtures(zones);

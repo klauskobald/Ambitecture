@@ -68,18 +68,18 @@ export class StrobeScheduler {
 
     private enterOnPhase(): void {
         this.emit(this.hue, this.sat, this.bri);
-        this.timer = setTimeout(() => this.enterOffPhase(), this.config.onTime * 1000);
+        this.timer = setTimeout(() => this.enterOffPhase(), this.onMs());
     }
 
     private enterOffPhase(): void {
-        const offMs = this.periodMs() - this.config.onTime * 1000;
-        const neverGoesDark = offMs <= 0;
-        if (neverGoesDark) {
-            this.enterOnPhase();
-            return;
-        }
         this.emit(this.hue, this.sat, 0);
-        this.timer = setTimeout(() => this.enterOnPhase(), offMs);
+        this.timer = setTimeout(() => this.enterOnPhase(), this.periodMs() - this.onMs());
+    }
+
+    // The on flash is the configured onTime, but never more than half the period, so a
+    // high frequency (short period) still leaves an equal off phase instead of staying lit.
+    private onMs(): number {
+        return Math.min(this.config.onTime * 1000, this.periodMs() / 2);
     }
 
     private periodMs(): number {

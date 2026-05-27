@@ -45,45 +45,49 @@ try {
     const filled = parseStrobeConfig({ lowFrequency: 2 });
     assert(filled.highFrequency === 10 && filled.onTime === 0.02, 'missing strobe keys take defaults');
 
-    // strobeValue 0.5 → freq = 0.5 + 0.5*(10-0.5) = 5.25 Hz → period ≈ 190.48ms, on 100ms, off ≈ 90.48ms
     const config = { lowFrequency: 0.5, highFrequency: 10, onTime: 0.1 };
     const emits: Emit[] = [];
     const emit = (h: number, s: number, b: number): void => {
         emits.push([h, s, b]);
     };
 
-    const scheduler = new StrobeScheduler(config);
-    scheduler.update(200, 50, 80, 0.5, emit);
+    // strobeValue 0.2 → freq = 0.5 + 0.2*(10-0.5) = 2.4 Hz → period ≈ 416.7ms.
+    // onTime (100ms) < period/2 (208ms), so the flash keeps its configured length.
+    const slow = new StrobeScheduler(config);
+    slow.update(200, 50, 80, 0.2, emit);
 
     assert(emits.length === 1, 'first update emits the on-phase immediately');
     assert(emits[0]![2] === 80, 'on-phase emits full target brightness');
-    assertNear(nextDelay(), 100, 0.001, 'on-phase lasts onTime (0.1s)');
+    assertNear(nextDelay(), 100, 0.001, 'low frequency keeps the configured onTime flash');
 
     fire();
     assert(emits.length === 2, 'off-phase emits once');
     assert(emits[1]![2] === 0, 'off-phase multiplies brightness to 0');
-    assertNear(nextDelay(), 1000 / 5.25 - 100, 0.5, 'off-phase fills the rest of the period');
+    assertNear(nextDelay(), 1000 / 2.4 - 100, 0.5, 'off-phase fills the rest of the period');
 
     fire();
     assert(emits.length === 3 && emits[2]![2] === 80, 'cycle returns to on-phase at full brightness');
     assertNear(nextDelay(), 100, 0.001, 'on-phase delay is stable across cycles');
 
     // an intent update mid-cycle stores the new target without an extra emit
-    scheduler.update(120, 50, 80, 0.5, emit);
+    slow.update(120, 50, 80, 0.2, emit);
     assert(emits.length === 3, 'update while strobing does not emit out of phase');
     fire();
     assert(emits[3]![0] === 120, 'next phase uses the latest target hue');
 
-    scheduler.stop();
+    slow.stop();
     assert(pending === null, 'stop clears the armed timer');
 
-    // strobeValue 1 → freq 10 Hz → period 100ms == onTime → never goes dark, stays on
+    // strobeValue 1 → freq 10 Hz → period 100ms; onTime (100ms) is capped to half the period
+    // so the lamp flashes 50ms on / 50ms off instead of staying lit.
     const fast = new StrobeScheduler(config);
     const fastEmits: Emit[] = [];
     fast.update(0, 0, 90, 1, (h, s, b) => fastEmits.push([h, s, b]));
     assert(fastEmits.length === 1 && fastEmits[0]![2] === 90, 'fast strobe starts on');
+    assertNear(nextDelay(), 50, 0.001, 'on flash capped to half the period at max frequency');
     fire();
-    assert(fastEmits.length === 2 && fastEmits[1]![2] === 90, 'onTime ≥ period stays on (no dark frame)');
+    assert(fastEmits.length === 2 && fastEmits[1]![2] === 0, 'fast strobe still goes dark');
+    assertNear(nextDelay(), 50, 0.001, 'off phase is the other half of the period');
     fast.stop();
 
     console.log('strobeScheduler.test.ts: all passed');

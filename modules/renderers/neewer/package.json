@@ -1,0 +1,24 @@
+{
+  "name": "neewer-renderer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Neewer BLE light renderer for Ambitecture",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "ts-node src/index.ts",
+    "dev": "node --watch --watch-path=src --require ts-node/register src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "discover": "ts-node scripts/discover.ts"
+  },
+  "dependencies": {
+    "@stoprocent/noble": "^2.5.3",
+    "dotenv": "^16.0.0",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "@types/ws": "^8.5.14",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.3"
+  }
+}

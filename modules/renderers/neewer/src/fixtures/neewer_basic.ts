@@ -1,0 +1,28 @@
+import { Color, rgbToHsv01 } from '../color';
+import { NeewerBus } from '../NeewerBus';
+import { ConfiguredFixture } from '../handlers/ConfigHandler';
+import { FixtureIntentSnapshot } from './IFixtureClass';
+import { NeewerLightBase } from './NeewerLightBase';
+import { FixtureSampleContext } from '../layerIntent/LayerIntentEngine';
+
+class NeewerBasic extends NeewerLightBase {
+    applyIntentSnapshot(
+        fixture: ConfiguredFixture,
+        _context: FixtureSampleContext,
+        snapshot: FixtureIntentSnapshot,
+        bus: NeewerBus
+    ): void {
+        const masterBrightness = snapshot.sample<number>('master.brightness') ?? 1;
+        const masterBlackout = snapshot.sample<boolean>('master.blackout') ?? false;
+        const trimBrightness = this.getTrimBrightness(fixture);
+        const color = snapshot.sample<Color>('light.color.xyY', true) ?? Color.black();
+
+        const { r, g, b } = color.toRGB();
+        const scale = (masterBlackout ? 0 : 1) * Math.max(0, Math.min(1, masterBrightness)) * trimBrightness;
+        const { h, s, v } = rgbToHsv01(r * scale, g * scale, b * scale);
+
+        this.sendHsv(fixture, bus, h, s, v);
+    }
+}
+
+export default new NeewerBasic();

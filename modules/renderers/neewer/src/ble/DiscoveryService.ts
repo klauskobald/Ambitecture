@@ -69,7 +69,7 @@ export class DiscoveryService {
         try {
             await this.bus.stopScan();
             await this.bus.startScan((p) => this.onDiscover(p));
-            Logger.debug('[discovery] scan cycled');
+            // Logger.debug('[discovery] scan cycled');
         } catch (err) {
             Logger.warn('[discovery] failed to cycle scan', err);
         }

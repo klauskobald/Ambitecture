@@ -7,9 +7,6 @@ mounts:
   simulator-2d:
     root: ../renderers/simulator-2d
 
-  surface-v1:
-    root: ../controllers/surface-v1
-
   surface-v2:
     root: ../controllers/surface-v2
 

@@ -116,7 +116,7 @@ npm run dev
 
 Renderer settings come from environment variables (examples):
 
-- `AMBITECTURE_HUB_URL` (default `http://localhost:3000`, converted to `ws://...`)
+- `AMBITECTURE_HUB_URL` (default `http://localhost:2612`, converted to `ws://...`)
 - `GUID`
 - `GEO_LOCATION`
 - `BOUNDING_BOX`

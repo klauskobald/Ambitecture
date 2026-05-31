@@ -1,4 +1,4 @@
-LISTEN_PORT: 3000
+LISTEN_PORT: 2612
 LISTEN_HOST: 0.0.0.0
 
 projectsPath: ../../var/projects

@@ -1,4 +1,4 @@
-host: klausmacbookm4.local:3000
+host: klausmacbookm4.local:2612
 
 testParams:
   001-blinker.ts:

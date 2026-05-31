@@ -2,7 +2,7 @@ import 'dotenv/config';
 
 export class Config {
     static get hubWsUrl(): string {
-        const url = process.env['AMBITECTURE_HUB_URL'] ?? 'http://localhost:3000';
+        const url = process.env['AMBITECTURE_HUB_URL'] ?? 'http://localhost:2612';
         return url.replace(/^http/, 'ws');
     }
     static get guid(): string { return process.env['GUID'] ?? 'renderer-unknown'; }

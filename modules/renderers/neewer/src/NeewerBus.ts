@@ -1,12 +1,13 @@
 import { Logger } from './Logger';
-import { BleBus, BleConnection } from './ble/BleBus';
+import { BleBus, BleConnection, DiscoveredPeripheral } from './ble/BleBus';
+import { peripheralMatchesAddress } from './ble/bleLookup';
 import { DiscoveryService } from './ble/DiscoveryService';
 import { SERVICE_UUID, WRITE_UUID, NOTIFY_UUID } from './ble/NeewerProtocol';
 import type { ConfiguredFixture } from './handlers/ConfigHandler';
 
 interface FixtureBinding {
     fixture: ConfiguredFixture;
-    bluetoothId: string;
+    bluetoothAddress: string;
     connection: BleConnection | null;
     connecting: boolean;
     nextRetryAt: number;
@@ -32,20 +33,20 @@ export class NeewerBus {
         this.bus = bus;
         this.discovery = discovery;
         this.options = options;
-        this.discovery.onDiscovered((p) => this.onPeripheralSeen(p.id));
+        this.discovery.onDiscovered((p) => this.onPeripheralSeen(p));
     }
 
-    registerFixture(fixture: ConfiguredFixture, bluetoothId: string): void {
+    registerFixture(fixture: ConfiguredFixture, bluetoothAddress: string): void {
         const key = this.bindingKey(fixture);
         const existing = this.bindings.get(key);
         if (existing) {
             existing.fixture = fixture;
-            existing.bluetoothId = bluetoothId;
+            existing.bluetoothAddress = bluetoothAddress;
             return;
         }
         this.bindings.set(key, {
             fixture,
-            bluetoothId,
+            bluetoothAddress,
             connection: null,
             connecting: false,
             nextRetryAt: 0,
@@ -55,7 +56,7 @@ export class NeewerBus {
             offlineLogged: false,
         });
 
-        if (this.discovery.getPeripheral(bluetoothId)) {
+        if (this.discovery.resolveNobleId(bluetoothAddress) !== undefined) {
             void this.tryConnect(key);
         }
     }
@@ -79,7 +80,7 @@ export class NeewerBus {
                 Logger.warn(`[neewer] "${fixture.name}" is offline — dropping writes until reconnect`);
                 binding.offlineLogged = true;
             }
-            if (binding.nextRetryAt <= Date.now() && !binding.connecting && this.discovery.getPeripheral(binding.bluetoothId)) {
+            if (binding.nextRetryAt <= Date.now() && !binding.connecting && this.discovery.resolveNobleId(binding.bluetoothAddress) !== undefined) {
                 void this.tryConnect(key);
             }
             return;
@@ -99,9 +100,13 @@ export class NeewerBus {
         }
     }
 
-    private onPeripheralSeen(id: string): void {
+    private onPeripheralSeen(peripheral: DiscoveredPeripheral): void {
         for (const [key, binding] of this.bindings) {
-            if (binding.bluetoothId === id && !binding.connection && !binding.connecting) {
+            if (
+                peripheralMatchesAddress(peripheral, binding.bluetoothAddress) &&
+                !binding.connection &&
+                !binding.connecting
+            ) {
                 void this.tryConnect(key);
             }
         }
@@ -112,10 +117,13 @@ export class NeewerBus {
         if (!binding || binding.connecting || binding.connection) return;
         if (Date.now() < binding.nextRetryAt) return;
 
+        const nobleId = this.discovery.resolveNobleId(binding.bluetoothAddress);
+        if (nobleId === undefined) return;
+
         binding.connecting = true;
-        Logger.info(`[neewer] connecting "${binding.fixture.name}" id=${binding.bluetoothId}`);
+        Logger.info(`[neewer] connecting "${binding.fixture.name}" id=${nobleId}`);
         try {
-            const connection = await this.bus.connect(binding.bluetoothId, SERVICE_UUID, [WRITE_UUID, NOTIFY_UUID]);
+            const connection = await this.bus.connect(nobleId, SERVICE_UUID, [WRITE_UUID, NOTIFY_UUID]);
             connection.onDisconnect(() => this.onDisconnected(key));
             try {
                 await connection.subscribeAsync(NOTIFY_UUID, (data) => {

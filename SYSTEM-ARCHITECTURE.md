@@ -656,6 +656,7 @@ A channel under `params.channels` may carry a **`function`** describing hardware
 
 - **Brightness (0–100 %, normalised to [0,1] for the curve):** named **`FnCurve`** entries (e.g. `cubic`, `quadratic`) — e.g. `var/fixtures/neewer.yml` `channels.brightness.function: cubic` because Neewer lamps reach near-full perceived output well below 100 % input; the `neewer` renderer applies this in `NeewerLightBase.curveBrightness` via `FnCurve.evaluate`.
 - **Hue (0–360°, neewer renderer only):** renderer-specific maps, not `FnCurve` — e.g. `channels.hue.function: neewerHue` bends perceptual hue around yellow (perceptual 60° → device 48°) before BLE HSV send (`neewerHue.ts`, `NeewerLightBase.curveHue`). Used because cheap RGB-LED HSV firmware compresses the yellow/green region of the hue wheel.
+- **Neewer BLE identity (project fixture instance, not profile):** each Neewer fixture in the project YAML must set `params.bluetoothAddress` to the lamp’s BLE MAC (e.g. `ca:25:a6:0d:57:3d`). The `neewer` renderer resolves that portable address to the OS-specific noble `peripheral.id` at connect time (`modules/renderers/neewer`, `npm run discover` in that module). macOS noble UUIDs are not used in project data.
 
 ### Demo project definition
 

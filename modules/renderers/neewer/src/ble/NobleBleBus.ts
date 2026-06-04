@@ -79,7 +79,12 @@ export class NobleBleBus implements BleBus {
         noble.on('discover', (peripheral: Peripheral) => {
             this.peripheralsById.set(peripheral.id, peripheral);
             const name = peripheral.advertisement?.localName;
-            onDiscover({ id: peripheral.id, name, rssi: peripheral.rssi });
+            onDiscover({
+                id: peripheral.id,
+                address: peripheral.address,
+                name,
+                rssi: peripheral.rssi,
+            });
         });
         await noble.startScanningAsync([], true);
         this.scanning = true;

@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test:neewer-hue": "ts-node tests/unit/neewerHue.test.ts",
     "test:strobe": "ts-node tests/unit/strobeScheduler.test.ts",
+    "test:ble-lookup": "ts-node tests/unit/bleLookup.test.ts",
     "discover": "ts-node scripts/discover.ts"
   },
   "dependencies": {

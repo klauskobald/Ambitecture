@@ -19,9 +19,15 @@ async function main(): Promise<void> {
         Logger.warn('[discover] no Neewer-looking peripherals were seen');
         Logger.warn('         make sure each light is powered on and not connected to the Neewer app');
     } else {
-        Logger.info(`[discover] ${found.length} peripheral(s):`);
+        Logger.info(`[discover] ${found.length} peripheral(s) — copy bluetoothAddress into project fixture params:`);
         for (const p of found) {
-            console.log(`  ${p.name ?? '(no name)'.padEnd(20)}  id=${p.id}  rssi=${p.rssi}`);
+            const addr = p.address;
+            if (addr === undefined) {
+                Logger.warn(`  ${p.name ?? '(no name)'}: no BLE address reported (rssi=${p.rssi})`);
+                continue;
+            }
+            console.log(`  ${p.name ?? '(no name)'}:`);
+            console.log(`    bluetoothAddress: ${addr}`);
         }
     }
 }

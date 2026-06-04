@@ -1,5 +1,6 @@
 export interface DiscoveredPeripheral {
     id: string;
+    address: string | undefined;
     name: string | undefined;
     rssi: number;
 }

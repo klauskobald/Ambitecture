@@ -1,5 +1,6 @@
 import { Logger } from '../Logger';
 import { BleBus, DiscoveredPeripheral } from './BleBus';
+import { resolveNobleIdForAddress } from './bleLookup';
 import { looksLikeNeewer } from './NeewerProtocol';
 
 interface RegistryEntry {
@@ -43,8 +44,8 @@ export class DiscoveryService {
         this.listeners.push(cb);
     }
 
-    getPeripheral(id: string): DiscoveredPeripheral | undefined {
-        return this.registry.get(id)?.peripheral;
+    resolveNobleId(bluetoothAddress: string): string | undefined {
+        return resolveNobleIdForAddress(bluetoothAddress, this.listKnown());
     }
 
     listKnown(): DiscoveredPeripheral[] {
@@ -59,7 +60,8 @@ export class DiscoveryService {
         this.registry.set(p.id, { peripheral: p, lastSeenAt: Date.now() });
 
         if (isNew) {
-            Logger.info(`[discovery] found ${p.name} id=${p.id} rssi=${p.rssi}`);
+            const addr = p.address ?? p.id;
+            Logger.info(`[discovery] found ${p.name} address=${addr} rssi=${p.rssi}`);
             for (const cb of this.listeners) cb(p);
         }
     }

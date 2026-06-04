@@ -1,5 +1,6 @@
 import WebSocket from 'ws';
 import { Logger } from '../Logger';
+import { normalizeBleAddress } from '../ble/bleLookup';
 import { NeewerBus } from '../NeewerBus';
 import type { IFixtureClass } from '../fixtures/IFixtureClass';
 
@@ -214,12 +215,20 @@ export class ConfigHandler {
         this.neewerBus.clearFixtures();
         for (const zone of this.zones) {
             for (const fixture of zone.fixtures) {
-                const bluetoothId = fixture.params['bluetoothId'];
-                if (typeof bluetoothId !== 'string' || bluetoothId.length === 0) {
-                    Logger.warn(`[config] fixture "${fixture.name}" missing params.bluetoothId — will not be driven`);
+                const bluetoothAddress = fixture.params['bluetoothAddress'];
+                if (typeof bluetoothAddress !== 'string' || bluetoothAddress.length === 0) {
+                    Logger.warn(
+                        `[config] fixture "${fixture.name}" missing params.bluetoothAddress — will not be driven`,
+                    );
                     continue;
                 }
-                this.neewerBus.registerFixture(fixture, bluetoothId);
+                if (normalizeBleAddress(bluetoothAddress).length !== 12) {
+                    Logger.warn(
+                        `[config] fixture "${fixture.name}" params.bluetoothAddress must be a BLE MAC (e.g. ca:25:a6:0d:57:3d) — will not be driven`,
+                    );
+                    continue;
+                }
+                this.neewerBus.registerFixture(fixture, bluetoothAddress);
             }
         }
 

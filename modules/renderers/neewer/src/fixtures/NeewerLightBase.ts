@@ -25,10 +25,7 @@ export abstract class NeewerLightBase implements IFixtureClass {
     }
 
     protected sendHsv(fixture: ConfiguredFixture, bus: NeewerBus, hue: number, sat: number, bri: number): void {
-        void bus.send(
-            fixture,
-            NeewerProtocol.hsv(this.curveHue(fixture, hue), sat, this.curveBrightness(fixture, bri))
-        );
+        bus.setHsv(fixture, this.curveHue(fixture, hue), sat, this.curveBrightness(fixture, bri));
     }
 
     // Strobe is simulated by gating brightness on a timer (the lamp has no strobe channel).

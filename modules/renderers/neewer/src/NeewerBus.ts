@@ -2,8 +2,14 @@ import { Logger } from './Logger';
 import { BleBus, BleConnection, DiscoveredPeripheral } from './ble/BleBus';
 import { peripheralMatchesAddress } from './ble/bleLookup';
 import { DiscoveryService } from './ble/DiscoveryService';
-import { SERVICE_UUID, WRITE_UUID, NOTIFY_UUID } from './ble/NeewerProtocol';
+import { SERVICE_UUID, WRITE_UUID, NOTIFY_UUID, hsv } from './ble/NeewerProtocol';
 import type { ConfiguredFixture } from './handlers/ConfigHandler';
+
+interface HsvColor {
+    h: number;
+    s: number;
+    v: number;
+}
 
 interface FixtureBinding {
     fixture: ConfiguredFixture;
@@ -15,12 +21,19 @@ interface FixtureBinding {
     lastSentHex: string | null;
     lastSentAt: number;
     offlineLogged: boolean;
+    desiredHsv: HsvColor | null;
+    lastSentHsv: HsvColor | null;
+    frameTimer: ReturnType<typeof setTimeout> | null;
 }
 
 export interface NeewerBusOptions {
     connectRetryInitialMs: number;
     connectRetryMaxMs: number;
     writeMinIntervalMs: number;
+}
+
+function hsvEqual(a: HsvColor, b: HsvColor): boolean {
+    return a.h === b.h && a.s === b.s && a.v === b.v;
 }
 
 export class NeewerBus {
@@ -54,6 +67,9 @@ export class NeewerBus {
             lastSentHex: null,
             lastSentAt: 0,
             offlineLogged: false,
+            desiredHsv: null,
+            lastSentHsv: null,
+            frameTimer: null,
         });
 
         if (this.discovery.resolveNobleId(bluetoothAddress) !== undefined) {
@@ -63,11 +79,21 @@ export class NeewerBus {
 
     clearFixtures(): void {
         for (const binding of this.bindings.values()) {
+            this.clearColorState(binding);
             if (binding.connection) {
                 void binding.connection.disconnectAsync().catch(() => undefined);
             }
         }
         this.bindings.clear();
+    }
+
+    setHsv(fixture: ConfiguredFixture, h: number, s: number, v: number): void {
+        const key = this.bindingKey(fixture);
+        const binding = this.bindings.get(key);
+        if (!binding) return;
+
+        binding.desiredHsv = { h, s, v };
+        void this.trySendColor(key);
     }
 
     async send(fixture: ConfiguredFixture, packet: Buffer): Promise<void> {
@@ -98,6 +124,66 @@ export class NeewerBus {
         } catch (err) {
             Logger.warn(`[neewer] write failed on "${fixture.name}"`, err);
         }
+    }
+
+    private async trySendColor(key: string): Promise<void> {
+        const binding = this.bindings.get(key);
+        if (!binding || binding.desiredHsv === null) return;
+
+        const fixture = binding.fixture;
+        if (!binding.connection || binding.connection.state !== 'connected') {
+            if (!binding.offlineLogged) {
+                Logger.warn(`[neewer] "${fixture.name}" is offline — dropping writes until reconnect`);
+                binding.offlineLogged = true;
+            }
+            if (binding.nextRetryAt <= Date.now() && !binding.connecting && this.discovery.resolveNobleId(binding.bluetoothAddress) !== undefined) {
+                void this.tryConnect(key);
+            }
+            return;
+        }
+
+        const desired = binding.desiredHsv;
+        if (binding.lastSentHsv !== null && hsvEqual(desired, binding.lastSentHsv)) {
+            return;
+        }
+
+        const now = Date.now();
+        const elapsed = now - binding.lastSentAt;
+        if (elapsed < this.options.writeMinIntervalMs) {
+            if (binding.frameTimer === null) {
+                const delay = this.options.writeMinIntervalMs - elapsed;
+                binding.frameTimer = setTimeout(() => {
+                    binding.frameTimer = null;
+                    void this.trySendColor(key);
+                }, delay);
+            }
+            return;
+        }
+
+        const packet = hsv(desired.h, desired.s, desired.v);
+        const hex = packet.toString('hex');
+        if (hex === binding.lastSentHex) {
+            binding.lastSentHsv = { ...desired };
+            return;
+        }
+
+        try {
+            await binding.connection.writeAsync(WRITE_UUID, packet, true);
+            binding.lastSentHex = hex;
+            binding.lastSentAt = now;
+            binding.lastSentHsv = { ...desired };
+        } catch (err) {
+            Logger.warn(`[neewer] write failed on "${fixture.name}"`, err);
+        }
+    }
+
+    private clearColorState(binding: FixtureBinding): void {
+        if (binding.frameTimer !== null) {
+            clearTimeout(binding.frameTimer);
+            binding.frameTimer = null;
+        }
+        binding.desiredHsv = null;
+        binding.lastSentHsv = null;
     }
 
     private onPeripheralSeen(peripheral: DiscoveredPeripheral): void {
@@ -136,6 +222,7 @@ export class NeewerBus {
             binding.backoffMs = this.options.connectRetryInitialMs;
             binding.offlineLogged = false;
             Logger.info(`[neewer] connected "${binding.fixture.name}"`);
+            void this.trySendColor(key);
         } catch (err) {
             const next = Math.min(binding.backoffMs * 2, this.options.connectRetryMaxMs);
             binding.nextRetryAt = Date.now() + binding.backoffMs;
@@ -154,6 +241,7 @@ export class NeewerBus {
         binding.nextRetryAt = Date.now() + this.options.connectRetryInitialMs;
         binding.backoffMs = this.options.connectRetryInitialMs;
         binding.lastSentHex = null;
+        this.clearColorState(binding);
     }
 
     private bindingKey(fixture: ConfiguredFixture): string {

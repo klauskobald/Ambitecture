@@ -15,6 +15,8 @@ export class SliderControl extends PropertyControl {
     this._wasDeltaMode = false
     /** @type {Map<string, number> | null} frozen property values at drag start for delta multi-select */
     this._deltaBaseline = null
+    /** Ignore hub/graph refresh of thumb position while pointer is down on the track. */
+    this._pointerHeld = false
   }
 
   destroy () {
@@ -36,8 +38,8 @@ export class SliderControl extends PropertyControl {
       bubbleCharWidth,
       onInput: (v) => this._onScalarInput(v),
       onCommit: () => this._saveProject(),
-      onDragStart: () => this._captureDeltaBaseline(),
-      onDragEnd: () => { this._deltaBaseline = null }
+      onDragStart: () => this._onScalarDragStart(),
+      onDragEnd: () => this._onScalarDragEnd()
     })
     this._scalar.mount(area)
   }
@@ -46,7 +48,7 @@ export class SliderControl extends PropertyControl {
    * @param {{ mode: 'same'|'mixed'|'absent', value: unknown, enableState: string, selectionSize: number }} state
    */
   _applyState (state) {
-    if (!this._scalar) return
+    if (!this._scalar || this._pointerHeld) return
 
     this._isDelta = state.mode === 'mixed' && state.selectionSize > 1
 
@@ -158,6 +160,19 @@ export class SliderControl extends PropertyControl {
       const original = baseline !== null ? (baseline.get(guid) ?? fromGraph) : fromGraph
       const newVal = applyDelta(original, deltaVal, fn, pMin, pMax)
       this._updateProperty(guid, dotKey, newVal)
+    }
+  }
+
+  _onScalarDragStart () {
+    this._pointerHeld = true
+    this._captureDeltaBaseline()
+  }
+
+  _onScalarDragEnd () {
+    this._deltaBaseline = null
+    this._pointerHeld = false
+    if (this._currentGuids.size > 0) {
+      this.refresh(this._currentGuids)
     }
   }
 

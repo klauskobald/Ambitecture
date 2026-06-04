@@ -18,78 +18,20 @@
 #     mode:    1 = Full Install (wipe first)
 #              2 = Install (apt update/upgrade + update apps)
 #              3 = Update Apps (deploy code + npm install + restart)  [default]
-#     envflag: y = patch & transfer module .env files
-#              n = leave existing .env on the Pi untouched            [default]
+#     envflag: y = include .env + web config.json in the overwrite prompt (if present on Pi)
+#              n = never push .env / config.json [default]
+#   Modes 2/3: before deploy, lists var/ + (optional) host-config paths that would change the
+#   Pi; enter space-separated numbers to allow overwrite (default none). var/ is never bulk-synced.
 #
-# Target host / SSH user come from the repo-root .env (RASPBERRY_SSH, RASPBERRY_HOST).
+# Target host / SSH: install/config.sh (RASPBERRY_SSH, RASPBERRY_HOST only).
 
 set -euo pipefail
 
-# ----------------------------------------------------------------------------------------
-# Paths & config
-# ----------------------------------------------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-
-if [[ ! -f "$REPO_ROOT/.env" ]]; then
-  echo "ERROR: repo-root .env not found at $REPO_ROOT/.env (needs RASPBERRY_SSH / RASPBERRY_HOST)" >&2
-  exit 1
-fi
-
-# Load only the keys we need from the root .env (tolerate quotes / comments).
-get_env() { grep -E "^$1=" "$REPO_ROOT/.env" | head -1 | cut -d= -f2- | tr -d "\"'" | xargs; }
-RASPBERRY_SSH="$(get_env RASPBERRY_SSH)"
-RASPBERRY_HOST="$(get_env RASPBERRY_HOST)"
-
-if [[ -z "$RASPBERRY_SSH" || -z "$RASPBERRY_HOST" ]]; then
-  echo "ERROR: RASPBERRY_SSH / RASPBERRY_HOST missing in $REPO_ROOT/.env" >&2
-  exit 1
-fi
-
-# Remote install dir (relative to the SSH user's home).
-REMOTE_DIR="Ambitecture"
-
-# Node major version to install.
-NODE_MAJOR=22
-
-# .env overrides merged into each transferred module .env (source files untouched).
-HUB_HOST="$RASPBERRY_HOST"
-ENV_OVERRIDES=(
-  "AMBITECTURE_HUB_URL=http://${HUB_HOST}:2612"
-  "PLUGIN_PUBLIC_HOST=${HUB_HOST}"
-)
-
-# Module dirs that carry a .env worth patching/transferring.
-ENV_MODULES=(
-  "modules/hub"
-  "modules/renderers/dmx-ts"
-  "modules/renderers/neewer"
-  "modules/controllers/midi-v1"
-  "modules/controllers/music-analyser"
-)
-
-# Browser web-app config.json files served by `deliver`. These hold a client-side
-# AMBITECTURE_HUB_URL the browser connects to — patch it to the Pi's hub like the .env above.
-HUB_URL_VALUE="http://${HUB_HOST}:2612"
-WEB_CONFIGS=(
-  "modules/controllers/surface-v2/config.json"
-  "modules/renderers/simulator-2d/src/config.json"
-  "modules/renderers/starter-web-app/config.json"
-  "modules/renderers/screen/config.json"
-)
-
-# ----------------------------------------------------------------------------------------
-# Pretty logging
-# ----------------------------------------------------------------------------------------
-if [[ -t 1 ]]; then
-  C_BLUE=$'\033[1;34m'; C_GREEN=$'\033[1;32m'; C_YELLOW=$'\033[1;33m'; C_RED=$'\033[1;31m'; C_RESET=$'\033[0m'
-else
-  C_BLUE=''; C_GREEN=''; C_YELLOW=''; C_RED=''; C_RESET=''
-fi
-log()  { echo "${C_BLUE}==>${C_RESET} $*"; }
-ok()   { echo "${C_GREEN}  ok${C_RESET} $*"; }
-warn() { echo "${C_YELLOW}  !!${C_RESET} $*"; }
-err()  { echo "${C_RED} ERR${C_RESET} $*" >&2; }
+# shellcheck source=install/config.sh
+source "$SCRIPT_DIR/config.sh"
+# shellcheck source=install/lib.sh
+source "$SCRIPT_DIR/lib.sh"
 
 # ----------------------------------------------------------------------------------------
 # Argument / menu handling
@@ -136,21 +78,11 @@ MODE_NAME=$([[ "$MODE" == 1 ]] && echo "Full Install (wipe first)" || ([[ "$MODE
 log "Mode $MODE — $MODE_NAME"
 log "Transfer .env: $([[ $TRANSFER_ENV == 1 ]] && echo yes || echo no)"
 
-SSH_OPTS=(-o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new)
-rssh() { ssh "${SSH_OPTS[@]}" "$RASPBERRY_SSH" "$@"; }
-
 # ----------------------------------------------------------------------------------------
 # Preflight
 # ----------------------------------------------------------------------------------------
-command -v rsync >/dev/null 2>&1 || { err "rsync not found on this Mac"; exit 1; }
-command -v ssh   >/dev/null 2>&1 || { err "ssh not found on this Mac"; exit 1; }
-
-log "Checking SSH connectivity to ${RASPBERRY_SSH} ..."
-if ! ssh "${SSH_OPTS[@]}" -o BatchMode=yes "$RASPBERRY_SSH" 'echo ok' >/dev/null 2>&1; then
-  err "cannot SSH to ${RASPBERRY_SSH} (set up key auth: ssh-copy-id ${RASPBERRY_SSH})"
-  exit 1
-fi
-ok "SSH reachable"
+install_require_tools
+install_check_ssh
 
 # ----------------------------------------------------------------------------------------
 # Mode 1: wipe
@@ -162,26 +94,187 @@ if [[ "$MODE" == 1 ]]; then
 fi
 
 # ----------------------------------------------------------------------------------------
-# Deploy code (rsync working tree, ALWAYS excluding .env)
+# Pi overwrite guard (modes 2/3): detect conflicts BEFORE deploy, prompt, apply picks after
+# ----------------------------------------------------------------------------------------
+PI_OVERWRITE_CANDIDATES=()
+PI_OVERWRITE_PICKED=()
+HOST_CONFIG_TRANSFER_AUTO=()
+
+rel_in_list() {
+  local needle="$1"
+  shift
+  local item
+  [[ $# -eq 0 ]] && return 1
+  for item in "$@"; do
+    [[ "$item" == "$needle" ]] && return 0
+  done
+  return 1
+}
+
+# Strip optional " (…)" suffix from a numbered list entry back to a repo-relative path.
+pi_overwrite_rel_path() {
+  local entry="$1"
+  if [[ "$entry" == *" ("* ]]; then
+    printf '%s' "${entry%% (*}"
+  else
+    printf '%s' "$entry"
+  fi
+}
+
+prompt_read_tty() {
+  local varname="$1"
+  local prompt_text="$2"
+  if [[ -t 0 ]]; then
+    read -r -p "$prompt_text" "$varname"
+  elif [[ -r /dev/tty ]]; then
+    read -r -p "$prompt_text" "$varname" </dev/tty
+  else
+    printf -v "$varname" ''
+  fi
+}
+
+# prompt_pi_overwrite_picks — sets PI_OVERWRITE_PICKED (default none).
+prompt_pi_overwrite_picks() {
+  PI_OVERWRITE_PICKED=()
+  local -a candidates=("$@")
+  local count="${#candidates[@]}"
+  [[ "$count" -eq 0 ]] && return 0
+
+  echo
+  warn "These files will get overridden on the Pi:"
+  local i=1 entry
+  for entry in "${candidates[@]}"; do
+    echo "  $i) $entry"
+    i=$((i + 1))
+  done
+  echo
+
+  local picks=""
+  prompt_read_tty picks "Enter numbers to overwrite (space-separated, default none): "
+  if [[ -z "$picks" && ! -t 0 && ! -r /dev/tty ]]; then
+    warn "non-interactive — not overwriting any of the above (default none)"
+    return 0
+  fi
+
+  local num idx picked
+  for num in $picks; do
+    if [[ ! "$num" =~ ^[0-9]+$ ]]; then
+      warn "ignoring invalid entry: $num"
+      continue
+    fi
+    if (( num < 1 || num > count )); then
+      warn "ignoring out-of-range number: $num"
+      continue
+    fi
+    idx=$((num - 1))
+    picked="${candidates[$idx]}"
+    if rel_in_list "$picked" ${PI_OVERWRITE_PICKED[@]+"${PI_OVERWRITE_PICKED[@]}"}; then
+      continue
+    fi
+    PI_OVERWRITE_PICKED+=("$picked")
+  done
+}
+
+collect_var_pi_conflicts() {
+  [[ "$MODE" == "1" ]] && return 0
+  [[ ! -d "$REPO_ROOT/var" ]] && return 0
+
+  local rel local_path
+  while IFS= read -r rel; do
+    [[ -z "$rel" ]] && continue
+    if remote_exists "$rel"; then
+      PI_OVERWRITE_CANDIDATES+=("$rel")
+    fi
+  done < <(find "$REPO_ROOT/var" -type f ! -name '.DS_Store' | sed "s|^$REPO_ROOT/||")
+
+  while IFS= read -r rel; do
+    [[ -z "$rel" ]] && continue
+    local_path="$REPO_ROOT/$rel"
+    if [[ ! -e "$local_path" ]]; then
+      PI_OVERWRITE_CANDIDATES+=("$rel (Pi-only — would be removed)")
+    fi
+  done < <(rssh "cd \"\$HOME/$REMOTE_DIR\" && find var -type f ! -name '.DS_Store' 2>/dev/null" || true)
+}
+
+collect_host_config_pi_conflicts() {
+  [[ "$TRANSFER_ENV" != 1 ]] && return 0
+
+  local mod cfg rel
+  for mod in "${ENV_MODULES[@]}"; do
+    rel="$mod/.env"
+    if [[ -f "$REPO_ROOT/$rel" ]] && remote_exists "$rel"; then
+      PI_OVERWRITE_CANDIDATES+=("$rel")
+    fi
+  done
+  for cfg in "${WEB_CONFIGS[@]}"; do
+    if [[ -f "$REPO_ROOT/$cfg" ]] && remote_exists "$cfg"; then
+      PI_OVERWRITE_CANDIDATES+=("$cfg")
+    fi
+  done
+}
+
+build_host_config_auto_transfer() {
+  HOST_CONFIG_TRANSFER_AUTO=()
+  local mod cfg rel
+  if [[ "$TRANSFER_ENV" != 1 ]]; then
+    return 0
+  fi
+  for mod in "${ENV_MODULES[@]}"; do
+    rel="$mod/.env"
+    if [[ -f "$REPO_ROOT/$rel" ]] && ! remote_exists "$rel"; then
+      HOST_CONFIG_TRANSFER_AUTO+=("$rel")
+    fi
+  done
+  for cfg in "${WEB_CONFIGS[@]}"; do
+    if [[ -f "$REPO_ROOT/$cfg" ]] && ! remote_exists "$cfg"; then
+      HOST_CONFIG_TRANSFER_AUTO+=("$cfg")
+    fi
+  done
+}
+
+if [[ "$MODE" != "1" ]]; then
+  log "Checking Pi data that would be overridden (var/ and host config) ..."
+  collect_var_pi_conflicts
+  collect_host_config_pi_conflicts
+  if [[ ${#PI_OVERWRITE_CANDIDATES[@]} -gt 0 ]]; then
+    prompt_pi_overwrite_picks "${PI_OVERWRITE_CANDIDATES[@]}"
+  else
+    ok "no Pi host-data conflicts detected"
+  fi
+  build_host_config_auto_transfer
+else
+  if [[ "$TRANSFER_ENV" == 1 ]]; then
+    build_host_config_auto_transfer
+  fi
+fi
+
+# ----------------------------------------------------------------------------------------
+# Deploy code (rsync working tree; excludes .env, config.json; var/ only on mode 1)
 # ----------------------------------------------------------------------------------------
 log "Deploying code to ${RASPBERRY_SSH}:~/$REMOTE_DIR ..."
+RSYNC_EXCLUDES=(
+  --exclude='.env'
+  --exclude='config.json'
+  --exclude='node_modules/'
+  --exclude='.git/'
+  --exclude='dist/'
+  --exclude='.DS_Store'
+  --exclude='_scratch/'
+  --exclude='.claude/'
+  --exclude='.cursor/'
+  --exclude='.vscode/'
+)
+if [[ "$MODE" != "1" ]]; then
+  RSYNC_EXCLUDES+=(--exclude='var/')
+fi
 rsync -az --delete \
-  --exclude='.env' \
-  --exclude='config.json' \
-  --exclude='node_modules/' \
-  --exclude='.git/' \
-  --exclude='dist/' \
-  --exclude='.DS_Store' \
-  --exclude='_scratch/' \
-  --exclude='.claude/' \
-  --exclude='.cursor/' \
-  --exclude='.vscode/' \
-  -e "ssh ${SSH_OPTS[*]}" \
+  "${RSYNC_EXCLUDES[@]}" \
+  -e "$RSYNC_RSH" \
   "$REPO_ROOT"/ "$RASPBERRY_SSH:$REMOTE_DIR/"
 ok "code synced"
 
 # ----------------------------------------------------------------------------------------
-# Patch + transfer .env (optional)
+# Apply overwrite picks + host-config auto-transfer
 # ----------------------------------------------------------------------------------------
 upsert_env() {
   # upsert_env <src-env-file> <dst-staged-file>: copy src, then replace/append each override key.
@@ -207,36 +300,116 @@ patch_web_config() {
   sed -i.bak -E "s|(\"AMBITECTURE_HUB_URL\"[[:space:]]*:[[:space:]]*\")[^\"]*(\")|\1${HUB_URL_VALUE}\2|" "$dst" && rm -f "$dst.bak"
 }
 
-if [[ "$TRANSFER_ENV" == 1 ]]; then
-  log "Patching & transferring host config (.env + web config.json) ..."
+# stage_host_config <repo-relative-path> — write patched file into $STAGE; echo staged path.
+stage_host_config() {
+  local rel="$1"
+  local src="$REPO_ROOT/$rel"
+  local staged
+  if [[ "$rel" == */.env ]]; then
+    staged="$STAGE/$(echo "${rel%/.env}" | tr '/' '_').env"
+    upsert_env "$src" "$staged"
+  else
+    staged="$STAGE/$(echo "$rel" | tr '/' '_')"
+    patch_web_config "$src" "$staged"
+  fi
+  printf '%s' "$staged"
+}
+
+transfer_host_config() {
+  local rel="$1"
+  local staged
+  staged="$(stage_host_config "$rel")"
+  rsync -az -e "$RSYNC_RSH" "$staged" "$RASPBERRY_SSH:$REMOTE_DIR/$rel"
+  ok "$rel"
+}
+
+is_host_config_rel() {
+  [[ "$1" == */.env || "$1" == */config.json ]]
+}
+
+HOST_CONFIG_TO_TRANSFER=()
+
+queue_host_config_transfer() {
+  local rel="$1"
+  if ! rel_in_list "$rel" ${HOST_CONFIG_TO_TRANSFER[@]+"${HOST_CONFIG_TO_TRANSFER[@]}"}; then
+    HOST_CONFIG_TO_TRANSFER+=("$rel")
+  fi
+}
+
+if (( ${#HOST_CONFIG_TRANSFER_AUTO[@]} > 0 )); then
+  for rel in "${HOST_CONFIG_TRANSFER_AUTO[@]}"; do
+    queue_host_config_transfer "$rel"
+  done
+fi
+
+apply_var_overwrite_pick() {
+  local rel="$1"
+  local src="$REPO_ROOT/$rel"
+  local remote_dir
+  remote_dir="$(dirname "$rel")"
+  rssh "mkdir -p \"\$HOME/$REMOTE_DIR/$remote_dir\""
+  rsync -az -e "$RSYNC_RSH" "$src" "$RASPBERRY_SSH:$REMOTE_DIR/$rel"
+  ok "$rel"
+}
+
+apply_pi_overwrite_pick() {
+  local entry="$1"
+  local rel
+  rel="$(pi_overwrite_rel_path "$entry")"
+
+  if is_host_config_rel "$rel"; then
+    queue_host_config_transfer "$rel"
+    return 0
+  fi
+
+  if [[ "$rel" == var/* ]]; then
+    if [[ -f "$REPO_ROOT/$rel" ]]; then
+      apply_var_overwrite_pick "$rel"
+    elif [[ "$entry" == *"Pi-only"* ]]; then
+      rssh "rm -f \"\$HOME/$REMOTE_DIR/$rel\"" || true
+      ok "removed Pi-only $rel"
+    fi
+  fi
+}
+
+if [[ ${#PI_OVERWRITE_PICKED[@]} -gt 0 || ${#HOST_CONFIG_TO_TRANSFER[@]} -gt 0 ]]; then
+  log "Applying selected overwrites ..."
+fi
+
+if (( ${#PI_OVERWRITE_PICKED[@]} > 0 )); then
+  for entry in "${PI_OVERWRITE_PICKED[@]}"; do
+    apply_pi_overwrite_pick "$entry"
+  done
+fi
+
+if [[ ${#HOST_CONFIG_TO_TRANSFER[@]} -gt 0 ]]; then
   STAGE="$(mktemp -d)"
   trap 'rm -rf "$STAGE"' EXIT
+  if (( ${#HOST_CONFIG_TO_TRANSFER[@]} > 0 )); then
+    for rel in "${HOST_CONFIG_TO_TRANSFER[@]}"; do
+      transfer_host_config "$rel"
+    done
+  fi
+fi
 
-  for mod in "${ENV_MODULES[@]}"; do
-    src="$REPO_ROOT/$mod/.env"
-    if [[ ! -f "$src" ]]; then
-      warn "$mod/.env not present locally — skipping"
-      continue
-    fi
-    staged="$STAGE/$(echo "$mod" | tr '/' '_').env"
-    upsert_env "$src" "$staged"
-    rsync -az -e "ssh ${SSH_OPTS[*]}" "$staged" "$RASPBERRY_SSH:$REMOTE_DIR/$mod/.env"
-    ok "$mod/.env"
-  done
+if [[ "$MODE" != "1" && -d "$REPO_ROOT/var" ]]; then
+  log "Syncing new var/ files from Mac (existing Pi paths untouched) ..."
+  rsync -az --ignore-existing \
+    -e "$RSYNC_RSH" \
+    "$REPO_ROOT/var/" "$RASPBERRY_SSH:$REMOTE_DIR/var/" || true
+  ok "var/ new-file sync done"
+fi
 
-  for cfg in "${WEB_CONFIGS[@]}"; do
-    src="$REPO_ROOT/$cfg"
-    if [[ ! -f "$src" ]]; then
-      warn "$cfg not present locally — skipping"
-      continue
+if (( ${#PI_OVERWRITE_CANDIDATES[@]} > 0 )); then
+  for entry in "${PI_OVERWRITE_CANDIDATES[@]}"; do
+    if ! rel_in_list "$entry" ${PI_OVERWRITE_PICKED[@]+"${PI_OVERWRITE_PICKED[@]}"}; then
+      warn "left untouched on Pi: $entry"
     fi
-    staged="$STAGE/$(echo "$cfg" | tr '/' '_')"
-    patch_web_config "$src" "$staged"
-    rsync -az -e "ssh ${SSH_OPTS[*]}" "$staged" "$RASPBERRY_SSH:$REMOTE_DIR/$cfg"
-    ok "$cfg"
   done
-else
-  warn "skipping host-config transfer (existing .env / config.json on the Pi left untouched)"
+fi
+
+if [[ "$TRANSFER_ENV" != 1 ]]; then
+  warn "host .env / config.json not transferred (envflag n)"
 fi
 
 # ----------------------------------------------------------------------------------------
@@ -384,7 +557,11 @@ done
 # ---- start / restart PM2 (all modes) ----
 rlog "starting PM2 stack"
 cd "$APP_DIR"
-export HUB_PROJECT=""
+HUB_PROJECT=""
+if [[ -f "$APP_DIR/var/hub/activeProject.json" ]]; then
+  HUB_PROJECT="$(sed -n 's/.*"spec"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$APP_DIR/var/hub/activeProject.json" | head -1)"
+fi
+export HUB_PROJECT
 pm2 delete ecosystem.config.js >/dev/null 2>&1 || true
 pm2 start ecosystem.config.js --update-env || die "pm2 start failed"
 pm2 save >/dev/null 2>&1 || true

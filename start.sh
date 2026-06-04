@@ -3,11 +3,12 @@
 cd "$(dirname "$0")"
 
 
-export HUB_PROJECT="$1"
+export HUB_PROJECT="${1:-}"
 
-if [ -z "$HUB_PROJECT" ]; then
-  echo "Usage: $0 <hub-project>"
-  exit 1
+if [ -n "$HUB_PROJECT" ]; then
+  echo "Starting stack with hub project: $HUB_PROJECT"
+else
+  echo "Starting stack (hub uses persisted active project; fails if none)"
 fi
 
 pm2 start ecosystem.config.js --update-env

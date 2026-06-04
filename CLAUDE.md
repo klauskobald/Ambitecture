@@ -81,8 +81,8 @@ Pick a config profile via `.env`:
 
 ```bash
 cp .env.DEMO .env    # points CONFIG_PATH at config.DEMO/
-npm run dev          # loads project `test` (hub default)
 npm run dev test2    # loads `test2.yml` under projectsPath (same pattern for `npm run start`)
+npm run dev          # uses var/hub/activeProject.json if present; otherwise fails
 ```
 
 To open a project by file path, pass it as the first argument (must contain `/`, `\`, or end with `.yml` / `.yaml`; relative paths resolve from the hub process cwd, usually `modules/hub/`).

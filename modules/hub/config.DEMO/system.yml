@@ -1,3 +1,5 @@
+dataDir: ../../var
+
 systemCapabilities:
 
   animationActionProperties:

@@ -104,7 +104,7 @@ The default demo server config is in `modules/hub/config.DEMO/server.yml` and po
 
 - `var/projects`
 - `var/fixtures`
-- default project `test`
+- hub project: pass on CLI (`npm run dev test`) or persist via `./start.sh test` → `var/hub/activeProject.json`
 
 ### 2) Start DMX Renderer
 

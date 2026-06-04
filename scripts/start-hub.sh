@@ -3,4 +3,8 @@
 cd "$(dirname "$0")"
 cd ..
 cd modules/hub
-npm run start "$HUB_PROJECT"
+if [ -n "$HUB_PROJECT" ]; then
+  npm run start -- "$HUB_PROJECT"
+else
+  npm run start
+fi

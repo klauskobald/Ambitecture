@@ -41,15 +41,43 @@ import { parsePulseTapTempoConfig } from './pulse/PulseTapTempoConfig';
 import { PulseSync } from './pulse/PulseSync';
 import { SnapshotManager } from './snapshot/SnapshotManager';
 import { SnapshotCaptureHandler } from './handlers/SnapshotCaptureHandler';
+import { readActiveProjectSpec, writeActiveProjectSpec } from './ActiveProjectStore';
 
-const DEFAULT_HUB_PROJECT = 'test';
-
-function projectSpecifierFromArgv(): string | undefined {
-  const first = process.argv[2];
-  if (first === undefined || first.length === 0 || first.startsWith('-')) {
+function normalizeProjectSpecifier(raw: string | undefined): string | undefined {
+  if (raw === undefined) {
     return undefined;
   }
-  return first;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0 || trimmed.startsWith('-')) {
+    return undefined;
+  }
+  return trimmed;
+}
+
+function projectSpecifierFromArgv(): string | undefined {
+  return normalizeProjectSpecifier(process.argv[2]);
+}
+
+function projectSpecifierFromEnv(): string | undefined {
+  return normalizeProjectSpecifier(process.env.HUB_PROJECT);
+}
+
+function explicitProjectSpecifier(): string | undefined {
+  return projectSpecifierFromArgv() ?? projectSpecifierFromEnv();
+}
+
+function resolveInitialProjectSpec(): string {
+  const explicit = explicitProjectSpecifier();
+  if (explicit !== undefined) {
+    return explicit;
+  }
+  const persisted = readActiveProjectSpec();
+  if (persisted !== null) {
+    return persisted;
+  }
+  throw new Error(
+    '[project] no project specified (CLI/HUB_PROJECT) and no activeProject persisted under var/hub — run with a project name or ./start.sh <project> first',
+  );
 }
 
 const serverConfig = new Config('server');
@@ -388,11 +416,20 @@ router.register('binding:subscribe', bindingHandler);
 router.register('binding:set', bindingHandler);
 router.register('animation:edit', new AnimationEditHandler(registry, animationManager));
 
-const initialProjectSpec = projectSpecifierFromArgv() ?? DEFAULT_HUB_PROJECT;
-graphStore.useProject(initialProjectSpec, () => {
-  pulseManager.initializeFromProject();
-  pushConfigsToModules();
-});
+const initialProjectSpec = resolveInitialProjectSpec();
+const explicitInitialProject = explicitProjectSpecifier();
+try {
+  graphStore.useProject(initialProjectSpec, () => {
+    pulseManager.initializeFromProject();
+    pushConfigsToModules();
+  });
+} catch (err) {
+  Logger.error(`[project] failed to load "${initialProjectSpec}"`, err);
+  throw err;
+}
+if (explicitInitialProject !== undefined) {
+  writeActiveProjectSpec(explicitInitialProject);
+}
 
 const server = new Server(registry, router);
 server.addDisconnectHook(ws => {

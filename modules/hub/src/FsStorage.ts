@@ -5,7 +5,7 @@ import { Config } from './Config';
 
 /**
  * File system storage implementation
- * Uses system.yml > dataPath as storage base
+ * Uses system.yml > dataDir as storage base
  */
 export class FsStorage {
     private basePath: string;
@@ -59,6 +59,22 @@ export class FsStorage {
      * @param key File path relative to base
      * @returns Parsed data or null if not found
      */
+    getItemSync<T>(key: string): T | null {
+        const filePath = path.join(this.basePath, key) + '.' + this.filetype;
+        if (!fs.existsSync(filePath)) {
+            return null;
+        }
+        const content = fs.readFileSync(filePath, 'utf8');
+        return (this.filetype === 'json' ? JSON.parse(content) : content) as T;
+    }
+
+    setItemSync(key: string, data: unknown): void {
+        const filePath = path.join(this.basePath, key) + '.' + this.filetype;
+        const dirPath = path.dirname(filePath);
+        this.ensureDirectoryExists(dirPath);
+        fs.writeFileSync(filePath, this.filetype === 'json' ? JSON.stringify(data, null, 2) : String(data));
+    }
+
     async getItem<T>(key: string): Promise<T | null> {
         const filePath = path.join(this.basePath, key) + '.' + this.filetype;
 

@@ -19,5 +19,6 @@ export interface BleBus {
     startScan(onDiscover: (p: DiscoveredPeripheral) => void): Promise<void>;
     stopScan(): Promise<void>;
     connect(id: string, serviceUuid: string, charUuids: string[]): Promise<BleConnection>;
+    resetPeripheral(id: string): Promise<void>;
     stop(): Promise<void>;
 }

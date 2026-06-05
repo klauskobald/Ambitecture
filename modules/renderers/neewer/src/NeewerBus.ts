@@ -41,6 +41,7 @@ export class NeewerBus {
     private readonly discovery: DiscoveryService;
     private readonly options: NeewerBusOptions;
     private readonly bindings = new Map<string, FixtureBinding>();
+    private readonly reconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
     constructor(bus: BleBus, discovery: DiscoveryService, options: NeewerBusOptions) {
         this.bus = bus;
@@ -78,7 +79,8 @@ export class NeewerBus {
     }
 
     clearFixtures(): void {
-        for (const binding of this.bindings.values()) {
+        for (const [key, binding] of this.bindings) {
+            this.clearReconnectTimer(key);
             this.clearColorState(binding);
             if (binding.connection) {
                 void binding.connection.disconnectAsync().catch(() => undefined);
@@ -204,7 +206,11 @@ export class NeewerBus {
         if (Date.now() < binding.nextRetryAt) return;
 
         const nobleId = this.discovery.resolveNobleId(binding.bluetoothAddress);
-        if (nobleId === undefined) return;
+        if (nobleId === undefined) {
+            binding.nextRetryAt = Date.now() + this.options.connectRetryInitialMs;
+            this.scheduleReconnect(key);
+            return;
+        }
 
         binding.connecting = true;
         Logger.info(`[neewer] connecting "${binding.fixture.name}" id=${nobleId}`);
@@ -221,6 +227,7 @@ export class NeewerBus {
             binding.connection = connection;
             binding.backoffMs = this.options.connectRetryInitialMs;
             binding.offlineLogged = false;
+            this.clearReconnectTimer(key);
             Logger.info(`[neewer] connected "${binding.fixture.name}"`);
             void this.trySendColor(key);
         } catch (err) {
@@ -228,6 +235,8 @@ export class NeewerBus {
             binding.nextRetryAt = Date.now() + binding.backoffMs;
             Logger.warn(`[neewer] connect failed for "${binding.fixture.name}" — retry in ${binding.backoffMs}ms`, err);
             binding.backoffMs = next;
+            await this.bus.resetPeripheral(nobleId);
+            this.scheduleReconnect(key);
         } finally {
             binding.connecting = false;
         }
@@ -236,12 +245,37 @@ export class NeewerBus {
     private onDisconnected(key: string): void {
         const binding = this.bindings.get(key);
         if (!binding) return;
+        const nobleId = binding.connection?.id;
         Logger.warn(`[neewer] "${binding.fixture.name}" disconnected`);
         binding.connection = null;
         binding.nextRetryAt = Date.now() + this.options.connectRetryInitialMs;
         binding.backoffMs = this.options.connectRetryInitialMs;
         binding.lastSentHex = null;
         this.clearColorState(binding);
+        if (nobleId !== undefined) {
+            void this.bus.resetPeripheral(nobleId);
+        }
+        this.scheduleReconnect(key);
+    }
+
+    private clearReconnectTimer(key: string): void {
+        const timer = this.reconnectTimers.get(key);
+        if (timer === undefined) return;
+        clearTimeout(timer);
+        this.reconnectTimers.delete(key);
+    }
+
+    private scheduleReconnect(key: string): void {
+        const binding = this.bindings.get(key);
+        if (!binding || binding.connection || binding.connecting) return;
+
+        this.clearReconnectTimer(key);
+        const delay = Math.max(0, binding.nextRetryAt - Date.now());
+        const timer = setTimeout(() => {
+            this.reconnectTimers.delete(key);
+            void this.tryConnect(key);
+        }, delay);
+        this.reconnectTimers.set(key, timer);
     }
 
     private bindingKey(fixture: ConfiguredFixture): string {

@@ -97,14 +97,30 @@ export class NobleBleBus implements BleBus {
         this.scanning = false;
     }
 
+    async resetPeripheral(id: string): Promise<void> {
+        const peripheral = this.peripheralsById.get(id);
+        if (!peripheral) return;
+        try {
+            if (peripheral.state !== 'disconnected') {
+                await peripheral.disconnectAsync();
+            }
+        } catch {
+            // noble may already be tearing down after link loss
+        }
+        this.peripheralsById.delete(id);
+    }
+
     async connect(id: string, serviceUuid: string, charUuids: string[]): Promise<BleConnection> {
         const peripheral = this.peripheralsById.get(id);
         if (!peripheral) throw new Error(`peripheral ${id} not seen by scan yet`);
-        if (peripheral.state === 'connected') {
-            Logger.debug(`[ble] reusing existing connection ${id}`);
-        } else {
-            await peripheral.connectAsync();
+        if (peripheral.state !== 'disconnected') {
+            try {
+                await peripheral.disconnectAsync();
+            } catch {
+                // proceed — connectAsync may still succeed after a half-open session
+            }
         }
+        await peripheral.connectAsync();
         const { characteristics } = await peripheral.discoverSomeServicesAndCharacteristicsAsync(
             [serviceUuid],
             charUuids,

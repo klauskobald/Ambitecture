@@ -287,8 +287,9 @@ systemCapabilities:
         display: scalar
         range: [0, "RUNTIME:maxFollowTime"]
         step: 0.01
-        stepFunction: sqrt
+        stepFunction: sqr
         defaultValue: 0.5
+        isMandatory: true
         quickPanel: true
       - dotKey: position
         name: Position

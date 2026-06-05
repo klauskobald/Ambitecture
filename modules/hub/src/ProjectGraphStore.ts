@@ -11,7 +11,7 @@ import {
   GraphPersistence,
   emptyMutationResult,
 } from './GraphProtocol';
-import { intentRemovalEvent, intentToEvent, effectivePerformResetScene, isHubInternalIntentClass } from './handlers/intentHelpers';
+import { intentRemovalEvent, intentToEvent, effectivePerformResetScene } from './handlers/intentHelpers';
 import { transformIntentToNormalized, validateAndFixIntentPosition } from './intents';
 import { Logger } from './Logger';
 import { applyDotPathPatch, cloneRecord } from './dotPath';
@@ -104,7 +104,6 @@ export class ProjectGraphStore {
    */
   getActiveSceneEvents(now = Date.now()): object[] {
     return this.projectManager.getActiveSceneIntents()
-      .filter(raw => !isHubInternalIntentClass(raw.class))
       .map(raw => {
         const intent = transformIntentToNormalized(raw);
         const guid = intent.guid;
@@ -205,11 +204,9 @@ export class ProjectGraphStore {
       .filter(guid => !newGuids.has(guid))
       .map(guid => this.projectManager.getIntentDefinition(guid))
       .filter((intent): intent is ControllerIntent => intent !== undefined)
-      .filter(intent => !isHubInternalIntentClass(intent.class))
       .map(transformIntentToNormalized)
       .map(intent => intentRemovalEvent(intent, now));
     const activeEvents = newIntents
-      .filter(intent => !isHubInternalIntentClass(intent.class))
       .map(intent => {
         const eff = intent.guid ? this.rendererIntentSnapshot(intent.guid) ?? intent : intent;
         return intentToEvent(
@@ -255,7 +252,7 @@ export class ProjectGraphStore {
       return {
         revision: this.revision,
         controllerDeltas: [delta],
-        rendererEvents: isHubInternalIntentClass(existing.class) ? [] : [intentRemovalEvent(existing, now)],
+        rendererEvents: [intentRemovalEvent(existing, now)],
         rendererConfigChangedFor: [],
         durableChanged: true,
       };
@@ -282,7 +279,7 @@ export class ProjectGraphStore {
     const now = Date.now();
     const delta = this.makeDelta({ ...command, persistence });
     const eff = this.rendererIntentSnapshot(command.guid);
-    const rendererEvents = eff && !isHubInternalIntentClass(eff.class)
+    const rendererEvents = eff
       ? [intentToEvent(transformIntentToNormalized(eff), now + (eff.scheduled ?? 0))]
       : [];
     this.runtimeMerge?.clearRuntimeIntentMergeCache();

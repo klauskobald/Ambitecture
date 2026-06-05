@@ -57,26 +57,44 @@ class DmxMovingHeadMini extends DmxFixtureBase {
     }
 
     // Pan aims at the hub-resolved lookAt point (simple vector math). xy-speed is parked at 0 since the
-    // hub eases the target itself; tilt holds at center (deferred). Pan unwrap keeps >360° continuity.
+    // hub eases the target itself; tilt holds at raw 0 (deferred). Pan unwrap keeps >360° continuity.
     private applyPan(
         fixture: ConfiguredFixture,
         context: FixtureSampleContext,
         dmxUniverse: DmxUniverse
     ): void {
         this.writeFunction(fixture, 'xy-speed', 0, dmxUniverse);
-        this.writeFunction(fixture, 'tilt', 0.5, dmxUniverse);
+        this.writeFunction(fixture, 'tilt', 0, dmxUniverse);
 
         const panDegrees = this.getFunctionDegrees(fixture, 'pan');
         const target = fixture.resolvedTargetPos;
         if (!panDegrees || panDegrees <= 0 || !target) return;
 
         const [fx, , fz] = context.fixtureWorldPos;
-        const headingDeg = Math.atan2(target[2] - fz, target[0] - fx) * (180 / Math.PI);
+        const mount = readAxisMount(fixture, 'pan');
+        let headingDeg = Math.atan2(target[2] - fz, target[0] - fx) * (180 / Math.PI);
+        if (mount.reverse) headingDeg = -headingDeg;
+        headingDeg += mount.trimDegrees;
+
         const current = fixture.currentPanDeg ?? panDegrees / 2;
         const next = panUnwrap(current, headingDeg, panDegrees);
         fixture.currentPanDeg = next;
         this.writeFunction(fixture, 'pan', next / panDegrees, dmxUniverse);
     }
+}
+
+/** Per-instance mount calibration (dmx-only — depends on physical mounting). */
+function readAxisMount(
+    fixture: ConfiguredFixture,
+    axis: 'pan' | 'tilt'
+): { trimDegrees: number; reverse: boolean } {
+    const raw = fixture.params[axis];
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+        return { trimDegrees: 0, reverse: false };
+    }
+    const o = raw as Record<string, unknown>;
+    const trimDegrees = typeof o['trimDegrees'] === 'number' && Number.isFinite(o['trimDegrees']) ? o['trimDegrees'] : 0;
+    return { trimDegrees, reverse: o['reverse'] === true };
 }
 
 export default new DmxMovingHeadMini();

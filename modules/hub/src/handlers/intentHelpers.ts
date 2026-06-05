@@ -16,14 +16,6 @@ export function effectivePerformResetScene(intent: ControllerIntent | undefined)
   return true;
 }
 
-/**
- * Classes resolved per-fixture on the hub (e.g. `target` via PositionTargetManager) and never sent to
- * renderers as authored intents — renderers only receive the hub's resolved per-fixture output.
- */
-export function isHubInternalIntentClass(cls: string | undefined): boolean {
-  return cls === 'target';
-}
-
 export function intentToEvent(intent: ControllerIntent, scheduledAt: number): object {
   return {
     guid: intent.guid,

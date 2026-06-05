@@ -195,9 +195,10 @@ export class StageEditPane {
 
     const choice = await pickChoice('New intent', [
       { value: 'light', label: 'Light' },
-      { value: 'master', label: 'Master' }
+      { value: 'master', label: 'Master' },
+      { value: 'target', label: 'Target' }
     ])
-    if (!choice || (choice !== 'light' && choice !== 'master')) return
+    if (!choice || !['light', 'master', 'target'].includes(choice)) return
 
     const descriptors = resolveDescriptorsForClass(choice)
     if (!descriptors || descriptors.length === 0) {
@@ -274,7 +275,7 @@ export class StageEditPane {
       value = cloneAndSetAtDotPath(
         value,
         'name',
-        intentClass === 'master' ? 'Master' : 'Light'
+        intentClass.charAt(0).toUpperCase() + intentClass.slice(1)
       )
     }
     if (intentClass === 'master' && value.radius === undefined) {

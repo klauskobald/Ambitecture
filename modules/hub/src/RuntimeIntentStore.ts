@@ -17,7 +17,7 @@
 import { ProjectManager, ControllerIntent } from './ProjectManager';
 import { RuntimeUpdate } from './RuntimeProtocol';
 import { applyDotPathPatch, cloneRecord, diffRecordsToPatch, removeAtDotPath, setAtDotPath } from './dotPath';
-import { effectivePerformResetScene, intentToEvent, isHubInternalIntentClass } from './handlers/intentHelpers';
+import { effectivePerformResetScene, intentToEvent } from './handlers/intentHelpers';
 import { transformIntentToNormalized } from './intents';
 
 function applyRuntimePatch(base: Record<string, unknown>, update: RuntimeUpdate): Record<string, unknown> {
@@ -143,11 +143,6 @@ export class RuntimeIntentStore {
     }
     const eff = this.getEffectiveIntent(update.guid);
     if (!eff) {
-      return null;
-    }
-    // Overlay was updated above so PositionTargetManager sees live drags; the authored target itself
-    // is hub-internal and never emitted to renderers.
-    if (isHubInternalIntentClass(eff.class)) {
       return null;
     }
     return intentToEvent(transformIntentToNormalized(eff), now + (eff.scheduled ?? 0));

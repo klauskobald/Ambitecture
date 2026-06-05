@@ -31,6 +31,7 @@ import { DiscoveryService } from './DiscoveryService';
 import { DiscoveryHandler } from './handlers/DiscoveryHandler';
 import { resolveRuntimeReferences } from './ConfigResolver';
 import { registerZonesRangeResolver } from './resolvers/ZonesRangeResolver';
+import { registerMaxFollowTimeResolver } from './resolvers/MaxFollowTimeResolver';
 import { PulseManager } from './pulse/PulseManager';
 import { PulseBucketAssignManager } from './pulse/PulseBucketAssignManager';
 import { PulseAssignHandler } from './handlers/PulseAssignHandler';
@@ -91,6 +92,7 @@ const projectManager = new ProjectManager(
   serverConfig.get<string>('fixturesPath'),
 );
 registerZonesRangeResolver(projectManager);
+registerMaxFollowTimeResolver(projectManager);
 const actionInputManager = new ActionInputManager(
   projectManager,
   () => resolveRuntimeReferences(systemConfig.getOrDefault<unknown>('systemCapabilities', {})),

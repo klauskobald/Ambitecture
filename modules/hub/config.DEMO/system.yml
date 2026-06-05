@@ -282,11 +282,12 @@ systemCapabilities:
         noMultiple: true
         isMandatory: true
       - dotKey: params.speed
-        name: Speed
+        name: Follow Time
         type: number
         display: scalar
-        range: [0, 1]
+        range: [0, "RUNTIME:maxFollowTime"]
         step: 0.01
+        stepFunction: quadratic
         defaultValue: 0.5
         quickPanel: true
       - dotKey: position

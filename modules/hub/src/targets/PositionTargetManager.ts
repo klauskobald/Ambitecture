@@ -23,7 +23,7 @@ interface Magnet {
   alpha: number;
   radius: number;
   radiusFunction: string;
-  /** Slider 0..1 (quadratic → seconds against the fixture's maxFollowTime); 0 = instant. */
+  /** Desired follow time in seconds (authored on the target; capped per-fixture by maxFollowTime). 0 = instant. */
   speed: number;
 }
 
@@ -136,7 +136,7 @@ export class PositionTargetManager {
         alpha: numberOr(eff.params['alpha'], 1),
         radius: numberOr(eff.radius, 0),
         radiusFunction: typeof eff.radiusFunction === 'string' ? eff.radiusFunction : 'quadratic',
-        speed: clamp01(numberOr(eff.params['speed'], 0.5)),
+        speed: Math.max(0, numberOr(eff.params['speed'], 0.5)),
       });
     }
     return out;
@@ -216,10 +216,10 @@ function readMaxFollowTime(params: Record<string, unknown> | undefined): number 
   return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : DEFAULT_MAX_FOLLOW_TIME;
 }
 
-/** First acquisition snaps; otherwise exponential approach over `quad(speed) × maxFollowTime / strength`. */
+/** First acquisition snaps; otherwise exponential approach over `min(speed, maxFollowTime) / strength` seconds. */
 function ease(current: Vec3 | null, desired: Vec3, strength: number, speed: number, maxFollowTime: number, dt: number): Vec3 {
   if (!current) return desired;
-  const baseTime = speed * speed * maxFollowTime;
+  const baseTime = Math.min(speed, maxFollowTime);
   const effectiveTime = baseTime / Math.max(strength, EPSILON);
   if (effectiveTime <= dt || effectiveTime <= 0) return desired;
   const factor = 1 - Math.exp(-dt / effectiveTime);
@@ -232,10 +232,6 @@ function ease(current: Vec3 | null, desired: Vec3, strength: number, speed: numb
 
 function numberOr(v: unknown, fallback: number): number {
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
-}
-
-function clamp01(v: number): number {
-  return Math.max(0, Math.min(1, v));
 }
 
 function distance(a: Vec3, b: Vec3): number {

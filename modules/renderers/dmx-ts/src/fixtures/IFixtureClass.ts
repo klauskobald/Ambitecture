@@ -6,6 +6,8 @@ export interface RendererEvent {
     guid?: string;
     layer?: number;
     class: string;
+    /** Present on hub-resolved per-fixture events (e.g. `target`); routes to that fixture by guid. */
+    fixtureGuid?: string;
     scheduled?: number;
     position?: [number, number, number];
     radius?: number;

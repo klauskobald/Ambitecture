@@ -5,6 +5,8 @@ export interface DmxChannel {
     functionName: string;
     rangeMin: number;
     rangeMax: number;
+    /** Physical span in degrees for positional channels (pan/tilt); undefined for others. */
+    degrees?: number;
 }
 
 export class DmxMap {
@@ -18,7 +20,11 @@ export class DmxMap {
                 const parts = def.range.split('-');
                 const rangeMin = parseInt(parts[0] ?? '0', 10);
                 const rangeMax = parseInt(parts[1] ?? '255', 10);
-                this.map.set(def.function, { offset, functionName: def.function, rangeMin, rangeMax });
+                const channel: DmxChannel = { offset, functionName: def.function, rangeMin, rangeMax };
+                if (typeof def.degrees === 'number' && Number.isFinite(def.degrees)) {
+                    channel.degrees = def.degrees;
+                }
+                this.map.set(def.function, channel);
             }
         }
     }

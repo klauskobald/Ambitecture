@@ -1,5 +1,6 @@
 class LightBase {
     constructor(profile, instanceConfig, drawConfig) {
+        this.guid = instanceConfig.guid;
         this.name = instanceConfig.name;
         this.location = instanceConfig.location;
         this.range = instanceConfig.range;

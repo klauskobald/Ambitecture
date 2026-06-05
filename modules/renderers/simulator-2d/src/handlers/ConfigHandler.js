@@ -40,6 +40,7 @@ class ConfigHandler {
 
       for (const fixtureData of zone.fixtures) {
         const {
+          guid,
           fixtureProfile,
           name,
           location,
@@ -62,6 +63,7 @@ class ConfigHandler {
           bbox[2] + location[2]
         ]
         const instanceConfig = {
+          guid,
           name,
           location: worldLocation,
           params,

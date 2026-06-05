@@ -55,6 +55,11 @@ export abstract class DmxFixtureBase implements IFixtureClass {
         dmxUniverse.setChannel(dmxChannel, dmxValue);
     }
 
+    /** Physical span (deg) of a positional channel (e.g. `pan`), from the profile; undefined if absent. */
+    protected getFunctionDegrees(fixture: ConfiguredFixture, functionName: string): number | undefined {
+        return this.getDmxMap(fixture).lookup(functionName)?.degrees;
+    }
+
     private getDmxMap(fixture: ConfiguredFixture): DmxMap {
         let dmxMap = this.dmxMaps.get(fixture);
         if (!dmxMap) {

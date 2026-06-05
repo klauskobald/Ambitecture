@@ -4,11 +4,12 @@ import { ConfiguredFixture } from '../handlers/ConfigHandler';
 import { FixtureIntentSnapshot } from './IFixtureClass';
 import { DmxFixtureBase } from './DmxFixtureBase';
 import { FixtureSampleContext } from '../layerIntent/LayerIntentEngine';
+import { panUnwrap } from '../panUnwrap';
 
 class DmxMovingHeadMini extends DmxFixtureBase {
     applyIntentSnapshot(
         fixture: ConfiguredFixture,
-        _context: FixtureSampleContext,
+        context: FixtureSampleContext,
         snapshot: FixtureIntentSnapshot,
         dmxUniverse: DmxUniverse
     ): void {
@@ -51,6 +52,30 @@ class DmxMovingHeadMini extends DmxFixtureBase {
             if (functionName === 'strobe') continue;
             this.writeFunction(fixture, functionName, value, dmxUniverse);
         }
+
+        this.applyPan(fixture, context, dmxUniverse);
+    }
+
+    // Pan aims at the hub-resolved lookAt point (simple vector math). xy-speed is parked at 0 since the
+    // hub eases the target itself; tilt holds at center (deferred). Pan unwrap keeps >360° continuity.
+    private applyPan(
+        fixture: ConfiguredFixture,
+        context: FixtureSampleContext,
+        dmxUniverse: DmxUniverse
+    ): void {
+        this.writeFunction(fixture, 'xy-speed', 0, dmxUniverse);
+        this.writeFunction(fixture, 'tilt', 0.5, dmxUniverse);
+
+        const panDegrees = this.getFunctionDegrees(fixture, 'pan');
+        const target = fixture.resolvedTargetPos;
+        if (!panDegrees || panDegrees <= 0 || !target) return;
+
+        const [fx, , fz] = context.fixtureWorldPos;
+        const headingDeg = Math.atan2(target[2] - fz, target[0] - fx) * (180 / Math.PI);
+        const current = fixture.currentPanDeg ?? panDegrees / 2;
+        const next = panUnwrap(current, headingDeg, panDegrees);
+        fixture.currentPanDeg = next;
+        this.writeFunction(fixture, 'pan', next / panDegrees, dmxUniverse);
     }
 }
 

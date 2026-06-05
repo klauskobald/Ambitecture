@@ -293,6 +293,15 @@ Controllers submit authoritative graph/control changes to the hub with `graph:co
 
 Hub pre-filtering by bounding box/location is intended optimization, not current default behavior. Generated `events` are sent only to renderers that registered with `subscribe.events: true`.
 
+### Position targets (`target` intent) — hub-resolved per fixture
+
+The **`target`** intent class is a lookAt **magnet** that moving heads (and future positional fixtures) are attracted to point at. It is the **pilot of the resolved-per-fixture architecture**: unlike `light`/`master` (sampled spatially *in the renderer* by `LayerIntentEngine`), `target` resolution lives **on the hub**, and the renderer just aims with simple vector math.
+
+- **Authored `target` intents are hub-internal inputs** — they carry `position`, `layer`, `radius`, `radiusFunction`, `params.alpha`, `params.speed`, and are **never emitted to renderers** as authored intents (suppressed via `isHubInternalIntentClass` in `handlers/intentHelpers.ts`, applied at every `intentToEvent` site in `ProjectGraphStore` + `RuntimeIntentStore`). Controllers still author them through the graph/`projectPatch` path. A live drag updates the runtime overlay (so the resolver sees it) but emits no renderer event.
+- **`PositionTargetManager`** (`hub/src/targets/PositionTargetManager.ts`, modeled on `AnimationManager`) runs a ~50 Hz tick. Followers = fixtures whose profile DMX map declares a `pan` function; it reads their world position (`zone.bbox + location`), per-instance `params.maxFollowTime`, and `guid` from `getSerializedRuntimeZones()`. Active magnets = active-scene `target` intents (live via `getEffectiveIntent`). Per follower: `strength = alpha × radiusFn(1 − dist/radius)`; only the **highest in-range layer** contributes (layer override); the aim point is the strength-weighted mean of those magnets, eased on the fixture's own clock (`quad(speed) × maxFollowTime`, scaled by strength; `speed 0` = instant snap; no magnet in range = hold).
+- **Resolved delivery** reuses the `events` stream: `{ class: 'target', fixtureGuid, position }`, **routed by zone** (`getZoneToRendererPayload()[zone]` → that zone's renderers) — never broadcast. The wire unit is `(fixtureGuid, class, resolvedValue)`, the seed of the future "one resolved value per intent class per fixture" model that will eventually pull the rest of `LayerIntentEngine` onto the hub.
+- **Renderers** (`dmx-ts`, `simulator-2d`) match the resolved event to a fixture by `guid` (`EventsHandler.applyResolvedTarget`, bypassing `LayerIntentEngine`), store `resolvedTargetPos`, and the moving-head fixture aims: `heading = atan2(dz, dx)` from fixture→target. `dmx-ts` maps the heading onto the `pan` channel via `panUnwrap(currentPanDeg, heading, pan.degrees)` (keeps >360° continuity — spins past 360° toward 540 instead of snapping), parks `xy-speed = 0` and `tilt` at center; `simulator-2d` rotates the head icon toward the target. The pan/tilt physical span comes from `degrees` on the profile DMX channel def (e.g. `pan: { range: 0-255, degrees: 540 }`).
+
 ### Room and scope filtering for controllers
 
 Controllers should eventually receive room/scope-filtered graph init/delta data based on announced metadata. This filtering is not implemented yet.
@@ -556,6 +565,7 @@ Named easing functions used by the animation lerp planner and by renderer spatia
 - `transformIntentToNormalized(intent)` dispatches by `class`. Unknown classes fall through to `PassthroughIntent`.
 - `LightIntent.transformToNormalized` normalizes `params.color` into CIE 1931 `xyY` regardless of the input format the controller used (HSL, hex, RGB).
 - `MasterIntent.transformToNormalized` is currently a pass-through (placeholder for class-specific master logic).
+- `TargetIntent.transformToNormalized` is a pass-through — `target` (lookAt magnet) intents carry only geometry; their per-fixture effect is resolved by `PositionTargetManager` (see *Position targets* above), not shaped here.
 - Add a new class by adding a module + entry in `intents/registry.ts`. Renderer event payloads then carry already-normalized data.
 
 ### systemCapabilities

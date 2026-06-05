@@ -23,6 +23,7 @@ import { Logger } from './Logger';
 import { GraphMutationResult } from './GraphProtocol';
 import { HubStatusDispatcher } from './hubStatusTypes';
 import { AnimationManager } from './animation/AnimationManager';
+import { PositionTargetManager } from './targets/PositionTargetManager';
 import { BindingManager } from './BindingManager';
 import { BindingHandler } from './handlers/BindingHandler';
 import { AnimationEditHandler } from './handlers/AnimationEditHandler';
@@ -113,6 +114,7 @@ const animationManager = new AnimationManager(
   runtimeUpdateDispatcher,
   bindingManager,
 );
+const positionTargetManager = new PositionTargetManager(projectManager, runtimeIntentStore, registry);
 const pulseManager = new PulseManager(projectManager);
 pulseManager.setHubStatusDispatcher(hubStatusDispatcher);
 const pulseSetupManager = new PulseSetupManager(projectManager);
@@ -226,6 +228,7 @@ const pushConfigsToModules = (includeControllerIntentPatch = true) => {
   }
   recordRendererEventDeliveries(sceneEvents.eventCount, sceneEventRecipients);
   pushControllerProjectPatches(includeControllerIntentPatch);
+  positionTargetManager.refresh();
 };
 
 const publishGraphMutation = (source: import('ws').WebSocket | undefined, result: GraphMutationResult, location?: [number, number]): void => {
@@ -422,6 +425,7 @@ try {
   graphStore.useProject(initialProjectSpec, () => {
     pulseManager.initializeFromProject();
     pushConfigsToModules();
+    positionTargetManager.start();
   });
 } catch (err) {
   Logger.error(`[project] failed to load "${initialProjectSpec}"`, err);

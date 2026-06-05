@@ -1,6 +1,7 @@
 import { ControllerIntent } from '../ProjectManager';
 import { LightIntent } from './lightIntent';
 import { MasterIntent } from './masterIntent';
+import { TargetIntent } from './targetIntent';
 import { PassthroughIntent } from './passthroughIntent';
 
 type IntentTransformClass = {
@@ -15,6 +16,7 @@ type IntentTransformClass = {
 const REGISTRY: Record<string, IntentTransformClass> = {
   light: LightIntent,
   master: MasterIntent,
+  target: TargetIntent,
 };
 
 /**

@@ -57,6 +57,13 @@ export class EventsHandler {
 
         let anyChanged = false;
         for (const event of events) {
+            // Hub-resolved per-fixture targets bypass the LayerIntentEngine — applied straight to the fixture.
+            if (event.class === 'target' && typeof event.fixtureGuid === 'string') {
+                if (this.applyResolvedTarget(event.fixtureGuid, event.position ?? null, zones)) {
+                    anyChanged = true;
+                }
+                continue;
+            }
             const changed = this.layerIntentEngine.applyEvent(event, zones);
             if (changed) {
                 anyChanged = true;
@@ -70,6 +77,22 @@ export class EventsHandler {
         }
 
         this.applyAllFixtures(zones);
+    }
+
+    private applyResolvedTarget(
+        fixtureGuid: string,
+        position: [number, number, number] | null,
+        zones: ConfiguredZone[]
+    ): boolean {
+        for (const zone of zones) {
+            for (const fixture of zone.fixtures) {
+                if (fixture.guid === fixtureGuid) {
+                    fixture.resolvedTargetPos = position;
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private applyAllFixtures(zones: ConfiguredZone[]): void {

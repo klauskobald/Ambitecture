@@ -12,6 +12,8 @@ interface WsMessage {
 export interface FixtureChannelDef {
     function: string;
     range: string;
+    /** Physical span of a positional channel (pan/tilt) in degrees, for angle→DMX mapping. */
+    degrees?: number;
 }
 
 export interface FixtureProfile {
@@ -27,6 +29,8 @@ export interface FixtureTrim {
 }
 
 export interface ConfiguredFixture {
+    /** Hub fixture GUID; used to match hub-resolved per-fixture events (e.g. `target`). */
+    guid?: string;
     name: string;
     fixtureProfile: FixtureProfile;
     location: [number, number, number];
@@ -37,6 +41,10 @@ export interface ConfiguredFixture {
     trim?: FixtureTrim;
     target?: [number, number, number];
     rotation?: [number, number, number];
+    /** Hub-resolved lookAt aim point (from a `target` event); null/undefined = no target → hold. */
+    resolvedTargetPos?: [number, number, number] | null;
+    /** Per-fixture continuous pan angle (deg) for >360° unwrap continuity. */
+    currentPanDeg?: number;
     /** Resolved synchronously from `fixtureProfile.class` when config is applied. */
     fixtureClass: IFixtureClass;
 }
@@ -122,6 +130,9 @@ function parseConfiguredFixture(raw: unknown, zoneName: string): ConfiguredFixtu
         range: o['range'],
         params,
     };
+    if (typeof o['guid'] === 'string') {
+        out.guid = o['guid'];
+    }
     if (o['target'] !== undefined && isTuple3(o['target'])) {
         out.target = o['target'];
     }

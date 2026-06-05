@@ -1,0 +1,4 @@
+[     822ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://kobald-ambitecture.local:8080/favicon.ico:0
+[     878ms] [INFO] surface-v2: [connection] registered as controller — waiting for config… @ http://kobald-ambitecture.local:8080/surface-v2/src/app/statusLogger.js:2
+[     908ms] [INFO] surface-v2: [config] graph initialized @ http://kobald-ambitecture.local:8080/surface-v2/src/app/statusLogger.js:2
+[    1046ms] [LOG] [config] 11 fixture(s) across 1 zone(s) @ http://kobald-ambitecture.local:8080/simulator-2d/src/handlers/ConfigHandler.js:84

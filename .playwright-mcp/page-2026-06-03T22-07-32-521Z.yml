@@ -1,0 +1,23 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - navigation "Layout presets" [ref=e3]:
+      - button "1l+1r" [pressed] [ref=e4] [cursor=pointer]
+      - button "1l+3r" [ref=e5] [cursor=pointer]
+      - button "1t+1b" [ref=e6] [cursor=pointer]
+    - main "Layout workspace" [ref=e7]:
+      - generic [ref=e8]:
+        - tablist [ref=e11]:
+          - tab "Perform" [ref=e12] [cursor=pointer]
+          - tab "Edit" [ref=e13] [cursor=pointer]
+          - tab "Scenes" [ref=e14] [cursor=pointer]
+        - generic "Resize panel" [ref=e18]
+        - tablist [ref=e21]:
+          - tab "Control" [ref=e22] [cursor=pointer]
+          - tab "Pulse" [ref=e23] [cursor=pointer]
+          - tab "Animate" [ref=e24] [cursor=pointer]
+          - tab "Snapshot" [ref=e25] [cursor=pointer]
+          - tab "Midi" [ref=e26] [cursor=pointer]
+  - generic [ref=e33]:
+    - iframe [ref=e34]:
+      - generic [ref=f1e4]: loading…
+    - button "Perform HUDs" [pressed] [ref=e36] [cursor=pointer]: ❂

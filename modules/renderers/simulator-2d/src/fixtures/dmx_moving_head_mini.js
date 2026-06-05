@@ -51,6 +51,17 @@ class DmxMovingHeadMini extends LightBase {
       boostBrightness *
       this._trimBrightness
     this.currentColor = { r: r * f, g: g * f, b: b * f }
+
+    // Aim the head icon at the hub-resolved lookAt point (simple vector math). Rotation that points
+    // the icon's top marker (local 0,-1) at the target: φ = atan2(dx, -dz). No target → no rotation.
+    const target = this._resolvedTargetPos
+    if (Array.isArray(target)) {
+      const dx = target[0] - this.location[0]
+      const dz = target[2] - this.location[2]
+      this._targetRotation = Math.atan2(dx, -dz)
+    } else {
+      this._targetRotation = null
+    }
   }
 
   draw (ctx, cx, cy, ppm) {
@@ -65,7 +76,16 @@ class DmxMovingHeadMini extends LightBase {
     const outline = globalThis.SimFixtureIcons?.movingHead
     if (outline && outline.complete && outline.naturalWidth > 0) {
       const d = radius * 2
-      ctx.drawImage(outline, cx - radius, cy - radius, d, d)
+      const rot = this._targetRotation
+      if (typeof rot === 'number') {
+        ctx.save()
+        ctx.translate(cx, cy)
+        ctx.rotate(rot)
+        ctx.drawImage(outline, -radius, -radius, d, d)
+        ctx.restore()
+      } else {
+        ctx.drawImage(outline, cx - radius, cy - radius, d, d)
+      }
     } else {
       ctx.beginPath()
       ctx.arc(cx, cy, radius, 0, Math.PI * 2)

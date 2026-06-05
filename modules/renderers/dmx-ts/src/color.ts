@@ -79,5 +79,11 @@ export class Color {
         };
     }
 
+    toRGBW(): { r: number; g: number; b: number; w: number } {
+        const { r, g, b } = this.toRGB();
+        const w = Math.min(r, g, b);
+        return { r: r - w, g: g - w, b: b - w, w };
+    }
+
     static black(): Color { return new Color(0.3127, 0.3290, 0); }
 }

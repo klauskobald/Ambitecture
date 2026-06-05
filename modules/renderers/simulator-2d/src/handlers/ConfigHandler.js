@@ -8,6 +8,7 @@ class ConfigHandler {
     this.fixtureClasses = {
       dmx_light_static: DmxLightStatic,
       dmx_basic_static: DmxBasicStatic,
+      dmx_moving_head_mini: DmxMovingHeadMini,
       neewer_basic: NeewerBasic,
       screen: Screen
     }

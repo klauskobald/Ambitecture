@@ -390,7 +390,7 @@ export class OverlayCanvas {
           return
         }
         const secondOnIntent = spatial
-          ? this._findIntentAt(x, y, spatial)
+          ? this._findIntentAt(x, y, spatial, intent => this._policy.isIntentVisible(intent))
           : null
         if (
           !this._lastTap.intentGuid &&
@@ -408,9 +408,10 @@ export class OverlayCanvas {
       }
     }
 
-    // Track this pointer for tap-vs-drag detection
+    // Track this pointer for tap-vs-drag detection. Tap (e.g. animate/perform filter) targets any
+    // visible intent of any class; only dragging requires canDragIntent. Fixtures are never tapped here.
     if (spatial) {
-      const intentGuid = this._findIntentAt(x, y, spatial)
+      const intentGuid = this._findIntentAt(x, y, spatial, intent => this._policy.isIntentVisible(intent))
       this._tapTracker = {
         pointerId: ev.pointerId,
         downX: x,
@@ -568,7 +569,7 @@ export class OverlayCanvas {
    * @param {HubSpatialState} spatial
    * @returns {string | null}
    */
-  _findIntentAt (cx, cy, spatial) {
+  _findIntentAt (cx, cy, spatial, accept = (intent) => this._policy.canDragIntent(intent)) {
     const simRect = this._viewport.getSimCanvasRect()
     if (!simRect) return null
     const overlayRect = this._canvas.getBoundingClientRect()
@@ -578,7 +579,7 @@ export class OverlayCanvas {
     for (const [guid, sharedIntent] of projectGraph.getIntents()) {
       if (alreadyGrabbed.has(guid)) continue
       const intent = projectGraph.getEffectiveIntent(guid) ?? sharedIntent
-      if (!this._policy.canDragIntent(intent)) continue
+      if (!accept(intent)) continue
       const i = /** @type {Record<string, unknown>} */ (intent)
       const pos = /** @type {number[] | undefined} */ (i.position)
       if (!pos) continue

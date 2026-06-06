@@ -70,7 +70,7 @@ export class PositionTargetManager {
     private projectManager: ProjectManager,
     private runtimeIntentStore: RuntimeIntentStore,
     private registry: ConnectionRegistry,
-  ) {}
+  ) { }
 
   start(): void {
     this.refresh();
@@ -224,7 +224,7 @@ export class PositionTargetManager {
     follower.lastLogMs = nowMs;
     const aim = dir ? `x=${dir[0].toFixed(2)} z=${dir[2].toFixed(2)}` : 'none (no in-range magnet)';
     const layerStr = maxLayer === -Infinity ? '—' : String(maxLayer);
-    Logger.info(`[target] ${follower.name} layer=${layerStr} aim(${aim}) ← ${dbg.join(' | ') || 'no magnets'}`);
+    // Logger.info(`[target] ${follower.name} layer=${layerStr} aim(${aim}) ← ${dbg.join(' | ') || 'no magnets'}`);
   }
 
   private emit(follower: Follower, position: Vec3): void {

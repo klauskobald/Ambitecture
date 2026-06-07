@@ -1,5 +1,5 @@
 import { ConfigHandler } from './handlers/ConfigHandler.js';
-import { EventsHandler } from './handlers/EventsHandler.js';
+import { FixtureStateHandler } from './handlers/FixtureStateHandler.js';
 import { HubConnection } from './HubConnection.js';
 import { LifecycleHud } from './LifecycleHud.js';
 import { ScreenFixturePicker } from './ScreenFixturePicker.js';
@@ -23,7 +23,7 @@ async function boot() {
   const configHandler = new ConfigHandler(screenRenderer);
 
   const selection = { guid: /** @type {string | null} */ (null) };
-  const eventsHandler = new EventsHandler(
+  const fixtureStateHandler = new FixtureStateHandler(
     configHandler,
     screenRenderer,
     () => selection.guid
@@ -51,18 +51,18 @@ async function boot() {
     onSelect: guid => {
       selection.guid = guid;
       screenRenderer.setSelectedFixtureGuid(guid);
-      eventsHandler.reapplyCurrentIntents(true);
+      fixtureStateHandler.reapplyCurrentIntents();
     }
   });
 
   configHandler.setOnConfigApplied(() => {
     picker.syncAfterConfig();
-    eventsHandler.reapplyCurrentIntents(true);
+    fixtureStateHandler.reapplyCurrentIntents();
   });
 
   const hub = new HubConnection({}, hud, {
     onConfig: payload => configHandler.handle(payload),
-    onEvents: payload => eventsHandler.handle(payload),
+    onFixtureState: payload => fixtureStateHandler.handle(payload),
   });
 
   hub.onBoot();

@@ -88,7 +88,7 @@ export class HubConnection {
 
   _handleOpen() {
     this.onOpen();
-    const payload = { role: 'renderer', guid: this._config.GUID, subscribe: { events: true } };
+    const payload = { role: 'renderer', guid: this._config.GUID, subscribe: { events: false, fixtureState: true } };
     const ok = this.send('register', payload);
     if (ok) this.onRegisterSent(payload);
   }
@@ -152,8 +152,8 @@ export class HubConnection {
         this.onConfig(message.payload);
         this._callbacks.onConfig?.(message.payload);
         break;
-      case 'events':
-        this._callbacks.onEvents?.(message.payload);
+      case 'fixtureState':
+        this._callbacks.onFixtureState?.(message.payload);
         break;
       case 'systemCapabilities':
         this.onSystemCapabilities(message.payload);

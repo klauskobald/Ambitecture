@@ -1,7 +1,23 @@
-import { EventQueue } from '../EventQueue.js';
-import { LayerIntentEngine } from '../layerIntent/LayerIntentEngine.js';
+import { Color } from '../color.js';
 
-export class EventsHandler {
+/**
+ * `light.color.xyY` arrives from the hub as `[x,y,Y]`; rewrap into a Color so the algorithm classes
+ * (which call `color.toRGB()`) are unchanged. Other caps pass through.
+ */
+function sampleFixtureCap(caps, key) {
+  const v = caps[key];
+  if (v === undefined) return undefined;
+  if (key === 'light.color.xyY' && Array.isArray(v) && v.length === 3) {
+    return new Color(v[0], v[1], v[2]);
+  }
+  return v;
+}
+
+/**
+ * Consumes the hub's resolved per-fixture `fixtureState` stream. All resolution is hub-side; the screen
+ * just composes the selected fixture's caps into a pixel (with render-time strobe gating in the draw loop).
+ */
+export class FixtureStateHandler {
   /**
    * @param {import('./ConfigHandler.js').ConfigHandler} configHandler
    * @param {import('../ScreenRenderer.js').ScreenRenderer} screenRenderer
@@ -11,23 +27,25 @@ export class EventsHandler {
     this.configHandler = configHandler;
     this._screenRenderer = screenRenderer;
     this._getSelectedScreenFixtureGuid = getSelectedScreenFixtureGuid;
-    this._layerIntentEngine = new LayerIntentEngine();
-    this.queue = new EventQueue(events => this.processBatch(events));
+    this._caps = new Map();
   }
 
   handle(payload) {
-    const events = payload;
-    if (!Array.isArray(events)) return;
-    this.queue.enqueue(events);
+    const entries = payload;
+    if (!Array.isArray(entries)) return;
+    for (const e of entries) {
+      if (e && typeof e.fixtureGuid === 'string' && e.caps && typeof e.caps === 'object') {
+        this._caps.set(e.fixtureGuid, e.caps);
+      }
+    }
+    this.reapplyCurrentIntents();
   }
 
-  reapplyCurrentIntents(clearFirst = false) {
-    if (clearFirst) this._layerIntentEngine.clear();
+  reapplyCurrentIntents() {
     const zones = this.configHandler.getZones();
     if (!Array.isArray(zones) || zones.length === 0) {
       return;
     }
-    const intentsByLayer = this._layerIntentEngine.getActiveIntents();
     const selectedGuid = this._getSelectedScreenFixtureGuid();
     for (const zone of zones) {
       for (const fixture of zone.fixtures) {
@@ -42,34 +60,13 @@ export class EventsHandler {
           fixtureWorldPos: fixture.location,
           zoneName: zone.name
         };
+        const caps = (fixture.guid && this._caps.get(fixture.guid)) || {};
         const snapshot = {
-          intentsByLayer,
-          sample: (capabilityKey, withSpatialFactor) =>
-            this._layerIntentEngine.sample(
-              context,
-              capabilityKey,
-              withSpatialFactor
-            )
+          sample: capabilityKey => sampleFixtureCap(caps, capabilityKey)
         };
         fixture.applyIntentSnapshot(context, snapshot);
       }
     }
     this._screenRenderer.markRenderActivity();
-  }
-
-  processBatch(events) {
-    const zones = this.configHandler.getZones();
-    if (!Array.isArray(zones) || zones.length === 0) {
-      return;
-    }
-    let anyChanged = false;
-    for (const event of events) {
-      const changed = this._layerIntentEngine.applyEvent(event, zones);
-      if (changed) {
-        anyChanged = true;
-      }
-    }
-    if (!anyChanged) return;
-    this.reapplyCurrentIntents();
   }
 }

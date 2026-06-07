@@ -54,7 +54,7 @@ class DmxMovingHeadMini extends LightBase {
 
     // Aim the head icon at the hub-resolved lookAt point (simple vector math). Rotation that points
     // the icon's top marker (local 0,-1) at the target: φ = atan2(dx, -dz). No target → no rotation.
-    const target = this._resolvedTargetPos
+    const target = snapshot.sample('target')
     if (Array.isArray(target)) {
       const dx = target[0] - this.location[0]
       const dz = target[2] - this.location[2]

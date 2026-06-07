@@ -1,24 +1,14 @@
 import { ConfiguredFixture } from '../handlers/ConfigHandler';
 import { DmxUniverse } from '../DmxUniverse';
-import { FixtureSampleContext, IntentRecord } from '../layerIntent/LayerIntentEngine';
 
-export interface RendererEvent {
-    guid?: string;
-    layer?: number;
-    class: string;
-    /** Present on hub-resolved per-fixture events (e.g. `target`); routes to that fixture by guid. */
-    fixtureGuid?: string;
-    scheduled?: number;
-    position?: [number, number, number];
-    radius?: number;
-    radiusFunction?: string;
-    params?: Record<string, unknown>;
-    /** Hub signals logical removal (scene change, etc.) — intent dropped from engine; not a params.alpha cue. */
-    removed?: boolean;
+export interface FixtureSampleContext {
+    fixture: ConfiguredFixture;
+    fixtureWorldPos: [number, number, number];
+    zoneName: string;
 }
 
+/** Hub-resolved per-fixture capabilities; `sample(key)` reads the value the hub already resolved. */
 export interface FixtureIntentSnapshot {
-    intentsByLayer: ReadonlyMap<string, IntentRecord>;
     sample<TValue>(capabilityKey: string, withSpatialFactor?: boolean): TValue | undefined;
 }
 

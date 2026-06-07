@@ -3,7 +3,7 @@ import { Logger } from './Logger';
 import { Config } from './Config';
 import { DmxUniverse } from './DmxUniverse';
 import { ConfigHandler } from './handlers/ConfigHandler';
-import { EventsHandler } from './handlers/EventsHandler';
+import { FixtureStateHandler } from './handlers/FixtureStateHandler';
 
 interface WsMessage {
     type: string;
@@ -33,12 +33,12 @@ export class HubConnection {
     constructor() {
         this.dmxUniverse = new DmxUniverse();
         const configHandler = new ConfigHandler(this.dmxUniverse);
-        const eventsHandler = new EventsHandler(configHandler, this.dmxUniverse);
-        configHandler.setOnConfigApplied(() => eventsHandler.reapplyCurrentIntents());
+        const fixtureStateHandler = new FixtureStateHandler(configHandler, this.dmxUniverse);
+        configHandler.setOnConfigApplied(() => fixtureStateHandler.reapplyCurrentIntents());
 
         this.handlers = new Map<string, MessageHandler>([
             ['config', configHandler],
-            ['events', eventsHandler],
+            ['fixtureState', fixtureStateHandler],
         ]);
     }
 
@@ -134,7 +134,7 @@ export class HubConnection {
                     role: 'renderer',
                     guid: Config.guid,
                     boundingBox: Config.boundingBox,
-                    subscribe: { events: true },
+                    subscribe: { events: false, fixtureState: true },
                 },
             },
         };

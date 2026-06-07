@@ -3,7 +3,7 @@ import { Logger } from '../Logger';
 import { DmxUniverse } from '../DmxUniverse';
 import { FixtureIntentSnapshot, IFixtureClass } from './IFixtureClass';
 import { DmxMap } from './DmxMap';
-import { FixtureSampleContext } from '../layerIntent/LayerIntentEngine';
+import { FixtureSampleContext } from './IFixtureClass';
 
 export abstract class DmxFixtureBase implements IFixtureClass {
     private readonly dmxMaps = new WeakMap<ConfiguredFixture, DmxMap>();

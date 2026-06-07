@@ -52,6 +52,11 @@ export class ConnectionRegistry {
     return info?.role === 'renderer' && info.subscribe?.events === true;
   }
 
+  wantsFixtureState(ws: WebSocket): boolean {
+    const info = this.clients.get(ws);
+    return info?.role === 'renderer' && info.subscribe?.fixtureState === true;
+  }
+
   getControllersSubscribedToRuntime(): WebSocket[] {
     return this.getByRole('controller').filter(ws => this.wantsRuntimeUpdates(ws));
   }

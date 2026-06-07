@@ -1,10 +1,12 @@
 export interface ClientSubscribeState {
   runtime: boolean;
   events: boolean;
+  /** Renderer wants hub-resolved per-fixture `fixtureState` instead of (or alongside) raw `events`. */
+  fixtureState: boolean;
 }
 
 export type ParsedControllerSubscribe = { runtime: boolean };
-export type ParsedRendererSubscribe = { events: boolean };
+export type ParsedRendererSubscribe = { events: boolean; fixtureState: boolean };
 
 export function parseSubscribe(
   role: 'controller' | 'renderer',
@@ -23,7 +25,7 @@ export function parseSubscribe(
   if (typeof s['events'] !== 'boolean') {
     return null;
   }
-  return { events: s['events'] };
+  return { events: s['events'], fixtureState: s['fixtureState'] === true };
 }
 
 export function toClientSubscribeState(
@@ -32,8 +34,8 @@ export function toClientSubscribeState(
 ): ClientSubscribeState {
   if (role === 'controller') {
     const p = parsed as ParsedControllerSubscribe;
-    return { runtime: p.runtime, events: false };
+    return { runtime: p.runtime, events: false, fixtureState: false };
   }
   const p = parsed as ParsedRendererSubscribe;
-  return { runtime: false, events: p.events };
+  return { runtime: false, events: p.events, fixtureState: p.fixtureState };
 }

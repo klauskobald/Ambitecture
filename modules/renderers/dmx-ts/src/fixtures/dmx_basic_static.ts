@@ -1,9 +1,8 @@
 import { Color } from '../color';
 import { DmxUniverse } from '../DmxUniverse';
 import { ConfiguredFixture } from '../handlers/ConfigHandler';
-import { FixtureIntentSnapshot } from './IFixtureClass';
+import { FixtureIntentSnapshot, FixtureSampleContext } from './IFixtureClass';
 import { DmxFixtureBase } from './DmxFixtureBase';
-import { FixtureSampleContext } from '../layerIntent/LayerIntentEngine';
 
 class DmxBasicStatic extends DmxFixtureBase {
     applyIntentSnapshot(

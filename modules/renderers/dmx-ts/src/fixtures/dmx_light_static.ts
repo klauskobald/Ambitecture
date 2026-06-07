@@ -3,7 +3,7 @@ import { DmxUniverse } from '../DmxUniverse';
 import { ConfiguredFixture } from '../handlers/ConfigHandler';
 import { FixtureIntentSnapshot } from './IFixtureClass';
 import { DmxFixtureBase } from './DmxFixtureBase';
-import { FixtureSampleContext } from '../layerIntent/LayerIntentEngine';
+import { FixtureSampleContext } from './IFixtureClass';
 
 class DmxLightStatic extends DmxFixtureBase {
     applyIntentSnapshot(

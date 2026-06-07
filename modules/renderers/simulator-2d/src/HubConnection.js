@@ -5,13 +5,16 @@ class HubConnection {
         this.ws = null;
 
         const configHandler = new ConfigHandler(renderer, config);
-        const eventsHandler = new EventsHandler(configHandler, renderer);
+        const capsByFixture = new Map();
+        const eventsHandler = new EventsHandler(configHandler, renderer, capsByFixture);
+        const fixtureStateHandler = new FixtureStateHandler(capsByFixture, renderer);
         renderer.setEventsHandler(eventsHandler);
         configHandler.setOnConfigApplied(() => eventsHandler.reapplyCurrentIntents());
 
         this.handlers = {
             config: configHandler,
             events: eventsHandler,
+            fixtureState: fixtureStateHandler,
         };
     }
 
@@ -61,7 +64,7 @@ class HubConnection {
                 payload: {
                     role: 'renderer',
                     guid: this.config.GUID,
-                    subscribe: { events: true },
+                    subscribe: { events: true, fixtureState: true },
                 },
             },
         }));

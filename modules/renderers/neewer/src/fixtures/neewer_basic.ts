@@ -1,9 +1,8 @@
 import { Color, rgbToHsv01 } from '../color';
 import { NeewerBus } from '../NeewerBus';
 import { ConfiguredFixture } from '../handlers/ConfigHandler';
-import { FixtureIntentSnapshot } from './IFixtureClass';
+import { FixtureIntentSnapshot, FixtureSampleContext } from './IFixtureClass';
 import { NeewerLightBase } from './NeewerLightBase';
-import { FixtureSampleContext } from '../layerIntent/LayerIntentEngine';
 
 class NeewerBasic extends NeewerLightBase {
     applyIntentSnapshot(

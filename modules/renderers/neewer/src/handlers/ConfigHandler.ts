@@ -1,6 +1,6 @@
 import WebSocket from 'ws';
 import { Logger } from '../Logger';
-import { normalizeBleAddress } from '../ble/bleLookup';
+import { normalizeBleAddress, type BleMatch } from '../ble/bleLookup';
 import { NeewerBus } from '../NeewerBus';
 import type { IFixtureClass } from '../fixtures/IFixtureClass';
 
@@ -21,6 +21,8 @@ export interface FixtureTrim {
 }
 
 export interface ConfiguredFixture {
+    /** Hub fixture GUID; used to match hub-resolved per-fixture `fixtureState` caps. */
+    guid?: string;
     name: string;
     fixtureProfile: FixtureProfile;
     location: [number, number, number];
@@ -110,6 +112,9 @@ function parseConfiguredFixture(raw: unknown, zoneName: string): ConfiguredFixtu
         range: o['range'],
         params,
     };
+    if (typeof o['guid'] === 'string') {
+        out.guid = o['guid'];
+    }
     if (o['target'] !== undefined && isTuple3(o['target'])) {
         out.target = o['target'];
     }
@@ -215,20 +220,29 @@ export class ConfigHandler {
         this.neewerBus.clearFixtures();
         for (const zone of this.zones) {
             for (const fixture of zone.fixtures) {
-                const bluetoothAddress = fixture.params['bluetoothAddress'];
-                if (typeof bluetoothAddress !== 'string' || bluetoothAddress.length === 0) {
+                const rawAddress = fixture.params['bluetoothAddress'];
+                const bluetoothAddress = typeof rawAddress === 'string' ? rawAddress : '';
+                const rawId = fixture.params['bluetoothId'];
+                const bluetoothId = typeof rawId === 'string' && rawId.trim().length > 0 ? rawId.trim() : undefined;
+
+                const hasMac = normalizeBleAddress(bluetoothAddress).length === 12;
+                if (bluetoothAddress.length > 0 && !hasMac) {
                     Logger.warn(
-                        `[config] fixture "${fixture.name}" missing params.bluetoothAddress — will not be driven`,
+                        `[config] fixture "${fixture.name}" params.bluetoothAddress must be a BLE MAC (e.g. ca:25:a6:0d:57:3d)`,
+                    );
+                }
+                if (!hasMac && bluetoothId === undefined) {
+                    Logger.warn(
+                        `[config] fixture "${fixture.name}" needs params.bluetoothId (noble id, macOS) and/or params.bluetoothAddress (MAC, Linux) — see "npm run discover". Will not be driven`,
                     );
                     continue;
                 }
-                if (normalizeBleAddress(bluetoothAddress).length !== 12) {
-                    Logger.warn(
-                        `[config] fixture "${fixture.name}" params.bluetoothAddress must be a BLE MAC (e.g. ca:25:a6:0d:57:3d) — will not be driven`,
-                    );
-                    continue;
-                }
-                this.neewerBus.registerFixture(fixture, bluetoothAddress);
+                // Match by exact noble id (macOS) or MAC (Linux) — set both in config; the renderer uses whichever the OS provides.
+                const match: BleMatch = {
+                    ...(hasMac ? { address: bluetoothAddress } : {}),
+                    ...(bluetoothId !== undefined ? { id: bluetoothId } : {}),
+                };
+                this.neewerBus.registerFixture(fixture, match);
             }
         }
 

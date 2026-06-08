@@ -5,7 +5,7 @@ import { NeewerBus } from './NeewerBus';
 import { NobleBleBus } from './ble/NobleBleBus';
 import { DiscoveryService } from './ble/DiscoveryService';
 import { ConfigHandler } from './handlers/ConfigHandler';
-import { EventsHandler } from './handlers/EventsHandler';
+import { FixtureStateHandler } from './handlers/FixtureStateHandler';
 
 interface WsMessage {
     type: string;
@@ -43,12 +43,12 @@ export class HubConnection {
         });
 
         const configHandler = new ConfigHandler(this.neewerBus);
-        const eventsHandler = new EventsHandler(configHandler, this.neewerBus);
-        configHandler.setOnConfigApplied(() => eventsHandler.reapplyCurrentIntents());
+        const fixtureStateHandler = new FixtureStateHandler(configHandler, this.neewerBus);
+        configHandler.setOnConfigApplied(() => fixtureStateHandler.reapplyCurrentIntents());
 
         this.handlers = new Map<string, MessageHandler>([
             ['config', configHandler],
-            ['events', eventsHandler],
+            ['fixtureState', fixtureStateHandler],
         ]);
     }
 
@@ -143,7 +143,7 @@ export class HubConnection {
                     role: 'renderer',
                     guid: Config.guid,
                     boundingBox: Config.boundingBox,
-                    subscribe: { events: true },
+                    subscribe: { events: false, fixtureState: true },
                 },
             },
         };

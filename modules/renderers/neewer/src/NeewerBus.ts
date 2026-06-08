@@ -1,6 +1,6 @@
 import { Logger } from './Logger';
 import { BleBus, BleConnection, DiscoveredPeripheral } from './ble/BleBus';
-import { peripheralMatchesAddress } from './ble/bleLookup';
+import { peripheralMatches, type BleMatch } from './ble/bleLookup';
 import { DiscoveryService } from './ble/DiscoveryService';
 import { SERVICE_UUID, WRITE_UUID, NOTIFY_UUID, hsv } from './ble/NeewerProtocol';
 import type { ConfiguredFixture } from './handlers/ConfigHandler';
@@ -13,7 +13,8 @@ interface HsvColor {
 
 interface FixtureBinding {
     fixture: ConfiguredFixture;
-    bluetoothAddress: string;
+    /** How to find this lamp: exact noble id (macOS), BLE MAC (Linux), and/or advertised name. */
+    match: BleMatch;
     connection: BleConnection | null;
     connecting: boolean;
     nextRetryAt: number;
@@ -50,17 +51,17 @@ export class NeewerBus {
         this.discovery.onDiscovered((p) => this.onPeripheralSeen(p));
     }
 
-    registerFixture(fixture: ConfiguredFixture, bluetoothAddress: string): void {
+    registerFixture(fixture: ConfiguredFixture, match: BleMatch): void {
         const key = this.bindingKey(fixture);
         const existing = this.bindings.get(key);
         if (existing) {
             existing.fixture = fixture;
-            existing.bluetoothAddress = bluetoothAddress;
+            existing.match = match;
             return;
         }
         this.bindings.set(key, {
             fixture,
-            bluetoothAddress,
+            match,
             connection: null,
             connecting: false,
             nextRetryAt: 0,
@@ -73,7 +74,7 @@ export class NeewerBus {
             frameTimer: null,
         });
 
-        if (this.discovery.resolveNobleId(bluetoothAddress) !== undefined) {
+        if (this.discovery.resolveNobleId(match) !== undefined) {
             void this.tryConnect(key);
         }
     }
@@ -108,7 +109,7 @@ export class NeewerBus {
                 Logger.warn(`[neewer] "${fixture.name}" is offline — dropping writes until reconnect`);
                 binding.offlineLogged = true;
             }
-            if (binding.nextRetryAt <= Date.now() && !binding.connecting && this.discovery.resolveNobleId(binding.bluetoothAddress) !== undefined) {
+            if (binding.nextRetryAt <= Date.now() && !binding.connecting && this.discovery.resolveNobleId(binding.match) !== undefined) {
                 void this.tryConnect(key);
             }
             return;
@@ -138,7 +139,7 @@ export class NeewerBus {
                 Logger.warn(`[neewer] "${fixture.name}" is offline — dropping writes until reconnect`);
                 binding.offlineLogged = true;
             }
-            if (binding.nextRetryAt <= Date.now() && !binding.connecting && this.discovery.resolveNobleId(binding.bluetoothAddress) !== undefined) {
+            if (binding.nextRetryAt <= Date.now() && !binding.connecting && this.discovery.resolveNobleId(binding.match) !== undefined) {
                 void this.tryConnect(key);
             }
             return;
@@ -191,7 +192,7 @@ export class NeewerBus {
     private onPeripheralSeen(peripheral: DiscoveredPeripheral): void {
         for (const [key, binding] of this.bindings) {
             if (
-                peripheralMatchesAddress(peripheral, binding.bluetoothAddress) &&
+                peripheralMatches(peripheral, binding.match) &&
                 !binding.connection &&
                 !binding.connecting
             ) {
@@ -205,7 +206,7 @@ export class NeewerBus {
         if (!binding || binding.connecting || binding.connection) return;
         if (Date.now() < binding.nextRetryAt) return;
 
-        const nobleId = this.discovery.resolveNobleId(binding.bluetoothAddress);
+        const nobleId = this.discovery.resolveNobleId(binding.match);
         if (nobleId === undefined) {
             binding.nextRetryAt = Date.now() + this.options.connectRetryInitialMs;
             this.scheduleReconnect(key);

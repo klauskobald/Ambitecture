@@ -1,7 +1,6 @@
 import { ConfiguredFixture } from '../handlers/ConfigHandler';
 import { NeewerBus } from '../NeewerBus';
-import { FixtureSampleContext } from '../layerIntent/LayerIntentEngine';
-import { FixtureIntentSnapshot, IFixtureClass } from './IFixtureClass';
+import { FixtureSampleContext, FixtureIntentSnapshot, IFixtureClass } from './IFixtureClass';
 import * as NeewerProtocol from '../ble/NeewerProtocol';
 import { FnCurve } from '../FnCurve';
 import { evaluateNeewerHue } from '../neewerHue';

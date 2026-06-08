@@ -1,11 +1,21 @@
 import { Logger } from '../Logger';
 import { BleBus, DiscoveredPeripheral } from './BleBus';
-import { resolveNobleIdForAddress } from './bleLookup';
+import { findNobleId, type BleMatch } from './bleLookup';
 import { looksLikeNeewer } from './NeewerProtocol';
 
 interface RegistryEntry {
     peripheral: DiscoveredPeripheral;
     lastSeenAt: number;
+}
+
+/**
+ * One-line summary for the discovery log so the user can copy a device's identifiers into the project
+ * fixture params: `id` (use as `params.bluetoothId` on macOS) and, where the OS reports it, `address`
+ * (use as `params.bluetoothAddress` on Linux/Raspberry). `name` is shown only to tell devices apart.
+ */
+function describePeripheral(p: DiscoveredPeripheral): string {
+    const addr = p.address ? ` address=${p.address}` : '';
+    return `${p.name ?? '(no name)'} id=${p.id}${addr} rssi=${p.rssi}`;
 }
 
 /** No advertisements this long → drop registry entry and reset noble handle. */
@@ -47,8 +57,8 @@ export class DiscoveryService {
         this.listeners.push(cb);
     }
 
-    resolveNobleId(bluetoothAddress: string): string | undefined {
-        return resolveNobleIdForAddress(bluetoothAddress, this.listKnown());
+    resolveNobleId(match: BleMatch): string | undefined {
+        return findNobleId(match, this.listKnown());
     }
 
     listKnown(): DiscoveredPeripheral[] {
@@ -65,14 +75,12 @@ export class DiscoveryService {
         this.registry.set(p.id, { peripheral: p, lastSeenAt: now });
 
         if (isNew) {
-            const addr = p.address ?? p.id;
-            Logger.info(`[discovery] found ${p.name} address=${addr} rssi=${p.rssi}`);
+            Logger.info(`[discovery] found ${describePeripheral(p)}`);
             for (const cb of this.listeners) cb(p);
             return;
         }
         if (reappeared) {
-            const addr = p.address ?? p.id;
-            Logger.info(`[discovery] back in range ${p.name} address=${addr} rssi=${p.rssi}`);
+            Logger.info(`[discovery] back in range ${describePeripheral(p)}`);
             for (const cb of this.listeners) cb(p);
         }
     }

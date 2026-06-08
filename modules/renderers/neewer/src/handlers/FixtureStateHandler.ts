@@ -1,8 +1,9 @@
 import WebSocket from 'ws';
-import { DmxUniverse } from '../DmxUniverse';
+import { NeewerBus } from '../NeewerBus';
 import { ConfigHandler, ConfiguredFixture } from './ConfigHandler';
 import { Color } from '../color';
 import { FixtureIntentSnapshot, FixtureSampleContext } from '../fixtures/IFixtureClass';
+import { strobeRegistry } from '../StrobeRegistry';
 
 interface WsMessage {
     type: string;
@@ -32,17 +33,15 @@ function sampleCap(caps: Record<string, unknown>, key: string): unknown {
 }
 
 /**
- * Consumes the hub's resolved per-fixture `fixtureState` stream: stores each fixture's `caps` and feeds
- * them to the fixture classes' `applyIntentSnapshot`. All resolution (spatial blend, layers, target) is
- * done on the hub; the renderer just composes for DMX.
+ * Consumes the hub's resolved per-fixture `fixtureState` stream and feeds each fixture's `caps` to the
+ * fixture classes' `applyIntentSnapshot` (which write the Neewer BLE bus). All resolution is hub-side.
  */
 export class FixtureStateHandler {
     private capsByFixture = new Map<string, Record<string, unknown>>();
 
-    constructor(private configHandler: ConfigHandler, private dmxUniverse: DmxUniverse) { }
+    constructor(private configHandler: ConfigHandler, private neewerBus: NeewerBus) {}
 
     handle(_ws: WebSocket, message: WsMessage): void {
-        // console.log(JSON.stringify(message, null, 2));
         const entries = message.payload as FixtureStateEntry[];
         if (!Array.isArray(entries)) return;
         for (const e of entries) {
@@ -54,6 +53,8 @@ export class FixtureStateHandler {
     }
 
     reapplyCurrentIntents(): void {
+        // A fresh config may change strobe params or drop fixtures; tear timers down and re-arm.
+        strobeRegistry.stopAll();
         this.applyAllFixtures();
     }
 
@@ -71,9 +72,8 @@ export class FixtureStateHandler {
                 const snapshot: FixtureIntentSnapshot = {
                     sample: <TValue>(capabilityKey: string) => sampleCap(caps, capabilityKey) as TValue | undefined,
                 };
-                fixture.fixtureClass.applyIntentSnapshot(fixture, context, snapshot, this.dmxUniverse);
+                fixture.fixtureClass.applyIntentSnapshot(fixture, context, snapshot, this.neewerBus);
             }
         }
-        this.dmxUniverse.flushNow();
     }
 }

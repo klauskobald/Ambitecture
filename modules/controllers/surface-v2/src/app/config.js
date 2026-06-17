@@ -14,6 +14,16 @@ import { parseLayoutCatalog } from '../layout/loadLayoutCatalog.js'
  * @property {string} overlayFingerStrokeRgba
  * @property {number} overlayLineWidthPx
  * @property {number} overlayTrailFadeMs
+ * @property {number} heightSliderOffsetPx
+ * @property {number} heightSliderLengthPx
+ * @property {number} heightSliderWidthPx
+ * @property {number} heightSliderKnobRadiusPx
+ * @property {number} heightSliderEngagedScale
+ * @property {number} heightSliderHitPaddingPx
+ * @property {string} heightSliderTrackRgba
+ * @property {string} heightSliderColorRgba
+ * @property {string} heightSliderLabelRgba
+ * @property {number} heightSliderLabelFontPx
  * @property {number} animateEditCellWidthPx
  * @property {number} animateEditCellGapPx
  * @property {number} animateEditCellPaddingPx
@@ -51,6 +61,16 @@ const REQUIRED_LAYOUT_KEYS = /** @type {(keyof LayoutConfig)[]} */ ([
   'overlayFingerStrokeRgba',
   'overlayLineWidthPx',
   'overlayTrailFadeMs',
+  'heightSliderOffsetPx',
+  'heightSliderLengthPx',
+  'heightSliderWidthPx',
+  'heightSliderKnobRadiusPx',
+  'heightSliderEngagedScale',
+  'heightSliderHitPaddingPx',
+  'heightSliderTrackRgba',
+  'heightSliderColorRgba',
+  'heightSliderLabelRgba',
+  'heightSliderLabelFontPx',
   'animateEditCellWidthPx',
   'animateEditCellGapPx',
   'animateEditCellPaddingPx',
@@ -77,7 +97,13 @@ function parseLayoutConfig (raw) {
       return null
     }
     const v = L[key]
-    if (key === 'overlayFingerFillRgba' || key === 'overlayFingerStrokeRgba') {
+    const isStringKey =
+      key === 'overlayFingerFillRgba' ||
+      key === 'overlayFingerStrokeRgba' ||
+      key === 'heightSliderTrackRgba' ||
+      key === 'heightSliderColorRgba' ||
+      key === 'heightSliderLabelRgba'
+    if (isStringKey) {
       if (typeof v !== 'string' || v.trim() === '') {
         statusDisplay.error(`config.json LAYOUT.${key} must be a string.`, 'config')
         return null

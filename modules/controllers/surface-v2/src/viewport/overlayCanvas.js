@@ -69,6 +69,8 @@ export class OverlayCanvas {
     this._activePointers = new Set()
     /** @type {Map<number, string>} pointerId → intent guid */
     this._draggedIntents = new Map()
+    /** @type {Map<number, string>} pointerId → target intent guid (height slider drag) */
+    this._draggedHeightSliders = new Map()
     /** @type {Map<number, string>} pointerId → fixture id */
     this._draggedFixtures = new Map()
     /** @type {((guid: string) => void) | null} */
@@ -255,6 +257,24 @@ export class OverlayCanvas {
         ctx.restore()
       }
 
+      // height sliders for target intents — visualise/edit position[1] (height in metres)
+      const yRange = spatial.y2 - spatial.y1
+      if (yRange > 0) {
+        const engagedGuids = new Set(this._draggedHeightSliders.values())
+        for (const { guid, intent } of sortedIntents) {
+          if (isIntentLocked(guid)) continue
+          const i = /** @type {Record<string, unknown>} */ (intent)
+          if (i.class !== 'target') continue
+          if (!this._policy.isIntentVisible(intent)) continue
+          const pos = /** @type {number[] | undefined} */ (i.position)
+          if (!pos || pos.length < 3) continue
+          const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, rect)
+          const height = Number(pos[1])
+          const t = Math.min(1, Math.max(0, (height - spatial.y1) / yRange))
+          this._drawHeightSlider(ctx, px, py, t, height, engagedGuids.has(guid))
+        }
+      }
+
       // selection manager bubbles — drawn last so they appear on top
       if (this._selectionManager) {
         this._selectionManager.draw(ctx, spatial, simRect, rect)
@@ -265,6 +285,7 @@ export class OverlayCanvas {
     const dragOrTrail =
       this._samples.length > 0 ||
       this._draggedIntents.size > 0 ||
+      this._draggedHeightSliders.size > 0 ||
       this._draggedFixtures.size > 0
     if (idleMs < this._inactivityStopMs || dragOrTrail) {
       this._rafId = requestAnimationFrame(() => this._runFrame())
@@ -378,6 +399,16 @@ export class OverlayCanvas {
       return
     }
 
+    // Height slider grab takes priority over cross dragging (it sits beside the marker).
+    if (spatial) {
+      const sliderGuid = this._findHeightSliderAt(x, y, spatial)
+      if (sliderGuid !== null) {
+        this._draggedHeightSliders.set(ev.pointerId, sliderGuid)
+        this._capture(ev)
+        return
+      }
+    }
+
     // Double-tap detection: second tap close to first within 300ms (intent edit or empty-canvas create)
     if (this._lastTap) {
       const elapsed = performance.now() - this._lastTap.t
@@ -446,9 +477,31 @@ export class OverlayCanvas {
     if (
       this._draggedFixtures.has(ev.pointerId) ||
       this._draggedIntents.has(ev.pointerId) ||
+      this._draggedHeightSliders.has(ev.pointerId) ||
       this._activePointers.has(ev.pointerId)
     ) {
       this.markRenderActivity()
+    }
+    const sliderGuid = this._draggedHeightSliders.get(ev.pointerId)
+    if (sliderGuid !== undefined) {
+      const spatial = projectGraph.getSpatial()
+      const simRect = this._viewport.getSimCanvasRect()
+      if (!spatial || !simRect) return
+      const yRange = spatial.y2 - spatial.y1
+      if (!(yRange > 0)) return
+      const intent =
+        projectGraph.getEffectiveIntent(sliderGuid) ??
+        projectGraph.getIntents().get(sliderGuid)
+      const pos =
+        intent && /** @type {Record<string, unknown>} */ (intent).position
+      if (!Array.isArray(pos)) return
+      const rect = this._canvas.getBoundingClientRect()
+      const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, rect)
+      const g = this._heightSliderGeometry(px, py, 0, true)
+      const canvasY = ev.clientY - rect.top
+      const frac = Math.min(1, Math.max(0, (g.bottomY - canvasY) / g.length))
+      this._policy.onIntentHeightMove(sliderGuid, spatial.y1 + frac * yRange)
+      return
     }
     const fixtureId = this._draggedFixtures.get(ev.pointerId)
     if (fixtureId !== undefined) {
@@ -520,8 +573,11 @@ export class OverlayCanvas {
 
     const guid = this._draggedIntents.get(ev.pointerId)
     if (guid !== undefined) this._policy.onIntentMoveEnd(guid)
+    const sliderGuid = this._draggedHeightSliders.get(ev.pointerId)
+    if (sliderGuid !== undefined) this._policy.onIntentHeightMoveEnd(sliderGuid)
     this._activePointers.delete(ev.pointerId)
     this._draggedIntents.delete(ev.pointerId)
+    this._draggedHeightSliders.delete(ev.pointerId)
     this._draggedFixtures.delete(ev.pointerId)
     try {
       this._canvas.releasePointerCapture(ev.pointerId)
@@ -561,6 +617,117 @@ export class OverlayCanvas {
     if (!spatial) return
     const m = overlayClientToBboxMeters(clientX, clientY, this._canvas, spatial)
     if (!m) return
+  }
+
+  /**
+   * Vertical height-slider geometry in overlay-canvas pixels. `t` is the height
+   * fraction (0 = floor at the bottom, 1 = ceiling at the top). When engaged the
+   * whole control is scaled up (touch zoom, mirrors the radial knob behaviour).
+   * @param {number} px  cross pixel x
+   * @param {number} py  cross pixel y
+   * @param {number} t   height fraction 0..1
+   * @param {boolean} engaged
+   */
+  _heightSliderGeometry (px, py, t, engaged) {
+    const L = this._L
+    const scale = engaged ? L.heightSliderEngagedScale : 1
+    const length = L.heightSliderLengthPx * scale
+    const knobR = L.heightSliderKnobRadiusPx * scale
+    const trackX = px + L.heightSliderOffsetPx * scale
+    const topY = py - length / 2
+    const bottomY = py + length / 2
+    const knobY = bottomY - t * length
+    const hitPad = L.heightSliderHitPaddingPx
+    return {
+      scale,
+      length,
+      knobR,
+      trackX,
+      topY,
+      bottomY,
+      knobY,
+      hitX0: trackX - hitPad,
+      hitX1: trackX + hitPad,
+      hitY0: topY - hitPad,
+      hitY1: bottomY + hitPad
+    }
+  }
+
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} px
+   * @param {number} py
+   * @param {number} t       height fraction 0..1
+   * @param {number} meters  height value for the label
+   * @param {boolean} engaged
+   */
+  _drawHeightSlider (ctx, px, py, t, meters, engaged) {
+    const L = this._L
+    const g = this._heightSliderGeometry(px, py, t, engaged)
+    ctx.save()
+    ctx.lineCap = 'round'
+    ctx.strokeStyle = L.heightSliderTrackRgba
+    ctx.lineWidth = L.heightSliderWidthPx * g.scale
+    ctx.beginPath()
+    ctx.moveTo(g.trackX, g.topY)
+    ctx.lineTo(g.trackX, g.bottomY)
+    ctx.stroke()
+    // floor baseline tick (0 m)
+    ctx.beginPath()
+    ctx.moveTo(g.trackX - 3 * g.scale, g.bottomY)
+    ctx.lineTo(g.trackX + 3 * g.scale, g.bottomY)
+    ctx.stroke()
+    // knob
+    ctx.beginPath()
+    ctx.arc(g.trackX, g.knobY, g.knobR, 0, Math.PI * 2)
+    ctx.fillStyle = L.heightSliderColorRgba
+    ctx.fill()
+    // metres label beside the knob
+    ctx.font = `${L.heightSliderLabelFontPx * g.scale}px monospace`
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'middle'
+    ctx.fillStyle = L.heightSliderLabelRgba
+    ctx.fillText(`${meters.toFixed(1)} m`, g.trackX + g.knobR + 4 * g.scale, g.knobY)
+    ctx.restore()
+  }
+
+  /**
+   * Hit-test the (unzoomed) height sliders of visible target intents.
+   * @param {number} cx canvas-local x
+   * @param {number} cy canvas-local y
+   * @param {HubSpatialState} spatial
+   * @returns {string | null}
+   */
+  _findHeightSliderAt (cx, cy, spatial) {
+    const yRange = spatial.y2 - spatial.y1
+    if (!(yRange > 0)) return null
+    const simRect = this._viewport.getSimCanvasRect()
+    if (!simRect) return null
+    const overlayRect = this._canvas.getBoundingClientRect()
+    let nearest = null
+    let nearestDx = Infinity
+    for (const [guid, sharedIntent] of projectGraph.getIntents()) {
+      const intent = projectGraph.getEffectiveIntent(guid) ?? sharedIntent
+      const i = /** @type {Record<string, unknown>} */ (intent)
+      if (!i || i.class !== 'target') continue
+      if (isIntentLocked(guid)) continue
+      // Grabbing follows the same gate as cross dragging: perform requires performEnabled.
+      if (!this._policy.canDragIntent(intent)) continue
+      const pos = /** @type {number[] | undefined} */ (i.position)
+      if (!pos || pos.length < 3) continue
+      const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, overlayRect)
+      const t = Math.min(1, Math.max(0, (Number(pos[1]) - spatial.y1) / yRange))
+      const g = this._heightSliderGeometry(px, py, t, false)
+      const inside =
+        cx >= g.hitX0 && cx <= g.hitX1 && cy >= g.hitY0 && cy <= g.hitY1
+      if (!inside) continue
+      const dx = Math.abs(cx - g.trackX)
+      if (dx < nearestDx) {
+        nearest = guid
+        nearestDx = dx
+      }
+    }
+    return nearest
   }
 
   /**

@@ -70,7 +70,7 @@
   <script src="src/HubConnection.js"></script>
   <script>
     (async () => {
-      const config = await fetch('./src/config.json').then(r => r.json());
+      const config = await fetch(`./src/config.json?t=${Date.now()}`, { cache: 'no-store' }).then(r => r.json());
       const stage = document.getElementById('sim-stage');
       const canvas = document.getElementById('sim-canvas');
       if (!(stage instanceof HTMLElement) || !(canvas instanceof HTMLCanvasElement)) {

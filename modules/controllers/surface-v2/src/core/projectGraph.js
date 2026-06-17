@@ -1030,6 +1030,23 @@ class ProjectGraph {
   }
 
   /**
+   * Height (y) twin of {@link updateIntentPosition}: keeps x/z, replaces position[1].
+   * @param {string} guid
+   * @param {number} wy
+   * @returns {{ guid: string, patch: { position: number[] } } | null}
+   */
+  updateIntentHeight (guid, wy) {
+    const intent = this._data.intents.get(guid)
+    if (!intent) return null
+    this._trustHubReconciledIntentRow.delete(guid)
+    const i = /** @type {Record<string, unknown>} */ (intent)
+    const pos = /** @type {number[] | undefined} */ (i.position)
+    const updated = { ...i, position: [pos?.[0] ?? 0, wy, pos?.[2] ?? 0] }
+    this._data.intents.set(guid, updated)
+    return { guid, patch: { position: updated.position } }
+  }
+
+  /**
    * Build a position patch from the current effective intent; does not mutate locally
    * (hub echoes runtime:update which updates `intents`).
    * @param {string} guid
@@ -1045,6 +1062,24 @@ class ProjectGraph {
       wx,
       pos?.[1] ?? 0,
       wz
+    ])
+    return { guid, patch: { position } }
+  }
+
+  /**
+   * Height (y) twin of {@link updateRuntimeIntentPosition}: keeps x/z, replaces position[1].
+   * @param {string} guid
+   * @param {number} wy
+   * @returns {{ guid: string, patch: { position: [number, number, number] } } | null}
+   */
+  updateRuntimeIntentHeight (guid, wy) {
+    const intent = this.getEffectiveIntent(guid)
+    if (!intent) return null
+    const pos = /** @type {number[] | undefined} */ (intent.position)
+    const position = /** @type {[number, number, number]} */ ([
+      pos?.[0] ?? 0,
+      wy,
+      pos?.[2] ?? 0
     ])
     return { guid, patch: { position } }
   }

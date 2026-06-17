@@ -15,6 +15,8 @@ import {
  * @property {(fixture: unknown) => boolean} canDragFixture
  * @property {(guid: string, wx: number, wz: number) => void} onIntentMove
  * @property {(guid: string) => void} onIntentMoveEnd
+ * @property {(guid: string, wy: number) => void} onIntentHeightMove
+ * @property {(guid: string) => void} onIntentHeightMoveEnd
  * @property {(id: string, wx: number, wz: number) => void} onFixtureMove
  */
 
@@ -51,6 +53,19 @@ function updatePerformPositionOverlayIfActive (guid, wx, wz) {
   return true
 }
 
+/** Height (y) twin of {@link updatePerformPositionOverlayIfActive}. */
+function updatePerformHeightOverlayIfActive (guid, wy) {
+  const activeScene = projectGraph.getActiveSceneName()
+  if (
+    !activeScene ||
+    !projectGraph.isSceneIntentOverlayed(activeScene, guid, 'position')
+  )
+    return false
+  const updated = projectGraph.updateRuntimeIntentHeight(guid, wy)
+  if (updated) queueIntentUpdate(updated)
+  return true
+}
+
 /**
  * Edit pane: overlayed position is durable scene YAML only — mutate local overlay, no runtime:command.
  * @param {string} guid
@@ -68,6 +83,26 @@ function updateEditPositionOverlayIfActive (guid, wx, wz) {
   const cur = projectGraph.getEffectiveIntentProperty(guid, 'position')
   const y = Array.isArray(cur) ? Number(cur[1] ?? 0) : 0
   projectGraph.setSceneIntentOverlay(activeScene, guid, 'position', [wx, y, wz])
+  return true
+}
+
+/**
+ * Edit pane height (y) twin of {@link updateEditPositionOverlayIfActive}: preserve x/z.
+ * @param {string} guid
+ * @param {number} wy
+ * @returns {boolean}
+ */
+function updateEditHeightOverlayIfActive (guid, wy) {
+  const activeScene = projectGraph.getActiveSceneName()
+  if (
+    !activeScene ||
+    !projectGraph.isSceneIntentOverlayed(activeScene, guid, 'position')
+  )
+    return false
+  const cur = projectGraph.getEffectiveIntentProperty(guid, 'position')
+  const x = Array.isArray(cur) ? Number(cur[0] ?? 0) : 0
+  const z = Array.isArray(cur) ? Number(cur[2] ?? 0) : 0
+  projectGraph.setSceneIntentOverlay(activeScene, guid, 'position', [x, wy, z])
   return true
 }
 
@@ -115,6 +150,12 @@ export const performPolicy = {
     queueIntentUpdate({ guid, patch: { position } })
   },
   onIntentMoveEnd (_guid) {},
+  onIntentHeightMove (guid, wy) {
+    if (updatePerformHeightOverlayIfActive(guid, wy)) return
+    const updated = projectGraph.updateRuntimeIntentHeight(guid, wy)
+    if (updated) queueIntentUpdate(updated)
+  },
+  onIntentHeightMoveEnd (_guid) {},
   onFixtureMove (_id, _wx, _wz) {}
 }
 
@@ -137,6 +178,15 @@ export const editPolicy = {
     if (updated) queueIntentUpdate(updated)
   },
   onIntentMoveEnd (guid) {
+    if (savePositionOverlayIfActive(guid)) return
+    sendSaveProject('intents', [...projectGraph.getIntents().values()])
+  },
+  onIntentHeightMove (guid, wy) {
+    if (updateEditHeightOverlayIfActive(guid, wy)) return
+    const updated = projectGraph.updateIntentHeight(guid, wy)
+    if (updated) queueIntentUpdate(updated)
+  },
+  onIntentHeightMoveEnd (guid) {
     if (savePositionOverlayIfActive(guid)) return
     sendSaveProject('intents', [...projectGraph.getIntents().values()])
   },
@@ -165,5 +215,7 @@ export const noopPolicy = {
   },
   onIntentMove (_guid, _wx, _wz) {},
   onIntentMoveEnd (_guid) {},
+  onIntentHeightMove (_guid, _wy) {},
+  onIntentHeightMoveEnd (_guid) {},
   onFixtureMove (_id, _wx, _wz) {}
 }

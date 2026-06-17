@@ -17,6 +17,13 @@
   "EVENT_DRAW": {
     "square": {
       "size": 0.3
+    },
+    "shadow": {
+      "offsetPerMeterPx": 6,
+      "blurPerMeterPx": 4,
+      "baseRadiusFactor": 0.55,
+      "baseOpacity": 0.45,
+      "color": "0,0,0"
     }
   }
 }

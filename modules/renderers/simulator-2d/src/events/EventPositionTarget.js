@@ -9,6 +9,7 @@ class EventPositionTarget extends EventBase {
   }
 
   draw (ctx, cx, cy, ppm) {
+    this._drawShadow(ctx, cx, cy, ppm)
     if (this._radius > 0) {
       ctx.save()
       ctx.beginPath()
@@ -33,6 +34,34 @@ class EventPositionTarget extends EventBase {
     ctx.stroke()
     const label = this._name ? `${this._name} (L${this._layer})` : `target L${this._layer}`
     CanvasDraw.drawLabel(ctx, cx, cy, r, label)
+  }
+
+  /** Cast shadow on the floor — drifts to bottom-right and blurs as the target rises (position[1]). */
+  _drawShadow (ctx, cx, cy, ppm) {
+    const cfg = this._drawConfig?.shadow
+    if (!cfg) return
+    const height = Math.max(0, this._position?.[1] ?? 0) + 0.1
+    const offset = height * cfg.offsetPerMeterPx
+    const blur = height * cfg.blurPerMeterPx
+    const opacity = cfg.baseOpacity / (1 + height * 0.5)
+    const radius = (this._drawConfig?.square?.size ?? 0.3) * ppm * cfg.baseRadiusFactor
+    const sx = cx + offset
+    const sy = cy + offset
+    const extent = radius + Math.max(0, blur)
+    if (!(extent > 0)) return
+    ctx.save()
+    const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, extent)
+    const coreStop = radius / extent
+    grad.addColorStop(0, `rgba(${cfg.color}, ${opacity})`)
+    if (coreStop < 1) {
+      grad.addColorStop(coreStop, `rgba(${cfg.color}, ${opacity * 0.4})`)
+    }
+    grad.addColorStop(1, `rgba(${cfg.color}, 0)`)
+    ctx.fillStyle = grad
+    ctx.beginPath()
+    ctx.arc(sx, sy, extent, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.restore()
   }
 }
 

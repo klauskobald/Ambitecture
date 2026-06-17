@@ -110,6 +110,10 @@ async function sendFile(req, res, rootAbs, fileAbs) {
   const mime = mimeForFilePath(realFile);
   res.setHeader('Content-Type', mime);
   res.setHeader('Content-Length', String(stat.size));
+  // Dev static host: never let the browser cache module/config/iframe assets, so
+  // edits show up on a normal reload (browsers don't reliably force-revalidate
+  // fetches inside a cross-document iframe on a parent hard-reload).
+  res.setHeader('Cache-Control', 'no-store');
   res.writeHead(200);
   if (req.method === 'HEAD') {
     res.end();

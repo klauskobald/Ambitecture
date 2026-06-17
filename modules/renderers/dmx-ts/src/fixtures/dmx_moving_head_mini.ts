@@ -54,10 +54,11 @@ class DmxMovingHeadMini extends DmxFixtureBase {
 
         const target = snapshot.sample<[number, number, number]>('target') ?? null;
         this.applyPan(fixture, context, target, dmxUniverse);
+        this.applyTilt(fixture, context, target, dmxUniverse);
     }
 
     // Pan aims at the hub-resolved lookAt point (simple vector math). xy-speed is parked at 0 since the
-    // hub eases the target itself; tilt holds at raw 0 (deferred). Pan unwrap keeps >360° continuity.
+    // hub eases the target itself. Pan unwrap keeps >360° continuity.
     private applyPan(
         fixture: ConfiguredFixture,
         context: FixtureSampleContext,
@@ -65,7 +66,6 @@ class DmxMovingHeadMini extends DmxFixtureBase {
         dmxUniverse: DmxUniverse
     ): void {
         this.writeFunction(fixture, 'xy-speed', 0, dmxUniverse);
-        this.writeFunction(fixture, 'tilt', 0, dmxUniverse);
 
         const panDegrees = this.getFunctionDegrees(fixture, 'pan');
         if (!panDegrees || panDegrees <= 0 || !target) return;
@@ -80,6 +80,32 @@ class DmxMovingHeadMini extends DmxFixtureBase {
         const next = panUnwrap(current, headingDeg, panDegrees);
         fixture.currentPanDeg = next;
         this.writeFunction(fixture, 'pan', next / panDegrees, dmxUniverse);
+    }
+
+    // Tilt aims at the elevation of the hub-resolved lookAt point. The vertical angle from the fixture to
+    // the target maps onto the head's mechanical range, centred (range/2) on the horizontal plane.
+    private applyTilt(
+        fixture: ConfiguredFixture,
+        context: FixtureSampleContext,
+        target: [number, number, number] | null,
+        dmxUniverse: DmxUniverse
+    ): void {
+        const tiltDegrees = this.getFunctionDegrees(fixture, 'tilt');
+        if (!tiltDegrees || tiltDegrees <= 0 || !target) {
+            this.writeFunction(fixture, 'tilt', 0, dmxUniverse);
+            return;
+        }
+
+        const [fx, fy, fz] = context.fixtureWorldPos;
+        const horizontalDist = Math.hypot(target[0] - fx, target[2] - fz);
+        const mount = readAxisMount(fixture, 'tilt');
+        // Negated so the centred range maps a target above the fixture to "beam up". Physical
+        // mounting orientation is handled separately by mount.reverse.
+        let elevationDeg = -Math.atan2(horizontalDist, target[1] - fy) * (180 / Math.PI);
+        if (mount.reverse) elevationDeg = -elevationDeg;
+
+        const tiltDeg = tiltDegrees / 2 + elevationDeg + mount.trimDegrees;
+        this.writeFunction(fixture, 'tilt', tiltDeg / tiltDegrees, dmxUniverse);
     }
 }
 

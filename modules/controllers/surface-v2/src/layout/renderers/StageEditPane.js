@@ -165,6 +165,7 @@ export class StageEditPane {
   _toggleFixtureLock () {
     setEditFixturesUnlocked(!getEditFixturesUnlocked())
     this._refreshFixtureLockButton()
+    getStageOverlay()?.markRenderActivity()
   }
 
   /**

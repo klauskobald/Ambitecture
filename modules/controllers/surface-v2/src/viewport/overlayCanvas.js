@@ -73,6 +73,8 @@ export class OverlayCanvas {
     this._draggedHeightSliders = new Map()
     /** @type {Map<number, string>} pointerId → fixture id */
     this._draggedFixtures = new Map()
+    /** @type {Map<number, string>} pointerId → fixture id (height slider drag) */
+    this._draggedFixtureHeightSliders = new Map()
     /** @type {((guid: string) => void) | null} */
     this._doubleTapIntentCallback = null
     /** @type {((guid: string) => void) | null} */
@@ -275,6 +277,25 @@ export class OverlayCanvas {
         }
       }
 
+      // fixtures: a height slider while fixture editing is unlocked (no shadow), otherwise a
+      // small metres label beneath the fixture so perform/locked views still read its height.
+      if (yRange > 0) {
+        const engagedFixtures = new Set(this._draggedFixtureHeightSliders.values())
+        for (const [id, fixture] of projectGraph.getFixtures()) {
+          const f = /** @type {Record<string, unknown>} */ (fixture)
+          const pos = /** @type {number[] | undefined} */ (f.position)
+          if (!pos || pos.length < 3) continue
+          const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, rect)
+          const height = Number(pos[1])
+          if (this._policy.canDragFixture(fixture)) {
+            const t = Math.min(1, Math.max(0, (height - spatial.y1) / yRange))
+            this._drawHeightSlider(ctx, px, py, t, height, engagedFixtures.has(id))
+          } else {
+            this._drawFixtureHeightLabel(ctx, px, py, height)
+          }
+        }
+      }
+
       // selection manager bubbles — drawn last so they appear on top
       if (this._selectionManager) {
         this._selectionManager.draw(ctx, spatial, simRect, rect)
@@ -286,7 +307,8 @@ export class OverlayCanvas {
       this._samples.length > 0 ||
       this._draggedIntents.size > 0 ||
       this._draggedHeightSliders.size > 0 ||
-      this._draggedFixtures.size > 0
+      this._draggedFixtures.size > 0 ||
+      this._draggedFixtureHeightSliders.size > 0
     if (idleMs < this._inactivityStopMs || dragOrTrail) {
       this._rafId = requestAnimationFrame(() => this._runFrame())
     }
@@ -407,6 +429,12 @@ export class OverlayCanvas {
         this._capture(ev)
         return
       }
+      const sliderFixtureId = this._findFixtureHeightSliderAt(x, y, spatial)
+      if (sliderFixtureId !== null) {
+        this._draggedFixtureHeightSliders.set(ev.pointerId, sliderFixtureId)
+        this._capture(ev)
+        return
+      }
     }
 
     // Double-tap detection: second tap close to first within 300ms (intent edit or empty-canvas create)
@@ -476,6 +504,7 @@ export class OverlayCanvas {
   _onPointerMove (ev) {
     if (
       this._draggedFixtures.has(ev.pointerId) ||
+      this._draggedFixtureHeightSliders.has(ev.pointerId) ||
       this._draggedIntents.has(ev.pointerId) ||
       this._draggedHeightSliders.has(ev.pointerId) ||
       this._activePointers.has(ev.pointerId)
@@ -501,6 +530,24 @@ export class OverlayCanvas {
       const canvasY = ev.clientY - rect.top
       const frac = Math.min(1, Math.max(0, (g.bottomY - canvasY) / g.length))
       this._policy.onIntentHeightMove(sliderGuid, spatial.y1 + frac * yRange)
+      return
+    }
+    const sliderFixtureId = this._draggedFixtureHeightSliders.get(ev.pointerId)
+    if (sliderFixtureId !== undefined) {
+      const spatial = projectGraph.getSpatial()
+      const simRect = this._viewport.getSimCanvasRect()
+      if (!spatial || !simRect) return
+      const yRange = spatial.y2 - spatial.y1
+      if (!(yRange > 0)) return
+      const fixture = projectGraph.getFixtures().get(sliderFixtureId)
+      const pos = fixture && /** @type {Record<string, unknown>} */ (fixture).position
+      if (!Array.isArray(pos)) return
+      const rect = this._canvas.getBoundingClientRect()
+      const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, rect)
+      const g = this._heightSliderGeometry(px, py, 0, true)
+      const canvasY = ev.clientY - rect.top
+      const frac = Math.min(1, Math.max(0, (g.bottomY - canvasY) / g.length))
+      this._policy.onFixtureHeightMove(sliderFixtureId, spatial.y1 + frac * yRange)
       return
     }
     const fixtureId = this._draggedFixtures.get(ev.pointerId)
@@ -575,10 +622,13 @@ export class OverlayCanvas {
     if (guid !== undefined) this._policy.onIntentMoveEnd(guid)
     const sliderGuid = this._draggedHeightSliders.get(ev.pointerId)
     if (sliderGuid !== undefined) this._policy.onIntentHeightMoveEnd(sliderGuid)
+    const sliderFixtureId = this._draggedFixtureHeightSliders.get(ev.pointerId)
+    if (sliderFixtureId !== undefined) this._policy.onFixtureHeightMoveEnd(sliderFixtureId)
     this._activePointers.delete(ev.pointerId)
     this._draggedIntents.delete(ev.pointerId)
     this._draggedHeightSliders.delete(ev.pointerId)
     this._draggedFixtures.delete(ev.pointerId)
+    this._draggedFixtureHeightSliders.delete(ev.pointerId)
     try {
       this._canvas.releasePointerCapture(ev.pointerId)
     } catch {
@@ -724,6 +774,60 @@ export class OverlayCanvas {
       const dx = Math.abs(cx - g.trackX)
       if (dx < nearestDx) {
         nearest = guid
+        nearestDx = dx
+      }
+    }
+    return nearest
+  }
+
+  /**
+   * Small metres label drawn beneath a fixture marker (perform / fixtures-locked views).
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} px
+   * @param {number} py
+   * @param {number} meters
+   */
+  _drawFixtureHeightLabel (ctx, px, py, meters) {
+    const L = this._L
+    ctx.save()
+    ctx.font = `${L.heightSliderLabelFontPx}px monospace`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'top'
+    ctx.fillStyle = L.heightSliderLabelRgba
+    ctx.fillText(`${meters.toFixed(1)} m`, px, py + L.heightSliderKnobRadiusPx + 6)
+    ctx.restore()
+  }
+
+  /**
+   * Hit-test the height sliders of draggable fixtures (only present while fixture editing
+   * is unlocked, per {@link InteractionPolicy.canDragFixture}).
+   * @param {number} cx canvas-local x
+   * @param {number} cy canvas-local y
+   * @param {HubSpatialState} spatial
+   * @returns {string | null}
+   */
+  _findFixtureHeightSliderAt (cx, cy, spatial) {
+    const yRange = spatial.y2 - spatial.y1
+    if (!(yRange > 0)) return null
+    const simRect = this._viewport.getSimCanvasRect()
+    if (!simRect) return null
+    const overlayRect = this._canvas.getBoundingClientRect()
+    let nearest = null
+    let nearestDx = Infinity
+    for (const [id, fixture] of projectGraph.getFixtures()) {
+      if (!this._policy.canDragFixture(fixture)) continue
+      const f = /** @type {Record<string, unknown>} */ (fixture)
+      const pos = /** @type {number[] | undefined} */ (f.position)
+      if (!pos || pos.length < 3) continue
+      const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, overlayRect)
+      const t = Math.min(1, Math.max(0, (Number(pos[1]) - spatial.y1) / yRange))
+      const g = this._heightSliderGeometry(px, py, t, false)
+      const inside =
+        cx >= g.hitX0 && cx <= g.hitX1 && cy >= g.hitY0 && cy <= g.hitY1
+      if (!inside) continue
+      const dx = Math.abs(cx - g.trackX)
+      if (dx < nearestDx) {
+        nearest = id
         nearestDx = dx
       }
     }

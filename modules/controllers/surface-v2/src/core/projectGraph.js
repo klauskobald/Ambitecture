@@ -1109,6 +1109,27 @@ class ProjectGraph {
   }
 
   /**
+   * Height (y) twin of {@link updateFixturePosition}: keeps x/z, replaces position[1].
+   * @param {string} id
+   * @param {number} wy
+   * @returns {{ guid: string, zoneName: string, fixtureName: string, position: [number, number, number] } | null}
+   */
+  updateFixtureHeight (id, wy) {
+    const fixture = this._fixtures.get(id)
+    if (!fixture) return null
+    const updated = {
+      ...fixture,
+      position: /** @type {[number, number, number]} */ ([
+        fixture.position[0] ?? 0,
+        wy,
+        fixture.position[2] ?? 0
+      ])
+    }
+    this._fixtures.set(id, updated)
+    return updated
+  }
+
+  /**
    * @param {unknown[]} incomingIntents
    * @param {((intent: unknown) => void) | null} queueFn
    * @param {{ pruneMissing?: boolean }} [opts]

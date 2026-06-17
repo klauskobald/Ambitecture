@@ -101,7 +101,9 @@ class DmxMovingHeadMini extends DmxFixtureBase {
         const mount = readAxisMount(fixture, 'tilt');
         // Negated so the centred range maps a target above the fixture to "beam up". Physical
         // mounting orientation is handled separately by mount.reverse.
-        let elevationDeg = -Math.atan2(horizontalDist, target[1] - fy) * (180 / Math.PI);
+        const a = fixture.params['headDown'] ? Math.atan2(horizontalDist, fy - target[1]) : Math.atan2(horizontalDist, target[1] - fy)
+        // const a = Math.atan2(target[1] - fy, horizontalDist)
+        let elevationDeg = -a * (180 / Math.PI);
         if (mount.reverse) elevationDeg = -elevationDeg;
 
         const tiltDeg = tiltDegrees / 2 + elevationDeg + mount.trimDegrees;

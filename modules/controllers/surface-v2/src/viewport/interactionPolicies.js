@@ -18,6 +18,8 @@ import {
  * @property {(guid: string, wy: number) => void} onIntentHeightMove
  * @property {(guid: string) => void} onIntentHeightMoveEnd
  * @property {(id: string, wx: number, wz: number) => void} onFixtureMove
+ * @property {(id: string, wy: number) => void} onFixtureHeightMove
+ * @property {(id: string) => void} onFixtureHeightMoveEnd
  */
 
 /** @param {unknown} intent @returns {boolean} */
@@ -156,7 +158,9 @@ export const performPolicy = {
     if (updated) queueIntentUpdate(updated)
   },
   onIntentHeightMoveEnd (_guid) {},
-  onFixtureMove (_id, _wx, _wz) {}
+  onFixtureMove (_id, _wx, _wz) {},
+  onFixtureHeightMove (_id, _wy) {},
+  onFixtureHeightMoveEnd (_id) {}
 }
 
 /** @type {InteractionPolicy} */
@@ -199,7 +203,18 @@ export const editPolicy = {
       fixtureName: fixture.fixtureName,
       position: fixture.position
     })
-  }
+  },
+  onFixtureHeightMove (id, wy) {
+    const fixture = projectGraph.updateFixtureHeight(id, wy)
+    if (!fixture) return
+    queueFixtureUpdate({
+      guid: fixture.guid,
+      zoneName: fixture.zoneName,
+      fixtureName: fixture.fixtureName,
+      position: fixture.position
+    })
+  },
+  onFixtureHeightMoveEnd (_id) {}
 }
 
 /** @type {InteractionPolicy} */
@@ -217,5 +232,7 @@ export const noopPolicy = {
   onIntentMoveEnd (_guid) {},
   onIntentHeightMove (_guid, _wy) {},
   onIntentHeightMoveEnd (_guid) {},
-  onFixtureMove (_id, _wx, _wz) {}
+  onFixtureMove (_id, _wx, _wz) {},
+  onFixtureHeightMove (_id, _wy) {},
+  onFixtureHeightMoveEnd (_id) {}
 }

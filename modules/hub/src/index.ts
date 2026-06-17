@@ -267,6 +267,10 @@ const publishGraphMutation = (source: import('ws').WebSocket | undefined, result
     );
   }
   if (result.rendererConfigChangedFor.length > 0) {
+    // Fixture geometry changed: the resolver caches each fixture's world position (e.g. the target
+    // aim point is worldPos + easedDir), so rebuild it here — otherwise renderers get a fresh config
+    // but the hub keeps resolving against the old position until the next restart.
+    fixtureStateManager.refresh();
     const changed = new Set(result.rendererConfigChangedFor);
     for (const ws of registry.getByRole('renderer')) {
       const info = registry.get(ws);

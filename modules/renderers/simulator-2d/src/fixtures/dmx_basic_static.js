@@ -2,7 +2,6 @@ class DmxBasicStatic extends LightBase {
   constructor (profile, instanceConfig, drawConfig) {
     super(profile, instanceConfig, drawConfig)
     this._drawConfig = drawConfig
-    this._trimBrightness = fixtureTrimBrightness(instanceConfig.trim)
     this.currentColor = null
   }
 
@@ -21,8 +20,7 @@ class DmxBasicStatic extends LightBase {
     const brightnessFactor =
       Math.max(0, Math.min(1, xbrightness * masterBrightness)) *
       (masterBlackout ? 0 : 1) *
-      boostBrightness *
-      this._trimBrightness
+      boostBrightness
     this.currentColor = {
       r: r * brightnessFactor,
       g: g * brightnessFactor,

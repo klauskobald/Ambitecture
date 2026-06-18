@@ -13,7 +13,6 @@ class NeewerBasic extends NeewerLightBase {
     ): void {
         const masterBrightness = snapshot.sample<number>('master.brightness') ?? 1;
         const masterBlackout = snapshot.sample<boolean>('master.blackout') ?? false;
-        const trimBrightness = this.getTrimBrightness(fixture);
         const color = snapshot.sample<Color>('light.color.xyY', true) ?? Color.black();
 
         const spatialStrobe = snapshot.sample<number>('light.strobe') ?? 0;
@@ -21,7 +20,7 @@ class NeewerBasic extends NeewerLightBase {
         const strobeValue = aux['strobe'] !== undefined ? aux['strobe'] : spatialStrobe;
 
         const { r, g, b } = color.toRGB();
-        const scale = (masterBlackout ? 0 : 1) * Math.max(0, Math.min(1, masterBrightness)) * trimBrightness;
+        const scale = (masterBlackout ? 0 : 1) * Math.max(0, Math.min(1, masterBrightness));
         const { h, s, v } = rgbToHsv01(r * scale, g * scale, b * scale);
 
         this.sendHsvStrobed(fixture, bus, h, s, v, strobeValue);

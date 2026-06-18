@@ -165,11 +165,6 @@ interface ControllerDef {
   [key: string]: unknown;  // pass-through for controller-specific config
 }
 
-/** Per-instance output calibration (multiplied into renderer brightness). */
-interface FixtureTrim {
-  brightness?: number;
-}
-
 /** Per-instance fields from project YAML; class-specific keys live in `params`. */
 interface FixtureInstance {
   guid?: string;
@@ -180,7 +175,6 @@ interface FixtureInstance {
   rotation?: [number, number, number];
   range: number;
   params?: Record<string, unknown>;
-  trim?: FixtureTrim;
 }
 
 export interface FixtureMoveUpdate {
@@ -808,7 +802,6 @@ export class ProjectManager {
       ...(fixture.target !== undefined ? { target: [...fixture.target] as [number, number, number] } : {}),
       ...(fixture.rotation !== undefined ? { rotation: [...fixture.rotation] as [number, number, number] } : {}),
       ...(fixture.params !== undefined ? { params: { ...fixture.params } } : {}),
-      ...(fixture.trim !== undefined ? { trim: { ...fixture.trim } } : {}),
     };
     return cloned;
   }
@@ -1232,9 +1225,6 @@ export class ProjectManager {
     }
     if (fi.target !== undefined) entry['target'] = fi.target;
     if (fi.rotation !== undefined) entry['rotation'] = fi.rotation;
-    if (fi.trim !== undefined && Object.keys(fi.trim).length > 0) {
-      entry['trim'] = fi.trim;
-    }
     return entry;
   }
 

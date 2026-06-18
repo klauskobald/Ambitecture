@@ -21,14 +21,12 @@ class DmxLightStatic extends DmxFixtureBase {
         const boostBrightness = masterBrightness > 1 ? masterBrightness : 1;
 
         const masterBlackout = snapshot.sample<boolean>('master.blackout') ?? false;
-        const trimBrightness = this.getTrimBrightness(fixture);
 
         const color = snapshot.sample<Color>('light.color.xyY', withSpatial) ?? Color.black();
         const { r, g, b } = color.toRGB();
-        const rgbTrim = boostBrightness > 1 ? trimBrightness : 1;
-        this.writeFunction(fixture, 'red', r * boostBrightness * rgbTrim, dmxUniverse);
-        this.writeFunction(fixture, 'green', g * boostBrightness * rgbTrim, dmxUniverse);
-        this.writeFunction(fixture, 'blue', b * boostBrightness * rgbTrim, dmxUniverse);
+        this.writeFunction(fixture, 'red', r * boostBrightness, dmxUniverse);
+        this.writeFunction(fixture, 'green', g * boostBrightness, dmxUniverse);
+        this.writeFunction(fixture, 'blue', b * boostBrightness, dmxUniverse);
 
         const spatialStrobe = snapshot.sample<number>('light.strobe') ?? 0;
         // aux writes after color; aux keys intentionally override color-pipeline channels
@@ -45,7 +43,7 @@ class DmxLightStatic extends DmxFixtureBase {
         }
 
         const brightness =
-            xbrightness * masterBrightness * (masterBlackout ? 0 : 1) * trimBrightness;
+            xbrightness * masterBrightness * (masterBlackout ? 0 : 1);
         this.writeFunction(fixture, 'brightness', Math.max(0, brightness), dmxUniverse);
     }
 }

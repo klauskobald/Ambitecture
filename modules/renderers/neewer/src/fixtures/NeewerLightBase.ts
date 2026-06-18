@@ -15,14 +15,6 @@ export abstract class NeewerLightBase implements IFixtureClass {
         bus: NeewerBus
     ): void;
 
-    protected getTrimBrightness(fixture: ConfiguredFixture): number {
-        const value = fixture.trim?.brightness;
-        if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
-            return value;
-        }
-        return 1;
-    }
-
     protected sendHsv(fixture: ConfiguredFixture, bus: NeewerBus, hue: number, sat: number, bri: number): void {
         bus.setHsv(fixture, this.curveHue(fixture, hue), sat, this.curveBrightness(fixture, bri));
     }

@@ -2,7 +2,6 @@ class NeewerBasic extends LightBase {
   constructor (profile, instanceConfig, drawConfig) {
     super(profile, instanceConfig, drawConfig)
     this._drawConfig = drawConfig
-    this._trimBrightness = fixtureTrimBrightness(instanceConfig.trim)
     this.currentColor = null
   }
 
@@ -15,8 +14,7 @@ class NeewerBasic extends LightBase {
     const { r, g, b } = color.toRGB()
     const f =
       Math.max(0, Math.min(1, masterBrightness)) *
-      (masterBlackout ? 0 : 1) *
-      this._trimBrightness
+      (masterBlackout ? 0 : 1)
     this.currentColor = { r: r * f, g: g * f, b: b * f }
   }
 

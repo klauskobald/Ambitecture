@@ -684,7 +684,7 @@ A channel under `params.channels` may carry a **`function`** describing hardware
 - Zone: `Zone 1`
 - Bound renderer: `rendererGUID: renderer-1234567890`
 - Fixture instance: references fixture profile `rgb_simple`
-- Fixture spatial data includes `location`, `target` (or `rotation`), and `range`; DMX binding uses `params.dmxBaseChannel`. Optional per-instance **`trim.brightness`** (default `1`) scales renderer output brightness (multiplied with master / dimmer).
+- Fixture spatial data includes `location`, `target` (or `rotation`), and `range`; DMX binding uses `params.dmxBaseChannel`.
 - Range falloff curve is configured under `params.rangeFunction` (or alias `params.rangeFn`), not a top-level fixture field.
 - **Profile `instance` section (editor schema):** a fixture profile YAML may carry a root **`instance`** array — descriptors (same shape as `systemCapabilities.intentProperties`: `dotKey`, `name`, `type`, `display`, `range`, `step`, `options`, …) describing the editable **instance** `params` (e.g. `params.dmxBaseChannel`, `params.pan.trimDegrees`). It drives the `surface-v2` fixture instance editor; the hub ships it verbatim inside `fixtureProfile`. It describes the per-instance layer only, never the physical-model `params`.
 - **`beam`** in profile `params` (`type: cone`, `angle`, `falloff`) is **unused** — no hub, renderer, or controller code reads it (only code comments mention beam geometry). Left in YAML as a future-intent placeholder.

@@ -14,6 +14,7 @@ import {
   setStageEditExitSelectModeHandler
 } from '../../stage/stageOverlayCoordinator.js'
 import { IntentParamsHost } from '../../stage/IntentParamsHost.js'
+import { FixtureParamsHost } from '../../edit/fixture/FixtureParamsHost.js'
 import { selectionState } from '../../edit/selectionState.js'
 import { projectGraph } from '../../core/projectGraph.js'
 import { intentGuid } from '../../core/stores.js'
@@ -50,6 +51,18 @@ function getParamsHost () {
 
 export function rebindIntentParamsHost () {
   getParamsHost().rebindHost()
+}
+
+/** @type {FixtureParamsHost | null} */
+let sharedFixtureParamsHost = null
+
+function getFixtureParamsHost () {
+  if (!sharedFixtureParamsHost) sharedFixtureParamsHost = new FixtureParamsHost()
+  return sharedFixtureParamsHost
+}
+
+export function rebindFixtureParamsHost () {
+  getFixtureParamsHost().rebindHost()
 }
 
 export class StageEditPane {
@@ -135,8 +148,15 @@ export class StageEditPane {
     this._refreshFixtureLockButton()
     setEditMode()
     setEditDoubleTapHandlers(
-      guid => getParamsHost().openForIntentGuid(guid),
-      detail => void this._onDoubleTapEmptyStage(detail)
+      guid => {
+        getFixtureParamsHost().close()
+        getParamsHost().openForIntentGuid(guid)
+      },
+      detail => {
+        getFixtureParamsHost().close()
+        void this._onDoubleTapEmptyStage(detail)
+      },
+      fixtureId => this._openFixtureEditor(fixtureId)
     )
     setStageEditExitSelectModeHandler(() => this._exitSelectModeIfActive())
 
@@ -154,12 +174,29 @@ export class StageEditPane {
     clearEditDoubleTapHandlers()
     setStageEditExitSelectModeHandler(null)
     getParamsHost().close()
+    getFixtureParamsHost().close()
     setPerformMode()
     if (this._selectionUnsub) {
       this._selectionUnsub()
       this._selectionUnsub = null
     }
     detachStage()
+  }
+
+  /**
+   * Resolve a fixture id (`zoneName::fixtureName`) from the overlay to its stable guid and open
+   * the fixture editor, closing the intent editor (shared overlay region).
+   * @param {string} fixtureId
+   */
+  _openFixtureEditor (fixtureId) {
+    const fixture = projectGraph.getFixtures().get(fixtureId)
+    const guid =
+      fixture && typeof fixture === 'object'
+        ? String(/** @type {Record<string, unknown>} */ (fixture).guid ?? '')
+        : ''
+    if (!guid) return
+    getParamsHost().close()
+    void getFixtureParamsHost().openForFixtureGuid(guid)
   }
 
   _toggleFixtureLock () {

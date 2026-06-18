@@ -298,7 +298,7 @@ export class ProjectGraphStore {
     }
     const position = command.patch?.['position'] ?? command.value?.['position'];
     if (!Array.isArray(position) || position.length !== 3) {
-      return this.applyOpaqueCommand(command);
+      return this.applyFixtureInstancePatch(command);
     }
     const fixtureRef = this.findFixtureRef(command.guid);
     if (!fixtureRef) {
@@ -312,6 +312,40 @@ export class ProjectGraphStore {
     };
     const changed = this.projectManager.updateFixtures([update]);
     if (changed === 0) return emptyMutationResult(this.revision);
+    const fixtureEntity = this.projectManager.getGraphEntities()['fixture']?.[command.guid];
+    const delta = this.makeDelta({
+      op: 'upsert',
+      entityType: command.entityType,
+      guid: command.guid,
+      ...(fixtureEntity !== undefined ? { value: fixtureEntity } : {}),
+      persistence: command.persistence ?? 'runtimeAndDurable',
+    });
+    return {
+      revision: this.revision,
+      controllerDeltas: [delta],
+      rendererEvents: [],
+      rendererConfigChangedFor: this.getAllRendererGuids(),
+      durableChanged: true,
+    };
+  }
+
+  /**
+   * Patch instance-level fixture fields (root params + nested `params`) by dot-path and persist.
+   * Renderers re-read instance params (e.g. `dmxBaseChannel`) via `rendererConfigChangedFor`.
+   */
+  private applyFixtureInstancePatch(command: GraphCommand): GraphMutationResult {
+    if (!command.patch && !command.remove) {
+      return this.applyOpaqueCommand(command);
+    }
+    const updated = this.projectManager.patchFixtureByGuid(
+      command.guid,
+      command.patch ?? {},
+      command.remove,
+    );
+    if (!updated) {
+      Logger.warn(`[graph] fixture ${command.guid} not found`);
+      return emptyMutationResult(this.revision);
+    }
     const fixtureEntity = this.projectManager.getGraphEntities()['fixture']?.[command.guid];
     const delta = this.makeDelta({
       op: 'upsert',

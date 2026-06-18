@@ -5,8 +5,8 @@ import { evaluate as fnEvaluate, inverse as fnInverse } from './fnCurve.js'
 import { ScalarDragSlider } from '../components/ScalarDragSlider.js'
 
 export class SliderControl extends PropertyControl {
-  constructor (descriptor, onCommit, selectionSize) {
-    super(descriptor, onCommit, selectionSize)
+  constructor (descriptor, onCommit, selectionSize, writeTarget = null) {
+    super(descriptor, onCommit, selectionSize, writeTarget)
     /** @type {ScalarDragSlider | null} */
     this._scalar = null
     /** @type {boolean} */

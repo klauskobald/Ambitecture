@@ -1,8 +1,8 @@
 import { PropertyControl } from './PropertyControl.js'
 
 export class InfoTextControl extends PropertyControl {
-  constructor (descriptor, onCommit, selectionSize) {
-    super(descriptor, onCommit, selectionSize)
+  constructor (descriptor, onCommit, selectionSize, writeTarget = null) {
+    super(descriptor, onCommit, selectionSize, writeTarget)
     /** @type {HTMLElement | null} */
     this._valueEl = null
   }

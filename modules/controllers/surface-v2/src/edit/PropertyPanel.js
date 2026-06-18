@@ -20,11 +20,14 @@ export class PropertyPanel {
    * @param {unknown[]} descriptors  resolved descriptor list from systemCapabilities
    * @param {number} selectionSize
    * @param {Set<string>} [selectedGuids]
+   * @param {import('./controls/PropertyControl.js').PropertyControl['_writeTarget']} [writeTarget]
+   *   optional entity write target (fixtures); intents use the default path when omitted.
    */
-  constructor (descriptors, selectionSize, selectedGuids = new Set()) {
+  constructor (descriptors, selectionSize, selectedGuids = new Set(), writeTarget = null) {
     this._descriptors = descriptors
     this._selectionSize = selectionSize
     this._selectedGuids = selectedGuids
+    this._writeTarget = writeTarget
     /** @type {import('./controls/PropertyControl.js').PropertyControl[]} */
     this._controls = []
     /** @type {InputAssignManager | null} */
@@ -229,20 +232,21 @@ export class PropertyPanel {
   _controlForDescriptor (d) {
     const onCommit = () => {}
     const size = this._selectionSize
+    const wt = this._writeTarget
     const kind = resolveIntentDescriptorUiKind(d)
     switch (kind) {
       case 'color':
-        return new ColorControl(d, onCommit, size)
+        return new ColorControl(d, onCommit, size, wt)
       case 'scalar':
-        return new SliderControl(d, onCommit, size)
+        return new SliderControl(d, onCommit, size, wt)
       case 'pills':
-        return new PillControl(d, onCommit, size)
+        return new PillControl(d, onCommit, size, wt)
       case 'string':
         return Array.isArray(d.options) && d.options.length > 0
-          ? new PillControl(d, onCommit, size)
-          : new ModalControl(d, onCommit, size)
+          ? new PillControl(d, onCommit, size, wt)
+          : new ModalControl(d, onCommit, size, wt)
       case 'vector3':
-        return new InfoTextControl(d, onCommit, size)
+        return new InfoTextControl(d, onCommit, size, wt)
       default:
         return null
     }

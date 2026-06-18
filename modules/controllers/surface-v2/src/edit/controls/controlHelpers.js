@@ -19,15 +19,18 @@ function deepEqual (a, b) {
 }
 
 /**
- * Inspect all selected intents for a given dotKey.
+ * Inspect all selected entities for a given dotKey. Defaults to reading intent properties;
+ * pass `read` to read from another entity (e.g. fixtures).
  * @param {Set<string>} guids
  * @param {string} dotKey
+ * @param {(guid: string, dotKey: string) => unknown} [read]
  * @returns {{ mode: 'same' | 'mixed' | 'absent', value: unknown }}
  */
-export function resolveMultiSelectState (guids, dotKey) {
+export function resolveMultiSelectState (guids, dotKey, read) {
+  const readFn = read ?? ((guid, dk) => projectGraph.getEffectiveIntentProperty(guid, dk))
   const values = []
   for (const guid of guids) {
-    const val = projectGraph.getEffectiveIntentProperty(guid, dotKey)
+    const val = readFn(guid, dotKey)
     if (val !== undefined) values.push(val)
   }
   if (values.length === 0) return { mode: 'absent', value: undefined }

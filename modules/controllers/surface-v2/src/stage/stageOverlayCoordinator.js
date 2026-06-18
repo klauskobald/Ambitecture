@@ -10,6 +10,9 @@ let doubleTapIntentHandler = null
 /** @type {(() => void) | null} */
 let doubleTapEmptyHandler = null
 
+/** @type {((fixtureId: string) => void) | null} */
+let doubleTapFixtureHandler = null
+
 /** @type {(() => void) | null} */
 let exitSelectModeHandler = null
 
@@ -20,9 +23,11 @@ function applyOverlayPolicy () {
   if (mode === 'edit') {
     overlay.setDoubleTapIntentCallback(doubleTapIntentHandler)
     overlay.setDoubleTapEmptyCallback(doubleTapEmptyHandler)
+    overlay.setDoubleTapFixtureCallback(doubleTapFixtureHandler)
   } else {
     overlay.setDoubleTapIntentCallback(null)
     overlay.setDoubleTapEmptyCallback(null)
+    overlay.setDoubleTapFixtureCallback(null)
   }
 }
 
@@ -44,16 +49,19 @@ export function getStageMode () {
 /**
  * @param {(guid: string) => void} onIntent
  * @param {(detail: { clientX: number, clientY: number }) => void} [onEmpty]
+ * @param {(fixtureId: string) => void} [onFixture]
  */
-export function setEditDoubleTapHandlers (onIntent, onEmpty) {
+export function setEditDoubleTapHandlers (onIntent, onEmpty, onFixture) {
   doubleTapIntentHandler = onIntent
   doubleTapEmptyHandler = onEmpty ?? null
+  doubleTapFixtureHandler = onFixture ?? null
   if (mode === 'edit') applyOverlayPolicy()
 }
 
 export function clearEditDoubleTapHandlers () {
   doubleTapIntentHandler = null
   doubleTapEmptyHandler = null
+  doubleTapFixtureHandler = null
   if (mode === 'edit') applyOverlayPolicy()
 }
 

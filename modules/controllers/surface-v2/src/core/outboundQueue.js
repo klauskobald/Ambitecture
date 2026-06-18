@@ -59,6 +59,30 @@ export function queueFixtureUpdate (fixtureUpdate) {
 }
 
 /**
+ * Durable patch of instance-level fixture fields (root params + nested `params`) by dot-path.
+ * Distinct from {@link queueFixtureUpdate}, which streams only `position` for stage drags.
+ * @param {string} guid
+ * @param {Record<string, unknown>} [patch]
+ * @param {string[]} [remove]
+ */
+export function queueFixturePropertyUpdate (guid, patch, remove) {
+  if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation) return
+  if (!guid) return
+  sendGraphCommands(
+    [{
+      op: 'patch',
+      entityType: 'fixture',
+      guid,
+      ...(patch ? { patch } : {}),
+      ...(remove && remove.length > 0 ? { remove } : {}),
+      persistence: 'runtimeAndDurable'
+    }],
+    activeWs,
+    activeLocation
+  )
+}
+
+/**
  * @param {unknown[]} commands
  * @param {WebSocket} ws
  * @param {number[]} location

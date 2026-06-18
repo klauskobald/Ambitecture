@@ -14,8 +14,8 @@ const HSL_CHANNEL_DEFAULTS = {
 }
 
 export class ColorControl extends PropertyControl {
-  constructor (descriptor, onCommit, selectionSize) {
-    super(descriptor, onCommit, selectionSize)
+  constructor (descriptor, onCommit, selectionSize, writeTarget = null) {
+    super(descriptor, onCommit, selectionSize, writeTarget)
     /** @type {{ setColor: (c: unknown) => void, destroy: () => void } | null} */
     this._paletteInstance = null
     /** @type {HTMLElement | null} */

@@ -729,6 +729,38 @@ export class ProjectManager {
     return changed;
   }
 
+  /**
+   * Apply a dot-path patch (e.g. `params.dmxBaseChannel`, `name`, `range`) to a fixture
+   * instance by guid and persist. Position moves go through `updateFixtures` instead, which
+   * handles zone-relative `location` recomputation. Returns the serialized instance or null
+   * when the guid is unknown.
+   */
+  patchFixtureByGuid(
+    guid: string,
+    patch: Record<string, unknown>,
+    remove: string[] = [],
+  ): Record<string, unknown> | null {
+    for (const zone of this.runtimeZones) {
+      const index = zone.fixtures.findIndex((fixture) => fixture.guid === guid);
+      if (index < 0) continue;
+      const current = zone.fixtures[index]!;
+      const patched = applyDotPathPatch(
+        this.cloneFixtureInstance(current) as unknown as Record<string, unknown>,
+        patch,
+        remove,
+      );
+      patched['guid'] = guid;
+      zone.fixtures[index] = patched as unknown as FixtureInstance;
+      this.project!.zones = this.runtimeZones.map((z) => ({
+        ...z,
+        fixtures: z.fixtures.map((fixture) => this.cloneFixtureInstance(fixture)),
+      }));
+      this._scheduleSave();
+      return this.serializeFixtureInstance(zone.fixtures[index]!);
+    }
+    return null;
+  }
+
   private updateFixture(update: FixtureMoveUpdate): boolean {
     const sourceZone = this.runtimeZones.find((zone) => zone.name === update.zoneName);
     const fallbackZone = this.runtimeZones.find((zone) =>

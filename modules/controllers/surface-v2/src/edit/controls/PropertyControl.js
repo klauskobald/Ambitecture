@@ -20,14 +20,26 @@ function cloneDefaultValue (value) {
 
 export class PropertyControl {
   /**
+   * @typedef {object} WriteTarget
+   * @property {(guid: string, dotKey: string) => unknown} read
+   * @property {(guid: string, dotKey: string, value: unknown) => void} update
+   * @property {(guid: string, dotKey: string) => void} remove
+   * @property {() => void} save
+   */
+
+  /**
    * @param {Record<string, unknown>} descriptor
    * @param {(dotKey: string, guids: Set<string>, value: unknown) => void} onCommit
    * @param {number} selectionSize
+   * @param {WriteTarget | null} [writeTarget] when provided, reads/writes route here instead of
+   *   the default intent path (scene-overlay aware). Used by the fixture editor.
    */
-  constructor (descriptor, onCommit, selectionSize) {
+  constructor (descriptor, onCommit, selectionSize, writeTarget = null) {
     this._descriptor = descriptor
     this._onCommit = onCommit
     this._selectionSize = selectionSize
+    /** @type {WriteTarget | null} */
+    this._writeTarget = writeTarget
     this._isMandatory = !!descriptor.isMandatory
     this._allowOverlay = !!descriptor.allowOverlay
     /** @type {HTMLElement | null} */
@@ -114,7 +126,7 @@ export class PropertyControl {
     if (this._isMandatory) {
       if (this._controlArea) this._controlArea.hidden = false
       this._applyOverlayState(this._resolveOverlayState(guids, dotKey))
-      const multiState = resolveMultiSelectState(guids, dotKey)
+      const multiState = resolveMultiSelectState(guids, dotKey, this._writeTarget?.read)
       this._applyState({
         ...multiState,
         enableState: 'on',
@@ -125,7 +137,7 @@ export class PropertyControl {
     }
 
     const enableState = resolveEnableState(guids, dotKey)
-    const multiState = resolveMultiSelectState(guids, dotKey)
+    const multiState = resolveMultiSelectState(guids, dotKey, this._writeTarget?.read)
 
     this._applyEnableState(enableState)
     this._applyOverlayState(this._resolveOverlayState(guids, dotKey))
@@ -158,6 +170,10 @@ export class PropertyControl {
   }
 
   _saveProject () {
+    if (this._writeTarget) {
+      this._writeTarget.save()
+      return
+    }
     const dotKey = /** @type {string} */ (this._descriptor.dotKey)
     const activeScene = projectGraph.getActiveSceneName()
     const hasOverlayTargets =
@@ -187,6 +203,10 @@ export class PropertyControl {
    * @param {unknown} value
    */
   _updateProperty (guid, dotKey, value) {
+    if (this._writeTarget) {
+      this._writeTarget.update(guid, dotKey, value)
+      return
+    }
     const activeScene = projectGraph.getActiveSceneName()
     if (
       this._allowOverlay &&
@@ -206,6 +226,10 @@ export class PropertyControl {
    * @param {string} dotKey
    */
   _removeProperty (guid, dotKey) {
+    if (this._writeTarget) {
+      this._writeTarget.remove(guid, dotKey)
+      return
+    }
     const activeScene = projectGraph.getActiveSceneName()
     if (
       this._allowOverlay &&

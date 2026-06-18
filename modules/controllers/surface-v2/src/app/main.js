@@ -8,7 +8,8 @@ import { Simulator2dPane } from '../layout/renderers/Simulator2dPane.js'
 import { StagePane } from '../layout/renderers/StagePane.js'
 import {
   StageEditPane,
-  rebindIntentParamsHost
+  rebindIntentParamsHost,
+  rebindFixtureParamsHost
 } from '../layout/renderers/StageEditPane.js'
 import { ScenesPane } from '../layout/renderers/ScenesPane.js'
 import { ControlPane } from '../layout/renderers/ControlPane.js'
@@ -55,7 +56,10 @@ async function main () {
     stage,
     catalog: appCfg.layoutCatalog,
     defaultLayoutId: '2cols',
-    onLayoutRebuild: () => rebindIntentParamsHost()
+    onLayoutRebuild: () => {
+      rebindIntentParamsHost()
+      rebindFixtureParamsHost()
+    }
   })
 
   initSceneAutoResetOnLoad()

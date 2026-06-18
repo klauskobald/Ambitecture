@@ -1130,6 +1130,94 @@ class ProjectGraph {
   }
 
   /**
+   * Locate the raw fixture instance record (root fields + `params` + `fixtureProfile`) in
+   * `_data.zones` by fixture `guid` (stable across name edits, unlike the `_fixtures` map key).
+   * The `_fixtures` map only carries world position; the editor needs the full instance.
+   * @param {string} guid
+   * @returns {{ fixtures: unknown[], index: number, record: Record<string, unknown> } | null}
+   */
+  _findRawFixtureByGuid (guid) {
+    for (const z of this._data.zones) {
+      if (!z || typeof z !== 'object' || Array.isArray(z)) continue
+      const zoneFixtures = /** @type {Record<string, unknown>} */ (z).fixtures
+      if (!Array.isArray(zoneFixtures)) continue
+      for (let i = 0; i < zoneFixtures.length; i++) {
+        const raw = zoneFixtures[i]
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue
+        if (String(/** @type {Record<string, unknown>} */ (raw).guid ?? '') === guid) {
+          return { fixtures: zoneFixtures, index: i, record: /** @type {Record<string, unknown>} */ (raw) }
+        }
+      }
+    }
+    return null
+  }
+
+  /**
+   * @param {string} guid
+   * @returns {Record<string, unknown> | null}
+   */
+  getEffectiveFixture (guid) {
+    return this._findRawFixtureByGuid(guid)?.record ?? null
+  }
+
+  /**
+   * Fixture profile slice the editor needs: implementation `class` and the YAML `instance`
+   * descriptor array (mirrors `systemCapabilities.intentProperties`).
+   * @param {string} guid
+   * @returns {{ class: string, instance: unknown[] } | null}
+   */
+  getFixtureProfile (guid) {
+    const record = this._findRawFixtureByGuid(guid)?.record
+    if (!record) return null
+    const profile = record.fixtureProfile
+    if (!profile || typeof profile !== 'object' || Array.isArray(profile)) return null
+    const p = /** @type {Record<string, unknown>} */ (profile)
+    return {
+      class: String(p.class ?? ''),
+      instance: Array.isArray(p.instance) ? p.instance : []
+    }
+  }
+
+  /**
+   * @param {string} guid
+   * @param {string} dotKey
+   * @returns {unknown}
+   */
+  getEffectiveFixtureProperty (guid, dotKey) {
+    const record = this._findRawFixtureByGuid(guid)?.record
+    if (!record) return undefined
+    return readAtDotPath(record, dotKey)
+  }
+
+  /**
+   * Optimistically patch an instance property in the local replica. Returns the durable
+   * `{ guid, patch }` to send via {@link queueFixturePropertyUpdate}; the hub echoes an
+   * upsert delta that reconciles through {@link _applyFixtureDelta}.
+   * @param {string} guid
+   * @param {string} dotKey
+   * @param {unknown} value
+   * @returns {{ guid: string, patch: Record<string, unknown> } | null}
+   */
+  updateFixtureProperty (guid, dotKey, value) {
+    const found = this._findRawFixtureByGuid(guid)
+    if (!found) return null
+    found.fixtures[found.index] = cloneAndSetAtDotPath(found.record, dotKey, value)
+    return { guid, patch: { [dotKey]: value } }
+  }
+
+  /**
+   * @param {string} guid
+   * @param {string} dotKey
+   * @returns {{ guid: string, remove: string[] } | null}
+   */
+  removeFixtureProperty (guid, dotKey) {
+    const found = this._findRawFixtureByGuid(guid)
+    if (!found) return null
+    found.fixtures[found.index] = cloneAndDeleteAtDotPath(found.record, dotKey)
+    return { guid, remove: [dotKey] }
+  }
+
+  /**
    * @param {unknown[]} incomingIntents
    * @param {((intent: unknown) => void) | null} queueFn
    * @param {{ pruneMissing?: boolean }} [opts]

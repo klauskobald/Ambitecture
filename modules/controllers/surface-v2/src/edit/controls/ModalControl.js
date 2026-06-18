@@ -3,8 +3,8 @@ import * as Modal from '../../core/Modal.js'
 import { resolveMultiSelectState } from './controlHelpers.js'
 
 export class ModalControl extends PropertyControl {
-  constructor (descriptor, onCommit, selectionSize) {
-    super(descriptor, onCommit, selectionSize)
+  constructor (descriptor, onCommit, selectionSize, writeTarget = null) {
+    super(descriptor, onCommit, selectionSize, writeTarget)
     /** @type {HTMLButtonElement | null} */
     this._btn = null
   }
@@ -27,7 +27,7 @@ export class ModalControl extends PropertyControl {
   async _handleClick () {
     const dotKey = /** @type {string} */ (this._descriptor.dotKey)
     const fieldName = String(this._descriptor.name ?? dotKey)
-    const state = resolveMultiSelectState(this._currentGuids, dotKey)
+    const state = resolveMultiSelectState(this._currentGuids, dotKey, this._writeTarget?.read)
     const current = state.mode === 'same' ? String(state.value ?? '') : ''
 
     const result = await Modal.prompt(

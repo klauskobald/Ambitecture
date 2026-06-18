@@ -81,9 +81,11 @@ export class OverlayCanvas {
     this._singleTapIntentCallback = null
     /** @type {((detail: { clientX: number, clientY: number }) => void) | null} */
     this._doubleTapEmptyCallback = null
-    /** @type {{ pointerId: number, downX: number, downY: number, downClientX: number, downClientY: number, intentGuid: string | null } | null} */
+    /** @type {((fixtureId: string) => void) | null} */
+    this._doubleTapFixtureCallback = null
+    /** @type {{ pointerId: number, downX: number, downY: number, downClientX: number, downClientY: number, intentGuid: string | null, fixtureId: string | null } | null} */
     this._tapTracker = null
-    /** @type {{ x: number, y: number, t: number, clientX: number, clientY: number, intentGuid: string | null } | null} */
+    /** @type {{ x: number, y: number, t: number, clientX: number, clientY: number, intentGuid: string | null, fixtureId: string | null } | null} */
     this._lastTap = null
 
     /** @type {number | null} */
@@ -357,6 +359,17 @@ export class OverlayCanvas {
   }
 
   /**
+   * Double-tap on a fixture marker (edit mode, fixtures unlocked) → open the fixture editor.
+   * Receives the fixture id (`zoneName::fixtureName`); the handler resolves its guid.
+   * @param {((fixtureId: string) => void) | null} fn
+   */
+  setDoubleTapFixtureCallback (fn) {
+    this._doubleTapFixtureCallback = fn
+    this._lastTap = null
+    this._tapTracker = null
+  }
+
+  /**
    * @param {number} clientX
    * @param {number} clientY
    * @returns {{ wx: number, wy: number, wz: number } | null}
@@ -448,11 +461,18 @@ export class OverlayCanvas {
           if (!isIntentLocked(guid)) this._doubleTapIntentCallback(guid)
           return
         }
+        if (this._lastTap.fixtureId && this._doubleTapFixtureCallback) {
+          const fixtureId = this._lastTap.fixtureId
+          this._lastTap = null
+          this._doubleTapFixtureCallback(fixtureId)
+          return
+        }
         const secondOnIntent = spatial
           ? this._findIntentAt(x, y, spatial, intent => this._policy.isIntentVisible(intent))
           : null
         if (
           !this._lastTap.intentGuid &&
+          !this._lastTap.fixtureId &&
           !secondOnIntent &&
           this._doubleTapEmptyCallback
         ) {
@@ -471,13 +491,17 @@ export class OverlayCanvas {
     // visible intent of any class; only dragging requires canDragIntent. Fixtures are never tapped here.
     if (spatial) {
       const intentGuid = this._findIntentAt(x, y, spatial, intent => this._policy.isIntentVisible(intent))
+      // `_findFixtureAt` is gated by `canDragFixture` (edit mode + fixtures unlocked), so a
+      // fixture id is only tracked when the editor should be reachable via double-tap.
+      const fixtureTapId = !intentGuid ? this._findFixtureAt(x, y, spatial) : null
       this._tapTracker = {
         pointerId: ev.pointerId,
         downX: x,
         downY: y,
         downClientX: ev.clientX,
         downClientY: ev.clientY,
-        intentGuid
+        intentGuid,
+        fixtureId: fixtureTapId
       }
     }
 
@@ -596,6 +620,7 @@ export class OverlayCanvas {
         y - this._tapTracker.downY
       )
       const tappedIntent = this._tapTracker.intentGuid
+      const tappedFixture = this._tapTracker.fixtureId
       this._lastTap =
         dist < 10
           ? {
@@ -604,7 +629,8 @@ export class OverlayCanvas {
               t: performance.now(),
               clientX: this._tapTracker.downClientX,
               clientY: this._tapTracker.downClientY,
-              intentGuid: tappedIntent
+              intentGuid: tappedIntent,
+              fixtureId: tappedFixture
             }
           : null
       this._tapTracker = null

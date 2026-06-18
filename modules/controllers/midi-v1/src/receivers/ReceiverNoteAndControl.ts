@@ -73,7 +73,7 @@ export class ReceiverNoteAndControl extends ReceiverBase {
     if (a.class !== 'noteAndControl') return null;
     const params = readParams(a.params);
     if (params === null) return null;
-    const chLabel = a.channelAny || a.channel === 0 ? 'any' : String(a.channel);
+    const chLabel = midiTools.bracketLabel(a);
     const targetBits = formatIntentTargetsLine(
       a.targets,
       guid => {

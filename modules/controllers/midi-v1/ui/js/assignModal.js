@@ -229,7 +229,7 @@ export function createAssignModal (opts) {
       label: 'Channel:',
       anyKey: 'channelAny',
       valueKey: 'channel',
-      learnLabel: 'Channel Learn',
+      learnLabel: 'Learn',
       formatValue: v => (typeof v === 'number' && v >= 1 ? String(v) : '—')
     })
     syncChannelRow = channelRow.sync

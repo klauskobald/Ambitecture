@@ -2,6 +2,7 @@ import { ReceiverBase } from './ReceiverBase';
 import { Logger } from '../Logger';
 import { AssignmentRecord, TargetRecord } from '../GraphReplica';
 import { MidiCcEvent, MidiNoteEvent } from '../MidiManager';
+import { midiTools } from '../midiTools';
 import { TargetBase } from '../targets/TargetBase';
 
 interface ControlParams {
@@ -54,7 +55,7 @@ export class ReceiverControl extends ReceiverBase {
     if (a.class !== 'control') return null;
     const params = readParams(a.params);
     if (params === null) return null;
-    const chLabel = a.channelAny || a.channel === 0 ? 'any' : String(a.channel);
+    const chLabel = midiTools.bracketLabel(a);
     const targetBits = formatIntentTargetsLine(
       a.targets,
       guid => {

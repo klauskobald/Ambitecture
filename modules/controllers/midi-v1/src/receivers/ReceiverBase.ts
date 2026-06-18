@@ -24,8 +24,10 @@ export abstract class ReceiverBase {
   abstract handleNoteOff(e: MidiNoteEvent): void;
   abstract handleCc(e: MidiCcEvent): void;
 
-  // YAML uses 1..16 with 0 meaning "any"; MidiNoteEvent.channel is 0-indexed.
+  // `channelAny` (or channel 0 = nothing learned) matches every channel;
+  // otherwise the 1..16 learned channel must equal the 0-indexed event channel.
   protected channelMatches(midiChannel: number): boolean {
+    if (this.assignment.channelAny) return true;
     const yamlChannel = this.assignment.channel;
     return yamlChannel === 0 || (yamlChannel - 1) === midiChannel;
   }

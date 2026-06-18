@@ -103,7 +103,7 @@ export class ReceiverNoteOnOff extends ReceiverBase {
     if (a.class !== 'noteOnOff') return null;
     const params = readParams(a.params);
     if (params === null) return null;
-    const chLabel = a.channel === 0 ? 'any' : String(a.channel);
+    const chLabel = a.channelAny || a.channel === 0 ? 'any' : String(a.channel);
     const targetBits = formatIntentTargetsLine(a.targets, guid => {
       const n = intentName(guid);
       // Replace ASCII spaces (U+0020) with hard space (U+00A0)

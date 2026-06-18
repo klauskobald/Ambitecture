@@ -147,10 +147,17 @@ export class PluginServer {
     });
   }
 
-  sendLearnResult(assignmentGuid: string, field: string, value?: number, device?: string): void {
+  sendLearnResult(
+    assignmentGuid: string,
+    field: string,
+    value?: number,
+    device?: string,
+    channel?: number,
+  ): void {
     const payload: Record<string, unknown> = { type: 'learnValue', assignmentGuid, field };
     if (typeof value === 'number' && Number.isFinite(value)) payload['value'] = value;
     if (typeof device === 'string') payload['device'] = device;
+    if (typeof channel === 'number' && Number.isFinite(channel)) payload['channel'] = channel;
     const msg = JSON.stringify(payload);
     for (const ws of this.clients) {
       if (ws.readyState === WebSocket.OPEN) ws.send(msg);
@@ -233,6 +240,7 @@ function assignmentToWire(a: AssignmentRecord, summary: string): Record<string, 
     class: a.class,
     guid: a.guid,
     channel: a.channel,
+    channelAny: a.channelAny,
     device: a.device,
     deviceAny: a.deviceAny,
     params: { ...a.params },

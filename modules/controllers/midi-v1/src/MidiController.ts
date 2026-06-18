@@ -68,7 +68,7 @@ export class MidiController {
       onLearnStart: (assignmentGuid, field, capture) => {
         let cap: 'noteOn' | 'controlChange' | 'any';
         if (capture === 'noteOn' || capture === 'controlChange' || capture === 'any') cap = capture;
-        else if (field === 'device') cap = 'any';
+        else if (field === 'device' || field === 'channel') cap = 'any';
         else if (field === 'controller') cap = 'controlChange';
         else cap = 'noteOn';
         this.learn = { assignmentGuid, field, capture: cap };
@@ -147,6 +147,7 @@ export class MidiController {
       class: a.class,
       guid: a.guid,
       channel: a.channel,
+      channelAny: a.channelAny,
       device: a.device,
       deviceAny: a.deviceAny,
       params: { ...a.params },
@@ -211,7 +212,7 @@ export class MidiController {
   }
 
   private dispatchNoteOn(e: MidiNoteEvent): void {
-    if (this.resolveLearn('noteOn', e.note, e.device)) return;
+    if (this.resolveLearn('noteOn', e.note, e.device, e.channel)) return;
     for (const r of this.receivers) r.handleNoteOn(e);
   }
 
@@ -220,22 +221,29 @@ export class MidiController {
   }
 
   private dispatchCc(e: MidiCcEvent): void {
-    if (this.resolveLearn('controlChange', e.controller, e.device)) return;
+    if (this.resolveLearn('controlChange', e.controller, e.device, e.channel)) return;
     for (const r of this.receivers) r.handleCc(e);
   }
 
   /**
    * Completes a pending MIDI learn from an incoming event. `'any'` captures fire
-   * on either note or CC. Every learn also reports the source device, so the
-   * note/controller Learn buttons capture the device as a side-effect.
+   * on either note or CC. Every learn also reports the source device and channel,
+   * so the note/controller Learn buttons capture device + channel as a side-effect.
+   * `midiChannel` is 0-indexed; it is reported as the 1..16 UI channel.
    */
-  private resolveLearn(source: 'noteOn' | 'controlChange', value: number, device: string): boolean {
+  private resolveLearn(
+    source: 'noteOn' | 'controlChange',
+    value: number,
+    device: string,
+    midiChannel: number,
+  ): boolean {
     const pending = this.learn;
     if (pending === null) return false;
     if (pending.capture !== source && pending.capture !== 'any') return false;
     this.learn = null;
-    const numeric = pending.field === 'device' ? undefined : value;
-    this.pluginServer.sendLearnResult(pending.assignmentGuid, pending.field, numeric, device);
+    const isNonNumericField = pending.field === 'device' || pending.field === 'channel';
+    const numeric = isNonNumericField ? undefined : value;
+    this.pluginServer.sendLearnResult(pending.assignmentGuid, pending.field, numeric, device, midiChannel + 1);
     return true;
   }
 }

@@ -318,7 +318,7 @@ body {
   flex-wrap: wrap;
 }
 
-.modal__row--device {
+.modal__row--filter {
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -326,7 +326,7 @@ body {
   flex-wrap: wrap;
 }
 
-.modal__device-any {
+.modal__filter-any {
   display: flex;
   align-items: center;
   gap: 0.25rem;
@@ -335,7 +335,7 @@ body {
   font-size: 0.75rem;
 }
 
-.modal__device-name {
+.modal__filter-name {
   flex: 1 1 auto;
   min-width: 4ch;
   font-size: 0.8rem;
@@ -344,7 +344,7 @@ body {
   white-space: nowrap;
 }
 
-.modal__device-name--ignored {
+.modal__filter-name--ignored {
   color: var(--color-muted);
   text-decoration: line-through;
   opacity: 0.6;

@@ -12,6 +12,7 @@ export interface AssignmentRecord {
   class: string;
   guid: string;
   channel: number;
+  channelAny: boolean;
   device: string;
   deviceAny: boolean;
   params: Record<string, unknown>;
@@ -52,6 +53,9 @@ function toAssignment(raw: unknown): AssignmentRecord | null {
   const guid = raw['guid'];
   if (typeof cls !== 'string' || typeof guid !== 'string') return null;
   const channel = typeof raw['channel'] === 'number' && Number.isFinite(raw['channel']) ? raw['channel'] : 0;
+  // Legacy assignments have no `channelAny`: channel 0 was "any", a specific
+  // channel meant "this channel only" — preserve that as the default.
+  const channelAny = typeof raw['channelAny'] === 'boolean' ? raw['channelAny'] : (channel === 0);
   const device = typeof raw['device'] === 'string' ? raw['device'] : '';
   const deviceAny = typeof raw['deviceAny'] === 'boolean' ? raw['deviceAny'] : true;
   const params = isRecord(raw['params']) ? raw['params'] : {};
@@ -61,7 +65,7 @@ function toAssignment(raw: unknown): AssignmentRecord | null {
     const target = toTarget(t);
     if (target) targets.push(target);
   }
-  return { class: cls, guid, channel, device, deviceAny, params, targets };
+  return { class: cls, guid, channel, channelAny, device, deviceAny, params, targets };
 }
 
 export type AssignmentsChangedReason = 'init' | 'controller-changed' | 'controller-removed';

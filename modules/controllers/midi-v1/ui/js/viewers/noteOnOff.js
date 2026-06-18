@@ -118,7 +118,7 @@ function ensureNoteOnOffShape (a) {
   }
   if (typeof a.channel !== 'number' || !Number.isFinite(a.channel))
     a.channel = 0
-  a.channel = Math.max(0, Math.min(15, Math.round(a.channel)))
+  a.channel = Math.max(0, Math.min(16, Math.round(a.channel)))
   ensureSingleIntentTarget(a)
 }
 
@@ -150,6 +150,7 @@ export function createDefaultNoteOnOff (context) {
     class: CLASS_ID,
     guid,
     channel: 0,
+    channelAny: true,
     device: '',
     deviceAny: true,
     params: {

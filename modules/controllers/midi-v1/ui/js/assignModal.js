@@ -1,4 +1,7 @@
-import { getAssignmentClass, listAssignmentClasses } from './assignmentRegistry.js'
+import {
+  getAssignmentClass,
+  listAssignmentClasses
+} from './assignmentRegistry.js'
 import { NOTE_AND_CONTROL_CLASS } from './viewers/noteAndControl.js'
 
 /**
@@ -19,6 +22,7 @@ export function createAssignModal (opts) {
   let viewerTeardown = () => {}
   let viewerSync = () => {}
   let syncDeviceRow = () => {}
+  let syncChannelRow = () => {}
 
   const editorHost = document.createElement('div')
   editorHost.className = 'modal__editor'
@@ -56,7 +60,7 @@ export function createAssignModal (opts) {
     viewerSync = v.syncFromModel
   }
 
-  function commitDevice () {
+  function commitFilter () {
     if (!editing) return
     opts.session.mergeEditingIntoAssignments(editing)
     opts.refreshList()
@@ -64,21 +68,29 @@ export function createAssignModal (opts) {
   }
 
   /**
-   * Class-independent device filter row. Lives in the shared chrome so every
-   * receiver class gets it. "Any" on ⇒ the learned device is ignored (matches
-   * all sources); off ⇒ only the learned device drives this assignment.
+   * Class-independent source-filter row (Device / Channel). Lives in the shared
+   * chrome so every receiver class gets it. "Any" on ⇒ the learned value is
+   * ignored (matches everything); off ⇒ only the learned value passes.
+   *
+   * @param {{
+   *   label: string,
+   *   anyKey: 'deviceAny' | 'channelAny',
+   *   valueKey: 'device' | 'channel',
+   *   learnLabel: string,
+   *   formatValue: (v: unknown) => string
+   * }} cfg
    */
-  function buildDeviceRow () {
+  function buildFilterRow (cfg) {
     const row = document.createElement('div')
-    row.className = 'modal__row modal__row--device'
+    row.className = 'modal__row modal__row--filter'
 
     const label = document.createElement('span')
     label.className = 'modal__field-label'
-    label.textContent = 'Device:'
+    label.textContent = cfg.label
     row.appendChild(label)
 
     const anyWrap = document.createElement('label')
-    anyWrap.className = 'modal__device-any'
+    anyWrap.className = 'modal__filter-any'
     const anyChk = document.createElement('input')
     anyChk.type = 'checkbox'
     const anyText = document.createElement('span')
@@ -87,53 +99,64 @@ export function createAssignModal (opts) {
     anyWrap.appendChild(anyText)
     anyChk.addEventListener('change', () => {
       if (!editing) return
-      editing.deviceAny = anyChk.checked
-      syncDeviceRow()
-      commitDevice()
+      editing[cfg.anyKey] = anyChk.checked
+      sync()
+      commitFilter()
     })
     row.appendChild(anyWrap)
 
-    const nameEl = document.createElement('span')
-    nameEl.className = 'modal__device-name'
-    row.appendChild(nameEl)
+    const valueEl = document.createElement('span')
+    valueEl.className = 'modal__filter-name'
+    row.appendChild(valueEl)
 
     const learnBtn = document.createElement('button')
     learnBtn.type = 'button'
     learnBtn.className = 'btn btn--compact'
-    learnBtn.textContent = 'Device Learn'
+    learnBtn.textContent = cfg.learnLabel
     learnBtn.addEventListener('click', () => {
       const g = editing && typeof editing.guid === 'string' ? editing.guid : ''
-      if (g) opts.session.sendLearnStart(g, 'device', 'any')
+      if (g) opts.session.sendLearnStart(g, cfg.valueKey, 'any')
     })
     row.appendChild(learnBtn)
 
-    syncDeviceRow = () => {
+    function sync () {
       if (!editing) return
-      const any = editing.deviceAny === true
+      const any = editing[cfg.anyKey] === true
       anyChk.checked = any
-      const dev = typeof editing.device === 'string' ? editing.device : ''
-      nameEl.textContent = dev || '—'
-      nameEl.classList.toggle('modal__device-name--ignored', any)
+      valueEl.textContent = cfg.formatValue(editing[cfg.valueKey])
+      valueEl.classList.toggle('modal__filter-name--ignored', any)
     }
 
-    syncDeviceRow()
-    return row
+    sync()
+    return { row, sync }
   }
 
-  function ensureDeviceShape () {
+  function ensureFilterShape () {
     if (!editing) return
     if (typeof editing.device !== 'string') editing.device = ''
     if (typeof editing.deviceAny !== 'boolean') editing.deviceAny = true
+    if (
+      typeof editing.channel !== 'number' ||
+      !Number.isFinite(editing.channel)
+    ) {
+      editing.channel = 0
+    }
+    editing.channel = Math.max(
+      0,
+      Math.min(16, Math.round(/** @type {number} */ (editing.channel)))
+    )
+    if (typeof editing.channelAny !== 'boolean')
+      editing.channelAny = editing.channel === 0
   }
 
   function renderChrome () {
-    ensureDeviceShape()
+    ensureFilterShape()
     const modalBody = opts.els.modalBody
     modalBody.replaceChildren()
 
     const headerRow = document.createElement('div')
     headerRow.className = 'modal__header-row'
-    
+
     const closeBtn = document.createElement('button')
     closeBtn.type = 'button'
     closeBtn.className = 'btn btn--compact'
@@ -176,17 +199,14 @@ export function createAssignModal (opts) {
       remountEditor()
     })
     headerRow.appendChild(sel)
-    
+
     const btnDel = document.createElement('button')
     btnDel.type = 'button'
     btnDel.className = 'btn btn--danger btn--compact'
     btnDel.textContent = '❌'
     btnDel.addEventListener('click', () => {
       const g = editing && typeof editing.guid === 'string' ? editing.guid : ''
-      if (
-        !g ||
-        !window.confirm('Remove this assignment from the project?')
-      ) {
+      if (!g || !window.confirm('Remove this assignment from the project?')) {
         return
       }
       opts.session.deleteAssignment(g)
@@ -195,9 +215,28 @@ export function createAssignModal (opts) {
       close()
     })
     headerRow.appendChild(btnDel)
-    
+
+    const deviceRow = buildFilterRow({
+      label: 'Device:',
+      anyKey: 'deviceAny',
+      valueKey: 'device',
+      learnLabel: 'Learn',
+      formatValue: v => (typeof v === 'string' && v ? v : '—')
+    })
+    syncDeviceRow = deviceRow.sync
+
+    const channelRow = buildFilterRow({
+      label: 'Channel:',
+      anyKey: 'channelAny',
+      valueKey: 'channel',
+      learnLabel: 'Channel Learn',
+      formatValue: v => (typeof v === 'number' && v >= 1 ? String(v) : '—')
+    })
+    syncChannelRow = channelRow.sync
+
     modalBody.appendChild(headerRow)
-    modalBody.appendChild(buildDeviceRow())
+    modalBody.appendChild(deviceRow.row)
+    modalBody.appendChild(channelRow.row)
     modalBody.appendChild(editorHost)
 
     remountEditor()
@@ -214,6 +253,7 @@ export function createAssignModal (opts) {
     viewerTeardown()
     viewerTeardown = () => {}
     syncDeviceRow = () => {}
+    syncChannelRow = () => {}
     editing = null
     opts.els.modal.hidden = true
   }
@@ -255,11 +295,17 @@ export function createAssignModal (opts) {
       if (!editing || msg.assignmentGuid !== editing.guid) return
       const field = msg.field
       let changed = false
-      // Every learn reports its source device; the note/controller Learn buttons
-      // capture it as a side-effect. The "Any" toggle is left as the user set it.
+      // Every learn reports its source device + channel; the note/controller
+      // Learn buttons capture them as a side-effect. The "Any" toggles are left
+      // as the user set them.
       if (typeof msg.device === 'string') {
         editing.device = msg.device
         syncDeviceRow()
+        changed = true
+      }
+      if (typeof msg.channel === 'number' && Number.isFinite(msg.channel)) {
+        editing.channel = Math.max(1, Math.min(16, Math.round(msg.channel)))
+        syncChannelRow()
         changed = true
       }
       if (field === 'note' || field === 'controller') {

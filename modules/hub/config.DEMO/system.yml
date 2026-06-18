@@ -281,6 +281,14 @@ systemCapabilities:
         defaultValue: quadratic
         noMultiple: true
         isMandatory: true
+      - dotKey: params.mode
+        name: Mode
+        type: string
+        display: pills
+        options: [Attract, Repel]
+        defaultValue: Attract
+        noMultiple: true
+        isMandatory: true
       - dotKey: params.speed
         name: Follow Time
         type: number

@@ -63,8 +63,10 @@ function resolveDesiredDir(
     const radiusFunction = typeof m.radiusFunction === 'string' ? m.radiusFunction : 'quadratic';
     const strength = m.alpha * FnCurve.evaluate(radiusFunction, norm);
     if (strength <= 0) continue;
-    const dir = normalize(sub(m.position, worldPos));
-    if (!dir) continue;
+    const toMagnet = normalize(sub(m.position, worldPos));
+    if (!toMagnet) continue;
+    const isRepel = m.params['mode'] === 'Repel';
+    const dir: Vec3 = isRepel ? [-toMagnet[0], -toMagnet[1], -toMagnet[2]] : toMagnet;
     const speed = Math.max(0, numberOr(m.params['speed'], 0.5));
     contributions.push({ strength, dir, speed, layer: m.layer });
     if (m.layer > maxLayer) maxLayer = m.layer;

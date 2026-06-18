@@ -29,6 +29,9 @@ export const FIXTURE_ROOT_DESCRIPTORS = [
     display: 'scalar',
     range: [0, 9999],
     step: 1,
+    // Ease-in: most of the slider's left half covers small ranges (fine control), and it ramps
+    // up steeply toward 9999. `quadratic` is a gentler alternative.
+    stepFunction: 'cubic',
     isMandatory: true
   }
 ]

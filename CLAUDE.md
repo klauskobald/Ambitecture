@@ -164,6 +164,7 @@ No hardcoded addresses or local config reads inside test files.
 - `Logger` (`src/Logger.ts`) is the shared logging utility for hub-side code.
 - **Modules are self-contained.** No `../../` cross-module imports. Duplication is acceptable for now — shared utilities will be extracted into a proper shared package later.
 - **Renderers must stay in sync.** Whenever you update a renderer (e.g. `dmx-ts`), apply the same logic change to all other renderers (e.g. `simulator-2d`). Renderers share the same event model, LayerIntentEngine, fixture classes, and `FnCurve` math — divergence causes hard-to-debug behavioral differences at runtime.
+- **Never clamp signal values to [0,1] except at the final hardware write point.** Intermediate brightness / intensity / master values must pass through unclamped so boost (>1) and stacking effects are preserved. The only allowed clamp sites are: `DmxUniverse.setChannel`, `DmxFixtureBase.normalizedToDmxRange`, `NeewerProtocol` helpers, `color.js` gamut math, and equivalent final-output guards in screen / simulator-2d. `FnCurve.evaluate` is a pure function — it receives and returns the raw value.
 - **Hub is the source of truth.** Renderers and controllers may cache hub data in memory but must not invent authoritative state. Use `runtime:command` for transient streams, `graph:command` for durable changes.
 
 ---

@@ -45,6 +45,8 @@ export interface ConfiguredFixture {
     resolvedTargetPos?: [number, number, number] | null;
     /** Per-fixture continuous pan angle (deg) for >360° unwrap continuity. */
     currentPanDeg?: number;
+    /** Per-fixture continuous world front-heading (deg) for pan/tilt over-the-top branch selection. */
+    currentAimHeadingDeg?: number;
     /** Resolved synchronously from `fixtureProfile.class` when config is applied. */
     fixtureClass: IFixtureClass;
 }

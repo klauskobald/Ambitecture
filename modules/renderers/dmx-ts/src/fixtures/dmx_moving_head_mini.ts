@@ -53,13 +53,22 @@ class DmxMovingHeadMini extends DmxFixtureBase {
         }
 
         const target = snapshot.sample<[number, number, number]>('target') ?? null;
-        this.applyPan(fixture, context, target, dmxUniverse);
-        this.applyTilt(fixture, context, target, dmxUniverse);
+        this.applyAim(fixture, context, target, dmxUniverse);
     }
 
-    // Pan aims at the hub-resolved lookAt point (simple vector math). xy-speed is parked at 0 since the
-    // hub eases the target itself. Pan unwrap keeps >360° continuity.
-    private applyPan(
+    /**
+     * Aim the head at the hub-resolved lookAt point. `xy-speed` is parked at 0 since the hub eases the
+     * target itself.
+     *
+     * Each beam direction has two reachable (pan, tilt) poses: aim "front" (tilt below the up-centre) or
+     * "over the top" (pan held, tilt swung past vertical to the back). We track the head's continuous
+     * world front-heading and, **outside** a near-vertical cone, snap it to whichever of `heading` /
+     * `heading+180` is closer — so once the beam has gone over the top it stays there instead of spinning
+     * pan 180°. **Inside** the cone the front-heading is frozen and tilt alone carries the beam through
+     * vertical (the in-plane formula stays continuous as the target crosses overhead). This trades a tiny
+     * pointing error very close to straight-up for smooth motion and use of the full tilt range.
+     */
+    private applyAim(
         fixture: ConfiguredFixture,
         context: FixtureSampleContext,
         target: [number, number, number] | null,
@@ -68,47 +77,100 @@ class DmxMovingHeadMini extends DmxFixtureBase {
         this.writeFunction(fixture, 'xy-speed', 0, dmxUniverse);
 
         const panDegrees = this.getFunctionDegrees(fixture, 'pan');
-        if (!panDegrees || panDegrees <= 0 || !target) return;
+        const tiltDegrees = this.getFunctionDegrees(fixture, 'tilt');
+        const hasTilt = !!tiltDegrees && tiltDegrees > 0;
 
-        const [fx, , fz] = context.fixtureWorldPos;
+        if (!target) {
+            if (hasTilt) this.writeFunction(fixture, 'tilt', 0, dmxUniverse);
+            return;
+        }
+        if (!panDegrees || panDegrees <= 0) return;
+
+        const [fx, fy, fz] = context.fixtureWorldPos;
+        const dx = target[0] - fx;
+        const dz = target[2] - fz;
+        const horizontalDist = Math.hypot(dx, dz);
+        const headDown = fixture.params['headDown'] === true;
+        const dy = headDown ? fy - target[1] : target[1] - fy;
+
+        const headingDeg = Math.atan2(dz, dx) * (180 / Math.PI);
+
+        // Pan-only head: keep the simple single-solution aim (no over-top branch).
+        if (!hasTilt) {
+            this.writePan(fixture, headingDeg, panDegrees, dmxUniverse);
+            return;
+        }
+
+        // Zenith from straight-up (0 = overhead, 90 = horizon). The cone is measured here.
+        const zenithDeg = Math.atan2(horizontalDist, dy) * (180 / Math.PI);
+        const prevFrontHeading = fixture.currentAimHeadingDeg ?? headingDeg;
+
+        // Outside the cone we may re-commit the front-heading to the nearer of the two poses; inside it
+        // stays frozen so the fast azimuth swing around the zenith never spins pan.
+        let frontHeading = prevFrontHeading;
+        if (zenithDeg >= OVER_TOP_CONE_DEG) {
+            const frontCandidate = nearestHeading(headingDeg, prevFrontHeading);
+            const overTopCandidate = nearestHeading(headingDeg + 180, prevFrontHeading);
+            frontHeading =
+                Math.abs(frontCandidate - prevFrontHeading) <= Math.abs(overTopCandidate - prevFrontHeading)
+                    ? frontCandidate
+                    : overTopCandidate;
+        }
+        fixture.currentAimHeadingDeg = frontHeading;
+
+        // In-plane beam angle within the (frozen-or-tracked) front-heading plane. cos(rel) < 0 means the
+        // target sits behind the front, i.e. the beam is over the top → inPlaneTilt passes 90° smoothly.
+        const relRad = normalizeTo180(headingDeg - frontHeading) * (Math.PI / 180);
+        const inPlaneTiltDeg = Math.atan2(dy, horizontalDist * Math.cos(relRad)) * (180 / Math.PI);
+
+        this.writePan(fixture, frontHeading, panDegrees, dmxUniverse);
+        this.writeTilt(fixture, inPlaneTiltDeg, tiltDegrees, dmxUniverse);
+    }
+
+    /** Mechanical pan write with reverse/trim and >360° unwrap continuity. */
+    private writePan(
+        fixture: ConfiguredFixture,
+        headingDeg: number,
+        panDegrees: number,
+        dmxUniverse: DmxUniverse
+    ): void {
         const mount = readAxisMount(fixture, 'pan');
-        let headingDeg = Math.atan2(target[2] - fz, target[0] - fx) * (180 / Math.PI);
-        if (mount.reverse) headingDeg = -headingDeg;
-        headingDeg += mount.trimDegrees;
-
-        const current = fixture.currentPanDeg ?? panDegrees / 2;
-        const next = panUnwrap(current, headingDeg, panDegrees);
+        let mechHeading = mount.reverse ? -headingDeg : headingDeg;
+        mechHeading += mount.trimDegrees;
+        const next = panUnwrap(fixture.currentPanDeg ?? panDegrees / 2, mechHeading, panDegrees);
         fixture.currentPanDeg = next;
         this.writeFunction(fixture, 'pan', next / panDegrees, dmxUniverse);
     }
 
-    // Tilt aims at the elevation of the hub-resolved lookAt point. The vertical angle from the fixture to
-    // the target maps onto the head's mechanical range, centred (range/2) on the horizontal plane.
-    private applyTilt(
+    /** Map an in-plane beam angle (0 = front horizon, 90 = up, 180 = back horizon) onto mechanical tilt. */
+    private writeTilt(
         fixture: ConfiguredFixture,
-        context: FixtureSampleContext,
-        target: [number, number, number] | null,
+        inPlaneTiltDeg: number,
+        tiltDegrees: number,
         dmxUniverse: DmxUniverse
     ): void {
-        const tiltDegrees = this.getFunctionDegrees(fixture, 'tilt');
-        if (!tiltDegrees || tiltDegrees <= 0 || !target) {
-            this.writeFunction(fixture, 'tilt', 0, dmxUniverse);
-            return;
-        }
-
-        const [fx, fy, fz] = context.fixtureWorldPos;
-        const horizontalDist = Math.hypot(target[0] - fx, target[2] - fz);
         const mount = readAxisMount(fixture, 'tilt');
-        // Negated so the centred range maps a target above the fixture to "beam up". Physical
-        // mounting orientation is handled separately by mount.reverse.
-        const a = fixture.params['headDown'] ? Math.atan2(horizontalDist, fy - target[1]) : Math.atan2(horizontalDist, target[1] - fy)
-        // const a = Math.atan2(target[1] - fy, horizontalDist)
-        let elevationDeg = -a * (180 / Math.PI);
-        if (mount.reverse) elevationDeg = -elevationDeg;
-
-        const tiltDeg = tiltDegrees / 2 + elevationDeg + mount.trimDegrees;
+        const offsetFromUp = inPlaneTiltDeg - 90;
+        const tiltDeg = tiltDegrees / 2 + (mount.reverse ? -offsetFromUp : offsetFromUp) + mount.trimDegrees;
         this.writeFunction(fixture, 'tilt', tiltDeg / tiltDegrees, dmxUniverse);
     }
+}
+
+/**
+ * Half-angle (deg) of the near-vertical cone where pan freezes and tilt carries the beam over the top.
+ * Kept tight so pan tracks the target normally everywhere except an almost-dead-overhead crossing.
+ */
+const OVER_TOP_CONE_DEG = 2;
+
+/** Representation of `targetDeg` (any sign) on the same continuous turn as `referenceDeg` (within ±180°). */
+function nearestHeading(targetDeg: number, referenceDeg: number): number {
+    const delta = (((targetDeg - referenceDeg) % 360) + 540) % 360 - 180;
+    return referenceDeg + delta;
+}
+
+/** Fold a degree difference into [-180, 180). */
+function normalizeTo180(deg: number): number {
+    return (((deg % 360) + 540) % 360) - 180;
 }
 
 /** Per-instance mount calibration (dmx-only — depends on physical mounting). */

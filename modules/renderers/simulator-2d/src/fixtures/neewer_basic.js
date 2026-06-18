@@ -14,7 +14,7 @@ class NeewerBasic extends LightBase {
 
     const { r, g, b } = color.toRGB()
     const f =
-      Math.max(0, Math.min(1, masterBrightness)) *
+      Math.max(0, masterBrightness) *
       (masterBlackout ? 0 : 1) *
       this._trimBrightness
     this.currentColor = { r: r * f, g: g * f, b: b * f }

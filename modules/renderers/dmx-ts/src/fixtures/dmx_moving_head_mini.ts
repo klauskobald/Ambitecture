@@ -29,7 +29,7 @@ class DmxMovingHeadMini extends DmxFixtureBase {
         // output, so the master dimmer must scale the color channels; with strobe off the
         // dimmer rides on the brightness channel and the color stays at full level.
         if (strobeOn) {
-            const colorScale = Math.max(0, Math.min(1, masterBrightness)) * blackoutFactor * trimBrightness;
+            const colorScale = Math.max(0, masterBrightness) * blackoutFactor * trimBrightness;
             const intensityFactor = this.getIntensityGain(fixture, colorScale);
             this.writeFunction(fixture, 'red', r * intensityFactor, dmxUniverse);
             this.writeFunction(fixture, 'green', g * intensityFactor, dmxUniverse);
@@ -44,7 +44,7 @@ class DmxMovingHeadMini extends DmxFixtureBase {
             this.writeFunction(fixture, 'green', g * colorScale, dmxUniverse);
             this.writeFunction(fixture, 'blue', b * colorScale, dmxUniverse);
             this.writeFunction(fixture, 'white', w * colorScale, dmxUniverse);
-            const dimmer = Math.max(0, Math.min(1, masterBrightness)) * blackoutFactor * trimBrightness;
+            const dimmer = Math.max(0, masterBrightness) * blackoutFactor * trimBrightness;
             this.writeFunction(fixture, 'brightness', this.getIntensityGain(fixture, Math.max(0, dimmer)), dmxUniverse);
         }
 

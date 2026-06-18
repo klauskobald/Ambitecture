@@ -24,11 +24,11 @@ class DmxBasicStatic extends DmxFixtureBase {
         const { r, g, b } = color.toRGB();
 
         const brightnessFactor =
-            Math.max(0, Math.min(1, xbrightness * masterBrightness)) *
+            Math.max(0, xbrightness * masterBrightness) *
             (masterBlackout ? 0 : 1) *
             boostBrightness *
             trimBrightness;
-        const intensityFactor = this.getIntensityGain(fixture, brightnessFactor);
+        const intensityFactor = this.getIntensityGain(fixture, Math.max(0, brightnessFactor));
 
         this.writeFunction(fixture, 'red', r * intensityFactor, dmxUniverse);
         this.writeFunction(fixture, 'green', g * intensityFactor, dmxUniverse);

@@ -47,7 +47,7 @@ class DmxLightStatic extends LightBase {
 
     const { r, g, b } = color.toRGB()
     const f =
-      Math.max(0, Math.min(1, xbrightness * masterBrightness)) *
+      Math.max(0, xbrightness * masterBrightness) *
       (masterBlackout ? 0 : 1) *
       boostBrightness *
       this._trimBrightness

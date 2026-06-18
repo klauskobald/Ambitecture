@@ -46,7 +46,7 @@ class DmxMovingHeadMini extends LightBase {
     // resulting RGB and reflects master brightness the same way in both strobe states.
     const { r, g, b } = color.toRGB()
     const f =
-      Math.max(0, Math.min(1, xbrightness * masterBrightness)) *
+      Math.max(0, xbrightness * masterBrightness) *
       (masterBlackout ? 0 : 1) *
       boostBrightness *
       this._trimBrightness

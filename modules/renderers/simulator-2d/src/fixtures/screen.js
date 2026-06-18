@@ -57,7 +57,7 @@ class Screen extends LightBase {
 
     const { r, g, b } = color.toRGB()
     const f =
-      Math.max(0, Math.min(1, xbrightness * masterBrightness)) *
+      Math.max(0, xbrightness * masterBrightness) *
       (masterBlackout ? 0 : 1) *
       boostBrightness
     this._rgb = { r: r * f, g: g * f, b: b * f }

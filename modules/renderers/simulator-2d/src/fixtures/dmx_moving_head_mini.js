@@ -2,7 +2,6 @@ class DmxMovingHeadMini extends LightBase {
   constructor (profile, instanceConfig, drawConfig) {
     super(profile, instanceConfig, drawConfig)
     this._drawConfig = drawConfig
-    this._trimBrightness = fixtureTrimBrightness(instanceConfig.trim)
     this._strobe = 0
     this.currentColor = null
     const py = profile.params?.strobe
@@ -30,13 +29,9 @@ class DmxMovingHeadMini extends LightBase {
   }
 
   applyIntentSnapshot (_context, snapshot) {
-    const xbrightness = 1
-    const withSpatial = true
-
     const color =
-      snapshot.sample('light.color.xyY', withSpatial) || Color.black()
+      snapshot.sample('light.color.xyY', true) || Color.black()
     const masterBrightness = snapshot.sample('master.brightness') ?? 1
-    const boostBrightness = masterBrightness > 1 ? masterBrightness : 1
     const masterBlackout = snapshot.sample('master.blackout') ?? false
     const spatialStrobe = snapshot.sample('light.strobe') ?? 0
     const aux = snapshot.sample('light.aux') ?? {}
@@ -46,10 +41,9 @@ class DmxMovingHeadMini extends LightBase {
     // resulting RGB and reflects master brightness the same way in both strobe states.
     const { r, g, b } = color.toRGB()
     const f =
-      Math.max(0, xbrightness * masterBrightness) *
+      Math.max(0, masterBrightness) *
       (masterBlackout ? 0 : 1) *
-      boostBrightness *
-      this._trimBrightness
+      masterBrightness
     this.currentColor = { r: r * f, g: g * f, b: b * f }
 
     // Aim the head icon at the hub-resolved lookAt point (simple vector math). Rotation that points

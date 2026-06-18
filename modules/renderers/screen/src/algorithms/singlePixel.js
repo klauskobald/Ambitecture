@@ -70,11 +70,8 @@ export class SinglePixelAlgorithm extends AlgorithmBase {
   }
 
   apply (snapshot, _context) {
-    const xbrightness = 1
-    const withSpatial = true
-
     const color =
-      snapshot.sample('light.color.xyY', withSpatial) || Color.black()
+      snapshot.sample('light.color.xyY', true) || Color.black()
     const masterBrightness = snapshot.sample('master.brightness') ?? 1
     const masterBlackout = snapshot.sample('master.blackout') ?? false
     const spatialStrobe = snapshot.sample('light.strobe') ?? 0
@@ -83,7 +80,7 @@ export class SinglePixelAlgorithm extends AlgorithmBase {
 
     const { r, g, b } = color.toRGB()
     const f =
-      Math.max(0, xbrightness * masterBrightness) *
+      Math.max(0, masterBrightness) *
       (masterBlackout ? 0 : 1) *
       masterBrightness
     // Instance-level hardware gain (simulator-2d ignores these params).

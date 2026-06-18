@@ -47,8 +47,7 @@ class ConfigHandler {
           params,
           range,
           target,
-          rotation,
-          trim
+          rotation
         } = fixtureData
         const FixtureClass = this.fixtureClasses[fixtureProfile.class]
         if (!FixtureClass) {
@@ -69,8 +68,7 @@ class ConfigHandler {
           params,
           range,
           target,
-          rotation,
-          trim
+          rotation
         }
         const instance = new FixtureClass(
           fixtureProfile,

@@ -14,7 +14,6 @@ class DmxMovingHeadMini extends DmxFixtureBase {
     ): void {
         const masterBrightness = snapshot.sample<number>('master.brightness') ?? 1;
         const masterBlackout = snapshot.sample<boolean>('master.blackout') ?? false;
-        const trimBrightness = this.getTrimBrightness(fixture);
         const blackoutFactor = masterBlackout ? 0 : 1;
 
         const color = snapshot.sample<Color>('light.color.xyY', true) ?? Color.black();
@@ -29,7 +28,7 @@ class DmxMovingHeadMini extends DmxFixtureBase {
         // output, so the master dimmer must scale the color channels; with strobe off the
         // dimmer rides on the brightness channel and the color stays at full level.
         if (strobeOn) {
-            const colorScale = Math.max(0, masterBrightness) * blackoutFactor * trimBrightness;
+            const colorScale = Math.max(0, masterBrightness) * blackoutFactor;
             const intensityFactor = this.getIntensityGain(fixture, colorScale);
             this.writeFunction(fixture, 'red', r * intensityFactor, dmxUniverse);
             this.writeFunction(fixture, 'green', g * intensityFactor, dmxUniverse);
@@ -37,14 +36,12 @@ class DmxMovingHeadMini extends DmxFixtureBase {
             this.writeFunction(fixture, 'white', w * intensityFactor, dmxUniverse);
             this.writeFunction(fixture, 'strobe-on', strobeValue, dmxUniverse);
         } else {
-            const boostBrightness = masterBrightness > 1 ? masterBrightness : 1;
-            const rgbTrim = boostBrightness > 1 ? trimBrightness : 1;
-            const colorScale = boostBrightness * rgbTrim;
+            const colorScale = masterBrightness;
             this.writeFunction(fixture, 'red', r * colorScale, dmxUniverse);
             this.writeFunction(fixture, 'green', g * colorScale, dmxUniverse);
             this.writeFunction(fixture, 'blue', b * colorScale, dmxUniverse);
             this.writeFunction(fixture, 'white', w * colorScale, dmxUniverse);
-            const dimmer = Math.max(0, masterBrightness) * blackoutFactor * trimBrightness;
+            const dimmer = Math.max(0, masterBrightness) * blackoutFactor;
             this.writeFunction(fixture, 'brightness', this.getIntensityGain(fixture, Math.max(0, dimmer)), dmxUniverse);
         }
 

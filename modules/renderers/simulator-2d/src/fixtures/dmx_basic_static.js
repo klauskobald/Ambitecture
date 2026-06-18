@@ -2,27 +2,20 @@ class DmxBasicStatic extends LightBase {
   constructor (profile, instanceConfig, drawConfig) {
     super(profile, instanceConfig, drawConfig)
     this._drawConfig = drawConfig
-    this._trimBrightness = fixtureTrimBrightness(instanceConfig.trim)
     this.currentColor = null
   }
 
   applyIntentSnapshot (_context, snapshot) {
-    // light.brightness additive sample is 0 with no intents — fold dimming via master + RGB.
-    const xbrightness = 1
-    const withSpatial = true
-
     const color =
-      snapshot.sample('light.color.xyY', withSpatial) || Color.black()
+      snapshot.sample('light.color.xyY', true) || Color.black()
     const masterBrightness = snapshot.sample('master.brightness') ?? 1
-    const boostBrightness = masterBrightness > 1 ? masterBrightness : 1
     const masterBlackout = snapshot.sample('master.blackout') ?? false
 
     const { r, g, b } = color.toRGB()
     const brightnessFactor =
-      Math.max(0, xbrightness * masterBrightness) *
+      Math.max(0, masterBrightness) *
       (masterBlackout ? 0 : 1) *
-      boostBrightness *
-      this._trimBrightness
+      masterBrightness
     this.currentColor = {
       r: r * brightnessFactor,
       g: g * brightnessFactor,

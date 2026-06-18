@@ -30,16 +30,8 @@ export abstract class DmxFixtureBase implements IFixtureClass {
         return null;
     }
 
-    protected getTrimBrightness(fixture: ConfiguredFixture): number {
-        const value = fixture.trim?.brightness;
-        if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
-            return value;
-        }
-        return 1;
-    }
-
     /**
-     * Hardward-abstract instance gain: `FnCurve.evaluate(fn, clamp(level,0,1)) * trim`.
+     * Hardware-abstract instance gain: shapes the brightness response with
      * `params.intensityFn` defaults to `'linear'` (identity), `params.intensityTrim` to 1.
      * Each fixture class calls this with the already-computed dimmer/level before writing
      * to hardware. `simulator-2d` ignores these params entirely.

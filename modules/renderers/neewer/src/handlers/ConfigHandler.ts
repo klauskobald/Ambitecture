@@ -16,10 +16,6 @@ export interface FixtureProfile {
     params: Record<string, unknown>;
 }
 
-export interface FixtureTrim {
-    brightness?: number;
-}
-
 export interface ConfiguredFixture {
     /** Hub fixture GUID; used to match hub-resolved per-fixture `fixtureState` caps. */
     guid?: string;
@@ -28,7 +24,6 @@ export interface ConfiguredFixture {
     location: [number, number, number];
     range: number;
     params: Record<string, unknown>;
-    trim?: FixtureTrim;
     /** Hardware-abstract intensity trim (0–10, default 1). */
     intensityTrim?: number;
     /** Named FnCurve shaping the brightness response (default `'quadratic'`). */
@@ -70,16 +65,6 @@ function isTuple6(v: unknown): v is [number, number, number, number, number, num
         v.length === 6 &&
         v.every((x) => typeof x === 'number' && Number.isFinite(x as number))
     );
-}
-
-function parseFixtureTrim(raw: unknown): FixtureTrim | undefined {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
-    const o = raw as Record<string, unknown>;
-    const trim: FixtureTrim = {};
-    if (typeof o['brightness'] === 'number' && Number.isFinite(o['brightness'])) {
-        trim.brightness = o['brightness'];
-    }
-    return Object.keys(trim).length > 0 ? trim : undefined;
 }
 
 function parseConfiguredFixture(raw: unknown, zoneName: string): ConfiguredFixtureDraft | null {
@@ -124,10 +109,6 @@ function parseConfiguredFixture(raw: unknown, zoneName: string): ConfiguredFixtu
     }
     if (o['rotation'] !== undefined && isTuple3(o['rotation'])) {
         out.rotation = o['rotation'];
-    }
-    const trim = parseFixtureTrim(o['trim']);
-    if (trim !== undefined) {
-        out.trim = trim;
     }
     if (typeof o['intensityTrim'] === 'number' && Number.isFinite(o['intensityTrim']) && o['intensityTrim'] >= 0) {
         out.intensityTrim = o['intensityTrim'];

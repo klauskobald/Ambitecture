@@ -15,14 +15,6 @@ export abstract class NeewerLightBase implements IFixtureClass {
         bus: NeewerBus
     ): void;
 
-    protected getTrimBrightness(fixture: ConfiguredFixture): number {
-        const value = fixture.trim?.brightness;
-        if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
-            return value;
-        }
-        return 1;
-    }
-
     /**
      * Hardware-abstract instance gain: shapes the brightness response with
      * `FnCurve.evaluate(fn, clamp(level,0,1)) * trim` where `intensityFn` defaults to `'linear'`

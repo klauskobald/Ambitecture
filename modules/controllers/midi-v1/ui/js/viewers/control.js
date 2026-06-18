@@ -116,6 +116,8 @@ export function createDefaultControl (context) {
     class: CLASS_ID,
     guid,
     channel: 0,
+    device: '',
+    deviceAny: true,
     params: {
       controller: 1,
       controllerAdd: 0,

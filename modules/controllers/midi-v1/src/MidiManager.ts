@@ -1,7 +1,7 @@
 import { Input } from '@julusian/midi';
 
-export interface MidiNoteEvent       { channel: number; note: number; velocity: number; }
-export interface MidiCcEvent         { channel: number; controller: number; value: number; }
+export interface MidiNoteEvent       { channel: number; note: number; velocity: number; device: string; }
+export interface MidiCcEvent         { channel: number; controller: number; value: number; device: string; }
 export interface MidiPitchBendEvent  { channel: number; value: number; }
 export interface MidiProgramEvent    { channel: number; program: number; }
 export interface MidiAftertouchEvent { channel: number; pressure: number; note?: number; }
@@ -117,14 +117,14 @@ export class MidiManager {
       case 0x80: {
         const note = message[1] ?? 0;
         const velocity = message[2] ?? 0;
-        cb.onNoteOff?.(deviceName, { channel, note, velocity });
+        cb.onNoteOff?.(deviceName, { channel, note, velocity, device: deviceName });
         return;
       }
       case 0x90: {
         const note = message[1] ?? 0;
         const velocity = message[2] ?? 0;
-        if (velocity === 0) cb.onNoteOff?.(deviceName, { channel, note, velocity });
-        else cb.onNoteOn?.(deviceName, { channel, note, velocity });
+        if (velocity === 0) cb.onNoteOff?.(deviceName, { channel, note, velocity, device: deviceName });
+        else cb.onNoteOn?.(deviceName, { channel, note, velocity, device: deviceName });
         return;
       }
       case 0xa0: {
@@ -136,7 +136,7 @@ export class MidiManager {
       case 0xb0: {
         const controller = message[1] ?? 0;
         const value = message[2] ?? 0;
-        cb.onControlChange?.(deviceName, { channel, controller, value });
+        cb.onControlChange?.(deviceName, { channel, controller, value, device: deviceName });
         return;
       }
       case 0xc0: {

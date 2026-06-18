@@ -86,6 +86,7 @@ export class ReceiverControl extends ReceiverBase {
   handleNoteOff(_e: MidiNoteEvent): void {}
 
   handleCc(e: MidiCcEvent): void {
+    if (!this.deviceMatches(e.device)) return;
     if (!this.channelMatches(e.channel)) return;
     if (e.controller !== this.params.controller) return;
     // Pre-curve transform in raw 0..127 CC space: (cc + add) * scale, normalized.

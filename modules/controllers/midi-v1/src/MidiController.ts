@@ -32,7 +32,7 @@ export class MidiController {
   private learn: {
     assignmentGuid: string;
     field: string;
-    capture: 'noteOn' | 'controlChange';
+    capture: 'noteOn' | 'controlChange' | 'any';
   } | null = null;
 
   constructor(config: MidiV1Config, logger: Logger) {
@@ -66,8 +66,9 @@ export class MidiController {
       summarizeForPlugin: a => summarizeAssignmentForPlugin(a, this.graph),
       onSave: arr => this.persistAssignmentsFromUi(arr),
       onLearnStart: (assignmentGuid, field, capture) => {
-        let cap: 'noteOn' | 'controlChange';
-        if (capture === 'noteOn' || capture === 'controlChange') cap = capture;
+        let cap: 'noteOn' | 'controlChange' | 'any';
+        if (capture === 'noteOn' || capture === 'controlChange' || capture === 'any') cap = capture;
+        else if (field === 'device') cap = 'any';
         else if (field === 'controller') cap = 'controlChange';
         else cap = 'noteOn';
         this.learn = { assignmentGuid, field, capture: cap };
@@ -146,6 +147,8 @@ export class MidiController {
       class: a.class,
       guid: a.guid,
       channel: a.channel,
+      device: a.device,
+      deviceAny: a.deviceAny,
       params: { ...a.params },
       targets: a.targets.map(t => ({ ...t })),
     };
@@ -208,12 +211,7 @@ export class MidiController {
   }
 
   private dispatchNoteOn(e: MidiNoteEvent): void {
-    const pending = this.learn;
-    if (pending !== null && pending.capture === 'noteOn') {
-      this.learn = null;
-      this.pluginServer.sendLearnResult(pending.assignmentGuid, pending.field, e.note);
-      return;
-    }
+    if (this.resolveLearn('noteOn', e.note, e.device)) return;
     for (const r of this.receivers) r.handleNoteOn(e);
   }
 
@@ -222,13 +220,23 @@ export class MidiController {
   }
 
   private dispatchCc(e: MidiCcEvent): void {
-    const pending = this.learn;
-    if (pending !== null && pending.capture === 'controlChange') {
-      this.learn = null;
-      this.pluginServer.sendLearnResult(pending.assignmentGuid, pending.field, e.controller);
-      return;
-    }
+    if (this.resolveLearn('controlChange', e.controller, e.device)) return;
     for (const r of this.receivers) r.handleCc(e);
+  }
+
+  /**
+   * Completes a pending MIDI learn from an incoming event. `'any'` captures fire
+   * on either note or CC. Every learn also reports the source device, so the
+   * note/controller Learn buttons capture the device as a side-effect.
+   */
+  private resolveLearn(source: 'noteOn' | 'controlChange', value: number, device: string): boolean {
+    const pending = this.learn;
+    if (pending === null) return false;
+    if (pending.capture !== source && pending.capture !== 'any') return false;
+    this.learn = null;
+    const numeric = pending.field === 'device' ? undefined : value;
+    this.pluginServer.sendLearnResult(pending.assignmentGuid, pending.field, numeric, device);
+    return true;
   }
 }
 

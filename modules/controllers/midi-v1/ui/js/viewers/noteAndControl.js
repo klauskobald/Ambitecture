@@ -128,6 +128,8 @@ export function createDefaultNoteAndControl (context) {
     class: CLASS_ID,
     guid,
     channel: 0,
+    device: '',
+    deviceAny: true,
     params: {
       note: 0,
       velocityRange: [0, 127],

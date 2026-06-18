@@ -153,6 +153,7 @@ export class ReceiverNoteOnOff extends ReceiverBase {
   }
 
   handleNoteOn(e: MidiNoteEvent): void {
+    if (!this.deviceMatches(e.device)) return;
     if (!this.channelMatches(e.channel)) return;
     if (e.note !== this.params.note) return;
     if (e.velocity < this.params.velocityMin || e.velocity > this.params.velocityMax) return;
@@ -174,6 +175,7 @@ export class ReceiverNoteOnOff extends ReceiverBase {
   }
 
   handleNoteOff(e: MidiNoteEvent): void {
+    if (!this.deviceMatches(e.device)) return;
     if (!this.channelMatches(e.channel)) return;
     if (e.note !== this.params.note) return;
 

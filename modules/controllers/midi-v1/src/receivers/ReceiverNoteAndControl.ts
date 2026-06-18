@@ -117,6 +117,7 @@ export class ReceiverNoteAndControl extends ReceiverBase {
   }
 
   handleNoteOn(e: MidiNoteEvent): void {
+    if (!this.deviceMatches(e.device)) return;
     if (!this.channelMatches(e.channel)) return;
     if (e.note !== this.params.note) return;
     if (e.velocity < this.params.velocityMin || e.velocity > this.params.velocityMax) return;
@@ -126,6 +127,7 @@ export class ReceiverNoteAndControl extends ReceiverBase {
   }
 
   handleNoteOff(e: MidiNoteEvent): void {
+    if (!this.deviceMatches(e.device)) return;
     if (e.note !== this.params.note) return;
     if (this.armedChannel === null || e.channel !== this.armedChannel) return;
     this.armedChannel = null;
@@ -134,6 +136,7 @@ export class ReceiverNoteAndControl extends ReceiverBase {
   }
 
   handleCc(e: MidiCcEvent): void {
+    if (!this.deviceMatches(e.device)) return;
     if (this.armedChannel === null) return;
     if (e.channel !== this.armedChannel) return;
     if (e.controller !== this.params.controller) return;

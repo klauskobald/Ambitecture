@@ -194,6 +194,7 @@ export class ReceiverNoteOnOffToggle extends ReceiverBase {
   }
 
   handleNoteOn(e: MidiNoteEvent): void {
+    if (!this.deviceMatches(e.device)) return;
     if (!this.channelMatches(e.channel)) return;
     if (e.note !== this.params.note) return;
 

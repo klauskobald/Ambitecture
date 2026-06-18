@@ -21,7 +21,7 @@ export interface PluginServerHandlers {
   onLearnStart: (
     assignmentGuid: string,
     field: string,
-    capture?: 'noteOn' | 'controlChange',
+    capture?: 'noteOn' | 'controlChange' | 'any',
   ) => void;
 }
 
@@ -147,8 +147,11 @@ export class PluginServer {
     });
   }
 
-  sendLearnResult(assignmentGuid: string, field: string, value: number): void {
-    const msg = JSON.stringify({ type: 'learnValue', assignmentGuid, field, value });
+  sendLearnResult(assignmentGuid: string, field: string, value?: number, device?: string): void {
+    const payload: Record<string, unknown> = { type: 'learnValue', assignmentGuid, field };
+    if (typeof value === 'number' && Number.isFinite(value)) payload['value'] = value;
+    if (typeof device === 'string') payload['device'] = device;
+    const msg = JSON.stringify(payload);
     for (const ws of this.clients) {
       if (ws.readyState === WebSocket.OPEN) ws.send(msg);
     }
@@ -207,7 +210,7 @@ export class PluginServer {
       const field = msg['field'];
       const capRaw = msg['capture'];
       const capture =
-        capRaw === 'noteOn' || capRaw === 'controlChange' ? capRaw : undefined;
+        capRaw === 'noteOn' || capRaw === 'controlChange' || capRaw === 'any' ? capRaw : undefined;
       if (typeof guid === 'string' && typeof field === 'string') {
         this.handlers.onLearnStart(guid, field, capture);
         if (sender.readyState === WebSocket.OPEN) {
@@ -230,6 +233,8 @@ function assignmentToWire(a: AssignmentRecord, summary: string): Record<string, 
     class: a.class,
     guid: a.guid,
     channel: a.channel,
+    device: a.device,
+    deviceAny: a.deviceAny,
     params: { ...a.params },
     targets: a.targets.map(t => ({ ...t })),
     summary,

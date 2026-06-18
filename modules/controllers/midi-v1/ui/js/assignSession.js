@@ -22,7 +22,7 @@ const SAVE_DEBOUNCE_MS = 280
  *   pushAssignment: (row: Record<string, unknown>) => void,
  *   mergeEditingIntoAssignments: (editing: Record<string, unknown>) => void,
  *   deleteAssignment: (guid: string) => void,
- *   sendLearnStart: (assignmentGuid: string, field: string, capture: 'noteOn'|'controlChange') => void
+ *   sendLearnStart: (assignmentGuid: string, field: string, capture: 'noteOn'|'controlChange'|'any') => void
  * }} AssignSessionApi
  */
 

@@ -318,6 +318,38 @@ body {
   flex-wrap: wrap;
 }
 
+.modal__row--device {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.modal__device-any {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex: 0 0 auto;
+  color: var(--color-muted);
+  font-size: 0.75rem;
+}
+
+.modal__device-name {
+  flex: 1 1 auto;
+  min-width: 4ch;
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modal__device-name--ignored {
+  color: var(--color-muted);
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
 .modal__vel-wrap {
   display: flex;
   align-items: center;

@@ -18,6 +18,7 @@ export function createAssignModal (opts) {
   let editing = null
   let viewerTeardown = () => {}
   let viewerSync = () => {}
+  let syncDeviceRow = () => {}
 
   const editorHost = document.createElement('div')
   editorHost.className = 'modal__editor'
@@ -55,7 +56,78 @@ export function createAssignModal (opts) {
     viewerSync = v.syncFromModel
   }
 
+  function commitDevice () {
+    if (!editing) return
+    opts.session.mergeEditingIntoAssignments(editing)
+    opts.refreshList()
+    opts.session.scheduleSave()
+  }
+
+  /**
+   * Class-independent device filter row. Lives in the shared chrome so every
+   * receiver class gets it. "Any" on ⇒ the learned device is ignored (matches
+   * all sources); off ⇒ only the learned device drives this assignment.
+   */
+  function buildDeviceRow () {
+    const row = document.createElement('div')
+    row.className = 'modal__row modal__row--device'
+
+    const label = document.createElement('span')
+    label.className = 'modal__field-label'
+    label.textContent = 'Device:'
+    row.appendChild(label)
+
+    const anyWrap = document.createElement('label')
+    anyWrap.className = 'modal__device-any'
+    const anyChk = document.createElement('input')
+    anyChk.type = 'checkbox'
+    const anyText = document.createElement('span')
+    anyText.textContent = 'Any'
+    anyWrap.appendChild(anyChk)
+    anyWrap.appendChild(anyText)
+    anyChk.addEventListener('change', () => {
+      if (!editing) return
+      editing.deviceAny = anyChk.checked
+      syncDeviceRow()
+      commitDevice()
+    })
+    row.appendChild(anyWrap)
+
+    const nameEl = document.createElement('span')
+    nameEl.className = 'modal__device-name'
+    row.appendChild(nameEl)
+
+    const learnBtn = document.createElement('button')
+    learnBtn.type = 'button'
+    learnBtn.className = 'btn btn--compact'
+    learnBtn.textContent = 'Device Learn'
+    learnBtn.addEventListener('click', () => {
+      const g = editing && typeof editing.guid === 'string' ? editing.guid : ''
+      if (g) opts.session.sendLearnStart(g, 'device', 'any')
+    })
+    row.appendChild(learnBtn)
+
+    syncDeviceRow = () => {
+      if (!editing) return
+      const any = editing.deviceAny === true
+      anyChk.checked = any
+      const dev = typeof editing.device === 'string' ? editing.device : ''
+      nameEl.textContent = dev || '—'
+      nameEl.classList.toggle('modal__device-name--ignored', any)
+    }
+
+    syncDeviceRow()
+    return row
+  }
+
+  function ensureDeviceShape () {
+    if (!editing) return
+    if (typeof editing.device !== 'string') editing.device = ''
+    if (typeof editing.deviceAny !== 'boolean') editing.deviceAny = true
+  }
+
   function renderChrome () {
+    ensureDeviceShape()
     const modalBody = opts.els.modalBody
     modalBody.replaceChildren()
 
@@ -125,6 +197,7 @@ export function createAssignModal (opts) {
     headerRow.appendChild(btnDel)
     
     modalBody.appendChild(headerRow)
+    modalBody.appendChild(buildDeviceRow())
     modalBody.appendChild(editorHost)
 
     remountEditor()
@@ -140,6 +213,7 @@ export function createAssignModal (opts) {
   function close () {
     viewerTeardown()
     viewerTeardown = () => {}
+    syncDeviceRow = () => {}
     editing = null
     opts.els.modal.hidden = true
   }
@@ -180,15 +254,27 @@ export function createAssignModal (opts) {
     applyLearnValue (msg) {
       if (!editing || msg.assignmentGuid !== editing.guid) return
       const field = msg.field
-      if (field !== 'note' && field !== 'controller') return
-      const value = Number(msg.value)
-      if (!Number.isFinite(value)) return
-      if (!editing.params || typeof editing.params !== 'object') {
-        editing.params = {}
+      let changed = false
+      // Every learn reports its source device; the note/controller Learn buttons
+      // capture it as a side-effect. The "Any" toggle is left as the user set it.
+      if (typeof msg.device === 'string') {
+        editing.device = msg.device
+        syncDeviceRow()
+        changed = true
       }
-      const pr = /** @type {Record<string, unknown>} */ (editing.params)
-      pr[/** @type {'note'|'controller'} */ (field)] = Math.round(value)
-      viewerSync()
+      if (field === 'note' || field === 'controller') {
+        const value = Number(msg.value)
+        if (Number.isFinite(value)) {
+          if (!editing.params || typeof editing.params !== 'object') {
+            editing.params = {}
+          }
+          const pr = /** @type {Record<string, unknown>} */ (editing.params)
+          pr[/** @type {'note'|'controller'} */ (field)] = Math.round(value)
+          viewerSync()
+          changed = true
+        }
+      }
+      if (!changed) return
       opts.session.mergeEditingIntoAssignments(editing)
       opts.refreshList()
       opts.session.scheduleSave()

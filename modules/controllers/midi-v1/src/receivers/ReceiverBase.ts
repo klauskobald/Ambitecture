@@ -30,6 +30,14 @@ export abstract class ReceiverBase {
     return yamlChannel === 0 || (yamlChannel - 1) === midiChannel;
   }
 
+  // `deviceAny` (or no learned device) matches every source; otherwise the
+  // event must come from the learned port-name key.
+  protected deviceMatches(device: string): boolean {
+    if (this.assignment.deviceAny) return true;
+    if (!this.assignment.device) return true;
+    return device === this.assignment.device;
+  }
+
   protected fanOut(normalized: number): void {
     for (const t of this.targets) t.send(normalized);
   }

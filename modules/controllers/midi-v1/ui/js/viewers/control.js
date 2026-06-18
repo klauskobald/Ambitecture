@@ -134,7 +134,7 @@ export function createDefaultControl (context) {
  *   intents: import('../assignSession.js').IntentRow[],
  *   systemCapabilities: unknown,
  *   getIntentClass: (guid: string) => string | null,
- *   requestLearn: (o: { field: string, capture: 'noteOn' | 'controlChange' }) => void,
+ *   learn: import('../assignModal.js').LearnCoordinator,
  *   onChange: () => void
  * }} ControlEditorApi
  */
@@ -304,8 +304,7 @@ function mountControlEditor (container, api) {
       ctrlRow.syncInput()
       api.onChange()
     },
-    requestLearn: ({ field, capture }) => api.requestLearn({ field, capture }),
-    onLearnArmed: armed => ctrlRow.setLearnArmed(armed)
+    learn: api.learn
   })
   row.appendChild(ctrlRow.row)
 
@@ -358,11 +357,11 @@ function mountControlEditor (container, api) {
     ctrlRow.syncInput()
     addIn.value = String(p.controllerAdd)
     scaleIn.value = String(p.controllerScale)
-    ctrlRow.setLearnArmed(false)
   }
 
   return {
     teardown: () => {
+      ctrlRow.dispose()
       container.replaceChildren()
     },
     syncFromModel

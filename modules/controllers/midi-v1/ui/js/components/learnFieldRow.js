@@ -1,5 +1,7 @@
 /**
- * Compact input + Learn button. Sends learnStart with field + capture (noteOn / controlChange).
+ * Compact input + Learn toggle. The button arms via the shared learn
+ * coordinator; clicking again stops the learn (the button turns blue while
+ * armed). Only one field is armed at a time across the whole editor.
  */
 
 /**
@@ -11,8 +13,7 @@
  *   getValue: () => string,
  *   setValue: (s: string) => void,
  *   commit: () => void,
- *   requestLearn: (payload: { field: string, capture: 'noteOn' | 'controlChange' }) => void,
- *   onLearnArmed?: (armed: boolean) => void
+ *   learn: import('../assignModal.js').LearnCoordinator
  * }} opts
  */
 export function createLearnFieldRow (opts) {
@@ -34,11 +35,12 @@ export function createLearnFieldRow (opts) {
 
   const btn = document.createElement('button')
   btn.type = 'button'
-  btn.className = 'btn btn--compact'
+  btn.className = 'btn btn--compact midi-learn-btn'
   btn.textContent = 'Learn'
-  btn.addEventListener('click', () => {
-    opts.onLearnArmed?.(true)
-    opts.requestLearn({ field: opts.field, capture: opts.capture })
+  btn.addEventListener('click', () => opts.learn.toggle(opts.field, opts.capture))
+
+  const unregister = opts.learn.register(opts.field, armed => {
+    btn.classList.toggle('midi-learn-btn--armed', armed)
   })
 
   row.appendChild(input)
@@ -51,9 +53,8 @@ export function createLearnFieldRow (opts) {
     syncInput () {
       input.value = opts.getValue()
     },
-    setLearnArmed (armed) {
-      btn.disabled = armed
-      input.classList.toggle('learn-field-row__input--armed', armed)
+    dispose () {
+      unregister()
     }
   }
 }

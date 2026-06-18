@@ -100,6 +100,38 @@ body {
   cursor: not-allowed;
 }
 
+/* Rounded pill on/off toggle (surface-v2 style): grey off, blue on. */
+.midi-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0.7rem;
+  border: 1px solid var(--color-muted);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.midi-toggle--on {
+  background: var(--color-accent-dim);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* Learn button while armed: same blue accent as an enabled pill. */
+.midi-learn-btn--armed {
+  background: var(--color-accent-dim);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
 .banner {
   flex: 0 0 auto;
   margin: var(--space-3) var(--space-4) 0;
@@ -324,15 +356,6 @@ body {
   gap: 0.4rem;
   margin-bottom: 0.4rem;
   flex-wrap: wrap;
-}
-
-.modal__filter-any {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  flex: 0 0 auto;
-  color: var(--color-muted);
-  font-size: 0.75rem;
 }
 
 .modal__filter-name {

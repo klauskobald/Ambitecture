@@ -1,3 +1,5 @@
+import { createToggleButton } from '../components/toggleButton.js'
+
 /**
  * @param {HTMLElement} parent
  * @param {{
@@ -10,14 +12,15 @@ export function mountEnvArRow (parent, api) {
   const row = document.createElement('div')
   row.className = 'modal__row modal__row--compact'
 
-  const enLabel = document.createElement('span')
-  enLabel.className = 'modal__field-label'
-  enLabel.textContent = 'Env:'
-
-  const enChk = document.createElement('input')
-  enChk.type = 'checkbox'
-  enChk.title = 'envelope env_ar on/off'
-  enChk.setAttribute('aria-label', 'Envelope enabled')
+  const enToggle = createToggleButton({
+    label: 'Envelope',
+    getValue: () => getEnvelopeObj().enabled === true,
+    onToggle: next => {
+      getEnvelopeObj().enabled = next
+      setDisabled(!next)
+      commit()
+    }
+  })
 
   const atkLabel = document.createElement('span')
   atkLabel.className = 'modal__field-label'
@@ -57,7 +60,6 @@ export function mountEnvArRow (parent, api) {
   function commit () {
     const env = getEnvelopeObj()
     env.type = 'env_ar'
-    env.enabled = enChk.checked
     const a = Math.round(Number(atkIn.value))
     const r = Math.round(Number(relIn.value))
     env.attackMs = Number.isFinite(a) ? Math.max(0, a) : 0
@@ -72,15 +74,10 @@ export function mountEnvArRow (parent, api) {
     relIn.disabled = disabled
   }
 
-  enChk.addEventListener('change', () => {
-    setDisabled(!enChk.checked)
-    commit()
-  })
   atkIn.addEventListener('change', commit)
   relIn.addEventListener('change', commit)
 
-  row.appendChild(enLabel)
-  row.appendChild(enChk)
+  row.appendChild(enToggle.el)
   row.appendChild(atkLabel)
   row.appendChild(atkIn)
   row.appendChild(relLabel)
@@ -92,7 +89,7 @@ export function mountEnvArRow (parent, api) {
     const env = getEnvelopeObj()
     const en =
       typeof env.enabled === 'boolean' ? env.enabled : true
-    enChk.checked = en
+    enToggle.sync()
     setDisabled(!en)
     const atk =
       typeof env.attackMs === 'number' && Number.isFinite(env.attackMs)

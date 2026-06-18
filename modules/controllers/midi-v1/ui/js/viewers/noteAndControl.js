@@ -148,7 +148,7 @@ export function createDefaultNoteAndControl (context) {
  *   intents: import('../assignSession.js').IntentRow[],
  *   systemCapabilities: unknown,
  *   getIntentClass: (guid: string) => string | null,
- *   requestLearn: (o: { field: string, capture: 'noteOn' | 'controlChange' }) => void,
+ *   learn: import('../assignModal.js').LearnCoordinator,
  *   onChange: () => void
  * }} NoteAndControlEditorApi
  */
@@ -317,8 +317,7 @@ function mountNoteAndControlEditor (container, api) {
       noteRow.syncInput()
       api.onChange()
     },
-    requestLearn: ({ field, capture }) => api.requestLearn({ field, capture }),
-    onLearnArmed: armed => noteRow.setLearnArmed(armed)
+    learn: api.learn
   })
   row1.appendChild(noteRow.row)
 
@@ -386,8 +385,7 @@ function mountNoteAndControlEditor (container, api) {
       ctrlRow.syncInput()
       api.onChange()
     },
-    requestLearn: ({ field, capture }) => api.requestLearn({ field, capture }),
-    onLearnArmed: armed => ctrlRow.setLearnArmed(armed)
+    learn: api.learn
   })
   row2.appendChild(ctrlRow.row)
 
@@ -443,12 +441,12 @@ function mountNoteAndControlEditor (container, api) {
     hi.value = String(/** @type {number[]} */ (p.velocityRange)[1])
     addIn.value = String(p.controllerAdd)
     scaleIn.value = String(p.controllerScale)
-    noteRow.setLearnArmed(false)
-    ctrlRow.setLearnArmed(false)
   }
 
   return {
     teardown: () => {
+      noteRow.dispose()
+      ctrlRow.dispose()
       container.replaceChildren()
     },
     syncFromModel

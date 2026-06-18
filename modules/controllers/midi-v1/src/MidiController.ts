@@ -74,6 +74,13 @@ export class MidiController {
         this.learn = { assignmentGuid, field, capture: cap };
         this.logger.info(`MIDI learn armed (${field}, ${cap}) for ${assignmentGuid}`);
       },
+      onLearnStop: (assignmentGuid, field) => {
+        const pending = this.learn;
+        if (pending !== null && pending.assignmentGuid === assignmentGuid && pending.field === field) {
+          this.learn = null;
+          this.logger.info(`MIDI learn cancelled (${field}) for ${assignmentGuid}`);
+        }
+      },
     }, logger);
   }
 

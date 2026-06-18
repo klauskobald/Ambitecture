@@ -175,7 +175,7 @@ export function createDefaultNoteOnOff (context) {
  *   intents: import('../assignSession.js').IntentRow[],
  *   systemCapabilities: unknown,
  *   getIntentClass: (guid: string) => string | null,
- *   requestLearn: (o: { field: string, capture: 'noteOn' | 'controlChange' }) => void,
+ *   learn: import('../assignModal.js').LearnCoordinator,
  *   onChange: () => void
  * }} NoteOnOffEditorApi
  */
@@ -342,8 +342,7 @@ function mountNoteOnOffEditor (container, api) {
       noteRow.syncInput()
       api.onChange()
     },
-    requestLearn: ({ field, capture }) => api.requestLearn({ field, capture }),
-    onLearnArmed: armed => noteRow.setLearnArmed(armed)
+    learn: api.learn
   })
   row1.appendChild(noteRow.row)
 
@@ -447,12 +446,12 @@ function mountNoteOnOffEditor (container, api) {
     hi.value = String(/** @type {number[]} */ (p.velocityRange)[1])
     offIn.value = String(p.velocityOffset)
     scaleIn.value = String(p.velocityScale)
-    noteRow.setLearnArmed(false)
     envUi.syncFromModel()
   }
 
   return {
     teardown: () => {
+      noteRow.dispose()
       envUi.teardown()
       container.replaceChildren()
     },

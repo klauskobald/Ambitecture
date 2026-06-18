@@ -22,7 +22,8 @@ const SAVE_DEBOUNCE_MS = 280
  *   pushAssignment: (row: Record<string, unknown>) => void,
  *   mergeEditingIntoAssignments: (editing: Record<string, unknown>) => void,
  *   deleteAssignment: (guid: string) => void,
- *   sendLearnStart: (assignmentGuid: string, field: string, capture: 'noteOn'|'controlChange'|'any') => void
+ *   sendLearnStart: (assignmentGuid: string, field: string, capture: 'noteOn'|'controlChange'|'any') => void,
+ *   sendLearnStop: (assignmentGuid: string, field: string) => void
  * }} AssignSessionApi
  */
 
@@ -221,6 +222,17 @@ export function createAssignSession (opts) {
             assignmentGuid,
             field,
             capture
+          })
+        )
+      }
+    },
+    sendLearnStop (assignmentGuid, field) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(
+          JSON.stringify({
+            type: 'learnStop',
+            assignmentGuid,
+            field
           })
         )
       }

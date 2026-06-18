@@ -23,6 +23,7 @@ export interface PluginServerHandlers {
     field: string,
     capture?: 'noteOn' | 'controlChange' | 'any',
   ) => void;
+  onLearnStop: (assignmentGuid: string, field: string) => void;
 }
 
 const MIME: Record<string, string> = {
@@ -230,6 +231,14 @@ export class PluginServer {
             }),
           );
         }
+      }
+      return;
+    }
+    if (type === 'learnStop') {
+      const guid = msg['assignmentGuid'];
+      const field = msg['field'];
+      if (typeof guid === 'string' && typeof field === 'string') {
+        this.handlers.onLearnStop(guid, field);
       }
     }
   }

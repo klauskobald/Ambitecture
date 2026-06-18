@@ -1,12 +1,12 @@
-import { AlgorithmBase } from './AlgorithmBase.js';
-import { Color } from '../color.js';
-import { FnCurve } from '../FnCurve.js';
+import { AlgorithmBase } from './AlgorithmBase.js'
+import { Color } from '../color.js'
+import { FnCurve } from '../FnCurve.js'
 
 const DEFAULT_STROBE = {
   lowFrequency: 0.5,
   highFrequency: 10,
   onTime: 0.02
-};
+}
 
 /**
  * @param {unknown} fixtureProfile
@@ -54,8 +54,7 @@ export class SinglePixelAlgorithm extends AlgorithmBase {
         ? instanceConfig.intensityTrim
         : 1
     const fn = instanceConfig?.intensityFn
-    this._intensityFn =
-      typeof fn === 'string' && fn.length > 0 ? fn : 'linear'
+    this._intensityFn = typeof fn === 'string' && fn.length > 0 ? fn : 'linear'
   }
 
   update (nowSec) {
@@ -65,10 +64,9 @@ export class SinglePixelAlgorithm extends AlgorithmBase {
   _isStrobeOn (strobeValue) {
     if (!strobeValue || strobeValue === 0) return true
     const { lowFrequency, highFrequency, onTime } = this._strobeConfig
-    const freq =
-      lowFrequency + strobeValue * (highFrequency - lowFrequency)
+    const freq = lowFrequency + strobeValue * (highFrequency - lowFrequency)
     const period = 1 / freq
-    return (this._nowSec % period) < onTime
+    return this._nowSec % period < onTime
   }
 
   apply (snapshot, _context) {
@@ -78,18 +76,16 @@ export class SinglePixelAlgorithm extends AlgorithmBase {
     const color =
       snapshot.sample('light.color.xyY', withSpatial) || Color.black()
     const masterBrightness = snapshot.sample('master.brightness') ?? 1
-    const boostBrightness = masterBrightness > 1 ? masterBrightness : 1
     const masterBlackout = snapshot.sample('master.blackout') ?? false
     const spatialStrobe = snapshot.sample('light.strobe') ?? 0
     const aux = snapshot.sample('light.aux') ?? {}
-    this._strobe =
-      aux.strobe !== undefined ? aux.strobe : spatialStrobe
+    this._strobe = aux.strobe !== undefined ? aux.strobe : spatialStrobe
 
     const { r, g, b } = color.toRGB()
     const f =
       Math.max(0, Math.min(1, xbrightness * masterBrightness)) *
       (masterBlackout ? 0 : 1) *
-      boostBrightness
+      masterBrightness
     // Instance-level hardware gain (simulator-2d ignores these params).
     const finalF = FnCurve.evaluate(this._intensityFn, f * this._intensityTrim)
     this._rgb = { r: r * finalF, g: g * finalF, b: b * finalF }

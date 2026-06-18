@@ -35,7 +35,6 @@ export abstract class NeewerLightBase implements IFixtureClass {
         const fnVal = typeof fixture.intensityFn === 'string' && fixture.intensityFn.length > 0
             ? fixture.intensityFn
             : 'linear';
-        console.log('test', fixture.name, level, trimVal, fnVal, FnCurve.evaluate(fnVal, level * trimVal));
         return FnCurve.evaluate(fnVal, level * trimVal);
     }
 

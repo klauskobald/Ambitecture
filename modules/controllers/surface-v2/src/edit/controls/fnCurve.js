@@ -1,6 +1,6 @@
 /**
  * Normalized curve evaluation matching renderer FnCurve (simulator-2d / dmx-ts).
- * Input x and output are in [0, 1].
+ * No clamping — values above 1 or below 0 pass through; clamp only at the hardware write point.
  */
 
 const _functions = {
@@ -21,9 +21,7 @@ const _functions = {
 export function evaluate (name, x) {
   const fnName = typeof name === 'string' ? name : 'quadratic'
   const fn = _functions[fnName] || _functions.quadratic
-  const clampedX = Math.max(0, Math.min(1, x))
-  const y = fn(clampedX)
-  return Math.max(0, Math.min(1, y))
+  return fn(x)
 }
 
 /**

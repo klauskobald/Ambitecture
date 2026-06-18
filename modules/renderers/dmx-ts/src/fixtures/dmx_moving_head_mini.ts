@@ -45,7 +45,6 @@ class DmxMovingHeadMini extends DmxFixtureBase {
             this.writeFunction(fixture, 'blue', b * colorScale, dmxUniverse);
             this.writeFunction(fixture, 'white', w * colorScale, dmxUniverse);
             const dimmer = Math.max(0, Math.min(1, masterBrightness)) * blackoutFactor * trimBrightness;
-            console.log('test', fixture.name, dimmer, this.getIntensityGain(fixture, Math.max(0, dimmer)));
             this.writeFunction(fixture, 'brightness', this.getIntensityGain(fixture, Math.max(0, dimmer)), dmxUniverse);
         }
 

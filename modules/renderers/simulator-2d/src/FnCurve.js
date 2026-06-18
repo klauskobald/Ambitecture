@@ -2,9 +2,7 @@ class FnCurve {
     static evaluate(name, x) {
         const fnName = typeof name === 'string' ? name : 'quadratic';
         const fn = FnCurve._functions[fnName] || FnCurve._functions.quadratic;
-        const clampedX = Math.max(0, Math.min(1, x));
-        const y = fn(clampedX);
-        return Math.max(0, Math.min(1, y));
+        return fn(x);
     }
 }
 

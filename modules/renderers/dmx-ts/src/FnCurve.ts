@@ -14,9 +14,7 @@ export class FnCurve {
     static evaluate(name: unknown, x: number): number {
         const fnName = typeof name === 'string' ? name : 'quadratic';
         const fn = this.functions.get(fnName) ?? this.functions.get('quadratic')!;
-        const clampedX = Math.max(0, Math.min(1, x));
-        const y = fn(clampedX);
-        return Math.max(0, Math.min(1, y));
+        return fn(x);
     }
 }
 

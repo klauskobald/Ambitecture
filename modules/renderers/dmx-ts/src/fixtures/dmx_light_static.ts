@@ -46,7 +46,7 @@ class DmxLightStatic extends DmxFixtureBase {
 
         const brightness =
             xbrightness * masterBrightness * (masterBlackout ? 0 : 1) * trimBrightness;
-        this.writeFunction(fixture, 'brightness', Math.max(0, brightness), dmxUniverse);
+        this.writeFunction(fixture, 'brightness', this.getIntensityGain(fixture, Math.max(0, brightness)), dmxUniverse);
     }
 }
 

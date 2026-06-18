@@ -23,6 +23,22 @@ export abstract class NeewerLightBase implements IFixtureClass {
         return 1;
     }
 
+    /**
+     * Hardware-abstract instance gain: shapes the brightness response with
+     * `FnCurve.evaluate(fn, clamp(level,0,1)) * trim` where `intensityFn` defaults to `'linear'`
+     * (identity) and `intensityTrim` defaults to 1. Simulator-2d ignores these params.
+     */
+    protected getIntensityGain(fixture: ConfiguredFixture, level: number): number {
+        const trimVal = typeof fixture.intensityTrim === 'number' && Number.isFinite(fixture.intensityTrim) && fixture.intensityTrim >= 0
+            ? fixture.intensityTrim
+            : 1;
+        const fnVal = typeof fixture.intensityFn === 'string' && fixture.intensityFn.length > 0
+            ? fixture.intensityFn
+            : 'linear';
+        console.log('test', fixture.name, level, trimVal, fnVal, FnCurve.evaluate(fnVal, level * trimVal));
+        return FnCurve.evaluate(fnVal, level * trimVal);
+    }
+
     protected sendHsv(fixture: ConfiguredFixture, bus: NeewerBus, hue: number, sat: number, bri: number): void {
         bus.setHsv(fixture, this.curveHue(fixture, hue), sat, this.curveBrightness(fixture, bri));
     }

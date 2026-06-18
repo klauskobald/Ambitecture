@@ -30,10 +30,11 @@ class DmxMovingHeadMini extends DmxFixtureBase {
         // dimmer rides on the brightness channel and the color stays at full level.
         if (strobeOn) {
             const colorScale = Math.max(0, Math.min(1, masterBrightness)) * blackoutFactor * trimBrightness;
-            this.writeFunction(fixture, 'red', r * colorScale, dmxUniverse);
-            this.writeFunction(fixture, 'green', g * colorScale, dmxUniverse);
-            this.writeFunction(fixture, 'blue', b * colorScale, dmxUniverse);
-            this.writeFunction(fixture, 'white', w * colorScale, dmxUniverse);
+            const intensityFactor = this.getIntensityGain(fixture, colorScale);
+            this.writeFunction(fixture, 'red', r * intensityFactor, dmxUniverse);
+            this.writeFunction(fixture, 'green', g * intensityFactor, dmxUniverse);
+            this.writeFunction(fixture, 'blue', b * intensityFactor, dmxUniverse);
+            this.writeFunction(fixture, 'white', w * intensityFactor, dmxUniverse);
             this.writeFunction(fixture, 'strobe-on', strobeValue, dmxUniverse);
         } else {
             const boostBrightness = masterBrightness > 1 ? masterBrightness : 1;
@@ -44,7 +45,8 @@ class DmxMovingHeadMini extends DmxFixtureBase {
             this.writeFunction(fixture, 'blue', b * colorScale, dmxUniverse);
             this.writeFunction(fixture, 'white', w * colorScale, dmxUniverse);
             const dimmer = Math.max(0, Math.min(1, masterBrightness)) * blackoutFactor * trimBrightness;
-            this.writeFunction(fixture, 'brightness', dimmer, dmxUniverse);
+            console.log('test', fixture.name, dimmer, this.getIntensityGain(fixture, Math.max(0, dimmer)));
+            this.writeFunction(fixture, 'brightness', this.getIntensityGain(fixture, Math.max(0, dimmer)), dmxUniverse);
         }
 
         for (const [functionName, value] of Object.entries(aux)) {

@@ -4,6 +4,7 @@ import { DmxUniverse } from '../DmxUniverse';
 import { FixtureIntentSnapshot, IFixtureClass } from './IFixtureClass';
 import { DmxMap } from './DmxMap';
 import { FixtureSampleContext } from './IFixtureClass';
+import { FnCurve } from '../FnCurve';
 
 export abstract class DmxFixtureBase implements IFixtureClass {
     private readonly dmxMaps = new WeakMap<ConfiguredFixture, DmxMap>();
@@ -35,6 +36,22 @@ export abstract class DmxFixtureBase implements IFixtureClass {
             return value;
         }
         return 1;
+    }
+
+    /**
+     * Hardward-abstract instance gain: `FnCurve.evaluate(fn, clamp(level,0,1)) * trim`.
+     * `params.intensityFn` defaults to `'linear'` (identity), `params.intensityTrim` to 1.
+     * Each fixture class calls this with the already-computed dimmer/level before writing
+     * to hardware. `simulator-2d` ignores these params entirely.
+     */
+    protected getIntensityGain(fixture: ConfiguredFixture, level: number): number {
+        const trimVal = typeof fixture.intensityTrim === 'number' && Number.isFinite(fixture.intensityTrim) && fixture.intensityTrim >= 0
+            ? fixture.intensityTrim
+            : 1;
+        const fnVal = typeof fixture.intensityFn === 'string' && fixture.intensityFn.length > 0
+            ? fixture.intensityFn
+            : 'linear';
+        return FnCurve.evaluate(fnVal, level * trimVal);
     }
 
     protected writeFunction(

@@ -22,7 +22,8 @@ class NeewerBasic extends NeewerLightBase {
 
         const { r, g, b } = color.toRGB();
         const scale = (masterBlackout ? 0 : 1) * Math.max(0, Math.min(1, masterBrightness)) * trimBrightness;
-        const { h, s, v } = rgbToHsv01(r * scale, g * scale, b * scale);
+        const intensityScale = this.getIntensityGain(fixture, scale);
+        const { h, s, v } = rgbToHsv01(r * intensityScale, g * intensityScale, b * intensityScale);
 
         this.sendHsvStrobed(fixture, bus, h, s, v, strobeValue);
     }

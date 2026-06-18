@@ -29,6 +29,10 @@ export interface ConfiguredFixture {
     range: number;
     params: Record<string, unknown>;
     trim?: FixtureTrim;
+    /** Hardware-abstract intensity trim (0–10, default 1). */
+    intensityTrim?: number;
+    /** Named FnCurve shaping the brightness response (default `'quadratic'`). */
+    intensityFn?: string;
     target?: [number, number, number];
     rotation?: [number, number, number];
     fixtureClass: IFixtureClass;
@@ -124,6 +128,12 @@ function parseConfiguredFixture(raw: unknown, zoneName: string): ConfiguredFixtu
     const trim = parseFixtureTrim(o['trim']);
     if (trim !== undefined) {
         out.trim = trim;
+    }
+    if (typeof o['intensityTrim'] === 'number' && Number.isFinite(o['intensityTrim']) && o['intensityTrim'] >= 0) {
+        out.intensityTrim = o['intensityTrim'];
+    }
+    if (typeof o['intensityFn'] === 'string' && o['intensityFn'].length > 0) {
+        out.intensityFn = o['intensityFn'];
     }
     return out;
 }

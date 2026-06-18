@@ -33,5 +33,27 @@ export const FIXTURE_ROOT_DESCRIPTORS = [
     // up steeply toward 9999. `quadratic` is a gentler alternative.
     stepFunction: 'cubic',
     isMandatory: true
+  },
+  {
+    dotKey: 'intensityTrim',
+    name: 'Intensity Trim',
+    type: 'number',
+    display: 'scalar',
+    range: [0, 10],
+    step: 0.05,
+    // Quadratic ease-in: fine control at low trim values (dim range), rapid toward 10× boost.
+    stepFunction: 'quadratic',
+    defaultValue: 1,
+    isMandatory: true
+  },
+  {
+    dotKey: 'intensityFn',
+    name: 'Intensity Curve',
+    type: 'string',
+    display: 'pills',
+    // Resolved to _caps.functionCurves in FixtureParamsHost._appendSection via getCapabilities().
+    optionsRef: 'functionCurves',
+    defaultValue: 'quadratic',
+    isMandatory: true
   }
 ]

@@ -39,6 +39,10 @@ export interface ConfiguredFixture {
     params: Record<string, unknown>;
     /** Per-instance output calibration; omitted keys use renderer defaults. */
     trim?: FixtureTrim;
+    /** Hardware-abstract intensity trim (0–10, default 1). */
+    intensityTrim?: number;
+    /** Named FnCurve shaping the brightness response (default `'quadratic'`). */
+    intensityFn?: string;
     target?: [number, number, number];
     rotation?: [number, number, number];
     /** Hub-resolved lookAt aim point (from a `target` event); null/undefined = no target → hold. */
@@ -144,6 +148,12 @@ function parseConfiguredFixture(raw: unknown, zoneName: string): ConfiguredFixtu
     const trim = parseFixtureTrim(o['trim']);
     if (trim !== undefined) {
         out.trim = trim;
+    }
+    if (typeof o['intensityTrim'] === 'number' && Number.isFinite(o['intensityTrim']) && o['intensityTrim'] >= 0) {
+        out.intensityTrim = o['intensityTrim'];
+    }
+    if (typeof o['intensityFn'] === 'string' && o['intensityFn'].length > 0) {
+        out.intensityFn = o['intensityFn'];
     }
     return out;
 }

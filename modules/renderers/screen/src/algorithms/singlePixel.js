@@ -1,5 +1,6 @@
 import { AlgorithmBase } from './AlgorithmBase.js';
 import { Color } from '../color.js';
+import { FnCurve } from '../FnCurve.js';
 
 const DEFAULT_STROBE = {
   lowFrequency: 0.5,
@@ -45,6 +46,16 @@ export class SinglePixelAlgorithm extends AlgorithmBase {
     this._strobe = 0
     this._nowSec = 0
     this._rgb = { r: 0, g: 0, b: 0 }
+    this._intensityTrim =
+      instanceConfig &&
+      typeof instanceConfig.intensityTrim === 'number' &&
+      Number.isFinite(instanceConfig.intensityTrim) &&
+      instanceConfig.intensityTrim >= 0
+        ? instanceConfig.intensityTrim
+        : 1
+    const fn = instanceConfig?.intensityFn
+    this._intensityFn =
+      typeof fn === 'string' && fn.length > 0 ? fn : 'linear'
   }
 
   update (nowSec) {
@@ -79,7 +90,9 @@ export class SinglePixelAlgorithm extends AlgorithmBase {
       Math.max(0, Math.min(1, xbrightness * masterBrightness)) *
       (masterBlackout ? 0 : 1) *
       boostBrightness
-    this._rgb = { r: r * f, g: g * f, b: b * f }
+    // Instance-level hardware gain (simulator-2d ignores these params).
+    const finalF = FnCurve.evaluate(this._intensityFn, f * this._intensityTrim)
+    this._rgb = { r: r * finalF, g: g * finalF, b: b * finalF }
   }
 
   draw (ctx, w, h, _nowSec) {

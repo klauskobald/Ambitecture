@@ -1,5 +1,6 @@
 import { PropertyPanel } from '../PropertyPanel.js'
 import { projectGraph } from '../../core/projectGraph.js'
+import { getCapabilities } from '../../core/systemCapabilities.js'
 import { queueFixturePropertyUpdate } from '../../core/outboundQueue.js'
 import { findLayoutTagHost } from '../../stage/layoutTagHost.js'
 import { loadFixtureEditor } from './loadFixtureEditor.js'
@@ -193,7 +194,18 @@ export class FixtureParamsHost {
     heading.appendChild(label)
     section.appendChild(heading)
 
-    const panel = new PropertyPanel(descriptors, guids.size, guids, this._writeTarget)
+    // Resolve optionsRef for fixture descriptors (they bypass resolveDescriptorsForClass). Mirrors
+    // the one-liner in systemCapabilities.resolveDescriptorsForClass: { ...d, options: caps[ref] }.
+    const caps = getCapabilities()
+    const resolved = descriptors.map(d => {
+      const row = /** @type {Record<string, unknown>} */ (d)
+      if (typeof row.optionsRef === 'string' && caps) {
+        return { ...row, options: caps[row.optionsRef] ?? [] }
+      }
+      return row
+    })
+
+    const panel = new PropertyPanel(resolved, guids.size, guids, this._writeTarget)
     section.appendChild(panel.buildElement())
     panel.refresh(guids)
     this._panels.push(panel)

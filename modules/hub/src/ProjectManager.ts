@@ -181,6 +181,10 @@ interface FixtureInstance {
   range: number;
   params?: Record<string, unknown>;
   trim?: FixtureTrim;
+  /** Hardware-abstract intensity calibration (default 1). */
+  intensityTrim?: number;
+  /** Named FnCurve shaping the brightness response (default `'quadratic'`). */
+  intensityFn?: string;
 }
 
 export interface FixtureMoveUpdate {
@@ -809,6 +813,8 @@ export class ProjectManager {
       ...(fixture.rotation !== undefined ? { rotation: [...fixture.rotation] as [number, number, number] } : {}),
       ...(fixture.params !== undefined ? { params: { ...fixture.params } } : {}),
       ...(fixture.trim !== undefined ? { trim: { ...fixture.trim } } : {}),
+      ...(fixture.intensityTrim !== undefined ? { intensityTrim: fixture.intensityTrim } : {}),
+      ...(fixture.intensityFn !== undefined ? { intensityFn: fixture.intensityFn } : {}),
     };
     return cloned;
   }
@@ -1235,6 +1241,8 @@ export class ProjectManager {
     if (fi.trim !== undefined && Object.keys(fi.trim).length > 0) {
       entry['trim'] = fi.trim;
     }
+    if (fi.intensityTrim !== undefined) entry['intensityTrim'] = fi.intensityTrim;
+    if (fi.intensityFn !== undefined) entry['intensityFn'] = fi.intensityFn;
     return entry;
   }
 

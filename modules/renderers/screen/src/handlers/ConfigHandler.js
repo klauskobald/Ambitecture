@@ -42,6 +42,8 @@ export class ConfigHandler {
           range,
           target,
           rotation,
+          intensityTrim,
+          intensityFn,
           guid: guidField
         } = fixtureData;
         const guidRaw =
@@ -62,7 +64,17 @@ export class ConfigHandler {
           params,
           range,
           target,
-          rotation
+          rotation,
+          intensityTrim:
+            typeof intensityTrim === 'number' &&
+            Number.isFinite(intensityTrim) &&
+            intensityTrim >= 0
+              ? intensityTrim
+              : 1,
+          intensityFn:
+            typeof intensityFn === 'string' && intensityFn.length > 0
+              ? intensityFn
+              : 'linear'
         });
         if (!instance) {
           console.warn(

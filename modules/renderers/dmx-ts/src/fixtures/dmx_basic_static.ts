@@ -28,10 +28,11 @@ class DmxBasicStatic extends DmxFixtureBase {
             (masterBlackout ? 0 : 1) *
             boostBrightness *
             trimBrightness;
+        const intensityFactor = this.getIntensityGain(fixture, brightnessFactor);
 
-        this.writeFunction(fixture, 'red', r * brightnessFactor, dmxUniverse);
-        this.writeFunction(fixture, 'green', g * brightnessFactor, dmxUniverse);
-        this.writeFunction(fixture, 'blue', b * brightnessFactor, dmxUniverse);
+        this.writeFunction(fixture, 'red', r * intensityFactor, dmxUniverse);
+        this.writeFunction(fixture, 'green', g * intensityFactor, dmxUniverse);
+        this.writeFunction(fixture, 'blue', b * intensityFactor, dmxUniverse);
 
         const aux = snapshot.sample<Record<string, number>>('light.aux') ?? {};
         for (const [functionName, value] of Object.entries(aux)) {

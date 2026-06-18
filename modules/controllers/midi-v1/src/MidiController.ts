@@ -11,6 +11,7 @@ import {
   normalizeAssignmentsInput,
 } from './GraphReplica';
 import { ReceiverBase } from './receivers/ReceiverBase';
+import { ReceiverControl } from './receivers/ReceiverControl';
 import { ReceiverNoteAndControl } from './receivers/ReceiverNoteAndControl';
 import { ReceiverNoteOnOff } from './receivers/ReceiverNoteOnOff';
 import { ReceiverNoteOnOffToggle } from './receivers/ReceiverNoteOnOffToggle';
@@ -156,6 +157,8 @@ export class MidiController {
     const onEngaged = (engaged: boolean) =>
       this.pluginServer.sendAssignmentEngaged(assignment.guid, engaged);
     switch (assignment.class) {
+      case 'control':
+        return ReceiverControl.build(assignment, targets, this.logger, onActivity);
       case 'noteAndControl':
         return ReceiverNoteAndControl.build(
           assignment,

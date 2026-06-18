@@ -1,6 +1,7 @@
 import { createAssignSession } from './assignSession.js'
 import { createAssignList } from './assignList.js'
 import { createAssignModal } from './assignModal.js'
+import './viewers/control.js'
 import './viewers/noteAndControl.js'
 import './viewers/noteOnOff.js'
 import './viewers/noteOnOffToggle.js'

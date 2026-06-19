@@ -90,11 +90,13 @@ export const hslPalette = {
     function updateValueReadout () {
       const { r, g, b } = hslToRGB255(currentH, currentS, currentL)
       const { x, y, Y } = hslToXYY(currentH, currentS, currentL)
-      hslLine.textContent =
-        `H:${Math.round(currentH)} S:${formatHslComponent(currentS)} L:${formatHslComponent(currentL)}`
+      hslLine.textContent = `H:${Math.round(currentH)} S:${formatHslComponent(
+        currentS
+      )} L:${formatHslComponent(currentL)}`
       rgbLine.textContent = `R:${r} G:${g} B:${b}`
-      xyyLine.textContent =
-        `x:${x.toFixed(4)} y:${y.toFixed(4)} Y:${Y.toFixed(4)}`
+      xyyLine.textContent = `x:${x.toFixed(4)} y:${y.toFixed(4)} Y:${Y.toFixed(
+        4
+      )}`
     }
 
     function drawCrosshair () {

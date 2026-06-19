@@ -43,6 +43,7 @@ interface ActiveDrag {
 export class PhysicsIntentAdapter {
   private bounds: Aabb | null = null;
   private readonly activeDrags = new Map<string, ActiveDrag>();
+  private enabled = true;
 
   constructor(
     private readonly projectManager: ProjectManager,
@@ -63,6 +64,21 @@ export class PhysicsIntentAdapter {
     this.engine.stop();
     this.engine.clear();
     this.activeDrags.clear();
+  }
+
+  /** Enable or disable physics. When disabled, the engine stops ticking, all drag anchors are dropped, and
+   *  raw position updates pass through unclaimed (edit-mode placement). When re-enabled, bodies/connectors
+   *  are rebuilt fresh from the project (picking up any restLength changes made while disabled). */
+  setEnabled(enable: boolean): void {
+    if (enable === this.enabled) return;
+    this.enabled = enable;
+    if (!enable) {
+      for (const drag of [...this.activeDrags.values()]) this.clearDrag(drag.intentGuid);
+      this.engine.stop();
+    } else {
+      this.rebuild();
+    }
+    Logger.info(`[physics] ${enable ? 'enabled' : 'disabled'}`);
   }
 
   /** Rebuild bodies, connectors and bounds from the current project. Idempotent; safe to call on any graph change. */
@@ -148,13 +164,23 @@ export class PhysicsIntentAdapter {
     let woke = false;
     const passthrough: RuntimeUpdate[] = [];
     for (const update of updates) {
-      if (update.entityType !== 'intent' || update.source === PHYSICS_SOURCE || !update.drag) {
+      if (update.entityType === 'physics') {
+        this.setEnabled(!!update.patch?.enabled);
+        continue;
+      }
+      const isDrag = update.entityType === 'intent' && update.source !== PHYSICS_SOURCE && update.drag;
+      if (!isDrag) {
         passthrough.push(update);
         continue;
       }
       if (update.drag === 'end') {
         this.clearDrag(update.guid);
         woke = true;
+        continue;
+      }
+      if (!this.enabled) {
+        // Physics disabled (edit mode, toggle off): pass drag through as raw position.
+        passthrough.push(update);
         continue;
       }
       const position = update.patch?.['position'];

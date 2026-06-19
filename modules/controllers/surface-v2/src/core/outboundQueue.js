@@ -82,6 +82,19 @@ export function queueFixtureUpdate (fixtureUpdate) {
 }
 
 /**
+ * Enable or disable the hub physics solver from the edit pane Physics toggle (perform always on).
+ * @param {boolean} enabled
+ */
+export function queuePhysicsEnabled (enabled) {
+  if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation) return
+  sendRuntimeCommands(
+    [{ entityType: 'physics', guid: 'master', patch: { enabled } }],
+    activeWs,
+    activeLocation
+  )
+}
+
+/**
  * Durable patch of instance-level fixture fields (root params + nested `params`) by dot-path.
  * Distinct from {@link queueFixtureUpdate}, which streams only `position` for stage drags.
  * @param {string} guid

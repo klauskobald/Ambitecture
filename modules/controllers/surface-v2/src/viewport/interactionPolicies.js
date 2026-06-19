@@ -6,6 +6,7 @@ import {
   queueIntentDragMove,
   queueIntentDragEnd,
   queueFixtureUpdate,
+  sendGraphCommand,
   sendSaveProject,
   sendSceneActivate
 } from '../core/outboundQueue.js'
@@ -188,7 +189,41 @@ export const editPolicy = {
   },
   onIntentMoveEnd (guid) {
     if (savePositionOverlayIfActive(guid)) return
+    this._updateConnectorRestLengths(guid)
     sendSaveProject('intents', [...projectGraph.getIntents().values()])
+  },
+
+  /** After an edit-mode drag, update every connector touching this intent so its restLength
+   *  reflects the new current distance — physics picks it up cleanly when re-enabled. */
+  _updateConnectorRestLengths (guid) {
+    for (const c of projectGraph.getConnectorsForIntent(guid)) {
+      const aPos = this._intentPosition(c.aGuid)
+      const bPos = this._intentPosition(c.bGuid)
+      if (!aPos || !bPos) continue
+      const dx = aPos[0] - bPos[0]
+      const dy = aPos[1] - bPos[1]
+      const dz = aPos[2] - bPos[2]
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz)
+      sendGraphCommand({
+        op: 'patch',
+        entityType: 'connector',
+        guid: c.guid,
+        patch: { restLength: dist },
+        persistence: 'runtimeAndDurable'
+      })
+    }
+  },
+
+  /** @param {string} guid @returns {[number,number,number] | null} */
+  _intentPosition (guid) {
+    if (!guid) return null
+    const intent = projectGraph.getEffectiveIntent(guid)
+    if (!intent || typeof intent !== 'object' || Array.isArray(intent)) return null
+    const pos = /** @type {unknown} */ (intent).position
+    if (Array.isArray(pos) && pos.length === 3) {
+      return [Number(pos[0]), Number(pos[1]), Number(pos[2])]
+    }
+    return null
   },
   onIntentHeightMove (guid, wy) {
     if (updateEditHeightOverlayIfActive(guid, wy)) return

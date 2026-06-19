@@ -24,7 +24,8 @@ import { warn as modalWarn, openModalCard, pickChoice } from '../../core/Modal.j
 import {
   sendGraphCommand,
   sendSaveProject,
-  sendSceneActivate
+  sendSceneActivate,
+  queuePhysicsEnabled
 } from '../../core/outboundQueue.js'
 import {
   ArraySorter,
@@ -77,6 +78,9 @@ export class StageEditPane {
     this._modeBar = null
     /** @type {HTMLElement | null} */
     this._stageSlot = null
+    /** @type {HTMLButtonElement | null} */
+    this._physicsBtn = null
+    this._physicsOn = false
   }
 
   /** @param {HTMLElement} container */
@@ -138,7 +142,26 @@ export class StageEditPane {
       bar.appendChild(this._performSortBtn)
     }
 
+    this._physicsBtn = document.createElement('button')
+    this._physicsBtn.type = 'button'
+    this._physicsBtn.className = 'btn btn-mode-toggle'
+    this._physicsBtn.textContent = 'Physics'
+    this._refreshPhysicsButton()
+    this._physicsBtn.addEventListener('click', () => this._togglePhysics())
+    bar.appendChild(this._physicsBtn)
+
     modeBar.appendChild(bar)
+  }
+
+  _refreshPhysicsButton () {
+    if (!this._physicsBtn) return
+    this._physicsBtn.classList.toggle('btn--active', this._physicsOn)
+  }
+
+  _togglePhysics () {
+    this._physicsOn = !this._physicsOn
+    this._refreshPhysicsButton()
+    queuePhysicsEnabled(this._physicsOn)
   }
 
   activate () {
@@ -146,6 +169,9 @@ export class StageEditPane {
 
     setEditFixturesUnlocked(false)
     this._refreshFixtureLockButton()
+    this._physicsOn = false
+    this._refreshPhysicsButton()
+    queuePhysicsEnabled(false)
     setEditMode()
     setEditDoubleTapHandlers(
       guid => {
@@ -175,6 +201,7 @@ export class StageEditPane {
     setStageEditExitSelectModeHandler(null)
     getParamsHost().close()
     getFixtureParamsHost().close()
+    queuePhysicsEnabled(true)
     setPerformMode()
     if (this._selectionUnsub) {
       this._selectionUnsub()

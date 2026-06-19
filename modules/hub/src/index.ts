@@ -314,6 +314,7 @@ const publishGraphMutation = (source: import('ws').WebSocket | undefined, result
   });
 
   if (sceneActivateResync) {
+    physicsIntentAdapter.rebuild();
     const scenesWire = projectManager.getScenesWirePayload();
     const activeDelta = result.controllerDeltas.find(d => {
       if (d.entityType !== 'project' || d.guid !== 'active' || d.op !== 'patch') return false;

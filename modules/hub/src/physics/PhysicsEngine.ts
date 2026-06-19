@@ -1,4 +1,3 @@
-import { Logger } from '../Logger';
 import { PhysicsBody } from './PhysicsBody';
 import { vec3, type Vec3 } from './vec3';
 import { ConnectorBase, type ConnectorRecord } from './connectors/ConnectorBase';
@@ -15,6 +14,8 @@ export interface PhysicsConfig {
   sleepVelocity: number;
   /** Constraint relaxation passes per sub-step. */
   iterations: number;
+  /** How often to check isSettled (ms). Decoupled from the tick rate. */
+  watchIntervalMs: number;
 }
 
 /** Consumer hook: the engine offers a candidate state, the consumer returns the committed one (e.g. wall-clamped). */
@@ -35,6 +36,7 @@ export class PhysicsEngine {
   private commitFn: CommitFn = (_id, position, velocity) => ({ position, velocity });
 
   private timer: ReturnType<typeof setTimeout> | undefined;
+  private watchTimer: ReturnType<typeof setTimeout> | undefined;
   private running = false;
   private lastWallMs = 0;
   private accumulatorMs = 0;
@@ -83,21 +85,18 @@ export class PhysicsEngine {
   /** Start (or keep) the solver running. Call whenever an external move perturbs the network. */
   wake(): void {
     if (this.running) return;
-    Logger.info(`[physics engine] waking — ${this.bodies.size} bodies, ${this.connectors.length} connectors`);
     this.running = true;
     this.lastWallMs = Date.now();
     this.accumulatorMs = 0;
     this.scheduleNextTick();
+    this.scheduleWatch();
   }
 
   stop(): void {
-    Logger.info(`[physics engine] stop called — running=${this.running} timer=${!!this.timer}`);
     if (!this.running && this.timer === undefined) return;
     this.running = false;
-    if (this.timer !== undefined) {
-      clearTimeout(this.timer);
-      this.timer = undefined;
-    }
+    if (this.timer !== undefined) { clearTimeout(this.timer); this.timer = undefined; }
+    if (this.watchTimer !== undefined) { clearTimeout(this.watchTimer); this.watchTimer = undefined; }
   }
 
   private scheduleNextTick(): void {
@@ -106,31 +105,33 @@ export class PhysicsEngine {
     this.timer = setTimeout(() => this.onTick(), periodMs);
   }
 
-  private tickCount = 0;
+  private scheduleWatch(): void {
+    if (!this.running) return;
+    this.watchTimer = setTimeout(() => this.onWatch(), this.config.watchIntervalMs);
+  }
 
   private onTick(): void {
     this.timer = undefined;
     if (!this.running) return;
-    this.tickCount += 1;
     const now = Date.now();
-    const stillRunning = this.advance(now - this.lastWallMs);
+    this.advance(now - this.lastWallMs);
     this.lastWallMs = now;
-    if (stillRunning) {
-      if (this.tickCount === 1) Logger.info(`[physics engine] tick #1 — will reschedule`);
-      this.scheduleNextTick();
-    } else {
-      Logger.info(`[physics engine] tick #${this.tickCount} — settled, going to sleep`);
-      this.tickCount = 0;
-      this.running = false;
-    }
+    this.scheduleNextTick();
+  }
+
+  private onWatch(): void {
+    this.watchTimer = undefined;
+    if (!this.running) return;
+    if (this.isSettled()) { this.running = false; this.stop(); return; }
+    this.scheduleWatch();
   }
 
   /**
    * Advance the simulation by `frameMs` of wall time using fixed sub-steps, so the result is
-   * independent of how often this is called. Returns `false` once the network has settled. Exposed for
-   * deterministic testing; the live loop calls it from {@link onTick}.
+   * independent of how often this is called. Exposed for deterministic testing; the live loop calls it
+   * from {@link onTick}. The watch timer decides when to sleep — this just advances time.
    */
-  advance(frameMs: number): boolean {
+  advance(frameMs: number): void {
     this.accumulatorMs += Math.min(MAX_FRAME_MS, Math.max(0, frameMs));
     const stepMs = 1000 / this.config.fps;
     const dt = stepMs / 1000;
@@ -140,7 +141,6 @@ export class PhysicsEngine {
       this.accumulatorMs -= stepMs;
       steps += 1;
     }
-    return !this.isSettled();
   }
 
   /**

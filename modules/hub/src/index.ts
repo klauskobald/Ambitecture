@@ -126,6 +126,7 @@ const physicsEngine = new PhysicsEngine({
   fps: physicsConfig.fps ?? 20,
   sleepVelocity: physicsConfig.sleepVelocity ?? 0.1,
   iterations: physicsConfig.iterations ?? 8,
+  watchIntervalMs: physicsConfig.watchIntervalMs ?? 500,
 });
 const physicsIntentAdapter = new PhysicsIntentAdapter(
   projectManager,

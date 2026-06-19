@@ -15,7 +15,7 @@ function makeBody(id: string, position: Vec3, mass = 1, drag = 0): PhysicsBody {
 }
 
 function build(massA: number, drag: number): PhysicsEngine {
-  const engine = new PhysicsEngine({ fps: 20, sleepVelocity: 0.005, iterations: 8 });
+  const engine = new PhysicsEngine({ fps: 20, sleepVelocity: 0.005, iterations: 8, watchIntervalMs: 9999 });
   engine.setBody(makeBody('a', [0, 0, 0], massA, drag));
   engine.setBody(makeBody('b', [4, 0, 0], 1, drag));
   engine.setConnectors([{ guid: 'c', kind: 'spring', aId: 'a', bId: 'b', restLength: 1, params: { springForce: 0.5 } }]);
@@ -66,7 +66,7 @@ function main(): void {
 
   // D. drag link: a fixed anchor pulls a free intent — never overshoots, even at low mass.
   const testDrag = (label: string, mass: number) => {
-    const eng = new PhysicsEngine({ fps: 20, sleepVelocity: 0.005, iterations: 8 });
+    const eng = new PhysicsEngine({ fps: 20, sleepVelocity: 0.005, iterations: 8, watchIntervalMs: 9999 });
     const anc: PhysicsBody = { id: 'anc', position: [3, 0, 0], velocity: vec3.zero(), prevPosition: [3, 0, 0], mass: 1, drag: 0, pinned: true };
     const i = makeBody('i', [0, 0, 0], mass, 0);
     eng.setBody(anc);

@@ -2,7 +2,7 @@ import type { PhysicsBody } from '../PhysicsBody';
 import { inverseMass } from '../PhysicsBody';
 import { vec3, type Vec3 } from '../vec3';
 
-export type ConnectorKind = 'rod' | 'spring' | 'rope';
+export type ConnectorKind = 'rod' | 'spring' | 'rope' | 'drag';
 
 /** Resolved link the solver acts on. Endpoints are body ids; geometry/tuning captured at build time. */
 export interface ConnectorRecord {
@@ -39,6 +39,10 @@ export abstract class ConnectorBase {
 
   constructor(protected readonly record: ConnectorRecord) {
     this.restLength = record.restLength;
+  }
+
+  get guid(): string {
+    return this.record.guid;
   }
 
   get aId(): string {

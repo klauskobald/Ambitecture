@@ -9,45 +9,60 @@ import { vec3, type Vec3 } from './vec3';
 import type { ConnectorRecord, ConnectorKind } from './connectors/ConnectorBase';
 
 const PHYSICS_SOURCE = 'hub:physics';
-const DRAG_RELEASE_MS = 140;
 const DEFAULT_MASS = 1;
 const DEFAULT_DRAG = 0;
+const ANCHOR_PREFIX = '__drag-anchor:';
+const SPRING_PREFIX = '__drag-spring:';
 
 type Aabb = [number, number, number, number, number, number];
 
+/** Temporary mouse/animation drag link tuning (from `system.yml → physics`). */
+export interface DragConfig {
+  /** Pull strength of the critically-damped drag link (higher = tighter follow). */
+  stiffness: number;
+  /** Cap on the drag force magnitude — bounds the impulse propagated into the connection chain. */
+  maxForce: number;
+}
+
+/** A live drag: a fixed anchor body the intent is sprung to, and the temp spring connecting them. */
+interface ActiveDrag {
+  intentGuid: string;
+  anchorId: string;
+  springId: string;
+  anchorPos: Vec3;
+}
+
 /**
  * The intent-aware "consumer" half of the physics system. It owns no physics math: it builds bodies
- * and connectors from the project, wakes the engine when a connected intent is moved by anything other
- * than the engine itself, clamps committed positions to the stage bounds in the engine's commit hook,
- * and streams the results as transient `runtime:update`s (never durable graph state).
+ * and connectors from the project, clamps committed positions to the stage bounds, and streams results
+ * as transient `runtime:update`s. Dragging an intent (by mouse or animation) is modelled as a temporary
+ * stiff spring from a **fixed anchor** (the mouse/target point) to the intent, so the intent's mass
+ * governs how it lags and connected intents follow via real forces; releasing drops the anchor+spring
+ * and the intent flies on with its momentum.
  */
 export class PhysicsIntentAdapter {
   private bounds: Aabb | null = null;
-  private readonly dragTimers = new Map<string, ReturnType<typeof setTimeout>>();
-  private readonly dragSamples = new Map<string, { pos: Vec3; time: number }>();
-  private participants = new Set<string>();
+  private readonly activeDrags = new Map<string, ActiveDrag>();
 
   constructor(
     private readonly projectManager: ProjectManager,
     private readonly runtimeIntentStore: RuntimeIntentStore,
     private readonly runtimeUpdateDispatcher: RuntimeUpdateDispatcher,
     private readonly engine: PhysicsEngine,
-  ) {}
+    private readonly dragConfig: DragConfig,
+  ) { }
 
   start(): void {
     this.stop();
     this.engine.onCommit((id, position, velocity) => this.commit(id, position, velocity));
-    this.runtimeUpdateDispatcher.setUpdateListener(updates => this.onRuntimeUpdates(updates));
+    this.runtimeUpdateDispatcher.setUpdateInterceptor(updates => this.intercept(updates));
     this.rebuild();
   }
 
   stop(): void {
     this.engine.stop();
     this.engine.clear();
-    for (const timer of this.dragTimers.values()) clearTimeout(timer);
-    this.dragTimers.clear();
-    this.dragSamples.clear();
-    this.participants.clear();
+    this.activeDrags.clear();
   }
 
   /** Rebuild bodies, connectors and bounds from the current project. Idempotent; safe to call on any graph change. */
@@ -66,18 +81,32 @@ export class PhysicsIntentAdapter {
 
     const connectors = this.buildConnectors(bodies);
     this.engine.setConnectors(connectors);
-    this.participants = new Set(connectors.flatMap(c => [c.aId, c.bId]));
+    this.reestablishActiveDrags(bodies);
     Logger.info(`[physics] rebuilt: ${bodies.size} body(ies), ${connectors.length} connector(s)`);
+  }
+
+  /** A graph change rebuilds bodies/connectors; re-create any in-progress drag anchors + springs on top. */
+  private reestablishActiveDrags(bodies: Map<string, PhysicsBody>): void {
+    for (const drag of [...this.activeDrags.values()]) {
+      if (!bodies.has(drag.intentGuid)) {
+        this.clearDrag(drag.intentGuid);
+        continue;
+      }
+      this.engine.setBody(this.makeAnchor(drag.anchorId, drag.anchorPos));
+      this.engine.addConnector(this.makeDragSpring(drag.springId, drag.anchorId, drag.intentGuid));
+    }
   }
 
   private toBody(guid: string, intent: ControllerIntent): PhysicsBody {
     const position = this.toVec3(intent.position);
+    // Mass must be > 0 — a zero/invalid mass would make the body immovable (infinite inertia). Default to 1.
+    const mass = this.readNumber(intent.mass, DEFAULT_MASS);
     return {
       id: guid,
       position,
       velocity: vec3.zero(),
       prevPosition: vec3.clone(position),
-      mass: this.readNumber(intent.mass, DEFAULT_MASS),
+      mass: mass > 0 ? mass : DEFAULT_MASS,
       drag: this.readNumber(intent.drag, DEFAULT_DRAG),
       pinned: false,
     };
@@ -108,45 +137,87 @@ export class PhysicsIntentAdapter {
     return records;
   }
 
-  /** Called for every runtime update; an external (non-physics) move pins the body and wakes the solver. */
-  private onRuntimeUpdates(updates: RuntimeUpdate[]): void {
+  /**
+   * Handle the perform-drag lifecycle carried on runtime updates. `drag:'move'` grabs/holds the intent
+   * on a fixed physics anchor (so its mass governs lag and connected intents follow); `drag:'end'`
+   * releases it on pointer-up — exactly when the user lets go, never on a timeout. Both are consumed so
+   * the raw position never reaches renderers (the engine owns the dragged intent's rendered position).
+   * Everything else — physics output, edit-mode placement, animations, non-intent updates — passes through.
+   */
+  private intercept(updates: RuntimeUpdate[]): RuntimeUpdate[] {
     let woke = false;
-    const now = Date.now();
+    const passthrough: RuntimeUpdate[] = [];
     for (const update of updates) {
-      if (update.entityType !== 'intent' || update.source === PHYSICS_SOURCE) continue;
-      if (!this.participants.has(update.guid)) continue;
-      const position = update.patch?.['position'];
-      if (!Array.isArray(position) || position.length !== 3) continue;
-      const body = this.engine.getBody(update.guid);
-      if (!body) continue;
-      const nextPos = this.toVec3(position);
-      // Track drag velocity so releasing a moving intent throws it (and its partners); a still
-      // release leaves ~0 velocity and settles. Velocity is preserved while pinned and takes over on release.
-      const prev = this.dragSamples.get(update.guid);
-      if (prev) {
-        const dt = Math.max((now - prev.time) / 1000, 0.008);
-        body.velocity = vec3.scale(vec3.sub(nextPos, prev.pos), 1 / dt);
-      } else {
-        body.velocity = vec3.zero();
+      if (update.entityType !== 'intent' || update.source === PHYSICS_SOURCE || !update.drag) {
+        passthrough.push(update);
+        continue;
       }
-      this.dragSamples.set(update.guid, { pos: nextPos, time: now });
-      body.position = nextPos;
-      this.pin(body);
-      woke = true;
+      if (update.drag === 'end') {
+        this.clearDrag(update.guid);
+        woke = true;
+        continue;
+      }
+      const position = update.patch?.['position'];
+      if (Array.isArray(position) && position.length === 3 && this.engine.getBody(update.guid)) {
+        this.driveAnchor(update.guid, this.toVec3(position));
+        woke = true;
+      } else {
+        passthrough.push(update);
+      }
     }
     if (woke) this.engine.wake();
+    return passthrough;
   }
 
-  private pin(body: PhysicsBody): void {
-    body.pinned = true;
-    const existing = this.dragTimers.get(body.id);
-    if (existing) clearTimeout(existing);
-    this.dragTimers.set(body.id, setTimeout(() => {
-      body.pinned = false;
-      this.dragTimers.delete(body.id);
-      this.dragSamples.delete(body.id);
-      this.engine.wake();
-    }, DRAG_RELEASE_MS));
+  /** Move (or create) the fixed anchor the dragged intent is sprung to. Persists until an explicit release. */
+  private driveAnchor(intentGuid: string, anchorPos: Vec3): void {
+    let drag = this.activeDrags.get(intentGuid);
+    if (!drag) {
+      const anchorId = ANCHOR_PREFIX + intentGuid;
+      const springId = SPRING_PREFIX + intentGuid;
+      drag = { intentGuid, anchorId, springId, anchorPos };
+      this.activeDrags.set(intentGuid, drag);
+      this.engine.setBody(this.makeAnchor(anchorId, anchorPos));
+      this.engine.addConnector(this.makeDragSpring(springId, anchorId, intentGuid));
+    } else {
+      drag.anchorPos = anchorPos;
+      const anchor = this.engine.getBody(drag.anchorId);
+      if (anchor) anchor.position = anchorPos;
+    }
+  }
+
+  /** Release: drop the anchor body + drag link; the intent keeps its velocity and flies on. */
+  private clearDrag(intentGuid: string): void {
+    const drag = this.activeDrags.get(intentGuid);
+    if (!drag) return;
+    this.engine.removeConnector(drag.springId);
+    this.engine.removeBody(drag.anchorId);
+    this.activeDrags.delete(intentGuid);
+    this.engine.wake();
+  }
+
+  /** Fixed anchor body: pinned (immovable, so the intent cannot affect it — the requested "A is fixed"). */
+  private makeAnchor(anchorId: string, position: Vec3): PhysicsBody {
+    return {
+      id: anchorId,
+      position: vec3.clone(position),
+      velocity: vec3.zero(),
+      prevPosition: vec3.clone(position),
+      mass: 1,
+      drag: 0,
+      pinned: true,
+    };
+  }
+
+  private makeDragSpring(springId: string, anchorId: string, intentGuid: string): ConnectorRecord {
+    return {
+      guid: springId,
+      kind: 'drag',
+      aId: anchorId,
+      bId: intentGuid,
+      restLength: 0,
+      params: { stiffness: this.dragConfig.stiffness, maxForce: this.dragConfig.maxForce },
+    };
   }
 
   private commit(id: string, position: Vec3, velocity: Vec3): { position: Vec3; velocity: Vec3 } {

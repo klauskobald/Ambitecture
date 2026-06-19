@@ -25,7 +25,7 @@ import { HubStatusDispatcher } from './hubStatusTypes';
 import { AnimationManager } from './animation/AnimationManager';
 import { FixtureStateManager } from './resolve/FixtureStateManager';
 import { PhysicsEngine, type PhysicsConfig } from './physics/PhysicsEngine';
-import { PhysicsIntentAdapter } from './physics/PhysicsIntentAdapter';
+import { PhysicsIntentAdapter, type DragConfig } from './physics/PhysicsIntentAdapter';
 import { BindingManager } from './BindingManager';
 import { BindingHandler } from './handlers/BindingHandler';
 import { AnimationEditHandler } from './handlers/AnimationEditHandler';
@@ -119,7 +119,9 @@ const animationManager = new AnimationManager(
   bindingManager,
 );
 const fixtureStateManager = new FixtureStateManager(projectManager, runtimeIntentStore, registry);
-const physicsConfig = systemConfig.getOrDefault<Partial<PhysicsConfig>>('physics', {});
+const physicsConfig = systemConfig.getOrDefault<Partial<PhysicsConfig> & {
+  dragStiffness?: number; dragMaxForce?: number;
+}>('physics', {});
 const physicsEngine = new PhysicsEngine({
   fps: physicsConfig.fps ?? 20,
   sleepVelocity: physicsConfig.sleepVelocity ?? 0.1,
@@ -130,6 +132,10 @@ const physicsIntentAdapter = new PhysicsIntentAdapter(
   runtimeIntentStore,
   runtimeUpdateDispatcher,
   physicsEngine,
+  {
+    stiffness: physicsConfig.dragStiffness ?? 80,
+    maxForce: physicsConfig.dragMaxForce ?? 120,
+  },
 );
 const pulseManager = new PulseManager(projectManager);
 pulseManager.setHubStatusDispatcher(hubStatusDispatcher);

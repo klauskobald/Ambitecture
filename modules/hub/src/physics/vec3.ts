@@ -27,6 +27,10 @@ export const vec3 = {
     return Math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
   },
 
+  dot(a: Vec3, b: Vec3): number {
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  },
+
   distance(a: Vec3, b: Vec3): number {
     return vec3.length(vec3.sub(a, b));
   },

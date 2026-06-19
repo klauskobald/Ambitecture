@@ -3,6 +3,8 @@ import { projectGraph } from '../core/projectGraph.js'
 import { isIntentLocked } from '../core/intentLockRegistry.js'
 import {
   queueIntentUpdate,
+  queueIntentDragMove,
+  queueIntentDragEnd,
   queueFixtureUpdate,
   sendSaveProject,
   sendSceneActivate
@@ -149,9 +151,12 @@ export const performPolicy = {
       pos?.[1] ?? 0,
       wz
     ])
-    queueIntentUpdate({ guid, patch: { position } })
+    // Perform drag goes through the hub physics drag anchor (mass-based lag, connected intents follow).
+    queueIntentDragMove(guid, position)
   },
-  onIntentMoveEnd (_guid) {},
+  onIntentMoveEnd (guid) {
+    queueIntentDragEnd(guid)
+  },
   onIntentHeightMove (guid, wy) {
     if (updatePerformHeightOverlayIfActive(guid, wy)) return
     const updated = projectGraph.updateRuntimeIntentHeight(guid, wy)

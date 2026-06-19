@@ -38,6 +38,29 @@ export function queueIntentUpdate (intent) {
   sendRuntimeCommands([command], activeWs, activeLocation)
 }
 
+/**
+ * Perform drag of an intent: a `drag:'move'` runtime:command so the hub springs the intent to a
+ * physics drag anchor (mass-based lag, connected intents follow). @param {string} guid @param {[number,number,number]} position
+ */
+export function queueIntentDragMove (guid, position) {
+  if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation || !guid) return
+  sendRuntimeCommands(
+    [{ entityType: 'intent', guid, patch: { position }, drag: 'move' }],
+    activeWs,
+    activeLocation
+  )
+}
+
+/** Release a perform drag on pointer-up; the hub drops the anchor immediately. @param {string} guid */
+export function queueIntentDragEnd (guid) {
+  if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation || !guid) return
+  sendRuntimeCommands(
+    [{ entityType: 'intent', guid, drag: 'end' }],
+    activeWs,
+    activeLocation
+  )
+}
+
 /** @param {unknown} fixtureUpdate */
 export function queueFixtureUpdate (fixtureUpdate) {
   if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation) return

@@ -10,6 +10,8 @@ export interface RuntimeCommand {
   class?: string;
   target?: string;
   scheduled?: number;
+  /** Perform-drag lifecycle: `'move'` grabs/holds the intent on a physics drag anchor, `'end'` releases it on pointer-up. */
+  drag?: 'move' | 'end';
 }
 
 export interface RuntimeUpdate extends RuntimeCommand {

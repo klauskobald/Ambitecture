@@ -5,6 +5,7 @@ import { ConnectorBase, type ConnectorRecord } from './connectors/ConnectorBase'
 import './connectors/RodConnector';
 import './connectors/SpringConnector';
 import './connectors/RopeConnector';
+import './connectors/DragConnector';
 
 export interface PhysicsConfig {
   /** Solver rate while awake (Hz). Speeds are frame-rate independent regardless of this value. */
@@ -37,7 +38,7 @@ export class PhysicsEngine {
   private lastWallMs = 0;
   private accumulatorMs = 0;
 
-  constructor(private readonly config: PhysicsConfig) {}
+  constructor(private readonly config: PhysicsConfig) { }
 
   setBody(body: PhysicsBody): void {
     this.bodies.set(body.id, body);
@@ -60,6 +61,16 @@ export class PhysicsEngine {
     this.connectors = records
       .map(record => ConnectorBase.create(record))
       .filter((c): c is ConnectorBase => c !== null);
+  }
+
+  /** Add a single connector (e.g. a transient drag spring) without disturbing the others. */
+  addConnector(record: ConnectorRecord): void {
+    const connector = ConnectorBase.create(record);
+    if (connector) this.connectors.push(connector);
+  }
+
+  removeConnector(guid: string): void {
+    this.connectors = this.connectors.filter(c => c.guid !== guid);
   }
 
   onCommit(fn: CommitFn): void {

@@ -5,6 +5,11 @@ physics:
   fps: 20
   sleepVelocity: 0.0005
   iterations: 8
+  # Perform-dragging pulls the intent to a fixed anchor via a critically-damped drag link, so its mass
+  # governs lag. maxForce caps the impulse propagated into the connection chain (stability). The drag is
+  # released exactly on pointer-up (explicit), so no release-timeout is needed.
+  dragStiffness: 100
+  dragMaxForce: 1500
 
 systemCapabilities:
 

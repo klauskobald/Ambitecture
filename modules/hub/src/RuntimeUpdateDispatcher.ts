@@ -5,7 +5,7 @@ import { RuntimeIntentStore } from './RuntimeIntentStore';
 import { RuntimeUpdate } from './RuntimeProtocol';
 
 export class RuntimeUpdateDispatcher {
-  private updateListener?: (updates: RuntimeUpdate[]) => void;
+  private updateInterceptor?: (updates: RuntimeUpdate[]) => RuntimeUpdate[];
 
   constructor(
     private registry: ConnectionRegistry,
@@ -13,9 +13,13 @@ export class RuntimeUpdateDispatcher {
     private runtimeIntentStore: RuntimeIntentStore,
   ) {}
 
-  /** Observe every dispatched update (e.g. the physics adapter wakes on external intent moves). */
-  setUpdateListener(listener: (updates: RuntimeUpdate[]) => void): void {
-    this.updateListener = listener;
+  /**
+   * Intercept every dispatched update batch and return the subset to actually forward/apply. The
+   * physics adapter uses this to *claim* a dragged intent (redirecting the raw position into a spring
+   * anchor and owning the intent's rendered position itself) — those claimed updates are dropped here.
+   */
+  setUpdateInterceptor(interceptor: (updates: RuntimeUpdate[]) => RuntimeUpdate[]): void {
+    this.updateInterceptor = interceptor;
   }
 
   /** Delegates to {@link RuntimeIntentStore.clear} — same invalidation triggers as before. */
@@ -41,9 +45,11 @@ export class RuntimeUpdateDispatcher {
   ): void {
     if (updates.length === 0) return;
 
-    this.updateListener?.(updates);
-    this.forwardRuntimeUpdates(updates, location, excludeControllerSockets);
-    const rendererEvents = this.runtimeIntentStore.processRuntimeUpdates(updates, now);
+    const effective = this.updateInterceptor ? this.updateInterceptor(updates) : updates;
+    if (effective.length === 0) return;
+
+    this.forwardRuntimeUpdates(effective, location, excludeControllerSockets);
+    const rendererEvents = this.runtimeIntentStore.processRuntimeUpdates(effective, now);
     if (rendererEvents.length > 0) {
       this.eventQueue.schedule(rendererEvents.map(event => ({ event, scheduledAt: now })), location);
     }

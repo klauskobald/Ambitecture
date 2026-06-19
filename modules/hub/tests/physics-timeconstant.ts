@@ -22,13 +22,16 @@ function build(massA: number, drag: number): PhysicsEngine {
   return engine;
 }
 
-function runChunks(engine: PhysicsEngine, totalMs: number, frameMs: number): { a: Vec3; b: Vec3 } {
+function runChunks(engine: PhysicsEngine, totalMs: number, frameMs: number): void {
   let elapsed = 0;
   while (elapsed < totalMs) {
     engine.advance(frameMs);
     elapsed += frameMs;
   }
-  return { a: engine.getBody('a')!.position, b: engine.getBody('b')!.position };
+}
+
+function pos(engine: PhysicsEngine, id: string): Vec3 {
+  return engine.getBody(id)!.position;
 }
 
 function assert(cond: boolean, msg: string): void {
@@ -37,16 +40,16 @@ function assert(cond: boolean, msg: string): void {
 
 function main(): void {
   // A. same sim rate, different wall chunking → identical
-  const big = runChunks(build(1, 0.3), 6000, 100);
-  const tiny = runChunks(build(1, 0.3), 6000, 5);
-  const drift = vec3.distance(big.a, tiny.a);
-  console.log(`[A] frame-chunk drift=${drift.toFixed(5)}m (a→${big.a.map(n => n.toFixed(2))})`);
+  const bigEngine = build(1, 0.3); runChunks(bigEngine, 6000, 100);
+  const tinyEngine = build(1, 0.3); runChunks(tinyEngine, 6000, 5);
+  const drift = vec3.distance(pos(bigEngine, 'a'), pos(tinyEngine, 'a'));
+  console.log(`[A] frame-chunk drift=${drift.toFixed(5)}m (a→${pos(bigEngine, 'a').map(n => n.toFixed(2))})`);
   assert(drift < 0.02, `frame-rate dependent: drift ${drift.toFixed(4)}m`);
 
   // B. heavier A moves less than light B (COM stays mass-weighted)
-  const heavy = runChunks(build(9, 0.3), 6000, 50);
-  const moveA = Math.abs(heavy.a[0] - 0);
-  const moveB = Math.abs(heavy.b[0] - 4);
+  const heavyEngine = build(9, 0.3); runChunks(heavyEngine, 6000, 50);
+  const moveA = Math.abs(pos(heavyEngine, 'a')[0] - 0);
+  const moveB = Math.abs(pos(heavyEngine, 'b')[0] - 4);
   console.log(`[B] mass: |Δa|=${moveA.toFixed(2)} (m=9) vs |Δb|=${moveB.toFixed(2)} (m=1)`);
   assert(moveB > moveA * 2, `mass ignored: a moved ${moveA.toFixed(2)}, b moved ${moveB.toFixed(2)}`);
 
@@ -60,6 +63,23 @@ function main(): void {
   console.log(`[C] drag: speed@drag0=${speedNoDrag.toFixed(3)} speed@drag0.6=${speedDrag.toFixed(4)}`);
   assert(speedNoDrag > 0.05, 'drag=0 should keep momentum');
   assert(speedDrag < speedNoDrag * 0.05, 'drag>0 should bleed off momentum');
+
+  // D. drag link: a fixed anchor pulls a free intent to it without overshoot; the anchor never moves.
+  const drag = new PhysicsEngine({ fps: 20, sleepVelocity: 0.005, iterations: 8 });
+  const anchor: PhysicsBody = { id: 'anchor', position: [3, 0, 0], velocity: vec3.zero(), prevPosition: [3, 0, 0], mass: 1, drag: 0, pinned: true };
+  const intent = makeBody('intent', [0, 0, 0], 1, 0);
+  drag.setBody(anchor);
+  drag.setBody(intent);
+  drag.setConnectors([{ guid: 's', kind: 'drag', aId: 'anchor', bId: 'intent', restLength: 0, params: { stiffness: 80, maxForce: 120 } }]);
+  let maxX = 0;
+  for (let i = 0; i < 120; i++) { drag.advance(50); maxX = Math.max(maxX, drag.getBody('intent')!.position[0]); }
+  const reached = vec3.distance(drag.getBody('intent')!.position, [3, 0, 0]);
+  const anchorMoved = vec3.distance(drag.getBody('anchor')!.position, [3, 0, 0]);
+  const overshoot = Math.max(0, maxX - 3);
+  console.log(`[D] drag: reached dist=${reached.toFixed(3)} overshoot=${overshoot.toFixed(3)} anchorMoved=${anchorMoved.toFixed(3)}`);
+  assert(reached < 0.05, 'intent should be pulled onto the anchor');
+  assert(overshoot < 0.05, `critically-damped drag should not overshoot (was ${overshoot.toFixed(3)})`);
+  assert(anchorMoved < 1e-9, 'fixed anchor must not move');
 
   console.log('[physics-test] PASS');
 }

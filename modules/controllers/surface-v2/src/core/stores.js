@@ -29,6 +29,18 @@ export function intentRadius (intent) {
 }
 
 /**
+ * Whether the controller draws the height (Y) slider for this intent. An explicit `heightSlider`
+ * boolean wins; otherwise it defaults on for target intents only.
+ * @param {unknown} intent @returns {boolean}
+ */
+export function intentHeightSliderEnabled (intent) {
+  if (intent === null || typeof intent !== 'object' || Array.isArray(intent)) return false
+  const i = /** @type {Record<string, unknown>} */ (intent)
+  if (typeof i.heightSlider === 'boolean') return i.heightSlider
+  return i.class === 'target'
+}
+
+/**
  * @param {string} zoneName
  * @param {string} fixtureName
  * @returns {string}

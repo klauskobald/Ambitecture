@@ -1,4 +1,9 @@
-import { intentLayer, intentName, intentRadius } from '../core/stores.js'
+import {
+  intentLayer,
+  intentName,
+  intentRadius,
+  intentHeightSliderEnabled
+} from '../core/stores.js'
 import { projectGraph } from '../core/projectGraph.js'
 import {
   worldToCanvas,
@@ -290,7 +295,7 @@ export class OverlayCanvas {
         for (const { guid, intent } of sortedIntents) {
           if (isIntentLocked(guid)) continue
           const i = /** @type {Record<string, unknown>} */ (intent)
-          if (i.class !== 'target') continue
+          if (!intentHeightSliderEnabled(intent)) continue
           if (!this._policy.isIntentVisible(intent)) continue
           const pos = /** @type {number[] | undefined} */ (i.position)
           if (!pos || pos.length < 3) continue
@@ -902,7 +907,7 @@ export class OverlayCanvas {
     for (const [guid, sharedIntent] of projectGraph.getIntents()) {
       const intent = projectGraph.getEffectiveIntent(guid) ?? sharedIntent
       const i = /** @type {Record<string, unknown>} */ (intent)
-      if (!i || i.class !== 'target') continue
+      if (!i || !intentHeightSliderEnabled(intent)) continue
       if (isIntentLocked(guid)) continue
       // Grabbing follows the same gate as cross dragging: perform requires performEnabled.
       if (!this._policy.canDragIntent(intent)) continue

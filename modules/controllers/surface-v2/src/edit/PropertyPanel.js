@@ -13,6 +13,8 @@ import { InputAssignManager } from './InputAssignManager.js'
 import {
   effectivePerformResetForKey
 } from '../core/intentPerformDefaults.js'
+import { intentHeightSliderEnabled } from '../core/stores.js'
+import { getStageOverlay } from '../stage/stageOverlayHost.js'
 import { resolveIntentDescriptorUiKind } from '../core/systemCapabilities.js'
 import { PERFORM_RESET_KEY_METAS } from './performResetKeyMetas.js'
 
@@ -35,6 +37,8 @@ export class PropertyPanel {
     this._inputAssignManager = null
     /** @type {Map<string, HTMLButtonElement> | null} */
     this._performResetToggleByKey = null
+    /** @type {HTMLButtonElement | null} */
+    this._heightSliderPill = null
   }
 
   /**
@@ -75,6 +79,7 @@ export class PropertyPanel {
       control.refresh(guids)
     }
     this._refreshPerformResetPills()
+    this._refreshHeightSliderPill()
   }
 
   destroy () {
@@ -84,6 +89,7 @@ export class PropertyPanel {
     this._controls = []
     this._inputAssignManager = null
     this._performResetToggleByKey = null
+    this._heightSliderPill = null
   }
 
   /**
@@ -94,6 +100,7 @@ export class PropertyPanel {
   _buildBottomTogglesCard () {
     this._inputAssignManager = null
     this._performResetToggleByKey = null
+    this._heightSliderPill = null
     if (this._selectionSize !== 1) return null
     const [guid] = [...this._selectedGuids]
     if (!guid || !projectGraph.getIntents().has(guid)) return null
@@ -112,8 +119,49 @@ export class PropertyPanel {
     })
     pills.appendChild(this._inputAssignManager.getStatePill())
 
+    this._heightSliderPill = this._buildHeightSliderPill(guid)
+    pills.appendChild(this._heightSliderPill)
+    this._refreshHeightSliderPill()
+
     this._performResetToggleByKey = this._buildPerformResetPills(guid, pills)
     return card
+  }
+
+  /**
+   * Toggle the stage height (Y) slider for this intent. Persists an explicit `heightSlider`
+   * boolean (default-on for targets, off otherwise — see {@link intentHeightSliderEnabled}).
+   * @param {string} guid
+   * @returns {HTMLButtonElement}
+   */
+  _buildHeightSliderPill (guid) {
+    const pill = document.createElement('button')
+    pill.type = 'button'
+    pill.className = 'prop-pill intent-toggle'
+    pill.textContent = 'Height slider'
+    pill.title = 'Toggle the Y-height slider on the stage'
+    pill.addEventListener('click', () => {
+      const current =
+        projectGraph.getEffectiveIntent(guid) ?? projectGraph.getIntents().get(guid)
+      const eff = intentHeightSliderEnabled(current)
+      const updated = projectGraph.updateIntentProperty(guid, 'heightSlider', !eff)
+      if (updated) queueIntentUpdate(updated)
+      sendSaveProject('intents', [...projectGraph.getIntents().values()])
+      this._refreshHeightSliderPill()
+      getStageOverlay()?.markRenderActivity()
+    })
+    return pill
+  }
+
+  _refreshHeightSliderPill () {
+    if (!this._heightSliderPill || this._selectionSize !== 1) return
+    const [guid] = [...this._selectedGuids]
+    if (!guid) return
+    const intent =
+      projectGraph.getEffectiveIntent(guid) ?? projectGraph.getIntents().get(guid)
+    const eff = intentHeightSliderEnabled(intent)
+    this._heightSliderPill.classList.toggle('prop-pill--active', eff)
+    this._heightSliderPill.classList.toggle('intent-toggle--enabled', eff)
+    this._heightSliderPill.setAttribute('aria-pressed', eff ? 'true' : 'false')
   }
 
   /**

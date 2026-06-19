@@ -3,7 +3,7 @@ dataDir: ../../var
 # Connector physics solver (hub-side). Speeds are frame-rate independent of `fps`.
 physics:
   fps: 20
-  sleepVelocity: 0.01
+  sleepVelocity: 0.02
   iterations: 8
   watchIntervalMs: 2000
   # Perform-dragging pulls the intent to a fixed anchor via a critically-damped drag link, so its mass

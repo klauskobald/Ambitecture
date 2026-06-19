@@ -132,19 +132,30 @@
   align-items: stretch;
 }
 
-.prop-panel-section--perform-reset {
-  flex: 1 1 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
 .prop-row--group-heading .prop-row__label {
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--color-text-muted);
+}
+
+.prop-row.prop-row--connections {
+  flex: 1 1 440px;
+  /* Prefer 440 (own row at 2 cols) but shrink to the pane when it is narrower, instead of overflowing. */
+  min-width: min(440px, 100%);
+  container-type: inline-size;
+}
+
+.prop-pills--bottom-toggles {
+  align-items: center;
+}
+
+/* Connections editor sits inside a card now; drop its standalone divider chrome. */
+.prop-row--connections .connections-editor {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
 }
 
 .prop-pill--perform-reset-toggle {

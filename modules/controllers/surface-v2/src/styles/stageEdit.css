@@ -106,11 +106,6 @@
   align-items: stretch;
 }
 
-.stage-edit-params-overlay__body .prop-panel-section--perform-reset {
-  flex: 1 1 100%;
-  box-sizing: border-box;
-}
-
 .stage-edit-params-overlay__body .prop-row {
   box-sizing: border-box;
 }

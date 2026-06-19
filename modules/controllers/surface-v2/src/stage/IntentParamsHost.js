@@ -217,21 +217,30 @@ export class IntentParamsHost {
     this._currentGuids = guids
     this._refreshTitle()
     this._panel = new PropertyPanel(this._lastDescriptors, guids.size, guids)
-    this._body.appendChild(this._panel.buildElement())
+    const panelEl = this._panel.buildElement()
+    this._body.appendChild(panelEl)
     this._panel.refresh(guids)
-    this._maybeBuildConnections(guids)
+    this._maybeBuildConnections(guids, panelEl)
     this._refreshFooterActions()
   }
 
-  /** Connections editor only makes sense for a single non-master intent. @param {Set<string>} guids */
-  _maybeBuildConnections (guids) {
-    if (!this._body || guids.size !== 1) return
+  /**
+   * Connections editor only makes sense for a single non-master intent. Placed inside the panel
+   * as the last card.
+   * @param {Set<string>} guids
+   * @param {HTMLElement} panelEl
+   */
+  _maybeBuildConnections (guids, panelEl) {
+    if (guids.size !== 1) return
     const [guid] = [...guids]
     const intent = projectGraph.getEffectiveIntent(guid)
     if (!intent || typeof intent !== 'object' || Array.isArray(intent)) return
     if (/** @type {Record<string, unknown>} */ (intent).class === 'master') return
     this._connections = new ConnectionsEditor(guid)
-    this._body.appendChild(this._connections.buildElement())
+    const card = document.createElement('div')
+    card.className = 'prop-row prop-row--connections'
+    card.appendChild(this._connections.buildElement())
+    panelEl.appendChild(card)
   }
 
   _refreshFooterActions () {

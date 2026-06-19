@@ -56,14 +56,9 @@ export class PropertyPanel {
       panel.appendChild(control.buildRow())
     }
 
-    const assignSection = this._buildAssignSection()
-    if (assignSection) {
-      panel.appendChild(assignSection)
-    }
-
-    const performResetSection = this._buildPerformResetSection()
-    if (performResetSection) {
-      panel.appendChild(performResetSection)
+    const togglesCard = this._buildBottomTogglesCard()
+    if (togglesCard) {
+      panel.appendChild(togglesCard)
     }
 
     return panel
@@ -91,39 +86,42 @@ export class PropertyPanel {
     this._performResetToggleByKey = null
   }
 
-  /** @returns {HTMLElement | null} */
-  _buildAssignSection () {
-    if (this._selectionSize !== 1) return null
-    const [guid] = [...this._selectedGuids]
-    if (!guid || !projectGraph.getIntents().has(guid)) return null
-    const intent = projectGraph.getEffectiveIntent(guid)
-    const intentName = typeof intent?.name === 'string' ? intent.name : guid
-    this._inputAssignManager = new InputAssignManager({
-      context: { type: 'intent', guid },
-      labelDefault: intentName,
-    })
-    const section = document.createElement('div')
-    section.className = 'prop-row prop-row--assign'
-    const header = document.createElement('div')
-    header.className = 'prop-row__header'
-    const label = document.createElement('span')
-    label.className = 'prop-row__label'
-    label.textContent = 'Input'
-    header.appendChild(label)
-    header.appendChild(this._inputAssignManager.getInvokeButton())
-    section.appendChild(header)
-    return section
-  }
-
   /**
+   * Merged bottom card: input-assign pill + one pill per perform-reset key.
+   * No heading; pills lay out horizontally.
    * @returns {HTMLElement | null}
    */
-  _buildPerformResetSection () {
+  _buildBottomTogglesCard () {
+    this._inputAssignManager = null
     this._performResetToggleByKey = null
     if (this._selectionSize !== 1) return null
     const [guid] = [...this._selectedGuids]
     if (!guid || !projectGraph.getIntents().has(guid)) return null
 
+    const card = document.createElement('div')
+    card.className = 'prop-row prop-row--bottom-toggles'
+    const pills = document.createElement('div')
+    pills.className = 'prop-pills prop-pills--bottom-toggles'
+    card.appendChild(pills)
+
+    const intent = projectGraph.getEffectiveIntent(guid)
+    const intentLabel = typeof intent?.name === 'string' ? intent.name : guid
+    this._inputAssignManager = new InputAssignManager({
+      context: { type: 'intent', guid },
+      labelDefault: intentLabel
+    })
+    pills.appendChild(this._inputAssignManager.getStatePill())
+
+    this._performResetToggleByKey = this._buildPerformResetPills(guid, pills)
+    return card
+  }
+
+  /**
+   * @param {string} guid
+   * @param {HTMLElement} container
+   * @returns {Map<string, HTMLButtonElement>}
+   */
+  _buildPerformResetPills (guid, container) {
     const intent = projectGraph.getIntents().get(guid)
     /** @type {Set<string>} */
     const orderedKeys = new Set()
@@ -145,64 +143,25 @@ export class PropertyPanel {
 
     /** @type {Map<string, HTMLButtonElement>} */
     const toggles = new Map()
-    this._performResetToggleByKey = toggles
-
-    const wrap = document.createElement('section')
-    wrap.className = 'prop-panel-section prop-panel-section--perform-reset'
-
-    const groupHeader = document.createElement('div')
-    groupHeader.className = 'prop-row prop-row--group-heading'
-    const groupTitle = document.createElement('span')
-    groupTitle.className = 'prop-row__label'
-    groupTitle.textContent = 'Perform reset'
-    groupHeader.appendChild(groupTitle)
-    wrap.appendChild(groupHeader)
-
     for (const key of orderedKeys) {
       const dotKey = `perform.reset.${key}`
-      const row = document.createElement('div')
-      row.className = 'prop-row'
-
-      const header = document.createElement('div')
-      header.className = 'prop-row__header'
-      const labelEl = document.createElement('span')
-      labelEl.className = 'prop-row__label'
-      labelEl.textContent = this._labelForPerformResetKey(key)
-      header.appendChild(labelEl)
-      row.appendChild(header)
-
-      const controlArea = document.createElement('div')
-      controlArea.className = 'prop-row__control'
-      const group = document.createElement('div')
-      group.className = 'prop-pills'
-
-      /**
-       * @param {boolean} value
-       */
-      const persist = value => {
-        const updated = projectGraph.updateIntentProperty(guid, dotKey, value)
-        if (updated) queueIntentUpdate(updated)
-        sendSaveProject('intents', [...projectGraph.getIntents().values()])
-      }
-
-      const btn = document.createElement('button')
-      btn.type = 'button'
-      btn.className = 'prop-pill intent-toggle prop-pill--perform-reset-toggle'
-      btn.title = 'Click to toggle'
-      btn.addEventListener('click', () => {
+      const pill = document.createElement('button')
+      pill.type = 'button'
+      pill.className = 'prop-pill intent-toggle prop-pill--perform-reset-toggle'
+      pill.textContent = this._labelForPerformResetKey(key)
+      pill.title = 'Toggle perform reset'
+      pill.addEventListener('click', () => {
         const intentRow = projectGraph.getIntents().get(guid)
         const eff = effectivePerformResetForKey(intentRow, key)
-        persist(!eff)
+        const updated = projectGraph.updateIntentProperty(guid, dotKey, !eff)
+        if (updated) queueIntentUpdate(updated)
+        sendSaveProject('intents', [...projectGraph.getIntents().values()])
         this._refreshPerformResetPills()
       })
-      group.appendChild(btn)
-      toggles.set(key, btn)
-      controlArea.appendChild(group)
-      row.appendChild(controlArea)
-      wrap.appendChild(row)
+      container.appendChild(pill)
+      toggles.set(key, pill)
     }
-
-    return wrap
+    return toggles
   }
 
   /** @param {string} key */
@@ -220,9 +179,9 @@ export class PropertyPanel {
     const intent = projectGraph.getIntents().get(guid)
     for (const [key, btn] of this._performResetToggleByKey) {
       const eff = effectivePerformResetForKey(intent, key)
-      btn.textContent = eff ? 'On' : 'Off'
       btn.classList.toggle('prop-pill--active', eff === true)
       btn.classList.toggle('intent-toggle--enabled', eff === true)
+      btn.setAttribute('aria-pressed', eff === true ? 'true' : 'false')
     }
   }
 

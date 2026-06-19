@@ -66,3 +66,15 @@
   font-size: 0.75rem;
   opacity: 0.6;
 }
+
+/* Narrow pane: row splits into two lines — name/slider/trash, then the kind buttons below. */
+@container (max-width: 400px) {
+  .connections-editor__row {
+    flex-wrap: wrap;
+  }
+
+  .connections-editor__kind {
+    order: 1;
+    flex-basis: 100%;
+  }
+}

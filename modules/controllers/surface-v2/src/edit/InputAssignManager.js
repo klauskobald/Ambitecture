@@ -42,6 +42,12 @@ export class InputAssignManager {
     this._labelDefault = String(opts.labelDefault ?? this._contextGuid)
     /** @type {HTMLButtonElement | null} */
     this._invokeButton = null
+    /** @type {HTMLButtonElement | null} */
+    this._statePill = null
+    this._statePillLabels = {
+      assignedLabel: 'Input assigned',
+      unassignedLabel: 'Input unassigned'
+    }
   }
 
   /** @returns {HTMLButtonElement} */
@@ -58,8 +64,43 @@ export class InputAssignManager {
     return btn
   }
 
+  /**
+   * Pill reflecting assignment state ("Input assigned" / "Input unassigned"); click opens the picker.
+   * @param {{ assignedLabel?: string, unassignedLabel?: string }} [opts]
+   * @returns {HTMLButtonElement}
+   */
+  getStatePill (opts = {}) {
+    if (this._statePill) return this._statePill
+    if (typeof opts.assignedLabel === 'string') {
+      this._statePillLabels.assignedLabel = opts.assignedLabel
+    }
+    if (typeof opts.unassignedLabel === 'string') {
+      this._statePillLabels.unassignedLabel = opts.unassignedLabel
+    }
+    const btn = document.createElement('button')
+    btn.type = 'button'
+    btn.className = 'prop-pill intent-toggle input-assign__state-pill'
+    btn.addEventListener('click', () => {
+      void this.showControl()
+    })
+    this._statePill = btn
+    this._refreshStatePill()
+    return btn
+  }
+
   refresh () {
     this._refreshInvokeButton()
+  }
+
+  _refreshStatePill () {
+    if (!this._statePill) return
+    const isAssigned = this._anyInputLinkedToContext()
+    this._statePill.textContent = isAssigned
+      ? this._statePillLabels.assignedLabel
+      : this._statePillLabels.unassignedLabel
+    this._statePill.classList.toggle('intent-toggle--enabled', isAssigned)
+    this._statePill.classList.toggle('prop-pill--active', isAssigned)
+    this._statePill.setAttribute('aria-pressed', isAssigned ? 'true' : 'false')
   }
 
   /**
@@ -572,14 +613,16 @@ export class InputAssignManager {
   }
 
   _refreshInvokeButton () {
-    if (!this._invokeButton) return
     const isAssigned = this._anyInputLinkedToContext()
-    this._invokeButton.textContent = isAssigned ? 'Assigned' : 'Assign'
-    this._invokeButton.classList.toggle('intent-toggle--enabled', isAssigned)
-    this._invokeButton.setAttribute(
-      'aria-pressed',
-      isAssigned ? 'true' : 'false'
-    )
+    if (this._invokeButton) {
+      this._invokeButton.textContent = isAssigned ? 'Assigned' : 'Assign'
+      this._invokeButton.classList.toggle('intent-toggle--enabled', isAssigned)
+      this._invokeButton.setAttribute(
+        'aria-pressed',
+        isAssigned ? 'true' : 'false'
+      )
+    }
+    this._refreshStatePill()
   }
 
   /**

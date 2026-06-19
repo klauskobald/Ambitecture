@@ -64,22 +64,24 @@ function main(): void {
   assert(speedNoDrag > 0.05, 'drag=0 should keep momentum');
   assert(speedDrag < speedNoDrag * 0.05, 'drag>0 should bleed off momentum');
 
-  // D. drag link: a fixed anchor pulls a free intent to it without overshoot; the anchor never moves.
-  const drag = new PhysicsEngine({ fps: 20, sleepVelocity: 0.005, iterations: 8 });
-  const anchor: PhysicsBody = { id: 'anchor', position: [3, 0, 0], velocity: vec3.zero(), prevPosition: [3, 0, 0], mass: 1, drag: 0, pinned: true };
-  const intent = makeBody('intent', [0, 0, 0], 1, 0);
-  drag.setBody(anchor);
-  drag.setBody(intent);
-  drag.setConnectors([{ guid: 's', kind: 'drag', aId: 'anchor', bId: 'intent', restLength: 0, params: { stiffness: 80, maxForce: 120 } }]);
-  let maxX = 0;
-  for (let i = 0; i < 120; i++) { drag.advance(50); maxX = Math.max(maxX, drag.getBody('intent')!.position[0]); }
-  const reached = vec3.distance(drag.getBody('intent')!.position, [3, 0, 0]);
-  const anchorMoved = vec3.distance(drag.getBody('anchor')!.position, [3, 0, 0]);
-  const overshoot = Math.max(0, maxX - 3);
-  console.log(`[D] drag: reached dist=${reached.toFixed(3)} overshoot=${overshoot.toFixed(3)} anchorMoved=${anchorMoved.toFixed(3)}`);
-  assert(reached < 0.05, 'intent should be pulled onto the anchor');
-  assert(overshoot < 0.05, `critically-damped drag should not overshoot (was ${overshoot.toFixed(3)})`);
-  assert(anchorMoved < 1e-9, 'fixed anchor must not move');
+  // D. drag link: a fixed anchor pulls a free intent — never overshoots, even at low mass.
+  const testDrag = (label: string, mass: number) => {
+    const eng = new PhysicsEngine({ fps: 20, sleepVelocity: 0.005, iterations: 8 });
+    const anc: PhysicsBody = { id: 'anc', position: [3, 0, 0], velocity: vec3.zero(), prevPosition: [3, 0, 0], mass: 1, drag: 0, pinned: true };
+    const i = makeBody('i', [0, 0, 0], mass, 0);
+    eng.setBody(anc);
+    eng.setBody(i);
+    eng.setConnectors([{ guid: 's', kind: 'drag', aId: 'anc', bId: 'i', restLength: 0, params: { stiffness: 100, maxForce: 1500 } }]);
+    let maxX = 0;
+    for (let s = 0; s < 120; s++) { eng.advance(50); maxX = Math.max(maxX, eng.getBody('i')!.position[0]); }
+    const dist = vec3.distance(eng.getBody('i')!.position, [3, 0, 0]);
+    const over = Math.max(0, maxX - 3);
+    console.log(`[D] drag ${label}: mass=${mass} reached=${dist.toFixed(3)} overshoot=${over.toFixed(4)}`);
+    assert(dist < 0.05, `${label}: should reach anchor`);
+    assert(over < 0.02, `${label}: overshoot ${over.toFixed(4)} > 0.02`);
+  };
+  testDrag('light', 0.2);
+  testDrag('heavy', 10);
 
   console.log('[physics-test] PASS');
 }

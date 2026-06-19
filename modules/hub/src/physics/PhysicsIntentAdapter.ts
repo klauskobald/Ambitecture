@@ -189,6 +189,9 @@ export class PhysicsIntentAdapter {
       }
       const position = update.patch?.['position'];
       if (Array.isArray(position) && position.length === 3 && this.engine.getBody(update.guid)) {
+        // Edit-mode drags don't carry an explicit `drag` marker, so a new drag must release any
+        // other stale anchors — otherwise old drags freeze intents that should follow via connectors.
+        if (!update.drag) this.clearAllDragsExcept(update.guid);
         this.driveAnchor(update.guid, this.toVec3(position));
         woke = true;
         continue;
@@ -224,6 +227,14 @@ export class PhysicsIntentAdapter {
     this.engine.removeBody(drag.anchorId);
     this.activeDrags.delete(intentGuid);
     this.engine.wake();
+  }
+
+  /** Drop every active drag anchor except `keepGuid`. Used when an edit-mode drag starts — only the
+   *  just-grabbed intent should be anchored so connected intents move freely via their connectors. */
+  private clearAllDragsExcept(keepGuid: string): void {
+    for (const guid of [...this.activeDrags.keys()]) {
+      if (guid !== keepGuid) this.clearDrag(guid);
+    }
   }
 
   /** Fixed anchor body: pinned (immovable, so the intent cannot affect it — the requested "A is fixed"). */

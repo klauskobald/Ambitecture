@@ -5,11 +5,18 @@ import { RuntimeIntentStore } from './RuntimeIntentStore';
 import { RuntimeUpdate } from './RuntimeProtocol';
 
 export class RuntimeUpdateDispatcher {
+  private updateListener?: (updates: RuntimeUpdate[]) => void;
+
   constructor(
     private registry: ConnectionRegistry,
     private eventQueue: EventQueue,
     private runtimeIntentStore: RuntimeIntentStore,
   ) {}
+
+  /** Observe every dispatched update (e.g. the physics adapter wakes on external intent moves). */
+  setUpdateListener(listener: (updates: RuntimeUpdate[]) => void): void {
+    this.updateListener = listener;
+  }
 
   /** Delegates to {@link RuntimeIntentStore.clear} — same invalidation triggers as before. */
   clearRuntimeIntentMergeCache(): void {
@@ -34,6 +41,7 @@ export class RuntimeUpdateDispatcher {
   ): void {
     if (updates.length === 0) return;
 
+    this.updateListener?.(updates);
     this.forwardRuntimeUpdates(updates, location, excludeControllerSockets);
     const rendererEvents = this.runtimeIntentStore.processRuntimeUpdates(updates, now);
     if (rendererEvents.length > 0) {

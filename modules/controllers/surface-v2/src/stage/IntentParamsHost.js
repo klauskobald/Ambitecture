@@ -1,4 +1,5 @@
 import { PropertyPanel } from '../edit/PropertyPanel.js'
+import { ConnectionsEditor } from '../edit/ConnectionsEditor.js'
 import { selectionState } from '../edit/selectionState.js'
 import { projectGraph } from '../core/projectGraph.js'
 import { intentName } from '../core/stores.js'
@@ -21,6 +22,8 @@ export class IntentParamsHost {
     this._title = null
     /** @type {PropertyPanel | null} */
     this._panel = null
+    /** @type {ConnectionsEditor | null} */
+    this._connections = null
     /** @type {HTMLElement | null} */
     this._footer = null
     /** @type {HTMLButtonElement | null} */
@@ -139,6 +142,10 @@ export class IntentParamsHost {
       this._panel.destroy()
       this._panel = null
     }
+    if (this._connections) {
+      this._connections.destroy()
+      this._connections = null
+    }
     if (this._body) this._body.replaceChildren()
     if (this._selectionUnsub) {
       this._selectionUnsub()
@@ -201,14 +208,30 @@ export class IntentParamsHost {
     if (!this._body || !this._title) return
     if (this._panel) {
       this._panel.destroy()
-      this._body.replaceChildren()
     }
+    if (this._connections) {
+      this._connections.destroy()
+      this._connections = null
+    }
+    this._body.replaceChildren()
     this._currentGuids = guids
     this._refreshTitle()
     this._panel = new PropertyPanel(this._lastDescriptors, guids.size, guids)
     this._body.appendChild(this._panel.buildElement())
     this._panel.refresh(guids)
+    this._maybeBuildConnections(guids)
     this._refreshFooterActions()
+  }
+
+  /** Connections editor only makes sense for a single non-master intent. @param {Set<string>} guids */
+  _maybeBuildConnections (guids) {
+    if (!this._body || guids.size !== 1) return
+    const [guid] = [...guids]
+    const intent = projectGraph.getEffectiveIntent(guid)
+    if (!intent || typeof intent !== 'object' || Array.isArray(intent)) return
+    if (/** @type {Record<string, unknown>} */ (intent).class === 'master') return
+    this._connections = new ConnectionsEditor(guid)
+    this._body.appendChild(this._connections.buildElement())
   }
 
   _refreshFooterActions () {

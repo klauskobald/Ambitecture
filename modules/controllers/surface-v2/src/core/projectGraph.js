@@ -111,6 +111,10 @@ class ProjectGraph {
       snapshots: /** @type {Map<string, Record<string, unknown>>} */ (
         new Map()
       ),
+      /** Hub `entities.connector` (physical links between intents) from `graph:init` + `graph:delta`. */
+      connectors: /** @type {Map<string, Record<string, unknown>>} */ (
+        new Map()
+      ),
       activeSceneGuid: /** @type {string | null} */ (null),
       /** Hub hint: perform merge overlaps these scene intent GUIDs — show reset when non-empty. */
       runtimeOverlayGuidsInScene: /** @type {string[]} */ ([]),
@@ -460,6 +464,40 @@ class ProjectGraph {
   /** @returns {Map<string, Record<string, unknown>>} */
   getSnapshots () {
     return this._data.snapshots
+  }
+
+  /** @returns {Map<string, Record<string, unknown>>} */
+  getConnectors () {
+    return this._data.connectors
+  }
+
+  /**
+   * Connector entities referencing `intentGuid` on either end.
+   * @param {string} intentGuid
+   * @returns {Array<Record<string, unknown>>}
+   */
+  getConnectorsForIntent (intentGuid) {
+    const out = []
+    for (const c of this._data.connectors.values()) {
+      if (c.aGuid === intentGuid || c.bGuid === intentGuid) out.push(c)
+    }
+    return out
+  }
+
+  /**
+   * Optimistic local upsert of a connector (the hub suppresses the source's own echo, so the editor
+   * applies its change immediately). @param {Record<string, unknown>} record
+   */
+  putConnectorRecord (record) {
+    const guid = typeof record.guid === 'string' ? record.guid : ''
+    if (!guid) return
+    this._data.connectors.set(guid, { ...record, guid })
+    this._notify('connectors')
+  }
+
+  /** @param {string} guid */
+  removeConnectorLocal (guid) {
+    if (this._data.connectors.delete(guid)) this._notify('connectors')
   }
 
   /**
@@ -1397,6 +1435,23 @@ class ProjectGraph {
             )
           )
         }
+        this._data.connectors.clear()
+        const connectorMap = /** @type {Record<string, unknown>} */ (
+          entitiesRaw
+        ).connector
+        if (
+          connectorMap &&
+          typeof connectorMap === 'object' &&
+          !Array.isArray(connectorMap)
+        ) {
+          for (const [guid, raw] of Object.entries(connectorMap)) {
+            if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue
+            this._data.connectors.set(guid, {
+              .../** @type {Record<string, unknown>} */ (raw),
+              guid
+            })
+          }
+        }
       }
 
       const rawSnapshots = Array.isArray(p?.snapshots)
@@ -1420,6 +1475,7 @@ class ProjectGraph {
       'pulses',
       'animations',
       'snapshots',
+      'connectors',
       'controller',
       'runtimeOverlayHints'
     ])
@@ -1510,6 +1566,10 @@ class ProjectGraph {
           case 'snapshot':
             this._applyEntityDelta(this._data.snapshots, guid, op, delta)
             this._notify('snapshots')
+            break
+          case 'connector':
+            this._applyEntityDelta(this._data.connectors, guid, op, delta)
+            this._notify('connectors')
             break
           case 'project':
             // _applyProjectDelta touches activeSceneGuid + runtimeOverlayHints.

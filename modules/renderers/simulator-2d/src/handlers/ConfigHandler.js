@@ -83,6 +83,7 @@ class ConfigHandler {
     }
 
     this.renderer.setFixtures(this.fixtures)
+    this.renderer.setConnectors(message.payload.connectors ?? [])
     console.log(
       `[config] ${this.fixtures.length} fixture(s) across ${this.zones.length} zone(s)`
     )

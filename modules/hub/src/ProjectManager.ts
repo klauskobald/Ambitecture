@@ -36,9 +36,21 @@ export interface ControllerIntent {
   radius?: number;
   radiusFunction?: string;
   layer?: number;
+  mass?: number;
+  drag?: number;
   class: string;
   params: Record<string, unknown>;
   perform?: IntentPerformSettings;
+}
+
+/** A physical link between two intents (rod/spring/rope), referenced symmetrically by both endpoints. */
+export interface ConnectorEntity {
+  guid: string;
+  kind: 'rod' | 'spring' | 'rope';
+  aGuid: string;
+  bGuid: string;
+  restLength?: number;
+  params: Record<string, number>;
 }
 
 export interface Scene {
@@ -921,6 +933,39 @@ export class ProjectManager {
     return [...this.intentDefinitions.values()];
   }
 
+  /** Raw connector records from the top-level `connectors` collection (wire shape, no coercion). */
+  getConnectorsWirePayload(): Array<Record<string, unknown>> {
+    const raw = (this.project as unknown as Record<string, unknown>)?.['connectors'];
+    return Array.isArray(raw) ? (raw as Array<Record<string, unknown>>) : [];
+  }
+
+  /** Validated physical links (rod/spring/rope) between intents. */
+  getConnectors(): ConnectorEntity[] {
+    const out: ConnectorEntity[] = [];
+    for (const raw of this.getConnectorsWirePayload()) {
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+      const guid = raw['guid'];
+      const kind = raw['kind'];
+      const aGuid = raw['aGuid'];
+      const bGuid = raw['bGuid'];
+      if (typeof guid !== 'string') continue;
+      if (kind !== 'rod' && kind !== 'spring' && kind !== 'rope') continue;
+      if (typeof aGuid !== 'string' || typeof bGuid !== 'string') continue;
+      const params = raw['params'];
+      out.push({
+        guid,
+        kind,
+        aGuid,
+        bGuid,
+        ...(typeof raw['restLength'] === 'number' ? { restLength: raw['restLength'] } : {}),
+        params: params && typeof params === 'object' && !Array.isArray(params)
+          ? (params as Record<string, number>)
+          : {},
+      });
+    }
+    return out;
+  }
+
   getGraphEntities(): Record<string, Record<string, Record<string, unknown>>> {
     const entities: Record<string, Record<string, Record<string, unknown>>> = {};
     const add = (entityType: string, guid: unknown, value: Record<string, unknown>): void => {
@@ -1383,6 +1428,7 @@ export class ProjectManager {
     const result = {
       projectName: this.project.name,
       zones: zones.map((z) => this.serializeZone(z)),
+      connectors: this.getConnectors(),
     };
     Logger.info(`[project] buildRendererConfig(${rendererGuid}): ${zones.length} zone(s), ${zones.reduce((n, z) => n + z.fixtures.length, 0)} fixture(s)`);
     return result;

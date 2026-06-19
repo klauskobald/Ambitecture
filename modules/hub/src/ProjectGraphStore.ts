@@ -20,6 +20,12 @@ import { composeDefaultAnimationExecuteParams } from './inputAssignment/composeA
 
 export class ProjectGraphStore {
   private revision = 0;
+  private connectivityListener?: () => void;
+
+  /** Notified after any durable intent/connector change so the physics adapter can rebuild bodies/links. */
+  setConnectivityListener(listener: () => void): void {
+    this.connectivityListener = listener;
+  }
 
   constructor(
     private projectManager: ProjectManager,
@@ -160,6 +166,8 @@ export class ProjectGraphStore {
           runtimeMergeClear !== undefined ? { runtimeMergeClear } : undefined,
         );
       }
+      case 'connector':
+        return this.applyConnectorCommand(command);
       case 'controller':
         return this.applyControllerCommand(command);
       case 'animation':
@@ -247,13 +255,15 @@ export class ProjectGraphStore {
       this.projectManager.setProjectData('intents', remaining);
       this.runtimeMerge?.clearRuntimeIntentMergeCache();
       this.animationManager?.onIntentRemovedFromProject(command.guid);
+      const cascadeDeltas = this.removeConnectorsReferencing(command.guid);
       const now = Date.now();
       const delta = this.makeDelta({ ...command, persistence: 'runtimeAndDurable' });
+      this.connectivityListener?.();
       return {
         revision: this.revision,
-        controllerDeltas: [delta],
+        controllerDeltas: [delta, ...cascadeDeltas],
         rendererEvents: [intentRemovalEvent(existing, now)],
-        rendererConfigChangedFor: [],
+        rendererConfigChangedFor: cascadeDeltas.length > 0 ? this.getAllRendererGuids() : [],
         durableChanged: true,
       };
     }
@@ -283,12 +293,59 @@ export class ProjectGraphStore {
       ? [intentToEvent(transformIntentToNormalized(eff), now + (eff.scheduled ?? 0))]
       : [];
     this.runtimeMerge?.clearRuntimeIntentMergeCache();
+    if (durableChanged) this.connectivityListener?.();
     return {
       revision: this.revision,
       controllerDeltas: [delta],
       rendererEvents,
       rendererConfigChangedFor: [],
       durableChanged,
+    };
+  }
+
+  /** Connector entities reference two intents; remove every link touching `intentGuid` and return their deltas. */
+  private removeConnectorsReferencing(intentGuid: string): GraphDelta[] {
+    const connectors = this.projectManager.getConnectorsWirePayload();
+    const orphaned = connectors.filter(c => c['aGuid'] === intentGuid || c['bGuid'] === intentGuid);
+    if (orphaned.length === 0) return [];
+    const remaining = connectors.filter(c => c['aGuid'] !== intentGuid && c['bGuid'] !== intentGuid);
+    this.projectManager.setProjectData('connectors', remaining);
+    return orphaned.map(c => this.makeDelta({
+      op: 'remove',
+      entityType: 'connector',
+      guid: String(c['guid'] ?? ''),
+      persistence: 'runtimeAndDurable',
+    }));
+  }
+
+  private applyConnectorCommand(command: GraphCommand): GraphMutationResult {
+    const connectors = this.projectManager.getConnectorsWirePayload();
+    const nextConnectors = command.op === 'remove'
+      ? connectors.filter(c => c['guid'] !== command.guid)
+      : connectors.map(c => {
+        if (c['guid'] !== command.guid) return c;
+        const base = cloneRecord(c);
+        const next = command.patch || command.remove
+          ? applyDotPathPatch(base, command.patch ?? {}, command.remove)
+          : cloneRecord(command.value ?? base);
+        next['guid'] = command.guid;
+        return next;
+      });
+    const existing = connectors.some(c => c['guid'] === command.guid);
+    if (!existing && command.op !== 'remove') {
+      const value = cloneRecord(command.value ?? { guid: command.guid });
+      value['guid'] = command.guid;
+      nextConnectors.push(value);
+    }
+    this.projectManager.setProjectData('connectors', nextConnectors);
+    const delta = this.makeDelta({ ...command, persistence: command.persistence ?? 'runtimeAndDurable' });
+    this.connectivityListener?.();
+    return {
+      revision: this.revision,
+      controllerDeltas: [delta],
+      rendererEvents: [],
+      rendererConfigChangedFor: this.getAllRendererGuids(),
+      durableChanged: true,
     };
   }
 

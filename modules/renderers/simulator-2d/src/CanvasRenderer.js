@@ -23,6 +23,8 @@ class CanvasRenderer {
 
     this._events = new Map()
     this._eventDrawConfig = bootConfig.EVENT_DRAW
+    this._connectors = []
+    this._connectorDrawConfig = bootConfig.CONNECTOR_DRAW
     /** @type {EventsHandler | null} */
     this._eventsHandler = null
 
@@ -115,6 +117,16 @@ class CanvasRenderer {
     this.fixtures = fixtures
   }
 
+  /** @param {Array<{ kind: string, aGuid: string, bGuid: string }>} list connector records from hub config */
+  setConnectors (list) {
+    this._connectors = []
+    for (const record of Array.isArray(list) ? list : []) {
+      const ConnectorClass = ConnectorBase.getKind(record.kind)
+      if (!ConnectorClass) continue
+      this._connectors.push(new ConnectorClass(record, this._connectorDrawConfig))
+    }
+  }
+
   /** @param {EventsHandler} eventsHandler */
   setEventsHandler (eventsHandler) {
     this._eventsHandler = eventsHandler
@@ -165,6 +177,15 @@ class CanvasRenderer {
         fixture.location[2]
       )
       fixture.draw(ctx, cx, cy, this.ppm)
+    }
+
+    for (const connector of this._connectors) {
+      const a = this._events.get(connector.aGuid)
+      const b = this._events.get(connector.bGuid)
+      if (!a || !b) continue
+      const pa = this.worldToCanvas(a.position[0], a.position[2])
+      const pb = this.worldToCanvas(b.position[0], b.position[2])
+      connector.draw(ctx, pa.cx, pa.cy, pb.cx, pb.cy)
     }
 
     for (const [, ev] of this._events) {

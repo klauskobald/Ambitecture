@@ -1,0 +1,68 @@
+/* Intent connection editor — embedded in the stage-edit params overlay body. */
+
+.connections-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.connections-editor__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.connections-editor__title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.connections-editor__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.connections-editor__row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.connections-editor__name {
+  flex: 0 1 6rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.connections-editor__param {
+  flex: 1 1 6rem;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.connections-editor__kind {
+  flex: 0 0 auto;
+}
+
+.connections-editor__trash {
+  flex: 0 0 auto;
+  padding: 0.2rem 0.4rem;
+}
+
+.connections-editor__empty {
+  font-size: 0.75rem;
+  opacity: 0.6;
+}

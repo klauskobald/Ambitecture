@@ -1,5 +1,11 @@
 dataDir: ../../var
 
+# Connector physics solver (hub-side). Speeds are frame-rate independent of `fps`.
+physics:
+  fps: 20
+  sleepVelocity: 0.0005
+  iterations: 8
+
 systemCapabilities:
 
   animationActionProperties:
@@ -64,6 +70,29 @@ systemCapabilities:
     - sqrt
     - smoothstep
     - hard
+
+  # Physical link types an intent can form with another intent (rod/spring/rope) and their tunable params.
+  connectorTypes:
+    - kind: rod
+      name: Rod
+      params:
+        - dotKey: rotationSpring
+          name: Rotation
+          range: [0, 1]
+          step: 0.01
+          defaultValue: 1
+    - kind: spring
+      name: Spring
+      params:
+        - dotKey: springForce
+          name: Force
+          range: [0.1, 0.9]
+          step: 0.01
+          defaultValue: 0.5
+    - kind: rope
+      name: Rope
+      params: []
+
   intentProperties:
     # these are the properties that are available for all intents and show up in the controllers.
     master:
@@ -207,6 +236,23 @@ systemCapabilities:
         defaultValue: 0
         delta:
           value: { fn: ADD, range: [-1, 1] }
+      - dotKey: mass
+        name: Mass
+        type: number
+        display: scalar
+        range: [0.1, 10]
+        step: 0.1
+        stepFunction: quadratic
+        defaultValue: 1
+        isMandatory: true
+      - dotKey: drag
+        name: Drag
+        type: number
+        display: scalar
+        range: [0, 1]
+        step: 0.01
+        defaultValue: 0
+        isMandatory: true
       - dotKey: position
         name: Position
         allowOverlay: true
@@ -299,6 +345,23 @@ systemCapabilities:
         defaultValue: 0.5
         isMandatory: true
         quickPanel: true
+      - dotKey: mass
+        name: Mass
+        type: number
+        display: scalar
+        range: [0.1, 10]
+        step: 0.1
+        stepFunction: quadratic
+        defaultValue: 1
+        isMandatory: true
+      - dotKey: drag
+        name: Drag
+        type: number
+        display: scalar
+        range: [0, 1]
+        step: 0.01
+        defaultValue: 0
+        isMandatory: true
       - dotKey: position
         name: Position
         type: vector3

@@ -35,4 +35,55 @@ const CanvasDraw = {
         ctx.textAlign = 'center';
         ctx.fillText(text, cx, cy + radius + 12);
     },
+
+    drawLine(ctx, ax, ay, bx, by, color, width) {
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(bx, by);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.stroke();
+    },
+
+    /** Zigzag spring between (ax,ay) and (bx,by): peaks alternate perpendicular to the axis. */
+    drawZigzag(ctx, ax, ay, bx, by, amplitude, period, color, width) {
+        const dx = bx - ax;
+        const dy = by - ay;
+        const len = Math.hypot(dx, dy);
+        if (len < 1) {
+            CanvasDraw.drawLine(ctx, ax, ay, bx, by, color, width);
+            return;
+        }
+        const ux = dx / len;
+        const uy = dy / len;
+        const px = -uy;
+        const py = ux;
+        const segments = Math.max(2, Math.round(len / period));
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        for (let i = 1; i < segments; i++) {
+            const t = i / segments;
+            const sign = i % 2 === 0 ? 1 : -1;
+            const cx = ax + dx * t + px * amplitude * sign;
+            const cy = ay + dy * t + py * amplitude * sign;
+            ctx.lineTo(cx, cy);
+        }
+        ctx.lineTo(bx, by);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.stroke();
+    },
+
+    /** @param {Array<[number, number]>} points */
+    drawPolyline(ctx, points, color, width) {
+        if (!points || points.length < 2) return;
+        ctx.beginPath();
+        ctx.moveTo(points[0][0], points[0][1]);
+        for (let i = 1; i < points.length; i++) {
+            ctx.lineTo(points[i][0], points[i][1]);
+        }
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.stroke();
+    },
 };

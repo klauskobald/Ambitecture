@@ -118,6 +118,29 @@ export function getInputTypes () {
 }
 
 /**
+ * Connector kinds (rod/spring/rope) and their tunable params from hub
+ * `systemCapabilities.connectorTypes`. Drives the intent connection editor.
+ * @returns {{ kind: string, name: string, params: Record<string, unknown>[] }[] | null}
+ */
+export function getConnectorTypes () {
+  if (!_caps) return null
+  const raw = /** @type {unknown[] | undefined} */ (_caps.connectorTypes)
+  if (!Array.isArray(raw)) return null
+  const out = []
+  for (const item of raw) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+    const e = /** @type {Record<string, unknown>} */ (item)
+    if (typeof e.kind !== 'string') continue
+    out.push({
+      kind: e.kind,
+      name: typeof e.name === 'string' ? e.name : e.kind,
+      params: Array.isArray(e.params) ? /** @type {Record<string, unknown>[]} */ (e.params) : []
+    })
+  }
+  return out.length > 0 ? out : null
+}
+
+/**
  * Resolve animation command descriptors for a given animator class from
  * `systemCapabilities.animations[class].commands` (merged by hub RegisterHandler).
  * @param {string} animClass

@@ -33,6 +33,7 @@
   gap: 0.5rem;
   padding: 0.35rem 0.5rem;
   border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-leaf-header);
 }
 
 .stage-edit-params-overlay__title {

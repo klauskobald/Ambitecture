@@ -83,6 +83,11 @@ export class OverlayCanvas {
      * @type {{ pointerId: number, kind: 'intent' | 'fixture', targetId: string, downX: number, downY: number, timer: number } | null}
      */
     this._pendingHeightHold = null
+    /**
+     * Object currently open in an editor — drawn with a dashed ring until the editor closes.
+     * @type {{ kind: 'intent' | 'fixture', id: string } | null}
+     */
+    this._editHighlight = null
     /** @type {((guid: string) => void) | null} */
     this._doubleTapIntentCallback = null
     /** @type {((guid: string) => void) | null} */
@@ -116,6 +121,15 @@ export class OverlayCanvas {
    */
   setCoactivityCallback (fn) {
     this._coactivity = fn
+  }
+
+  /**
+   * Highlight the object currently open in an editor with a dashed ring. Pass null to clear.
+   * @param {{ kind: 'intent' | 'fixture', id: string } | null} target
+   */
+  setEditHighlight (target) {
+    this._editHighlight = target
+    this.markRenderActivity()
   }
 
   /** Extends the animated redraw window (see `_inactivityStopMs`) and ensures one rAF chain is scheduled. */
@@ -305,6 +319,9 @@ export class OverlayCanvas {
           }
         }
       }
+
+      // dashed ring around the object whose editor is open
+      this._drawEditHighlight(ctx, spatial, simRect, rect)
 
       // selection manager bubbles — drawn last so they appear on top
       if (this._selectionManager) {
@@ -755,6 +772,44 @@ export class OverlayCanvas {
     if (!spatial) return
     const m = overlayClientToBboxMeters(clientX, clientY, this._canvas, spatial)
     if (!m) return
+  }
+
+  /**
+   * Dashed ring around the object whose editor is open (intent or fixture), mirroring the
+   * connection-pick bubble in blue.
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {HubSpatialState} spatial
+   * @param {DOMRect} simRect
+   * @param {DOMRect} rect
+   */
+  _drawEditHighlight (ctx, spatial, simRect, rect) {
+    const pos = this._editHighlightPosition()
+    if (!pos) return
+    const { px, py } = worldToCanvas(pos[0], pos[2], spatial, simRect, rect)
+    ctx.save()
+    ctx.beginPath()
+    ctx.arc(px, py, 26, 0, Math.PI * 2)
+    ctx.strokeStyle = 'rgba(90, 176, 255, 0.95)'
+    ctx.lineWidth = 3
+    ctx.setLineDash([6, 4])
+    ctx.stroke()
+    ctx.restore()
+  }
+
+  /** @returns {number[] | null} world position of the edited object, or null. */
+  _editHighlightPosition () {
+    const target = this._editHighlight
+    if (!target) return null
+    const record =
+      target.kind === 'intent'
+        ? projectGraph.getEffectiveIntent(target.id) ??
+          projectGraph.getIntents().get(target.id)
+        : projectGraph.getFixtures().get(target.id)
+    if (!record || typeof record !== 'object' || Array.isArray(record)) return null
+    const pos = /** @type {number[] | undefined} */ (
+      /** @type {Record<string, unknown>} */ (record).position
+    )
+    return Array.isArray(pos) && pos.length >= 3 ? pos : null
   }
 
   /**

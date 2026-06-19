@@ -3,6 +3,7 @@ import { projectGraph } from '../../core/projectGraph.js'
 import { getCapabilities } from '../../core/systemCapabilities.js'
 import { queueFixturePropertyUpdate } from '../../core/outboundQueue.js'
 import { findLayoutTagHost } from '../../stage/layoutTagHost.js'
+import { getStageOverlay } from '../../stage/stageOverlayHost.js'
 import { loadFixtureEditor } from './loadFixtureEditor.js'
 
 /**
@@ -85,6 +86,7 @@ export class FixtureParamsHost {
     this._overlayEl.hidden = false
     this._overlayEl.setAttribute('aria-hidden', 'false')
     this._rebuild(guid, editor, profile)
+    getStageOverlay()?.setEditHighlight({ kind: 'fixture', id: guid })
 
     if (!this._graphUnsub) {
       this._graphUnsub = projectGraph.subscribe(['fixtures', 'project'], () =>
@@ -105,6 +107,7 @@ export class FixtureParamsHost {
       this._graphUnsub = null
     }
     this._currentGuid = null
+    getStageOverlay()?.setEditHighlight(null)
   }
 
   /**
@@ -164,7 +167,7 @@ export class FixtureParamsHost {
     this._refreshTitle(guid)
 
     const guids = new Set([guid])
-    this._appendSection('Fixture', editor.rootDescriptors(), guids)
+    this._appendSection(null, editor.rootDescriptors(), guids)
     const paramDescriptors = editor.paramDescriptors(profile)
     if (paramDescriptors.length > 0) {
       this._appendSection('Parameters', paramDescriptors, guids)
@@ -177,7 +180,7 @@ export class FixtureParamsHost {
   }
 
   /**
-   * @param {string} title
+   * @param {string | null} title  heading label; `null` renders the panel with no heading box
    * @param {unknown[]} descriptors
    * @param {Set<string>} guids
    */
@@ -186,13 +189,15 @@ export class FixtureParamsHost {
     const section = document.createElement('section')
     section.className = 'prop-panel-section'
 
-    const heading = document.createElement('div')
-    heading.className = 'prop-row prop-row--group-heading'
-    const label = document.createElement('span')
-    label.className = 'prop-row__label'
-    label.textContent = title
-    heading.appendChild(label)
-    section.appendChild(heading)
+    if (title !== null) {
+      const heading = document.createElement('div')
+      heading.className = 'prop-row prop-row--group-heading'
+      const label = document.createElement('span')
+      label.className = 'prop-row__label'
+      label.textContent = title
+      heading.appendChild(label)
+      section.appendChild(heading)
+    }
 
     // Resolve optionsRef for fixture descriptors (they bypass resolveDescriptorsForClass). Mirrors
     // the one-liner in systemCapabilities.resolveDescriptorsForClass: { ...d, options: caps[ref] }.
@@ -217,7 +222,7 @@ export class FixtureParamsHost {
     if (!this._title) return
     const record = projectGraph.getEffectiveFixture(guid)
     const name = record && typeof record.name === 'string' ? record.name : guid
-    this._title.textContent = `Modify: ${name}`
+    this._title.textContent = `Fixture: ${name}`
   }
 
   _onGraphChange () {

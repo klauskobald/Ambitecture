@@ -156,6 +156,7 @@ export class IntentParamsHost {
       this._graphUnsub = null
     }
     this._currentGuids = new Set()
+    getStageOverlay()?.setEditHighlight(null)
     selectionState.clearAll()
   }
 
@@ -222,6 +223,19 @@ export class IntentParamsHost {
     this._panel.refresh(guids)
     this._maybeBuildConnections(guids, panelEl)
     this._refreshFooterActions()
+    this._syncEditHighlight()
+  }
+
+  /** Highlight the edited intent on the stage; only for a single-object edit. */
+  _syncEditHighlight () {
+    const overlay = getStageOverlay()
+    if (!overlay) return
+    if (this._currentGuids.size === 1) {
+      const [g] = [...this._currentGuids]
+      overlay.setEditHighlight({ kind: 'intent', id: g })
+    } else {
+      overlay.setEditHighlight(null)
+    }
   }
 
   /**
@@ -275,7 +289,7 @@ export class IntentParamsHost {
       const [g] = [...guids]
       const intent = projectGraph.getEffectiveIntent(g)
       const n = intentName(intent)
-      this._title.textContent = n ? `Modify: ${n}` : `Modify: ${g}`
+      this._title.textContent = n ? `Intent: ${n}` : `Intent: ${g}`
       return
     }
     this._title.textContent = `Modifying ${size} intents`

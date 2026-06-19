@@ -3,7 +3,7 @@ dataDir: ../../var
 # Connector physics solver (hub-side). Speeds are frame-rate independent of `fps`.
 physics:
   fps: 20
-  sleepVelocity: 0.0005
+  sleepVelocity: 0.01
   iterations: 8
   # Perform-dragging pulls the intent to a fixed anchor via a critically-damped drag link, so its mass
   # governs lag. maxForce caps the impulse propagated into the connection chain (stability). The drag is

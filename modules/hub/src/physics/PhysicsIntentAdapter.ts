@@ -70,15 +70,20 @@ export class PhysicsIntentAdapter {
    *  raw position updates pass through unclaimed (edit-mode placement). When re-enabled, bodies/connectors
    *  are rebuilt fresh from the project (picking up any restLength changes made while disabled). */
   setEnabled(enable: boolean): void {
-    if (enable === this.enabled) return;
+    if (enable === this.enabled) {
+      Logger.info(`[physics] setEnabled(${enable}) — already in that state, skipped`);
+      return;
+    }
     this.enabled = enable;
     if (!enable) {
       for (const drag of [...this.activeDrags.values()]) this.clearDrag(drag.intentGuid);
       this.engine.stop();
+      Logger.info(`[physics] disabled — engine stopped`);
     } else {
       this.rebuild();
+      this.engine.wake();
+      Logger.info(`[physics] enabled — rebuilt ${this.engine.bodyCount} bodies, engine woken`);
     }
-    Logger.info(`[physics] ${enable ? 'enabled' : 'disabled'}`);
   }
 
   /** Rebuild bodies, connectors and bounds from the current project. Idempotent; safe to call on any graph change. */
@@ -154,22 +159,22 @@ export class PhysicsIntentAdapter {
   }
 
   /**
-   * Handle the perform-drag lifecycle carried on runtime updates. `drag:'move'` grabs/holds the intent
-   * on a fixed physics anchor (so its mass governs lag and connected intents follow); `drag:'end'`
-   * releases it on pointer-up — exactly when the user lets go, never on a timeout. Both are consumed so
-   * the raw position never reaches renderers (the engine owns the dragged intent's rendered position).
-   * Everything else — physics output, edit-mode placement, animations, non-intent updates — passes through.
+   * When physics is **enabled**, any external position update for an intent the engine owns is claimed
+   * and redirected into a drag anchor — whether it carries a `drag` marker (perform: explicit release on
+   * `drag:'end'`) or not (edit: anchor persists at the last cursor position until disabled). When
+   * **disabled**, all position updates pass through as raw direct writes so intents can be freely
+   * rearranged without forces.
    */
   private intercept(updates: RuntimeUpdate[]): RuntimeUpdate[] {
     let woke = false;
     const passthrough: RuntimeUpdate[] = [];
     for (const update of updates) {
       if (update.entityType === 'physics') {
+        Logger.info(`[physics] interceptor received physics toggle: enabled=${update.patch?.enabled}`);
         this.setEnabled(!!update.patch?.enabled);
         continue;
       }
-      const isDrag = update.entityType === 'intent' && update.source !== PHYSICS_SOURCE && update.drag;
-      if (!isDrag) {
+      if (update.entityType !== 'intent' || update.source === PHYSICS_SOURCE) {
         passthrough.push(update);
         continue;
       }
@@ -179,7 +184,6 @@ export class PhysicsIntentAdapter {
         continue;
       }
       if (!this.enabled) {
-        // Physics disabled (edit mode, toggle off): pass drag through as raw position.
         passthrough.push(update);
         continue;
       }
@@ -187,9 +191,9 @@ export class PhysicsIntentAdapter {
       if (Array.isArray(position) && position.length === 3 && this.engine.getBody(update.guid)) {
         this.driveAnchor(update.guid, this.toVec3(position));
         woke = true;
-      } else {
-        passthrough.push(update);
+        continue;
       }
+      passthrough.push(update);
     }
     if (woke) this.engine.wake();
     return passthrough;

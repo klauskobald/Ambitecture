@@ -1,3 +1,4 @@
+import { Logger } from '../Logger';
 import { PhysicsBody } from './PhysicsBody';
 import { vec3, type Vec3 } from './vec3';
 import { ConnectorBase, type ConnectorRecord } from './connectors/ConnectorBase';
@@ -77,9 +78,12 @@ export class PhysicsEngine {
     this.commitFn = fn;
   }
 
+  get bodyCount(): number { return this.bodies.size; }
+
   /** Start (or keep) the solver running. Call whenever an external move perturbs the network. */
   wake(): void {
     if (this.running) return;
+    Logger.info(`[physics engine] waking — ${this.bodies.size} bodies, ${this.connectors.length} connectors`);
     this.running = true;
     this.lastWallMs = Date.now();
     this.accumulatorMs = 0;
@@ -87,6 +91,8 @@ export class PhysicsEngine {
   }
 
   stop(): void {
+    Logger.info(`[physics engine] stop called — running=${this.running} timer=${!!this.timer}`);
+    if (!this.running && this.timer === undefined) return;
     this.running = false;
     if (this.timer !== undefined) {
       clearTimeout(this.timer);
@@ -100,14 +106,23 @@ export class PhysicsEngine {
     this.timer = setTimeout(() => this.onTick(), periodMs);
   }
 
+  private tickCount = 0;
+
   private onTick(): void {
     this.timer = undefined;
     if (!this.running) return;
+    this.tickCount += 1;
     const now = Date.now();
     const stillRunning = this.advance(now - this.lastWallMs);
     this.lastWallMs = now;
-    if (stillRunning) this.scheduleNextTick();
-    else this.running = false;
+    if (stillRunning) {
+      if (this.tickCount === 1) Logger.info(`[physics engine] tick #1 — will reschedule`);
+      this.scheduleNextTick();
+    } else {
+      Logger.info(`[physics engine] tick #${this.tickCount} — settled, going to sleep`);
+      this.tickCount = 0;
+      this.running = false;
+    }
   }
 
   /**

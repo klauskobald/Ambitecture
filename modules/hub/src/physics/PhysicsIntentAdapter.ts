@@ -188,18 +188,42 @@ export class PhysicsIntentAdapter {
         continue;
       }
       const position = update.patch?.['position'];
-      if (Array.isArray(position) && position.length === 3 && this.engine.getBody(update.guid)) {
-        // Edit-mode drags don't carry an explicit `drag` marker, so a new drag must release any
-        // other stale anchors — otherwise old drags freeze intents that should follow via connectors.
-        if (!update.drag) this.clearAllDragsExcept(update.guid);
+      const hasFullPos = Array.isArray(position) && position.length === 3;
+      const isAnim = update.source === 'hub:animation';
+      const body = this.engine.getBody(update.guid);
+
+      if (hasFullPos && body) {
+        const isEditDrag = !isAnim && !update.drag;
+        if (isEditDrag) this.clearAllDragsExcept(update.guid);
         this.driveAnchor(update.guid, this.toVec3(position));
         woke = true;
         continue;
       }
+
+      // Animation dot-path patches (e.g. `position.0`) don't carry a full position array, so the
+      // anchor can't be updated directly. Apply the patch to the body and sync the anchor so the
+      // animated intent tracks the keyframe position without fighting the engine.
+      if (update.patch && isAnim && update.drag === 'move' && body) {
+        this.applyPatchToBody(body, update.patch);
+        const anchor = this.findAnchorFor(update.guid);
+        if (anchor) anchor.position = vec3.clone(body.position);
+        woke = true;
+        continue;
+      }
+
       passthrough.push(update);
     }
     if (woke) this.engine.wake();
     return passthrough;
+  }
+
+  /** Create a persistent drag anchor at the intent's current position (used for animation start — the
+   *  anchor is already there, so no force spike). Subsequent position updates move it toward the target. */
+  private ensureAnchor(intentGuid: string): void {
+    if (this.activeDrags.has(intentGuid)) return;
+    const body = this.engine.getBody(intentGuid);
+    if (!body) return;
+    this.driveAnchor(intentGuid, body.position);
   }
 
   /** Move (or create) the fixed anchor the dragged intent is sprung to. Persists until an explicit release. */
@@ -216,6 +240,29 @@ export class PhysicsIntentAdapter {
       drag.anchorPos = anchorPos;
       const anchor = this.engine.getBody(drag.anchorId);
       if (anchor) anchor.position = anchorPos;
+    }
+  }
+
+  /** Find an existing drag anchor for this intent (if any). @returns the anchor body or undefined. */
+  private findAnchorFor(intentGuid: string): PhysicsBody | undefined {
+    const drag = this.activeDrags.get(intentGuid);
+    if (!drag) return undefined;
+    return this.engine.getBody(drag.anchorId);
+  }
+
+  /** Apply a dot-path patch (e.g. `position.0`) to a body's position. Only handles root `position.N` keys. */
+  private applyPatchToBody(body: PhysicsBody, patch: Record<string, unknown>): void {
+    for (const [key, value] of Object.entries(patch)) {
+      if (key === 'position' && Array.isArray(value) && value.length === 3) {
+        body.position = [Number(value[0]), Number(value[1]), Number(value[2])];
+        continue;
+      }
+      if (key.startsWith('position.')) {
+        const idx = Number(key.split('.')[1]);
+        if (idx >= 0 && idx < 3 && typeof value === 'number') {
+          body.position[idx] = value;
+        }
+      }
     }
   }
 

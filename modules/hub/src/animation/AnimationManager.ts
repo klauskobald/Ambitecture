@@ -137,6 +137,13 @@ export class AnimationManager {
   private unregisterNaturallyFinishedRunner(animationGuid: string): void {
     const existing = this.runners.get(animationGuid);
     if (!existing) return;
+    for (const guid of existing.targetIntentGuids) {
+      this.runtimeUpdateDispatcher.dispatch(
+        [{ entityType: 'intent', guid, drag: 'end', source: 'hub:animation' }],
+        undefined,
+        Date.now(),
+      );
+    }
     existing.plugin.stripTimers();
     this.runners.delete(animationGuid);
   }
@@ -251,7 +258,7 @@ export class AnimationManager {
 
     const mutateIntent: MutateIntentFn = (guid, patch) => {
       if (Object.keys(patch).length === 0) return;
-      const update: RuntimeUpdate = { entityType: 'intent', guid, patch, source: 'hub:animation' };
+      const update: RuntimeUpdate = { entityType: 'intent', guid, patch, source: 'hub:animation', drag: 'move' };
       this.runtimeUpdateDispatcher.dispatch([update], opts.location, Date.now());
     };
 
@@ -311,6 +318,13 @@ export class AnimationManager {
     const existing = this.runners.get(animationGuid);
     if (!existing) {
       return;
+    }
+    for (const guid of existing.targetIntentGuids) {
+      this.runtimeUpdateDispatcher.dispatch(
+        [{ entityType: 'intent', guid, drag: 'end', source: 'hub:animation' }],
+        undefined,
+        Date.now(),
+      );
     }
     existing.plugin.cancel(reason);
     this.runners.delete(animationGuid);

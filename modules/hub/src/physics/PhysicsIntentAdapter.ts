@@ -24,6 +24,7 @@ type Aabb = [number, number, number, number, number, number];
 export class PhysicsIntentAdapter {
   private bounds: Aabb | null = null;
   private readonly dragTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly dragSamples = new Map<string, { pos: Vec3; time: number }>();
   private participants = new Set<string>();
 
   constructor(
@@ -45,6 +46,7 @@ export class PhysicsIntentAdapter {
     this.engine.clear();
     for (const timer of this.dragTimers.values()) clearTimeout(timer);
     this.dragTimers.clear();
+    this.dragSamples.clear();
     this.participants.clear();
   }
 
@@ -109,6 +111,7 @@ export class PhysicsIntentAdapter {
   /** Called for every runtime update; an external (non-physics) move pins the body and wakes the solver. */
   private onRuntimeUpdates(updates: RuntimeUpdate[]): void {
     let woke = false;
+    const now = Date.now();
     for (const update of updates) {
       if (update.entityType !== 'intent' || update.source === PHYSICS_SOURCE) continue;
       if (!this.participants.has(update.guid)) continue;
@@ -116,8 +119,18 @@ export class PhysicsIntentAdapter {
       if (!Array.isArray(position) || position.length !== 3) continue;
       const body = this.engine.getBody(update.guid);
       if (!body) continue;
-      body.position = this.toVec3(position);
-      body.velocity = vec3.zero();
+      const nextPos = this.toVec3(position);
+      // Track drag velocity so releasing a moving intent throws it (and its partners); a still
+      // release leaves ~0 velocity and settles. Velocity is preserved while pinned and takes over on release.
+      const prev = this.dragSamples.get(update.guid);
+      if (prev) {
+        const dt = Math.max((now - prev.time) / 1000, 0.008);
+        body.velocity = vec3.scale(vec3.sub(nextPos, prev.pos), 1 / dt);
+      } else {
+        body.velocity = vec3.zero();
+      }
+      this.dragSamples.set(update.guid, { pos: nextPos, time: now });
+      body.position = nextPos;
       this.pin(body);
       woke = true;
     }
@@ -131,6 +144,7 @@ export class PhysicsIntentAdapter {
     this.dragTimers.set(body.id, setTimeout(() => {
       body.pinned = false;
       this.dragTimers.delete(body.id);
+      this.dragSamples.delete(body.id);
       this.engine.wake();
     }, DRAG_RELEASE_MS));
   }

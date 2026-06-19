@@ -78,9 +78,10 @@ systemCapabilities:
       params:
         - dotKey: rotationSpring
           name: Rotation
-          range: [0, 1]
-          step: 0.01
-          defaultValue: 1
+          range: [0.01, 0.1]
+          step: 0.001
+          defaultValue: 0.05
+          stepFunction: cubic
     - kind: spring
       name: Spring
       params:
@@ -251,7 +252,8 @@ systemCapabilities:
         display: scalar
         range: [0, 1]
         step: 0.01
-        defaultValue: 0
+        defaultValue: 0.1
+        stepFunction: quadratic
         isMandatory: true
       - dotKey: position
         name: Position
@@ -350,7 +352,7 @@ systemCapabilities:
         type: number
         display: scalar
         range: [0.1, 10]
-        step: 0.1
+        step: 0.05
         stepFunction: quadratic
         defaultValue: 1
         isMandatory: true

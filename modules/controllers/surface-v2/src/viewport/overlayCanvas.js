@@ -17,6 +17,9 @@ import { isIntentLocked } from '../core/intentLockRegistry.js'
 
 const DRAG_HIT_RADIUS_PX = 28
 
+/** Movement (canvas px) past which a pending height-slider hold is abandoned. */
+const HEIGHT_HOLD_MOVE_CANCEL_PX = 10
+
 /**
  * Resolve every intent guid to its effective intent and return them sorted by
  * `layer` ascending (NaN/missing → 0). Higher-layer intents end up last so
@@ -75,6 +78,11 @@ export class OverlayCanvas {
     this._draggedFixtures = new Map()
     /** @type {Map<number, string>} pointerId → fixture id (height slider drag) */
     this._draggedFixtureHeightSliders = new Map()
+    /**
+     * Height slider pressed but not yet engaged: waits for a deliberate hold before grabbing.
+     * @type {{ pointerId: number, kind: 'intent' | 'fixture', targetId: string, downX: number, downY: number, timer: number } | null}
+     */
+    this._pendingHeightHold = null
     /** @type {((guid: string) => void) | null} */
     this._doubleTapIntentCallback = null
     /** @type {((guid: string) => void) | null} */
@@ -434,18 +442,17 @@ export class OverlayCanvas {
       return
     }
 
-    // Height slider grab takes priority over cross dragging (it sits beside the marker).
+    // Height slider grab takes priority over cross dragging (it sits beside the marker). It only
+    // engages after a deliberate hold, so a quick tap or an immediate drag never grabs it.
     if (spatial) {
       const sliderGuid = this._findHeightSliderAt(x, y, spatial)
       if (sliderGuid !== null) {
-        this._draggedHeightSliders.set(ev.pointerId, sliderGuid)
-        this._capture(ev)
+        this._beginHeightHold(ev, 'intent', sliderGuid, x, y)
         return
       }
       const sliderFixtureId = this._findFixtureHeightSliderAt(x, y, spatial)
       if (sliderFixtureId !== null) {
-        this._draggedFixtureHeightSliders.set(ev.pointerId, sliderFixtureId)
-        this._capture(ev)
+        this._beginHeightHold(ev, 'fixture', sliderFixtureId, x, y)
         return
       }
     }
@@ -524,8 +531,61 @@ export class OverlayCanvas {
     this._pushSample(ev.clientX, ev.clientY, x, y)
   }
 
+  /**
+   * Arm a height-slider hold: the slider only engages after `heightSliderHoldMs` of a still press,
+   * so a quick tap or immediate drag never grabs it. Movement or release cancels the hold.
+   * @param {PointerEvent} ev
+   * @param {'intent' | 'fixture'} kind
+   * @param {string} targetId
+   * @param {number} downX
+   * @param {number} downY
+   */
+  _beginHeightHold (ev, kind, targetId, downX, downY) {
+    this._cancelHeightHold()
+    this._capture(ev)
+    const pointerId = ev.pointerId
+    const timer = window.setTimeout(() => {
+      const pending = this._pendingHeightHold
+      if (!pending || pending.pointerId !== pointerId) return
+      this._pendingHeightHold = null
+      if (pending.kind === 'intent') {
+        this._draggedHeightSliders.set(pointerId, pending.targetId)
+      } else {
+        this._draggedFixtureHeightSliders.set(pointerId, pending.targetId)
+      }
+      this.markRenderActivity()
+    }, this._L.heightSliderHoldMs)
+    this._pendingHeightHold = { pointerId, kind, targetId, downX, downY, timer }
+  }
+
+  _cancelHeightHold () {
+    if (!this._pendingHeightHold) return
+    window.clearTimeout(this._pendingHeightHold.timer)
+    this._pendingHeightHold = null
+  }
+
   /** @param {PointerEvent} ev */
   _onPointerMove (ev) {
+    // Pending (not yet engaged) height hold: abandon it if the pointer moves before the timer fires.
+    const pendingHold = this._pendingHeightHold
+    if (pendingHold && pendingHold.pointerId === ev.pointerId) {
+      const { x, y } = this._canvasPoint(ev)
+      const moved = Math.hypot(x - pendingHold.downX, y - pendingHold.downY)
+      if (moved > HEIGHT_HOLD_MOVE_CANCEL_PX) {
+        this._cancelHeightHold()
+        try {
+          this._canvas.releasePointerCapture(ev.pointerId)
+        } catch {
+          /* ignore */
+        }
+      }
+      return
+    }
+    return this._onPointerMoveEngaged(ev)
+  }
+
+  /** @param {PointerEvent} ev */
+  _onPointerMoveEngaged (ev) {
     if (
       this._draggedFixtures.has(ev.pointerId) ||
       this._draggedFixtureHeightSliders.has(ev.pointerId) ||
@@ -612,6 +672,8 @@ export class OverlayCanvas {
   /** @param {PointerEvent} ev */
   _onPointerUp (ev) {
     this.markRenderActivity()
+    // Released before the hold engaged: it was a tap, not a slider grab — drop the pending hold.
+    this._cancelHeightHold()
     // Confirm tap if pointer didn't move far (enables double-tap on next down)
     if (this._tapTracker?.pointerId === ev.pointerId) {
       const { x, y } = this._canvasPoint(ev)

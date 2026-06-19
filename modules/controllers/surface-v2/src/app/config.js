@@ -20,6 +20,7 @@ import { parseLayoutCatalog } from '../layout/loadLayoutCatalog.js'
  * @property {number} heightSliderKnobRadiusPx
  * @property {number} heightSliderEngagedScale
  * @property {number} heightSliderHitPaddingPx
+ * @property {number} heightSliderHoldMs
  * @property {string} heightSliderTrackRgba
  * @property {string} heightSliderColorRgba
  * @property {string} heightSliderLabelRgba
@@ -67,6 +68,7 @@ const REQUIRED_LAYOUT_KEYS = /** @type {(keyof LayoutConfig)[]} */ ([
   'heightSliderKnobRadiusPx',
   'heightSliderEngagedScale',
   'heightSliderHitPaddingPx',
+  'heightSliderHoldMs',
   'heightSliderTrackRgba',
   'heightSliderColorRgba',
   'heightSliderLabelRgba',

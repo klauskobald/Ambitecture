@@ -160,10 +160,22 @@ export const performPolicy = {
   },
   onIntentHeightMove (guid, wy) {
     if (updatePerformHeightOverlayIfActive(guid, wy)) return
-    const updated = projectGraph.updateRuntimeIntentHeight(guid, wy)
-    if (updated) queueIntentUpdate(updated)
+    const intent = projectGraph.getIntents().get(guid)
+    if (!intent) return
+    const i = /** @type {Record<string, unknown>} */ (intent)
+    const pos = /** @type {number[] | undefined} */ (i.position)
+    const position = /** @type {[number, number, number]} */ ([
+      pos?.[0] ?? 0,
+      wy,
+      pos?.[2] ?? 0
+    ])
+    // Height drag must share the physics drag anchor with position drag; a plain runtime height
+    // patch is otherwise overwritten by the hub physics simulation on the next tick.
+    queueIntentDragMove(guid, position)
   },
-  onIntentHeightMoveEnd (_guid) {},
+  onIntentHeightMoveEnd (guid) {
+    queueIntentDragEnd(guid)
+  },
   onFixtureMove (_id, _wx, _wz) {},
   onFixtureHeightMove (_id, _wy) {},
   onFixtureHeightMoveEnd (_id) {}

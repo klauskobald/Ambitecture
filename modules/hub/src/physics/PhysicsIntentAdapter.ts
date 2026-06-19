@@ -43,6 +43,8 @@ interface ActiveDrag {
 export class PhysicsIntentAdapter {
   private bounds: Aabb | null = null;
   private readonly activeDrags = new Map<string, ActiveDrag>();
+  /** Per-body freeze state: lock position + per-axis freeze flags. Populated in toBody() on rebuild. */
+  private readonly freezeCache = new Map<string, { freeze: [boolean, boolean, boolean]; lockPosition: Vec3 }>();
   private enabled = true;
 
   constructor(
@@ -122,6 +124,15 @@ export class PhysicsIntentAdapter {
     const position = this.toVec3(intent.position);
     // Mass must be > 0 — a zero/invalid mass would make the body immovable (infinite inertia). Default to 1.
     const mass = this.readNumber(intent.mass, DEFAULT_MASS);
+
+    // Populate freeze cache so commit() can enforce frozen axes without looking up the intent each tick.
+    const freeze = this.readFreeze(intent);
+    if (freeze[0] || freeze[1] || freeze[2]) {
+      this.freezeCache.set(guid, { freeze, lockPosition: vec3.clone(position) });
+    } else {
+      this.freezeCache.delete(guid);
+    }
+
     return {
       id: guid,
       position,
@@ -131,6 +142,15 @@ export class PhysicsIntentAdapter {
       drag: this.readNumber(intent.drag, DEFAULT_DRAG),
       pinned: false,
     };
+  }
+
+  /** Normalize a ControllerIntent freeze array to a 3-element boolean tuple. Missing/undefined → all false. */
+  private readFreeze(intent: ControllerIntent): [boolean, boolean, boolean] {
+    const f = intent.freeze;
+    if (Array.isArray(f)) {
+      return [!!f[0], !!f[1], !!f[2]];
+    }
+    return [false, false, false];
   }
 
   private buildConnectors(bodies: Map<string, PhysicsBody>): ConnectorRecord[] {
@@ -309,7 +329,19 @@ export class PhysicsIntentAdapter {
   }
 
   private commit(id: string, position: Vec3, velocity: Vec3): { position: Vec3; velocity: Vec3 } {
-    const clamped = this.clampToBounds(position, velocity);
+    // Enforce per-axis freeze: restore frozen axes to their lock position and zero velocity.
+    const frozen = this.freezeCache.get(id);
+    let outPos = position;
+    let outVel = velocity;
+    if (frozen) {
+      outPos = vec3.clone(position);
+      outVel = vec3.clone(velocity);
+      if (frozen.freeze[0]) { outPos[0] = frozen.lockPosition[0]; outVel[0] = 0; }
+      if (frozen.freeze[1]) { outPos[1] = frozen.lockPosition[1]; outVel[1] = 0; }
+      if (frozen.freeze[2]) { outPos[2] = frozen.lockPosition[2]; outVel[2] = 0; }
+    }
+
+    const clamped = this.clampToBounds(outPos, outVel);
     const update: RuntimeUpdate = {
       entityType: 'intent',
       guid: id,

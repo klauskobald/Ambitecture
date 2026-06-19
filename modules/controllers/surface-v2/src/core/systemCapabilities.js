@@ -48,7 +48,9 @@ export function resolveDescriptorsForClass (intentClass) {
 export function resolveIntentDescriptorUiKind (d) {
   const disp = d.display
   if (typeof disp === 'string' && disp.length > 0) {
-    return disp === 'infoText' ? 'vector3' : disp
+    if (disp === 'infoText') return 'vector3'
+    if (disp === 'vector3Boolean') return 'vector3Boolean'
+    return disp
   }
   const t = d.type
   if (typeof t !== 'string' || t.length === 0) return ''

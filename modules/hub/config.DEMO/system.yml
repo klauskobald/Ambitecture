@@ -289,6 +289,13 @@ systemCapabilities:
         noMultiple: true
         isMandatory: true
         display: vector3
+      - dotKey: freeze
+        name: Freeze
+        type: vector3
+        display: vector3Boolean
+        defaultValue: [0, 1, 0]
+        isMandatory: true
+        noMultiple: true
 
     target:
       - dotKey: name
@@ -368,7 +375,7 @@ systemCapabilities:
         display: scalar
         range: [0, 1]
         step: 0.01
-        defaultValue: 0
+        defaultValue: 0.1
         isMandatory: true
       - dotKey: position
         name: Position
@@ -397,6 +404,13 @@ systemCapabilities:
         noMultiple: true
         isMandatory: true
         display: vector3
+      - dotKey: freeze
+        name: Freeze
+        type: vector3
+        display: vector3Boolean
+        defaultValue: [0, 1, 0]
+        isMandatory: true
+        noMultiple: true
 
 pulse:
   tapTempo:

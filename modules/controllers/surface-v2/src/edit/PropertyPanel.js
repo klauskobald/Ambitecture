@@ -3,6 +3,7 @@ import { ColorControl } from './controls/ColorControl.js'
 import { PillControl } from './controls/PillControl.js'
 import { ModalControl } from './controls/ModalControl.js'
 import { InfoTextControl } from './controls/InfoTextControl.js'
+import { Vector3BooleanControl } from './controls/Vector3BooleanControl.js'
 import { projectGraph } from '../core/projectGraph.js'
 import {
   queueIntentUpdate,
@@ -247,6 +248,8 @@ export class PropertyPanel {
           : new ModalControl(d, onCommit, size, wt)
       case 'vector3':
         return new InfoTextControl(d, onCommit, size, wt)
+      case 'vector3Boolean':
+        return new Vector3BooleanControl(d, onCommit, size, wt)
       default:
         return null
     }

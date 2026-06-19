@@ -41,6 +41,8 @@ export interface ControllerIntent {
   class: string;
   params: Record<string, unknown>;
   perform?: IntentPerformSettings;
+  /** Per-axis physics freeze: [x, y, z]. 1 = frozen (position locked, velocity forced to 0). */
+  freeze?: [number, number, number];
 }
 
 /** A physical link between two intents (rod/spring/rope), referenced symmetrically by both endpoints. */

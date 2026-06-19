@@ -1,7 +1,7 @@
 import { toHSL, hslToRGB255, hslToXYY } from '../../core/color.js'
 
 const CANVAS_W = 320
-const CANVAS_H = 220
+const CANVAS_H = 110
 const MID_Y = Math.floor(CANVAS_H / 2) // split line: bottom = S=1 L 0→0.5, top = S 1→0 L 0.5→1
 
 /**
@@ -26,12 +26,15 @@ export const hslPalette = {
     const wrap = document.createElement('div')
     wrap.className = 'palette-hsl'
 
+    const canvasWrap = document.createElement('div')
+    canvasWrap.className = 'palette-hsl-canvas-wrap'
+
     const canvas = document.createElement('canvas')
     canvas.width = CANVAS_W
     canvas.height = CANVAS_H
     canvas.className = 'palette-hsl-canvas'
     canvas.style.touchAction = 'none'
-    wrap.appendChild(canvas)
+    canvasWrap.appendChild(canvas)
 
     const values = document.createElement('div')
     values.className = 'palette-hsl-values'
@@ -42,8 +45,9 @@ export const hslPalette = {
     const xyyLine = document.createElement('div')
     xyyLine.className = 'palette-hsl-values-line'
     values.append(hslLine, rgbLine, xyyLine)
-    wrap.appendChild(values)
+    canvasWrap.appendChild(values)
 
+    wrap.appendChild(canvasWrap)
     container.appendChild(wrap)
 
     const ctx = canvas.getContext('2d')
@@ -159,6 +163,7 @@ export const hslPalette = {
         /* ignore */
       }
       dragPointerId = null
+      wrap.classList.remove('is-dragging')
       onDragEnd?.()
       ev.preventDefault()
     }
@@ -166,6 +171,7 @@ export const hslPalette = {
     canvas.addEventListener('pointerdown', ev => {
       if (ev.button !== 0) return
       dragPointerId = ev.pointerId
+      wrap.classList.add('is-dragging')
       onDragStart?.()
       canvas.setPointerCapture(ev.pointerId)
       pickFromClient(ev.clientX, ev.clientY)
@@ -181,6 +187,7 @@ export const hslPalette = {
     canvas.addEventListener('lostpointercapture', ev => {
       if (dragPointerId !== ev.pointerId) return
       dragPointerId = null
+      wrap.classList.remove('is-dragging')
       onDragEnd?.()
     })
 

@@ -321,47 +321,55 @@
 
 .prop-color-inline .palette-hsl {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.35rem 0.65rem;
   width: 100%;
-  container-type: inline-size;
+}
+
+.prop-color-inline .palette-hsl-canvas-wrap {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  line-height: 0;
 }
 
 .prop-color-inline .palette-hsl-canvas {
   display: block;
-  flex: 0 0 auto;
   width: min(100%, calc(120px * 320 / 220));
-  max-width: 100%;
   height: auto;
-  max-height: 120px;
-  aspect-ratio: 320 / 220;
+  max-height: 60px;
+  aspect-ratio: 320 / 110;
   cursor: crosshair;
 }
 
+/* Readout overlays the lower edge of the palette, visible only while dragging */
 .prop-color-inline .palette-hsl-values {
-  flex: 1 1 auto;
-  min-width: 10.25rem;
-  margin-left: auto;
-  align-self: center;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0.25rem 0.4rem;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.72),
+    rgba(0, 0, 0, 0.32) 70%,
+    transparent
+  );
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 0.7rem;
-  line-height: 1.35;
-  color: var(--color-text-muted, rgba(255, 255, 255, 0.65));
+  font-size: 0.62rem;
+  line-height: 1.25;
+  color: rgba(255, 255, 255, 0.92);
   letter-spacing: 0.02em;
-  text-align: right;
+  text-align: left;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease-out;
+}
+
+.prop-color-inline .palette-hsl.is-dragging .palette-hsl-values {
+  opacity: 1;
 }
 
 .prop-color-inline .palette-hsl-values-line {
   white-space: nowrap;
-}
-
-@container (max-width: 19.5rem) {
-  .prop-color-inline .palette-hsl-values {
-    flex-basis: 100%;
-    margin-left: 0;
-    text-align: left;
-  }
 }
 
 /* ── Relative HSL sliders ────────────────────────────────────────────────── */

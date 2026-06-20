@@ -25,6 +25,7 @@ import {
   readPulseSyncRxBpm
 } from '../core/pulseSyncActivity.js'
 import { applyBindingValue, resubscribeAll } from '../core/bindingRegistry.js'
+import { hubProbe } from '../core/HubProbe.js'
 import { markStageOverlayActivity } from '../stage/stageOverlayHost.js'
 import * as statusDisplay from './statusDisplay.js'
 
@@ -209,6 +210,10 @@ export function connectStageHub (appCfg) {
         }
         case 'binding:value': {
           applyBindingValue(message.payload)
+          break
+        }
+        case 'system:probe:result': {
+          hubProbe.resolveResult(message.payload)
           break
         }
         case 'discovery:snapshot': {

@@ -54,6 +54,37 @@ function appendTextWithBreaks (fragment, text) {
 }
 
 /**
+ * Append a display-plugin result. `callFunction` may return data synchronously or
+ * a Promise; for a Promise we drop in a placeholder and swap once it resolves, so
+ * the help renderer can surface live (async) data without any domain coupling.
+ *
+ * @param {DocumentFragment} fragment
+ * @param {unknown} result
+ * @param {import('./display/registry.js').DisplayPlugin} display
+ * @param {RenderCtx} ctx
+ */
+function appendDisplayResult (fragment, result, display, ctx) {
+  const isThenable = !!result && typeof (/** @type {any} */ (result).then) === 'function'
+  if (!isThenable) {
+    const el = display(result, ctx)
+    if (el instanceof Node) fragment.appendChild(el)
+    return
+  }
+
+  const placeholder = document.createElement('span')
+  placeholder.className = 'help-display-loading'
+  fragment.appendChild(placeholder)
+
+  Promise.resolve(result)
+    .then(data => {
+      const el = display(data, ctx)
+      if (el instanceof Node) placeholder.replaceWith(el)
+      else placeholder.remove()
+    })
+    .catch(() => placeholder.remove())
+}
+
+/**
  * @typedef {object} RenderCtx
  * @property {(key: string) => void} showTopic
  * @property {{ callFunction: (name: string, args: string) => any } | null} [conduit]
@@ -103,10 +134,7 @@ export function renderHelpText (rawText, ctx) {
       if (display) {
         const conduit = ctx.conduit ?? null
         const data = conduit ? conduit.callFunction(fnName, args) : null
-        const el = display(data, ctx)
-        if (el instanceof Node) {
-          fragment.appendChild(el)
-        }
+        appendDisplayResult(fragment, data, display, ctx)
       } else {
         // Unknown display plugin — leave placeholder as plain text
         fragment.appendChild(document.createTextNode(phMatch[0]))

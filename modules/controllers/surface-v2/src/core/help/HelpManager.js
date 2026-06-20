@@ -39,7 +39,7 @@ let toggleIconEl = null
 
 /**
  * @typedef {object} HelpConduit
- * @property {(name: string, args: string) => any} callFunction
+ * @property {(name: string, args: string) => any | Promise<any>} callFunction
  */
 
 /** @type {HelpConduit | null} */

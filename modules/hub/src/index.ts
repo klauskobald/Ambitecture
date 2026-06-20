@@ -9,6 +9,8 @@ import { IntentsHandler } from './handlers/IntentsHandler';
 import { FixturesHandler } from './handlers/FixturesHandler';
 import { SaveProjectHandler } from './handlers/SaveProjectHandler';
 import { GraphCommandHandler } from './handlers/GraphCommandHandler';
+import { SystemProbeHandler } from './handlers/SystemProbeHandler';
+import { registerBuiltinProbeQueries } from './probe/builtinProbeQueries';
 import { RuntimeCommandHandler } from './handlers/RuntimeCommandHandler';
 import { ActionHandler } from './handlers/ActionHandler';
 import { EventQueue } from './EventQueue';
@@ -447,6 +449,8 @@ const bindingHandler = new BindingHandler(registry, bindingManager);
 router.register('binding:subscribe', bindingHandler);
 router.register('binding:set', bindingHandler);
 router.register('animation:edit', new AnimationEditHandler(registry, animationManager));
+registerBuiltinProbeQueries();
+router.register('system:probe', new SystemProbeHandler(registry, projectManager, graphStore));
 
 const initialProjectSpec = resolveInitialProjectSpec();
 const explicitInitialProject = explicitProjectSpecifier();

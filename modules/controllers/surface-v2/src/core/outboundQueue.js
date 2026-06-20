@@ -337,6 +337,17 @@ export function sendDiscoverySubscribe () {
   }))
 }
 
+/**
+ * Send a correlated `system:probe` read-only query to the hub.
+ * @param {{ requestId: string, query: string, args?: unknown }} payload
+ * @returns {boolean} whether the message was sent
+ */
+export function sendSystemProbe (payload) {
+  if (!activeWs || activeWs.readyState !== WebSocket.OPEN) return false
+  activeWs.send(JSON.stringify({ message: { type: 'system:probe', payload } }))
+  return true
+}
+
 export function sendActionTrigger (actionGuid, args) {
   if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation)
     return

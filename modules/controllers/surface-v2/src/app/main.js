@@ -19,6 +19,7 @@ import { SnapshotPane } from '../layout/renderers/SnapshotPane.js'
 import { PluginPane } from '../layout/renderers/PluginPane.js'
 import { initSceneAutoResetOnLoad } from '../perform/sceneAutoResetOnLoad.js'
 import { HelpManager } from '../core/help/HelpManager.js'
+import { HelpConduit } from './HelpConduit.js'
 import { findLayoutTagHost } from '../stage/layoutTagHost.js'
 
 async function main () {
@@ -65,16 +66,7 @@ async function main () {
   })
 
   HelpManager.registerHost('edit-panel', () => findLayoutTagHost())
-  HelpManager.setConduit({
-    callFunction (name, _args) {
-      switch (name) {
-        case 'getRendererList':
-          return [{ name: 'dmx', entity: 'renderer' }]
-        default:
-          return null
-      }
-    }
-  })
+  HelpManager.setConduit(new HelpConduit())
 
   initSceneAutoResetOnLoad()
   connectStageHub(appCfg)

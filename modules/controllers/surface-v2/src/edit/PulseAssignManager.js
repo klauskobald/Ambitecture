@@ -239,6 +239,7 @@ export class PulseAssignManager {
         editBtn.style.flex = '0 0 auto'
         editBtn.textContent = '✎'
         editBtn.setAttribute('aria-label', 'Edit')
+        editBtn.dataset.help = 'pulse.bucket.edit'
         editBtn.addEventListener('click', e => {
           e.stopPropagation()
           finish({ kind: 'edit', bucketGuid: row.guid })

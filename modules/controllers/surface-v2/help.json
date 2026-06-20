@@ -13,7 +13,11 @@
     },
     "heightSlider": {
         "heading": "Height",
-        "text": "Sets how high off the floor this element sits. On the stage you can also drag the small vertical handle next to it to change height directly."
+        "text": "Sets how high off the floor this element sits — the value it shows is the [Y (height) position](space.3d) in metres. On the stage you can also drag the small vertical handle next to it to change height directly."
+    },
+    "space.3d": {
+        "heading": "Height & 3D space",
+        "text": "The stage is your room seen from above, so you only see two of the three dimensions: X (left–right) and Z (near–far). The third is Y — height above the floor — which a top-down view can't show. Everything in Ambitecture, both [intents](intent.index) and [fixtures](fixture.edit), lives in real 3D metres and has a height.\n\nYou set height with the [height slider](heightSlider), or the small vertical handle on the stage; the number it shows is the Y position.\n\nWhy height matters:\n• Reach is measured in full 3D. A light's [radius](intent.edit.radius) is a sphere around its position, so an intent with a 2 m radius sitting on the floor won't touch a fixture mounted 4 m up — the vertical gap alone is bigger than its reach. Raise the intent or widen the radius to include high fixtures.\n• [Target](intent.index) intents aim moving heads in 3D: a moving head tilts toward the target's position, so the target's height decides whether beams point up, level, or down. Put a target at the height where you want the beams to meet."
     },
     "stage.index": {
         "heading": "The Stage",
@@ -37,7 +41,7 @@
     },
     "stage.edit": {
         "heading": "Edit",
-        "text": "Build mode. Here you place intents, arrange them, and set their properties — changes are saved to the project.\n\nIn Edit the fixtures are locked and the physics is paused so nothing drifts while you work.\n\n• Double-tap empty space to [add an intent](stage.edit.createIntent)\n• Double-tap an intent to open its [editor](intent.edit)\n• Drag an intent to move it\n\nToolbar: [Fixtures lock](stage.edit.fixtureLock) · [Perform Enable](stage.edit.performEnable) · [Perform sort](stage.edit.performSort) · [Select](stage.edit.select) · [Physics](stage.edit.physics)."
+        "text": "Build mode. Here you place intents, arrange them, and set their properties — changes are saved to the project.\n\nIn Edit the fixtures are locked and the physics is paused so nothing drifts while you work.\n\n• Double-tap empty space to [add an intent](stage.edit.createIntent)\n• Double-tap an intent to open its [editor](intent.edit)\n• Double-tap a fixture to open its [fixture editor](fixture.edit)\n• Drag an intent to move it\n\nToolbar: [Fixtures lock](stage.edit.fixtureLock) · [Perform Enable](stage.edit.performEnable) · [Perform sort](stage.edit.performSort) · [Select](stage.edit.select) · [Physics](stage.edit.physics)."
     },
     "stage.edit.fixtureLock": {
         "heading": "Lock / unlock fixtures",
@@ -63,9 +67,17 @@
         "heading": "Add an intent",
         "text": "You added a new intent to the stage. Pick its type:\n\n• Light — emits color and brightness around a point\n• Master — a global dimmer / blackout over everything\n• Target — a magnet that aims movable fixtures\n\nThe new intent joins the current scene. Double-tap it to open its [editor](intent.edit). See [intents](intent.index) for what each type does."
     },
+    "fixture.edit": {
+        "heading": "Fixture editor",
+        "text": "Double-tap a fixture on the stage in [Edit](stage.edit) to open this panel and adjust that physical fixture — its name, where it sits, and the settings specific to its type. Changes save to the project as you make them, and edits apply to this one fixture only.\n\nLike intents, a fixture lives in [3D space](space.3d): its position has a height (Y) above the floor, set with the [height slider](heightSlider). Getting a fixture's height right matters — it decides whether a nearby light intent's radius actually reaches it, and where a moving head appears to be in the room.\n\nThe top fields are common to every fixture; below them a [Parameters](fixture.edit.params) section shows controls that belong only to this kind of fixture.\n\nFixtures come from profile files, not from this screen — and there is no editor yet to build a new fixture type from scratch. Ambitecture is open source, so a visual fixture builder is a great thing to contribute: see [the project](index)."
+    },
+    "fixture.edit.params": {
+        "heading": "Parameters",
+        "text": "These controls are specific to this fixture's type. They come from the fixture's profile — a YAML file that describes what the fixture can do and which settings it exposes — so different fixtures show different parameters here (channels, ranges, options, and so on). Editing one changes only this fixture; the profile itself is a file you edit outside the app.\n\nNo profile for your hardware yet? Writing one — or building a proper in-app fixture editor — is a welcome open-source contribution. See [the project](index)."
+    },
     "intent.index": {
         "heading": "What is an intent?",
-        "text": "An intent is a \"wish\" for light at a place in the room — for example \"warm amber glow here, about 5 metres wide\". You never address a specific lamp; you describe what you want, and the hub works out what every nearby fixture should do to make it happen.\n\nThere are three types of intent:\n• Light — emits color, brightness and spread around a position\n• Master — a global brightness / blackout layered over everything\n• Target — aims movable fixtures toward or away from a point\n\nPlace intents in [Edit](stage.edit), tune them in the [intent editor](intent.edit), and group them into [scenes](scene.index)."
+        "text": "An intent is a \"wish\" for light at a place in the room — for example \"warm amber glow here, about 5 metres wide\". You never address a specific lamp; you describe what you want, and the hub works out what every nearby fixture should do to make it happen.\n\nThere are three types of intent:\n• Light — emits color, brightness and spread around a position\n• Master — a global brightness / blackout layered over everything\n• Target — aims movable fixtures toward or away from a point\n\nEvery intent sits at a point in [3D space](space.3d), including a height off the floor — which matters for how far a light reaches and how a Target aims moving heads.\n\nPlace intents in [Edit](stage.edit), tune them in the [intent editor](intent.edit), and group them into [scenes](scene.index)."
     },
     "intent.edit": {
         "heading": "Intent editor",
@@ -97,7 +109,7 @@
     },
     "intent.edit.inputAssign": {
         "heading": "Assign an input",
-        "text": "Links a physical control — a button, key or MIDI knob — to this intent, so hardware can trigger or drive it without touching the screen."
+        "text": "Links a physical control — a button or a key — to this intent, so hardware can trigger it without touching the screen. (MIDI controllers are handled separately, in their own [plugin tab](plugin.index).)"
     },
     "intent.edit.performReset": {
         "heading": "Perform reset",
@@ -117,7 +129,7 @@
     },
     "intent.edit.radius": {
         "heading": "Radius",
-        "text": "How far this intent reaches from its position, in metres. Fixtures inside the radius pick it up; the [falloff curve](intent.edit.radiusFunction) shapes how it fades toward the edge."
+        "text": "How far this intent reaches from its position, in metres. The radius is a sphere in [3D space](space.3d), so it counts height too: an intent with a 2 m radius on the floor won't touch a fixture mounted 4 m up, because the vertical gap alone is more than 2 m. Fixtures inside the sphere pick it up; the [falloff curve](intent.edit.radiusFunction) shapes how it fades toward the edge."
     },
     "intent.edit.radiusFunction": {
         "heading": "Falloff",
@@ -141,7 +153,7 @@
     },
     "intent.edit.position": {
         "heading": "Position",
-        "text": "Where the intent sits in the room (X across, Y up, Z depth). You'll usually set this by dragging on the stage rather than typing."
+        "text": "Where the intent sits in the room in [3D](space.3d): X across, Y up (height), Z depth. You'll usually set X and Z by dragging on the stage, and Y with the [height slider](heightSlider), rather than typing."
     },
     "intent.edit.freeze": {
         "heading": "Freeze axis",
@@ -157,7 +169,7 @@
     },
     "intent.edit.heightSlider": {
         "heading": "Height handle",
-        "text": "Turns on the little vertical handle on the stage so you can drag this intent's height directly."
+        "text": "Turns on the little vertical handle on the stage so you can drag this intent's height — its [Y position](space.3d) — directly, instead of using the slider."
     },
     "intent.edit.brightness": {
         "heading": "Master brightness",
@@ -165,7 +177,7 @@
     },
     "intent.edit.mode": {
         "heading": "Attract / Repel",
-        "text": "For a Target: Attract pulls movable fixtures to aim toward this point; Repel pushes their aim away from it."
+        "text": "For a Target: Attract pulls movable fixtures (moving heads) to aim toward this point; Repel pushes their aim away from it. Aiming happens in [3D](space.3d), so the target's height matters — set it with the [height slider](heightSlider) to tilt the beams up, level, or down."
     },
     "intent.edit.followTime": {
         "heading": "Follow time",
@@ -194,7 +206,7 @@
     },
     "scene.index": {
         "heading": "Scenes",
-        "text": "A scene is a saved look — a chosen set of intents with their settings. Switching scenes recalls that look instantly; only the active scene is sent to your fixtures.\n\nA scene can also override specific values just for itself ([Overlay](intent.edit.overlay)) while sharing the rest.\n\n• [Recall](scene.recall) a scene by tapping it\n• [Rename](scene.rename) · [Copy](scene.copy) · [Delete](scene.delete)\n• [Add/remove intents](scene.intentToggle) from a scene\n• [Assign](scene.performAssign) hardware to recall a scene\n\nTo save the current live state instead, use a [snapshot](snapshot.index)."
+        "text": "A scene is a saved look — a chosen set of intents with their settings. Switching scenes recalls that look instantly; only the active scene is sent to your fixtures.\n\nA scene can also override specific values just for itself ([Overlay](intent.edit.overlay)) while sharing the rest.\n\n• [Recall](scene.recall) a scene by tapping it\n• [Rename](scene.rename) · [Copy](scene.copy) · [Delete](scene.delete)\n• [Add/remove intents](scene.intentToggle) from a scene\n• Trigger it from an [Input](scene.performInput) or a [Pulse Bucket](scene.performPulse)\n\nTo save the current live state instead, use a [snapshot](snapshot.index)."
     },
     "scene.recall": {
         "heading": "Recall scene",
@@ -218,7 +230,15 @@
     },
     "scene.performAssign": {
         "heading": "Assign to recall",
-        "text": "Maps a physical input (button, key, MIDI) or a pulse to recalling this scene, so you can trigger the look from hardware during the show."
+        "text": "The scene's Perform section lets you trigger this look without tapping it on screen — two ways:\n\n• [Input](scene.performInput) — a button or a key\n• [Pulse Bucket](scene.performPulse) — a beat clock that recalls it in time"
+    },
+    "scene.performInput": {
+        "heading": "Input",
+        "text": "Links a physical input — a button or a keyboard key — to this scene, so pressing it recalls the look live without touching the screen. Tap the button to pick or change the input; assigning one makes it light up. (MIDI controllers don't go here — they live in their own [plugin tab](plugin.index).)\n\nSee also the other trigger: [Pulse Bucket](scene.performPulse)."
+    },
+    "scene.performPulse": {
+        "heading": "Pulse Bucket",
+        "text": "Puts this scene into a [pulse bucket](pulse.bucket) — a target a [pulse](pulse.index) drives — so the scene is recalled in time with the beat instead of by hand. Great for switching looks rhythmically with the music.\n\nTap the button to tick an existing bucket, or tap Create to make a new one (it's named and this scene is added to it). Assigning a bucket makes the button light up. The same bucket can also hold other scenes and animations that should change on the same beat. Each bucket row has a ✎ button to [rename it](pulse.bucket.edit) — a scene has nothing more to set; it's just recalled on the beat.\n\nSee also the other trigger: [Input](scene.performInput)."
     },
     "snapshot.index": {
         "heading": "Snapshots",
@@ -239,5 +259,101 @@
     "snapshot.delete": {
         "heading": "Delete snapshot",
         "text": "Removes this snapshot. The scenes and intents it referenced are untouched."
+    },
+    "layout.presets": {
+        "heading": "Layout presets",
+        "text": "These buttons at the top switch how the screen is split into panes — one wide pane, a big stage with a column of smaller panes beside it, top-and-bottom, and so on.\n\nSwitching a preset only rearranges the panes; it never changes your scenes, intents or fixtures. Your choice and the sizes you drag are remembered on this device. Within each pane you pick what to show from its [tabs](pane.index)."
+    },
+    "pane.index": {
+        "heading": "Panes and tabs",
+        "text": "The screen is divided into panes by the [layout preset](layout.presets) you pick. Each pane has a row of tabs along its top; tap one to choose what that pane shows:\n\n• [Perform](stage.index) — run the show live on the stage\n• [Edit](stage.edit) — place and arrange your intents\n• [Scenes](scene.index) — saved looks you switch between\n• [Control](control.index) — your live control board\n• [Pulse](pulse.index) — beat clocks that drive movement\n• [Animate](animation.index) — automatic motion and change\n• [Snapshot](snapshot.index) — capture and recall the live state\n• Plugin tabs — external [controllers](plugin.index) like MIDI\n\nThe same tab can appear in more than one pane; opening it just shows that view there."
+    },
+    "control.index": {
+        "heading": "Control board",
+        "text": "Your live control board for the show — the buttons and controls you set up, gathered in one place so you don't hunt for them during a performance.\n\nFrom here you can:\n• [Recall scenes](control.scenes) with a tap\n• Use [assigned triggers](control.assigns) — actions you mapped to buttons, keys or MIDI\n• [Play and stop animations](control.animations)\n• Set how scenes behave [on recall](control.autoReset)\n\nIt reflects what you built elsewhere: scenes come from the [Scenes](scene.index) tab, animations from [Animate](animation.index), and assignments from each intent's editor."
+    },
+    "control.scenes": {
+        "heading": "Scene buttons",
+        "text": "Each scene button recalls a saved [look](scene.index) — tap it and that scene goes live to your fixtures right away, clearing any temporary Perform tweaks from the previous one. The button order follows the order you set in [Perform sort](stage.edit.performSort)."
+    },
+    "control.assigns": {
+        "heading": "Assigned triggers",
+        "text": "Controls here fire the actions you mapped to a physical input — a button or a keyboard key. You create these mappings in the intent editor ([Assign an input](intent.edit.inputAssign)) or when [assigning a scene](scene.performAssign); the control board just gives you an on-screen copy to press. (MIDI lives in its own [plugin tab](plugin.index), not here.)"
+    },
+    "control.animations": {
+        "heading": "Play animations",
+        "text": "Starts or stops the [animations](animation.index) you've set up, without leaving your control board. Playing one runs it live on top of the current scene; stopping it returns to the plain scene. Build and tune animations in the [Animate](animation.index) tab."
+    },
+    "control.autoReset": {
+        "heading": "Reset on recall",
+        "text": "Decides whether recalling a scene also clears your live Perform tweaks automatically. On: every scene change starts clean from the saved look. Off: your temporary changes carry over until you clear them yourself with [Reset scene](stage.perform.resetScene)."
+    },
+    "pulse.index": {
+        "heading": "Pulses",
+        "text": "A pulse is a beat clock — a steady tempo that other things follow, so flashes, sweeps, scene changes and [animations](animation.index) all move together in time.\n\nEach row is one pulse with its tempo in beats per minute. You can [play or stop](pulse.play) it, change its [speed](pulse.speed), and [edit](pulse.edit) its name and tempo. Make a new pulse with the [Create pulse](pulse.create) button at the bottom of this tab.\n\nA pulse drives things through [pulse buckets](pulse.bucket) — named groups of scenes and animations that beat together. On its own a pulse does nothing visible; it only moves what's in a bucket on it. You can also [sync](pulse.sync) a pulse to an outside clock.\n\nNew to this? Make a pulse, then open a [scene's](scene.performPulse) or animation's Pulse Bucket button to put something on it."
+    },
+    "pulse.create": {
+        "heading": "Create pulse",
+        "text": "The Create pulse button at the bottom of the Pulse tab makes a new beat clock. Give it a name, then set its [tempo](pulse.speed) and [play](pulse.play) it. A fresh pulse beats but changes nothing until you put scenes or animations into a [pulse bucket](pulse.bucket) on it."
+    },
+    "pulse.bucket": {
+        "heading": "Pulse buckets",
+        "text": "A pulse bucket is a named group — a target — that a [pulse](pulse.index) drives. One bucket can hold several things at once — scenes and animations together — so they all fire on the same beat. That's how a pulse makes more than one thing move in time.\n\nBuckets are not created from the Pulse tab, which is why they're easy to lose. You make one from the thing you want it to drive:\n• On a [scene](scene.index), tap its [Pulse Bucket](scene.performPulse) button.\n• On an [animation](animation.index), tap its pulse button.\n\nIn the box that opens, tap Create and name the bucket — the scene or animation you started from is added automatically. To add more, open the Pulse Bucket button on another scene or animation and tick the same bucket. Each bucket row has a ✎ button for [more settings](pulse.bucket.edit), and untick (or 🗑) to take something out."
+    },
+    "pulse.bucket.edit": {
+        "heading": "Edit a pulse target",
+        "text": "The ✎ button on a bucket row opens its settings. Every bucket lets you rename it here.\n\nWhat else you get depends on what the bucket drives:\n• A [scene](scene.index) has no extra parameters — it's simply recalled on the beat, so there's nothing more to set.\n• An [animation](animation.index) can be given trigger parameters — they decide how the pulse drives it, for example which command it fires on each beat, so the same animation can react in different ways. These only take effect when the animation is set to manual run mode; on auto run mode the animation runs itself and the parameters are ignored."
+    },
+    "pulse.play": {
+        "heading": "Play / stop pulse",
+        "text": "Starts the beat clock running (▶) or stops it (■). While it runs, everything in its [buckets](pulse.bucket) stays locked to the tempo; stopping it freezes those followers in place."
+    },
+    "pulse.speed": {
+        "heading": "Pulse speed",
+        "text": "Sets how fast this pulse beats. Slide it up for a quicker tempo, down for a slower one — everything in the pulse's [buckets](pulse.bucket) speeds up or slows down with it. The current rate is shown in beats per minute (bpm)."
+    },
+    "pulse.edit": {
+        "heading": "Edit pulse",
+        "text": "Opens this pulse's settings so you can rename it and set its exact tempo. The name is what you'll see wherever you pick a pulse to drive a [bucket](pulse.bucket)."
+    },
+    "pulse.sync": {
+        "heading": "Sync to an outside clock",
+        "text": "Locks a pulse's tempo to an external clock instead of its own speed — handy for following a DJ or another device. You can choose whether the beat restarts on every bar, on every beat, or never, so it lines up cleanly with the music."
+    },
+    "animation.index": {
+        "heading": "Animations",
+        "text": "An animation makes something change over time on its own — a color drifting, a brightness breathing, intents sweeping across the room — so a look never sits still. Each animation is a small recipe of \"keep doing this\" that runs live.\n\nEach row is one animation. From here you can [play, pause or stop](animation.play) it, [create](animation.create) a new one or reuse an existing one, and [edit](animation.edit) what it does. Several can run at once and stack on top of each other.\n\nHow animations fit with everything else:\n• They run on top of the current [scene](scene.index) — they don't change the saved scene, and stopping them returns to the plain look.\n• Aim one at particular lights by setting a [target](perform.intentFilter): tap intents on the stage.\n• Give one musical timing by putting it in a [pulse bucket](pulse.bucket), so a [pulse](pulse.index) beat drives it instead of a fixed speed.\n\nTo freeze a running animation into a recallable look, take a [snapshot](snapshot.index)."
+    },
+    "animation.play": {
+        "heading": "Play / pause / stop",
+        "text": "▶ starts the animation running live, ⏸ holds it on the current frame, and ■ stops it and returns to the plain [scene](scene.index). Resuming from pause carries on where it left off. While it runs it layers on top of whatever scene is active, so you can switch scenes underneath it."
+    },
+    "animation.create": {
+        "heading": "Create or pick",
+        "text": "Create starts a fresh animation: you choose its type — the kind of change it makes (for example a drift, a sweep, or a breathe) — and then tune it. Pick existing reuses an animation already saved in the project, handy for running the same effect from more than one place. Either way it joins this list so you can play and adjust it. Set what it acts on with a [target](perform.intentFilter)."
+    },
+    "animation.edit": {
+        "heading": "Edit animation",
+        "text": "Opens this animation's settings — what property it changes, how far it moves, and how fast. Each animation type shows its own controls. At the top you can trigger it from an [Input](animation.input) or drive it from a [Pulse Bucket](animation.pulse). If the animation is in a pulse bucket, its timing rides on that [pulse](pulse.index)'s beat instead of the fixed speed set here, so it stays locked to the music."
+    },
+    "animation.input": {
+        "heading": "Input",
+        "text": "Links a physical input — a button or a key — to this animation, so you can start and stop it from hardware during the show without touching the screen. Tap the button to pick or change the input; assigning one makes it light up. (MIDI controllers don't go here — they live in their own [plugin tab](plugin.index).)\n\nSee also the other trigger: [Pulse Bucket](animation.pulse)."
+    },
+    "animation.pulse": {
+        "heading": "Pulse Bucket",
+        "text": "Puts this animation into a [pulse bucket](pulse.bucket) — a target a [pulse](pulse.index) drives — so its timing rides the beat instead of the animation's own speed. That's how you lock movement to the music.\n\nTap the button to tick an existing bucket, or tap Create to make a new one (it's named and this animation is added to it). Assigning a bucket makes the button light up. The same bucket can also hold scenes and other animations that should move on the same beat.\n\nEach bucket row has a ✎ button for [more settings](pulse.bucket.edit): for an animation you can set trigger parameters there — how the pulse drives it on each beat — so the same animation can react in different ways (these apply in manual run mode).\n\nSee also the other trigger: [Input](animation.input)."
+    },
+    "plugin.index": {
+        "heading": "MIDI & controller plugins",
+        "text": "A plugin tab embeds an external controller — for example a MIDI surface — inside Ambitecture, so you can drive the show from hardware without leaving this screen.\n\nImportant: the controller doesn't act on its own. First tap an intent on the stage to define the target — what the knobs and faders, and any animation they drive, will affect. The chip shows the current target ([intent filter](perform.intentFilter)); tap another intent to change it, or clear it to start over. Until you pick a target, turning a knob does nothing.\n\nThe plugin runs as its own program elsewhere and appears here when it's reachable; if it isn't you'll see an [offline notice](plugin.offline). Fixtures and intents always live in the hub — a plugin only sends controls, it never owns your show."
+    },
+    "plugin.offline": {
+        "heading": "Plugin offline",
+        "text": "This tab is showing a placeholder because its controller isn't reachable right now. Start that controller (or check it appears in discovery) and the panel will connect automatically — nothing in your project is affected meanwhile."
+    },
+    "perform.intentFilter": {
+        "heading": "Pick a target",
+        "text": "Sets which intents this tab acts on. Single-tap a light on the stage to add or remove it as a target; the chip shows what's currently picked. Until you pick at least one, there's nothing for the controller or animation to drive. Clear it to act on all intents again. Use it to aim one animation or controller at just part of the room."
     }
 }

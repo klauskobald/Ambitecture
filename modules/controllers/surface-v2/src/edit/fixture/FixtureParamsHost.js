@@ -53,6 +53,7 @@ export class FixtureParamsHost {
 
     this._title = document.createElement('span')
     this._title.className = 'stage-edit-params-overlay__title'
+    this._title.dataset.help = 'fixture.edit'
 
     const closeBtn = document.createElement('button')
     closeBtn.type = 'button'
@@ -170,7 +171,7 @@ export class FixtureParamsHost {
     this._appendSection(null, editor.rootDescriptors(), guids)
     const paramDescriptors = editor.paramDescriptors(profile)
     if (paramDescriptors.length > 0) {
-      this._appendSection('Parameters', paramDescriptors, guids)
+      this._appendSection('Parameters', paramDescriptors, guids, 'fixture.edit.params')
     }
     editor.decorate(this._body, {
       guid,
@@ -183,8 +184,9 @@ export class FixtureParamsHost {
    * @param {string | null} title  heading label; `null` renders the panel with no heading box
    * @param {unknown[]} descriptors
    * @param {Set<string>} guids
+   * @param {string} [helpKey]  optional `data-help` topic for the section heading
    */
-  _appendSection (title, descriptors, guids) {
+  _appendSection (title, descriptors, guids, helpKey) {
     if (!this._body) return
     const section = document.createElement('section')
     section.className = 'prop-panel-section'
@@ -192,6 +194,7 @@ export class FixtureParamsHost {
     if (title !== null) {
       const heading = document.createElement('div')
       heading.className = 'prop-row prop-row--group-heading'
+      if (helpKey) heading.dataset.help = helpKey
       const label = document.createElement('span')
       label.className = 'prop-row__label'
       label.textContent = title

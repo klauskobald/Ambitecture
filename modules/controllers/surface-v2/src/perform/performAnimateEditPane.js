@@ -176,22 +176,18 @@ export function createAnimationEditPane ({ onClose }) {
       context: { type: 'animation', guid: currentGuid },
       labelDefault: String(lastOpenRecord.name ?? currentGuid)
     })
-    assignHost.appendChild(
-      iam.getInlinePane({
-        rowClass: 'scene-perform-row',
-        toggleClass: 'intent-toggle scene-perform-button'
-      })
-    )
+    assignHost.appendChild(buildAssignGroup('Input', 'animation.input', iam.getInlinePane({
+      rowClass: 'scene-perform-row',
+      toggleClass: 'intent-toggle scene-perform-button'
+    })))
     const pam = new PulseAssignManager({
       context: { type: 'animation', guid: currentGuid },
       labelDefault: String(lastOpenRecord.name ?? currentGuid)
     })
-    assignHost.appendChild(
-      pam.getInlinePane({
-        rowClass: 'scene-perform-row',
-        toggleClass: 'intent-toggle scene-perform-button'
-      })
-    )
+    assignHost.appendChild(buildAssignGroup('Pulse Bucket', 'animation.pulse', pam.getInlinePane({
+      rowClass: 'scene-perform-row',
+      toggleClass: 'intent-toggle scene-perform-button'
+    })))
   }
 
   projectGraph.subscribe(['actions', 'inputs', 'pulses', 'animations'], () => {
@@ -370,6 +366,24 @@ function sendAnimationPatch (guid, patch) {
     guid,
     patch
   })
+}
+
+/**
+ * @param {string} labelText
+ * @param {string} helpKey
+ * @param {HTMLElement} pane
+ * @returns {HTMLElement}
+ */
+function buildAssignGroup (labelText, helpKey, pane) {
+  const group = document.createElement('div')
+  group.className = 'scene-perform-group'
+  group.dataset.help = helpKey
+  const label = document.createElement('span')
+  label.className = 'scene-perform-label'
+  label.textContent = labelText
+  group.appendChild(label)
+  group.appendChild(pane)
+  return group
 }
 
 /**

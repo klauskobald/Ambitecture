@@ -89,6 +89,22 @@
   gap: 0.35rem;
 }
 
+.scene-perform-group {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.scene-perform-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
 .scene-perform-row {
   display: flex;
   align-items: center;

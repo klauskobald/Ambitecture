@@ -157,18 +157,36 @@ export class ScenesPane {
       context: { type: 'scene', guid: sceneGuid },
       labelDefault: activeScene,
     })
-    this._performBody.appendChild(iam.getInlinePane({
+    this._performBody.appendChild(this._buildPerformGroup('Input', 'scene.performInput', iam.getInlinePane({
       rowClass: 'scene-perform-row',
       toggleClass: 'intent-toggle scene-perform-button'
-    }))
+    })))
     const pam = new PulseAssignManager({
       context: { type: 'scene', guid: sceneGuid },
       labelDefault: activeScene,
     })
-    this._performBody.appendChild(pam.getInlinePane({
+    this._performBody.appendChild(this._buildPerformGroup('Pulse Bucket', 'scene.performPulse', pam.getInlinePane({
       rowClass: 'scene-perform-row',
       toggleClass: 'intent-toggle scene-perform-button'
-    }))
+    })))
+  }
+
+  /**
+   * @param {string} labelText
+   * @param {string} helpKey
+   * @param {HTMLElement} pane
+   * @returns {HTMLElement}
+   */
+  _buildPerformGroup (labelText, helpKey, pane) {
+    const group = document.createElement('div')
+    group.className = 'scene-perform-group'
+    group.dataset.help = helpKey
+    const label = document.createElement('span')
+    label.className = 'scene-perform-label'
+    label.textContent = labelText
+    group.appendChild(label)
+    group.appendChild(pane)
+    return group
   }
 
   // ── Intent toggles ────────────────────────────────────────────────────────────

@@ -217,7 +217,7 @@ textarea.modal-input.input-assign-modal__json {
   max-height: min(82vh, calc(16rem + 18rem * var(--modal-scale)));
 }
 
-.input-assign-modal--assign-picker > .modal-text {
+.input-assign-modal--assign-picker>.modal-text {
   flex-shrink: 0;
 }
 
@@ -303,6 +303,10 @@ textarea.modal-input.input-assign-modal__json {
   color-scheme: dark;
   -webkit-appearance: none;
   appearance: none;
+}
+
+.input-assign-inline-icon-btn--edit {
+  font-size: 2rem;
 }
 
 .input-assign-inline-icon-btn:focus-visible {
@@ -412,7 +416,7 @@ textarea.modal-input.input-assign-modal__json {
   width: 100%;
 }
 
-.intent-params-row > .augmented-select {
+.intent-params-row>.augmented-select {
   flex: 1 1 auto;
   min-width: 0;
 }

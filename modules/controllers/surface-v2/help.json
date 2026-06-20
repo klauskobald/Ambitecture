@@ -121,9 +121,9 @@
     },
     "intent.edit.radius": {
         "heading": "Radius",
-        "text": "How far the light reaches from its position, in metres. Fixtures inside the radius pick it up; the [falloff curve](intent.edit.radiusFn) shapes how it fades toward the edge."
+        "text": "How far the light reaches from its position, in metres. Fixtures inside the radius pick it up; the [falloff curve](intent.edit.radiusFunction) shapes how it fades toward the edge."
     },
-    "intent.edit.radiusFn": {
+    "intent.edit.radiusFunction": {
         "heading": "Falloff",
         "text": "The curve that controls how the light fades from full at the centre to nothing at the edge of its radius — a soft gradient or a harder edge."
     },

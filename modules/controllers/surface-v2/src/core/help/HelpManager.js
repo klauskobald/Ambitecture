@@ -13,6 +13,8 @@ import { renderHelpText } from './renderHelpText.js'
  * @property {() => void} [onClose] invoked when the user dismisses the panel via its × control
  * @property {boolean} [force] open even when automatic help is toggled off (used by the manual ? button)
  * @property {boolean} [quiet] when the key has no topic, do nothing instead of showing the `no-help-available` fallback
+ * @property {boolean} [passThrough] render the floating panel click-through (pointer-events: none) so it never
+ *   intercepts taps meant for the UI underneath — used for automatic, transient contextual help
  */
 
 const DEFAULT_FLOAT_WIDTH = 320
@@ -264,6 +266,15 @@ async function show (key, options = {}) {
   if (hostEl) {
     panel.classList.add('help-panel--host')
     hostEl.appendChild(panel)
+    return
+  }
+
+  // Click-through for automatic help so it never swallows taps for controls underneath.
+  // Interactive (draggable/resizable) only for manual/forced opens.
+  if (options.passThrough && !currentTopicIsMandatory) {
+    panel.classList.add('help-panel--passthrough')
+    document.body.appendChild(panel)
+    applyFloatGeometry(panel)
     return
   }
 

@@ -4,6 +4,7 @@ import { PillControl } from './controls/PillControl.js'
 import { ModalControl } from './controls/ModalControl.js'
 import { InfoTextControl } from './controls/InfoTextControl.js'
 import { Vector3BooleanControl } from './controls/Vector3BooleanControl.js'
+import { BooleanPillControl } from './controls/BooleanPillControl.js'
 import { projectGraph } from '../core/projectGraph.js'
 import {
   queueIntentUpdate,
@@ -13,8 +14,6 @@ import { InputAssignManager } from './InputAssignManager.js'
 import {
   effectivePerformResetForKey
 } from '../core/intentPerformDefaults.js'
-import { intentHeightSliderEnabled } from '../core/stores.js'
-import { getStageOverlay } from '../stage/stageOverlayHost.js'
 import { resolveIntentDescriptorUiKind } from '../core/systemCapabilities.js'
 import { PERFORM_RESET_KEY_METAS } from './performResetKeyMetas.js'
 
@@ -37,8 +36,6 @@ export class PropertyPanel {
     this._inputAssignManager = null
     /** @type {Map<string, HTMLButtonElement> | null} */
     this._performResetToggleByKey = null
-    /** @type {HTMLButtonElement | null} */
-    this._heightSliderPill = null
   }
 
   /**
@@ -49,23 +46,45 @@ export class PropertyPanel {
     const panel = document.createElement('div')
     panel.className = 'prop-panel'
 
+    /**
+     * Descriptors with a `host` are not their own card — they pool into the card named by that id.
+     * `misc-settings` is the shared card that also carries the Input + Scene-switch pills.
+     * @type {Map<string, Record<string, unknown>[]>}
+     */
+    const hostGroups = new Map()
+    if (this._isSingleIntentSelection()) hostGroups.set('misc-settings', [])
+
     for (const descriptor of this._descriptors) {
       const d = /** @type {Record<string, unknown>} */ (descriptor)
       if (d.noMultiple && this._selectionSize > 1) continue
 
+      const host = typeof d.host === 'string' && d.host.length > 0 ? d.host : null
+      if (host) {
+        if (!hostGroups.has(host)) hostGroups.set(host, [])
+        const group = /** @type {Record<string, unknown>[]} */ (hostGroups.get(host))
+        group.push(d)
+        continue
+      }
+
       const control = this._controlForDescriptor(d)
       if (!control) continue
-
       this._controls.push(control)
       panel.appendChild(control.buildRow())
     }
 
-    const togglesCard = this._buildBottomTogglesCard()
-    if (togglesCard) {
-      panel.appendChild(togglesCard)
+    for (const [hostId, descriptors] of hostGroups) {
+      const card = this._buildHostCard(hostId, descriptors)
+      if (card) panel.appendChild(card)
     }
 
     return panel
+  }
+
+  /** @returns {boolean} */
+  _isSingleIntentSelection () {
+    if (this._selectionSize !== 1) return false
+    const [guid] = [...this._selectedGuids]
+    return !!guid && projectGraph.getIntents().has(guid)
   }
 
   /**
@@ -79,7 +98,6 @@ export class PropertyPanel {
       control.refresh(guids)
     }
     this._refreshPerformResetPills()
-    this._refreshHeightSliderPill()
   }
 
   destroy () {
@@ -89,28 +107,43 @@ export class PropertyPanel {
     this._controls = []
     this._inputAssignManager = null
     this._performResetToggleByKey = null
-    this._heightSliderPill = null
   }
 
   /**
-   * Merged bottom card: input-assign pill + one pill per perform-reset key.
-   * No heading; pills lay out horizontally.
+   * Shared host card: a single title-less card holding pills. `misc-settings` additionally carries
+   * the Input + Scene-switch pills. Returns null when the card would be empty.
+   * @param {string} hostId
+   * @param {Record<string, unknown>[]} descriptors
    * @returns {HTMLElement | null}
    */
-  _buildBottomTogglesCard () {
-    this._inputAssignManager = null
-    this._performResetToggleByKey = null
-    this._heightSliderPill = null
-    if (this._selectionSize !== 1) return null
-    const [guid] = [...this._selectedGuids]
-    if (!guid || !projectGraph.getIntents().has(guid)) return null
-
+  _buildHostCard (hostId, descriptors) {
     const card = document.createElement('div')
-    card.className = 'prop-row prop-row--bottom-toggles'
+    card.className = 'prop-row prop-row--host'
+    card.dataset.host = hostId
     const pills = document.createElement('div')
-    pills.className = 'prop-pills prop-pills--bottom-toggles'
+    pills.className = 'prop-pills prop-pills--host'
     card.appendChild(pills)
 
+    if (hostId === 'misc-settings') this._appendMiscSettingsPills(pills)
+
+    for (const d of descriptors) {
+      const control = this._buildHostControl(d)
+      if (!control) continue
+      this._controls.push(control)
+      pills.appendChild(control.buildPill())
+      control.refresh(this._selectedGuids)
+    }
+
+    return pills.childElementCount > 0 ? card : null
+  }
+
+  /** Input-assign pill + one pill per perform-reset key (single-intent only), into a host pill row. */
+  _appendMiscSettingsPills (pills) {
+    this._inputAssignManager = null
+    this._performResetToggleByKey = null
+    if (!this._isSingleIntentSelection()) return
+    const [guid] = [...this._selectedGuids]
+    if (!guid) return
     const intent = projectGraph.getEffectiveIntent(guid)
     const intentLabel = typeof intent?.name === 'string' ? intent.name : guid
     this._inputAssignManager = new InputAssignManager({
@@ -118,50 +151,16 @@ export class PropertyPanel {
       labelDefault: intentLabel
     })
     pills.appendChild(this._inputAssignManager.getStatePill())
-
-    this._heightSliderPill = this._buildHeightSliderPill(guid)
-    pills.appendChild(this._heightSliderPill)
-    this._refreshHeightSliderPill()
-
     this._performResetToggleByKey = this._buildPerformResetPills(guid, pills)
-    return card
   }
 
   /**
-   * Toggle the stage height (Y) slider for this intent. Persists an explicit `heightSlider`
-   * boolean (default-on for targets, off otherwise — see {@link intentHeightSliderEnabled}).
-   * @param {string} guid
-   * @returns {HTMLButtonElement}
+   * @param {Record<string, unknown>} d
+   * @returns {BooleanPillControl | null}
    */
-  _buildHeightSliderPill (guid) {
-    const pill = document.createElement('button')
-    pill.type = 'button'
-    pill.className = 'prop-pill intent-toggle'
-    pill.textContent = 'Height slider'
-    pill.title = 'Toggle the Y-height slider on the stage'
-    pill.addEventListener('click', () => {
-      const current =
-        projectGraph.getEffectiveIntent(guid) ?? projectGraph.getIntents().get(guid)
-      const eff = intentHeightSliderEnabled(current)
-      const updated = projectGraph.updateIntentProperty(guid, 'heightSlider', !eff)
-      if (updated) queueIntentUpdate(updated)
-      sendSaveProject('intents', [...projectGraph.getIntents().values()])
-      this._refreshHeightSliderPill()
-      getStageOverlay()?.markRenderActivity()
-    })
-    return pill
-  }
-
-  _refreshHeightSliderPill () {
-    if (!this._heightSliderPill || this._selectionSize !== 1) return
-    const [guid] = [...this._selectedGuids]
-    if (!guid) return
-    const intent =
-      projectGraph.getEffectiveIntent(guid) ?? projectGraph.getIntents().get(guid)
-    const eff = intentHeightSliderEnabled(intent)
-    this._heightSliderPill.classList.toggle('prop-pill--active', eff)
-    this._heightSliderPill.classList.toggle('intent-toggle--enabled', eff)
-    this._heightSliderPill.setAttribute('aria-pressed', eff ? 'true' : 'false')
+  _buildHostControl (d) {
+    if (resolveIntentDescriptorUiKind(d) !== 'pill') return null
+    return new BooleanPillControl(d, () => {}, this._selectionSize, this._writeTarget)
   }
 
   /**

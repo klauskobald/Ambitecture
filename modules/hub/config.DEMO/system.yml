@@ -121,6 +121,13 @@ systemCapabilities:
         isMandatory: true
 
     light:
+      - dotKey: heightSlider
+        name: Height Slider
+        type: boolean
+        display: pill
+        host: misc-settings
+        defaultValue: false
+        isMandatory: true
       - dotKey: name
         name: Name
         type: string
@@ -298,6 +305,13 @@ systemCapabilities:
         noMultiple: true
 
     target:
+      - dotKey: heightSlider
+        name: Height Slider
+        type: boolean
+        display: pill
+        host: misc-settings
+        defaultValue: false
+        isMandatory: true
       - dotKey: name
         name: Name
         type: string

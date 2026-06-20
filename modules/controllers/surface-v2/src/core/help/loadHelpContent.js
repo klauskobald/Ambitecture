@@ -2,6 +2,7 @@
  * @typedef {object} HelpTopic
  * @property {string} heading
  * @property {string} text
+ * @property {boolean} [mandatory]
  */
 
 /** @typedef {Record<string, HelpTopic>} HelpContent */
@@ -68,5 +69,6 @@ export function getHelpTopic (content, key) {
   const heading = typeof topic.heading === 'string' ? topic.heading : ''
   const text = typeof topic.text === 'string' ? topic.text : ''
   if (!heading && !text) return null
-  return { heading, text }
+  const mandatory = topic.mandatory === true
+  return { heading, text, mandatory }
 }

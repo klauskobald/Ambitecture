@@ -1,7 +1,11 @@
 import { loadHelpContent, getHelpTopic } from './loadHelpContent.js'
 import {
   loadHelpPanelGeometry,
-  saveHelpPanelGeometry
+  saveHelpPanelGeometry,
+  loadHelpVisible,
+  saveHelpVisible,
+  loadIconAnchor,
+  saveIconAnchor
 } from './helpPanelState.js'
 
 /**
@@ -12,6 +16,7 @@ import {
 
 const DEFAULT_FLOAT_WIDTH = 320
 const DEFAULT_FLOAT_HEIGHT = 200
+const TOGGLE_SIZE = 36
 
 /** @type {Map<string, HTMLElement | (() => HTMLElement | null)>} */
 const hosts = new Map()
@@ -25,6 +30,136 @@ let teardown = []
 let hiding = false
 /** Bumped on every show/hide so an in-flight (awaiting) `show` can detect it was superseded. */
 let generation = 0
+
+/** @type {boolean} */
+let helpVisible = loadHelpVisible()
+/** @type {boolean} */
+let currentTopicIsMandatory = false
+/** @type {HTMLElement | null} */
+let toggleIconEl = null
+
+// --- toggle icon (persistent, always in DOM) -----------------------------------
+
+function ensureToggleIcon () {
+  if (toggleIconEl) return
+  toggleIconEl = document.createElement('button')
+  toggleIconEl.type = 'button'
+  toggleIconEl.className = 'help-toggle-icon'
+  toggleIconEl.textContent = '❓'
+  toggleIconEl.setAttribute('aria-label', 'Toggle help visibility')
+  toggleIconEl.addEventListener('click', onToggleClick)
+  makeIconDraggable()
+  updateToggleIconVisual()
+  positionToggleIconStandalone()
+  document.body.appendChild(toggleIconEl)
+}
+
+/** @type {boolean} */
+let iconDidDrag = false
+
+function makeIconDraggable () {
+  if (!toggleIconEl) return
+
+  /** @param {PointerEvent} e */
+  const onDown = e => {
+    if (e.button !== 0) return
+    if (toggleIconEl.classList.contains('help-toggle-icon--in-panel')) return
+    e.preventDefault()
+    toggleIconEl.setPointerCapture(e.pointerId)
+    const rect = toggleIconEl.getBoundingClientRect()
+    const offsetX = e.clientX - rect.left
+    const offsetY = e.clientY - rect.top
+    iconDidDrag = false
+
+    /** @param {PointerEvent} ev */
+    const onMove = ev => {
+      const dx = ev.clientX - e.clientX
+      const dy = ev.clientY - e.clientY
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) iconDidDrag = true
+      const w = toggleIconEl.offsetWidth
+      toggleIconEl.style.left = `${clampToViewport(ev.clientX - offsetX, w, window.innerWidth)}px`
+      toggleIconEl.style.top = `${clampToViewport(ev.clientY - offsetY, TOGGLE_SIZE, window.innerHeight)}px`
+    }
+    /** @param {PointerEvent} ev */
+    const onUp = ev => {
+      toggleIconEl.releasePointerCapture(ev.pointerId)
+      toggleIconEl.removeEventListener('pointermove', onMove)
+      toggleIconEl.removeEventListener('pointerup', onUp)
+      toggleIconEl.removeEventListener('pointercancel', onUp)
+      if (iconDidDrag) {
+        saveIconAnchor({ x: toggleIconEl.offsetLeft + toggleIconEl.offsetWidth, y: toggleIconEl.offsetTop })
+      }
+    }
+    toggleIconEl.addEventListener('pointermove', onMove)
+    toggleIconEl.addEventListener('pointerup', onUp)
+    toggleIconEl.addEventListener('pointercancel', onUp)
+  }
+
+  toggleIconEl.addEventListener('pointerdown', onDown)
+}
+
+function updateToggleIconVisual () {
+  if (!toggleIconEl) return
+  toggleIconEl.classList.toggle('help-toggle-icon--off', !helpVisible)
+  if (!toggleIconEl.classList.contains('help-toggle-icon--in-panel')) {
+    toggleIconEl.textContent = `❓ ${helpVisible ? 'on' : 'off'}`
+  }
+}
+
+function positionToggleIconStandalone () {
+  if (!toggleIconEl) return
+  let anchor = loadIconAnchor()
+  if (!anchor) {
+    const stored = loadHelpPanelGeometry()
+    if (stored) {
+      anchor = { x: stored.x + stored.w, y: stored.y }
+    } else {
+      anchor = {
+        x: Math.round(window.innerWidth - 24),
+        y: Math.round((window.innerHeight - DEFAULT_FLOAT_HEIGHT) / 2)
+      }
+    }
+  }
+  const w = toggleIconEl.offsetWidth
+  toggleIconEl.style.left = `${clampToViewport(anchor.x - w, w, window.innerWidth)}px`
+  toggleIconEl.style.top = `${clampToViewport(anchor.y, TOGGLE_SIZE, window.innerHeight)}px`
+  toggleIconEl.style.right = 'auto'
+  toggleIconEl.style.bottom = 'auto'
+}
+
+function attachToggleToPanel (panel) {
+  if (!toggleIconEl) return
+  toggleIconEl.classList.add('help-toggle-icon--in-panel')
+  toggleIconEl.textContent = '❓'
+  const actions = panel.querySelector('.help-panel__actions')
+  if (actions instanceof HTMLElement) {
+    actions.appendChild(toggleIconEl)
+  }
+}
+
+function detachToggleToStandalone () {
+  if (!toggleIconEl) return
+  toggleIconEl.classList.remove('help-toggle-icon--in-panel')
+  toggleIconEl.textContent = `❓ ${helpVisible ? 'on' : 'off'}`
+  positionToggleIconStandalone()
+  document.body.appendChild(toggleIconEl)
+}
+
+function onToggleClick () {
+  if (iconDidDrag) {
+    iconDidDrag = false
+    return
+  }
+  helpVisible = !helpVisible
+  saveHelpVisible(helpVisible)
+  updateToggleIconVisual()
+
+  if (panelEl && !currentTopicIsMandatory) {
+    hide()
+  }
+}
+
+// --- host registry ------------------------------------------------------------
 
 /**
  * Register a named host so callers can pass `{ host: 'name' }` without the manager
@@ -49,9 +184,14 @@ function resolveHost (host) {
   return el instanceof HTMLElement ? el : null
 }
 
+// --- show / hide --------------------------------------------------------------
+
 /**
  * Show a help topic. With `options.host` the panel attaches into that host as a
  * full-host overlay card; otherwise it appears as a floating, movable + resizable panel.
+ *
+ * Non-mandatory topics are silently skipped when the user has toggled help off.
+ * Mandatory topics always show regardless of toggle state.
  * @param {string} key
  * @param {ShowOptions} [options]
  * @returns {Promise<void>}
@@ -66,29 +206,40 @@ async function show (key, options = {}) {
     return
   }
 
+  if (!topic.mandatory && !helpVisible) return
+
   hide()
+
+  ensureToggleIcon()
 
   const hostEl = resolveHost(options.host)
   currentOnClose = options.onClose ?? null
+  currentTopicIsMandatory = topic.mandatory === true
 
   const panel = buildCard(topic)
   panelEl = panel
-  bindEscDismiss()
+
+  if (!currentTopicIsMandatory) {
+    bindEscDismiss()
+  }
 
   if (hostEl) {
     panel.classList.add('help-panel--host')
     hostEl.appendChild(panel)
+    attachToggleToPanel(panel)
     return
   }
 
   document.body.appendChild(panel)
   applyFloatGeometry(panel)
+  attachToggleToPanel(panel)
   makeDraggable(panel)
   observeFloatResize(panel)
 }
 
 /** User-driven dismissal (× or Esc): close the panel and notify the caller. */
 function dismiss () {
+  if (currentTopicIsMandatory) return
   const cb = currentOnClose
   hide()
   cb?.()
@@ -106,6 +257,8 @@ function bindEscDismiss () {
   teardown.push(() => document.removeEventListener('keydown', onKey))
 }
 
+// --- panel building ------------------------------------------------------------
+
 /**
  * @param {import('./loadHelpContent.js').HelpTopic} topic
  * @returns {HTMLElement}
@@ -121,15 +274,21 @@ function buildCard (topic) {
   title.className = 'help-panel__title'
   title.textContent = topic.heading
 
-  const close = document.createElement('button')
-  close.type = 'button'
-  close.className = 'help-panel__close'
-  close.setAttribute('aria-label', 'Close')
-  close.textContent = '×'
-  close.addEventListener('click', () => dismiss())
+  const actions = document.createElement('div')
+  actions.className = 'help-panel__actions'
+
+  if (!topic.mandatory) {
+    const close = document.createElement('button')
+    close.type = 'button'
+    close.className = 'help-panel__close'
+    close.setAttribute('aria-label', 'Close')
+    close.textContent = '×'
+    close.addEventListener('click', () => dismiss())
+    actions.appendChild(close)
+  }
 
   header.appendChild(title)
-  header.appendChild(close)
+  header.appendChild(actions)
 
   const body = document.createElement('div')
   body.className = 'help-panel__body'
@@ -139,6 +298,8 @@ function buildCard (topic) {
   root.appendChild(body)
   return root
 }
+
+// --- floating geometry ---------------------------------------------------------
 
 /**
  * @param {HTMLElement} panel
@@ -178,7 +339,7 @@ function makeDraggable (panel) {
   /** @param {PointerEvent} e */
   const onDown = e => {
     if (e.button !== 0) return
-    if (e.target instanceof HTMLElement && e.target.closest('.help-panel__close')) return
+    if (e.target instanceof HTMLElement && e.target.closest('.help-panel__close, .help-toggle-icon')) return
     e.preventDefault()
     header.setPointerCapture(e.pointerId)
     const rect = panel.getBoundingClientRect()
@@ -233,6 +394,10 @@ function persistFloatGeometry (panel) {
     w: panel.offsetWidth,
     h: panel.offsetHeight
   })
+  saveIconAnchor({
+    x: panel.offsetLeft + panel.offsetWidth,
+    y: panel.offsetTop
+  })
 }
 
 /**
@@ -248,7 +413,17 @@ function hide () {
   panelEl?.remove()
   panelEl = null
   currentOnClose = null
+  currentTopicIsMandatory = false
+  detachToggleToStandalone()
   hiding = false
+}
+
+// --- module init ---------------------------------------------------------------
+
+if (typeof document !== 'undefined' && document.readyState !== 'loading') {
+  ensureToggleIcon()
+} else if (typeof document !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', ensureToggleIcon, { once: true })
 }
 
 export const HelpManager = { registerHost, show, hide }

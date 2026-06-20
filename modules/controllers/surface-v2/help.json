@@ -1,10 +1,19 @@
 {
+    "index": {
+        "heading": "Ambitecture",
+        "text": "Ambitecture is a platform for creating and managing spatial audio and lighting systems.\nDeveloped by [Kobald](https://kobald.com).\n\nFor fixtures like DMX a matching [renderer](renderer) is required."
+    },
+    "renderer": {
+        "heading": "Renderer",
+        "text": "A renderer is a module that converts Ambitecture intents into physical output."
+    },
     "heightSlider": {
         "heading": "Height Slider",
         "text": "The height slider is a control that allows you to adjust the height of the fixture."
     },
     "connectIntent": {
         "heading": "Connect intents",
-        "text": "Tap an intent on the stage to connect it to this one. Tap empty space, or × here, to cancel."
+        "text": "Tap an intent on the stage to connect it to this one. Tap empty space, or × here, to cancel.",
+        "mandatory": true
     }
 }

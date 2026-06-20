@@ -23,6 +23,13 @@ export type SnapshotMetadataPatch = {
 };
 
 export class SnapshotManager {
+  /**
+   * GUID of the most recently recalled snapshot, held in memory only (never persisted).
+   * Broadcast to controllers as the "last recalled" highlight and replayed to controllers
+   * on register so fresh/reloaded surfaces show the same highlight.
+   */
+  private lastRecalledSnapshotGuid: string | null = null;
+
   constructor(
     private projectManager: ProjectManager,
     private graphStore: ProjectGraphStore,
@@ -30,6 +37,10 @@ export class SnapshotManager {
     private pulseSetupManager: PulseSetupManager,
     private animationManager: AnimationManager,
   ) { }
+
+  getLastRecalledSnapshotGuid(): string | null {
+    return this.lastRecalledSnapshotGuid;
+  }
 
   captureFromLive(input: SnapshotCaptureInput): GraphMutationResult {
     if (this.animationManager.hasOpenEditMode()) {
@@ -91,6 +102,8 @@ export class SnapshotManager {
       Logger.warn(`[snapshot] recall: unknown snapshot ${snapshotGuid}`);
       return emptyMutationResult(this.graphStore.getRevision());
     }
+
+    this.lastRecalledSnapshotGuid = snapshot.guid;
 
     const results: GraphMutationResult[] = [];
     const { recall } = snapshot;

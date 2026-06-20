@@ -111,6 +111,8 @@ class ProjectGraph {
       snapshots: /** @type {Map<string, Record<string, unknown>>} */ (
         new Map()
       ),
+      /** Hub `snapshot:recalled` highlight — last recalled snapshot guid; transient, never persisted. */
+      lastRecalledSnapshotGuid: /** @type {string | null} */ (null),
       /** Hub `entities.connector` (physical links between intents) from `graph:init` + `graph:delta`. */
       connectors: /** @type {Map<string, Record<string, unknown>>} */ (
         new Map()
@@ -498,6 +500,23 @@ class ProjectGraph {
   /** @param {string} guid */
   removeConnectorLocal (guid) {
     if (this._data.connectors.delete(guid)) this._notify('connectors')
+  }
+
+  /** @returns {string | null} guid of the last snapshot recalled (hub-broadcast highlight). */
+  getLastRecalledSnapshotGuid () {
+    return this._data.lastRecalledSnapshotGuid
+  }
+
+  /**
+   * Set the last-recalled snapshot highlight from a hub `snapshot:recalled` message.
+   * Transient UI state only — never written to the project.
+   * @param {string} guid
+   */
+  setLastRecalledSnapshot (guid) {
+    const next = typeof guid === 'string' && guid.length > 0 ? guid : null
+    if (this._data.lastRecalledSnapshotGuid === next) return
+    this._data.lastRecalledSnapshotGuid = next
+    this._notify('snapshots')
   }
 
   /**

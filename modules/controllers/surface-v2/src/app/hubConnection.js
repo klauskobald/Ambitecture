@@ -163,6 +163,11 @@ export function connectStageHub (appCfg) {
           projectGraph.applyGraphDelta(message.payload)
           break
         }
+        case 'snapshot:recalled': {
+          const p = /** @type {Record<string, unknown>} */ (message.payload ?? {})
+          projectGraph.setLastRecalledSnapshot(typeof p.guid === 'string' ? p.guid : '')
+          break
+        }
         case 'runtime:update': {
           queueRuntimeUpdate(message.payload)
           break

@@ -375,10 +375,19 @@ router.register('register', new RegisterHandler(
   discoveryService,
   pulseManager,
   hubStatusDispatcher,
+  snapshotManager,
 ));
 router.register('discovery:subscribe', new DiscoveryHandler(discoveryService));
 router.register('graph:command', new GraphCommandHandler(registry, graphStore, publishGraphMutation));
 router.register('runtime:command', new RuntimeCommandHandler(registry, runtimeUpdateDispatcher, rateLimitEventsPerSecond));
+const broadcastSnapshotRecalled = (guid: string): void => {
+  if (!guid) return;
+  const msg = JSON.stringify({ message: { type: 'snapshot:recalled', payload: { guid } } });
+  for (const ws of registry.getByRole('controller')) {
+    if (ws.readyState !== ws.OPEN) continue;
+    ws.send(msg);
+  }
+};
 const actionHandler = new ActionHandler(
   registry,
   graphStore,
@@ -387,6 +396,7 @@ const actionHandler = new ActionHandler(
   runtimeUpdateDispatcher,
   animationManager,
   snapshotManager,
+  broadcastSnapshotRecalled,
 );
 router.register('action:input', actionHandler);
 router.register('action:trigger', actionHandler);

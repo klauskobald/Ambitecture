@@ -192,6 +192,8 @@ export function createPerformSnapshotPanel () {
       return
     }
 
+    const recalledGuid = projectGraph.getLastRecalledSnapshotGuid()
+
     for (const row of rows) {
       const guid = typeof row.guid === 'string' ? row.guid : ''
       if (!guid) continue
@@ -199,6 +201,7 @@ export function createPerformSnapshotPanel () {
 
       const item = document.createElement('div')
       item.className = 'perform-snapshot-row'
+      if (guid === recalledGuid) item.classList.add('perform-snapshot-row--recalled')
       item.setAttribute('role', 'listitem')
 
       const main = document.createElement('div')

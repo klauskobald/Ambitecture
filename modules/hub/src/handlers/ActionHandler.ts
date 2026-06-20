@@ -110,6 +110,7 @@ export class ActionHandler implements MessageHandler {
     private runtimeUpdateDispatcher: RuntimeUpdateDispatcher,
     private animationManager?: AnimationManager,
     private snapshotManager?: SnapshotManager,
+    private broadcastSnapshotRecalled?: (guid: string) => void,
   ) { }
 
   handle(ws: WebSocket, message: WsMessage, _registry: ConnectionRegistry): void {
@@ -399,6 +400,7 @@ export class ActionHandler implements MessageHandler {
       this.sendResultToSource(sourceWs, result);
     }
     this.publishMutation(sourceWs, result, location);
+    this.broadcastSnapshotRecalled?.(item.guid);
     return 1;
   }
 

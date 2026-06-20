@@ -12,6 +12,7 @@ import { resolveRuntimeReferences } from '../ConfigResolver';
 import { PulseManager } from '../pulse/PulseManager';
 import { HubStatusDispatcher } from '../hubStatusTypes';
 import { parseSubscribe, toClientSubscribeState } from '../SubscribeProtocol';
+import type { SnapshotManager } from '../snapshot/SnapshotManager';
 
 interface RegisterPayload {
   role: 'renderer' | 'controller';
@@ -40,6 +41,7 @@ export class RegisterHandler implements MessageHandler {
   private discovery: DiscoveryService;
   private pulseManager: PulseManager | undefined;
   private hubStatus: HubStatusDispatcher | undefined;
+  private snapshotManager: SnapshotManager | undefined;
 
   constructor(
     registry: ConnectionRegistry,
@@ -50,6 +52,7 @@ export class RegisterHandler implements MessageHandler {
     discovery: DiscoveryService,
     pulseManager?: PulseManager,
     hubStatus?: HubStatusDispatcher,
+    snapshotManager?: SnapshotManager,
   ) {
     this.registry = registry;
     this.graphStore = graphStore;
@@ -59,6 +62,7 @@ export class RegisterHandler implements MessageHandler {
     this.discovery = discovery;
     this.pulseManager = pulseManager;
     this.hubStatus = hubStatus;
+    this.snapshotManager = snapshotManager;
   }
 
   handle(ws: WebSocket, message: WsMessage, _registry: ConnectionRegistry): void {
@@ -158,6 +162,14 @@ export class RegisterHandler implements MessageHandler {
             : mergeAnimatorDescriptors(capabilities);
         ws.send(JSON.stringify({ message: { type: 'systemCapabilities', payload: mergedCaps } }));
         Logger.info(`[register] pushed systemCapabilities to controller ${guid}`);
+      }
+
+      const lastRecalledSnapshotGuid = this.snapshotManager?.getLastRecalledSnapshotGuid();
+      if (lastRecalledSnapshotGuid) {
+        ws.send(JSON.stringify({
+          message: { type: 'snapshot:recalled', payload: { guid: lastRecalledSnapshotGuid } },
+        }));
+        Logger.info(`[register] pushed last recalled snapshot to controller ${guid}`);
       }
     }
   }

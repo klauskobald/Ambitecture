@@ -1619,6 +1619,11 @@
   background: var(--color-bg-raised);
 }
 
+.perform-snapshot-row--recalled {
+  background: var(--color-accent-dim);
+  border-color: var(--color-accent);
+}
+
 .perform-snapshot-row > .perform-animate-toggle {
   flex: 0 0 auto;
 }

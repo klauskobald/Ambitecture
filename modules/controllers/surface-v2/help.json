@@ -1,7 +1,7 @@
 {
     "index": {
         "heading": "Ambitecture",
-        "text": "Ambitecture lets you design light and color in space, then perform it live.\n\nStart here:\n• [The stage](stage.index) — where you place and play your lights\n• [Intents](intent.index) — the spatial \"wishes\" that drive the lights\n• [Scenes](scene.index) — saved looks you switch between\n\nFor real hardware (DMX, LED…) a matching [renderer](renderer) must be connected.\n\nTip: keep this panel's \"Auto\" toggle on and help will follow what you click. Turn it off for silence. Made by [Kobald](https://kobald.com)."
+        "text": "Ambitecture lets you design light and color in space, then perform it live.\n\nMade by [Klaus Kobald](https://kobald.com) as an open source project.\n\nStart here:\n• [The stage](stage.index) — where you place and play your intents\n• [Intents](intent.index) — the spatial \"wishes\" that shape the light\n• [Scenes](scene.index) — saved looks you switch between\n\nFor real hardware (DMX, LED…) a matching [renderer](renderer) must be connected.\n\nTip: keep this panel's \"Auto\" toggle on and help will follow what you click. Turn it off for silence."
     },
     "no-help-available": {
         "heading": "Ooops!",
@@ -15,19 +15,17 @@
         "heading": "Height",
         "text": "Sets how high off the floor this element sits. On the stage you can also drag the small vertical handle next to it to change height directly."
     },
-
     "stage.index": {
         "heading": "The Stage",
-        "text": "The stage is your room seen from above — a space where you place lights (intents) and see your fixtures. It works in three modes, shown as tabs:\n\n• [Perform](stage.perform) — run the show live\n• [Edit](stage.edit) — build and arrange your lights\n• [Scenes](scene.index) — save and switch between looks\n\nThe hub takes everything you place here and works out, for every physical fixture, what color and brightness it should show."
+        "text": "The stage is your room seen from above — a space where you place [intents](intent.index) (your spatial light \"wishes\") and see your fixtures. It works in three modes, shown as tabs:\n\n• [Perform](stage.perform) — run the show live\n• [Edit](stage.edit) — build and arrange your intents\n• [Scenes](scene.index) — save and switch between looks\n\nThe hub takes the intents you place here and works out, for every physical fixture, what color and brightness it should show. New here? Read [what an intent is](intent.index)."
     },
-
     "stage.perform": {
         "heading": "Perform",
-        "text": "Live mode. Here you play the show in real time: drag enabled lights around the room and tweak them with knobs, and the change goes out to your fixtures instantly.\n\nMoves in Perform are temporary — they ride on top of the saved scene and don't change it. Use [Reset scene](stage.perform.resetScene) to snap back.\n\nControls: [HUD knobs toggle](stage.perform.hudToggle) · [knobs](stage.perform.knob). Only lights you marked in [Perform Enable](stage.edit.performEnable) can be moved here."
+        "text": "Live mode. Here you play the show in real time: drag enabled intents around the room and tweak them with knobs, and the change goes out to your fixtures instantly.\n\nMoves in Perform are temporary — they ride on top of the saved scene and don't change it. Use [Reset scene](stage.perform.resetScene) to snap back.\n\nControls: [HUD knobs toggle](stage.perform.hudToggle) · [knobs](stage.perform.knob). Only intents you marked in [Perform Enable](stage.edit.performEnable) can be moved here."
     },
     "stage.perform.hudToggle": {
         "heading": "Show / hide knobs",
-        "text": "Shows or hides the round control knobs that float over each light on the stage. Hide them for a clean view; show them to adjust lights live."
+        "text": "Shows or hides the round control knobs that float over each intent on the stage. Hide them for a clean view; show them to adjust intents live."
     },
     "stage.perform.resetScene": {
         "heading": "Reset scene",
@@ -35,20 +33,19 @@
     },
     "stage.perform.knob": {
         "heading": "Live knobs",
-        "text": "Each knob adjusts one property of one light in real time — brightness, radius, strobe, and so on. Turn it and the fixtures update immediately.\n\nYou choose which properties get a knob with the ❂ button in the intent editor ([quick panel](intent.edit.quickPanel))."
+        "text": "Each knob adjusts one property of one intent in real time — brightness, radius, strobe, and so on. Turn it and the fixtures update immediately.\n\nYou choose which properties get a knob with the ❂ button in the intent editor ([quick panel](intent.edit.quickPanel))."
     },
-
     "stage.edit": {
         "heading": "Edit",
-        "text": "Build mode. Here you place lights, arrange them, and set their properties — changes are saved to the project.\n\nIn Edit the fixtures are locked and the physics is paused so nothing drifts while you work.\n\n• Double-tap empty space to [add a light](stage.edit.createIntent)\n• Double-tap a light to open its [editor](intent.edit)\n• Drag a light to move it\n\nToolbar: [Fixtures lock](stage.edit.fixtureLock) · [Perform Enable](stage.edit.performEnable) · [Perform sort](stage.edit.performSort) · [Select](stage.edit.select) · [Physics](stage.edit.physics)."
+        "text": "Build mode. Here you place intents, arrange them, and set their properties — changes are saved to the project.\n\nIn Edit the fixtures are locked and the physics is paused so nothing drifts while you work.\n\n• Double-tap empty space to [add an intent](stage.edit.createIntent)\n• Double-tap an intent to open its [editor](intent.edit)\n• Drag an intent to move it\n\nToolbar: [Fixtures lock](stage.edit.fixtureLock) · [Perform Enable](stage.edit.performEnable) · [Perform sort](stage.edit.performSort) · [Select](stage.edit.select) · [Physics](stage.edit.physics)."
     },
     "stage.edit.fixtureLock": {
         "heading": "Lock / unlock fixtures",
-        "text": "Fixtures are locked by default so you don't move them by accident while arranging lights. Unlock (🔓) to drag the physical fixtures into their real-world positions; lock again (🔒) when you're done."
+        "text": "Fixtures are locked by default so you don't move them by accident while arranging intents. Unlock (🔓) to drag the physical fixtures into their real-world positions; lock again (🔒) when you're done."
     },
     "stage.edit.performEnable": {
         "heading": "Perform Enable",
-        "text": "Choose which lights the operator is allowed to grab and move during the live show. Tap a light's circle to switch it on (blue) or off. Only enabled lights can be dragged or knob-controlled in Perform. Tap Done when finished."
+        "text": "Choose which intents the operator is allowed to grab and move during the live show. Tap an intent's circle to switch it on (blue) or off. Only enabled intents can be dragged or knob-controlled in Perform. Tap Done when finished."
     },
     "stage.edit.performSort": {
         "heading": "Perform sort",
@@ -56,40 +53,39 @@
     },
     "stage.edit.select": {
         "heading": "Select",
-        "text": "Tap lights to select one or several at once; their shared editor opens so you can change them together. Tap empty space to clear the selection."
+        "text": "Tap intents to select one or several at once; their shared editor opens so you can change them together. Tap empty space to clear the selection."
     },
     "stage.edit.physics": {
         "heading": "Physics",
-        "text": "Turns the hub's physics solver on or off while editing. With physics on, lights linked by connections (rods, springs, ropes) pull on each other when you drag one. It's off by default in Edit so positions stay put; in Perform it's always on."
+        "text": "Turns the hub's physics solver on or off while editing. With physics on, intents linked by connections (rods, springs, ropes) pull on each other when you drag one. It's off by default in Edit so positions stay put; in Perform it's always on."
     },
     "stage.edit.createIntent": {
-        "heading": "Add a light",
-        "text": "You added a new element to the stage. Pick its type:\n\n• Light — emits color and brightness around a point\n• Master — a global dimmer / blackout over everything\n• Target — a magnet that aims movable fixtures\n\nThe new element joins the current scene. Double-tap it to open its [editor](intent.edit). See [intents](intent.index) for what each type does."
+        "heading": "Add an intent",
+        "text": "You added a new intent to the stage. Pick its type:\n\n• Light — emits color and brightness around a point\n• Master — a global dimmer / blackout over everything\n• Target — a magnet that aims movable fixtures\n\nThe new intent joins the current scene. Double-tap it to open its [editor](intent.edit). See [intents](intent.index) for what each type does."
     },
-
     "intent.index": {
         "heading": "What is an intent?",
-        "text": "An intent is a \"wish\" for light at a place in the room — for example \"warm amber glow here, about 5 metres wide\". You never address a specific lamp; you describe what you want, and the hub figures out what every nearby fixture should do to make it happen.\n\nThree kinds:\n• Light — color, brightness and spread at a position\n• Master — a global brightness / blackout over everything\n• Target — aims movable fixtures toward or away from a point\n\nPlace intents in [Edit](stage.edit), tune them in the [intent editor](intent.edit), and group them into [scenes](scene.index)."
+        "text": "An intent is a \"wish\" for light at a place in the room — for example \"warm amber glow here, about 5 metres wide\". You never address a specific lamp; you describe what you want, and the hub works out what every nearby fixture should do to make it happen.\n\nThere are three types of intent:\n• Light — emits color, brightness and spread around a position\n• Master — a global brightness / blackout layered over everything\n• Target — aims movable fixtures toward or away from a point\n\nPlace intents in [Edit](stage.edit), tune them in the [intent editor](intent.edit), and group them into [scenes](scene.index)."
     },
     "intent.edit": {
         "heading": "Intent editor",
-        "text": "This panel edits the selected light. Each row is one property with its value control; some rows have small buttons on the left to switch options.\n\n• [Color](intent.edit.color) · [Radius](intent.edit.radius) · [Alpha](intent.edit.alpha) · [Blend](intent.edit.blend) · [Strobe](intent.edit.strobe)\n• Row buttons: [On/Off](intent.edit.toggle) · [❂ quick knob](intent.edit.quickPanel) · [Shared/Overlay](intent.edit.overlay)\n• [Connections](connections.index) link lights together\n\nTop/footer: [× close](intent.edit.close) · [Copy](intent.edit.copy) · [Delete](intent.edit.delete)."
+        "text": "This panel edits the selected intent. Each row is one property with its value control; some rows have small buttons on the left to switch options.\n\n• [Color](intent.edit.color) · [Radius](intent.edit.radius) · [Alpha](intent.edit.alpha) · [Blend](intent.edit.blend) · [Strobe](intent.edit.strobe)\n• Row buttons: [On/Off](intent.edit.toggle) · [❂ quick knob](intent.edit.quickPanel) · [Shared/Overlay](intent.edit.overlay)\n• [Connections](connections.index) link intents together\n\nTop/footer: [× close](intent.edit.close) · [Copy](intent.edit.copy) · [Delete](intent.edit.delete)."
     },
     "intent.edit.close": {
         "heading": "Close",
-        "text": "Closes the editor and deselects the light. Nothing is lost — your edits are already saved as you make them."
+        "text": "Closes the editor and deselects the intent. Nothing is lost — your edits are already saved as you make them."
     },
     "intent.edit.copy": {
         "heading": "Copy",
-        "text": "Duplicates the selected light (or lights) into the current scene, dropped slightly offset so you can see the copy. Handy for repeating a look across the room."
+        "text": "Duplicates the selected intent (or intents) into the current scene, dropped slightly offset so you can see the copy. Handy for repeating a look across the room."
     },
     "intent.edit.delete": {
         "heading": "Delete",
-        "text": "Removes the selected light. You'll be asked whether to remove it just from this scene (it still exists elsewhere) or delete it completely from the project."
+        "text": "Removes the selected intent. You'll be asked whether to remove it just from this scene (it still exists elsewhere) or delete it completely from the project."
     },
     "intent.edit.toggle": {
         "heading": "On / Off",
-        "text": "Switches an optional property on or off. Off means \"don't set this\" — the light leaves that property alone and other lights or defaults decide it. On sets it to a value you can then adjust. \"Mix\" appears when several selected lights disagree."
+        "text": "Switches an optional property on or off. Off means \"don't set this\" — the intent leaves that property alone and other intents or defaults decide it. On sets it to a value you can then adjust. \"Mix\" appears when several selected intents disagree."
     },
     "intent.edit.quickPanel": {
         "heading": "❂ Quick knob",
@@ -97,39 +93,39 @@
     },
     "intent.edit.overlay": {
         "heading": "Shared or Overlay",
-        "text": "Decides whether this value belongs to the light everywhere (Shared) or is an override just for the current scene (Overlay). Use Overlay when one scene needs, say, a redder color while every other scene keeps the shared one. \"Mixed\" appears when a multi-selection disagrees."
+        "text": "Decides whether this value belongs to the intent everywhere (Shared) or is an override just for the current scene (Overlay). Use Overlay when one scene needs, say, a redder color while every other scene keeps the shared one. \"Mixed\" appears when a multi-selection disagrees."
     },
     "intent.edit.inputAssign": {
         "heading": "Assign an input",
-        "text": "Links a physical control — a button, key or MIDI knob — to this light, so hardware can trigger or drive it without touching the screen."
+        "text": "Links a physical control — a button, key or MIDI knob — to this intent, so hardware can trigger or drive it without touching the screen."
     },
     "intent.edit.performReset": {
         "heading": "Perform reset",
-        "text": "Picks which of this light's values snap back to their saved setting when you clear your live Perform tweaks. Turn a value on here if a temporary change to it should be undone by Reset scene."
+        "text": "Picks which of this intent's values snap back to their saved setting when you clear your live Perform tweaks. Turn a value on here if a temporary change to it should be undone by Reset scene."
     },
     "intent.edit.color": {
         "heading": "Color",
-        "text": "Pick a color from the palette (hue, saturation, lightness). Behind the scenes the hub stores it in a device-independent form (CIE xyY — basically \"which color\" plus \"how bright\") and then maps it to whatever each fixture can actually produce, so the same color looks right across very different lights.\n\nIf several lights are selected, the sliders nudge every light's color by the same amount instead of forcing them all to one color."
+        "text": "Pick a color from the palette (hue, saturation, lightness). Behind the scenes the hub stores it in a device-independent form (CIE xyY — basically \"which color\" plus \"how bright\") and then maps it to whatever each fixture can actually produce, so the same color looks right across very different fixtures.\n\nIf several intents are selected, the sliders nudge every intent's color by the same amount instead of forcing them all to one color."
     },
     "intent.edit.alpha": {
         "heading": "Alpha (intensity)",
-        "text": "How strongly this light contributes — its overall intensity / opacity in the blend with other lights. Lower it to fade the light back without changing its color."
+        "text": "How strongly this intent contributes — its overall intensity / opacity in the blend with other intents. Lower it to fade the intent back without changing its color."
     },
     "intent.edit.blend": {
         "heading": "Blend",
-        "text": "How this light mixes with others that overlap it: Add (colors pile up and brighten), Alpha (normal layering by intensity), or Multiply (darkens / tints what's underneath)."
+        "text": "How this intent mixes with others that overlap it: Add (colors pile up and brighten), Alpha (normal layering by intensity), or Multiply (darkens / tints what's underneath)."
     },
     "intent.edit.radius": {
         "heading": "Radius",
-        "text": "How far the light reaches from its position, in metres. Fixtures inside the radius pick it up; the [falloff curve](intent.edit.radiusFunction) shapes how it fades toward the edge."
+        "text": "How far this intent reaches from its position, in metres. Fixtures inside the radius pick it up; the [falloff curve](intent.edit.radiusFunction) shapes how it fades toward the edge."
     },
     "intent.edit.radiusFunction": {
         "heading": "Falloff",
-        "text": "The curve that controls how the light fades from full at the centre to nothing at the edge of its radius — a soft gradient or a harder edge."
+        "text": "The curve that controls how the intent fades from full at the centre to nothing at the edge of its radius — a soft gradient or a harder edge."
     },
     "intent.edit.strobe": {
         "heading": "Strobe",
-        "text": "Makes the light flash. Higher values flash faster; zero is steady."
+        "text": "Makes this intent flash. Higher values flash faster; zero is steady."
     },
     "intent.edit.amber": {
         "heading": "Amber",
@@ -137,31 +133,31 @@
     },
     "intent.edit.mass": {
         "heading": "Mass",
-        "text": "How heavy the light feels when dragged with physics on — heavier lights lag and swing more, lighter ones snap to your finger."
+        "text": "How heavy the intent feels when dragged with physics on — heavier intents lag and swing more, lighter ones snap to your finger."
     },
     "intent.edit.drag": {
         "heading": "Drag",
-        "text": "How much the light resists motion under physics — more drag settles it quickly, less drag lets it drift and overshoot."
+        "text": "How much the intent resists motion under physics — more drag settles it quickly, less drag lets it drift and overshoot."
     },
     "intent.edit.position": {
         "heading": "Position",
-        "text": "Where the light sits in the room (X across, Y up, Z depth). You'll usually set this by dragging on the stage rather than typing."
+        "text": "Where the intent sits in the room (X across, Y up, Z depth). You'll usually set this by dragging on the stage rather than typing."
     },
     "intent.edit.freeze": {
         "heading": "Freeze axis",
-        "text": "Locks movement on the X, Y or Z axis so physics and dragging can't change that direction — useful to keep a light on a line or at a fixed height."
+        "text": "Locks movement on the X, Y or Z axis so physics and dragging can't change that direction — useful to keep an intent on a line or at a fixed height."
     },
     "intent.edit.layer": {
         "heading": "Layer",
-        "text": "Stacking order for blending. Higher layers sit on top of lower ones when lights overlap."
+        "text": "Stacking order for blending. Higher layers sit on top of lower ones when intents overlap."
     },
     "intent.edit.name": {
         "heading": "Name",
-        "text": "A label for this light so you can recognise it in lists and on the stage."
+        "text": "A label for this intent so you can recognise it in lists and on the stage."
     },
     "intent.edit.heightSlider": {
         "heading": "Height handle",
-        "text": "Turns on the little vertical handle on the stage so you can drag this light's height directly."
+        "text": "Turns on the little vertical handle on the stage so you can drag this intent's height directly."
     },
     "intent.edit.brightness": {
         "heading": "Master brightness",
@@ -175,10 +171,9 @@
         "heading": "Follow time",
         "text": "How quickly fixtures swing to follow this Target. Short times snap; longer times glide smoothly."
     },
-
     "connections.index": {
         "heading": "Connections",
-        "text": "A connection physically links two lights so they move together under physics — drag one and the other follows. Choose the [kind](connections.kind) (rod, spring or rope) and tune its [strength](connections.param). Add one with + Connect, remove it with 🗑 ([release](connections.release))."
+        "text": "A connection physically links two intents so they move together under physics — drag one and the other follows. Choose the [kind](connections.kind) (rod, spring or rope) and tune its [strength](connections.param). Add one with + Connect, remove it with 🗑 ([release](connections.release))."
     },
     "connectIntent": {
         "heading": "Connect intents",
@@ -187,7 +182,7 @@
     },
     "connections.kind": {
         "heading": "Connection kind",
-        "text": "Rod holds a fixed distance (stiff), Spring pulls back toward a rest length (bouncy), Rope only pulls when stretched taut (slack otherwise). Each gives a different feel when you drag linked lights."
+        "text": "Rod holds a fixed distance (stiff), Spring pulls back toward a rest length (bouncy), Rope only pulls when stretched taut (slack otherwise). Each gives a different feel when you drag linked intents."
     },
     "connections.param": {
         "heading": "Connection strength",
@@ -195,12 +190,11 @@
     },
     "connections.release": {
         "heading": "Release",
-        "text": "Removes this connection. The two lights move independently again."
+        "text": "Removes this connection. The two intents move independently again."
     },
-
     "scene.index": {
         "heading": "Scenes",
-        "text": "A scene is a saved look — a chosen set of lights with their settings. Switching scenes recalls that look instantly; only the active scene is sent to your fixtures.\n\nA scene can also override specific values just for itself ([Overlay](intent.edit.overlay)) while sharing the rest.\n\n• [Recall](scene.recall) a scene by tapping it\n• [Rename](scene.rename) · [Copy](scene.copy) · [Delete](scene.delete)\n• [Add/remove lights](scene.intentToggle) from a scene\n• [Assign](scene.performAssign) hardware to recall a scene\n\nTo save the current live state instead, use a [snapshot](snapshot.index)."
+        "text": "A scene is a saved look — a chosen set of intents with their settings. Switching scenes recalls that look instantly; only the active scene is sent to your fixtures.\n\nA scene can also override specific values just for itself ([Overlay](intent.edit.overlay)) while sharing the rest.\n\n• [Recall](scene.recall) a scene by tapping it\n• [Rename](scene.rename) · [Copy](scene.copy) · [Delete](scene.delete)\n• [Add/remove intents](scene.intentToggle) from a scene\n• [Assign](scene.performAssign) hardware to recall a scene\n\nTo save the current live state instead, use a [snapshot](snapshot.index)."
     },
     "scene.recall": {
         "heading": "Recall scene",
@@ -219,14 +213,13 @@
         "text": "Removes this scene. You'll be asked to confirm; you can't delete the last remaining scene."
     },
     "scene.intentToggle": {
-        "heading": "Lights in this scene",
-        "text": "Switches a light in or out of this scene. A scene only sends the lights it includes, so use these toggles to decide what the look contains."
+        "heading": "Intents in this scene",
+        "text": "Switches an intent in or out of this scene. A scene only sends the intents it includes, so use these toggles to decide what the look contains."
     },
     "scene.performAssign": {
         "heading": "Assign to recall",
         "text": "Maps a physical input (button, key, MIDI) or a pulse to recalling this scene, so you can trigger the look from hardware during the show."
     },
-
     "snapshot.index": {
         "heading": "Snapshots",
         "text": "A snapshot captures the current live state — the active scene plus running pulses and animations — so you can jump straight back to it later. Unlike [scenes](scene.index), which you build, snapshots grab whatever is happening right now.\n\n• [Create](snapshot.create) a snapshot\n• [▶ Play](snapshot.play) to recall it\n• [Modify](snapshot.modify) · [Delete](snapshot.delete)"
@@ -245,6 +238,6 @@
     },
     "snapshot.delete": {
         "heading": "Delete snapshot",
-        "text": "Removes this snapshot. The scenes and lights it referenced are untouched."
+        "text": "Removes this snapshot. The scenes and intents it referenced are untouched."
     }
 }

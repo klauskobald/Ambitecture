@@ -1,6 +1,7 @@
 .help-panel {
   position: fixed;
   z-index: 1000;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   min-width: 200px;
@@ -38,6 +39,7 @@
   font-size: 0.95rem;
 }
 
+.help-panel__back,
 .help-panel__close {
   flex: 0 0 auto;
   width: 26px;
@@ -52,9 +54,16 @@
   cursor: pointer;
 }
 
+.help-panel__back:hover,
 .help-panel__close:hover {
   color: var(--color-text);
   background: var(--color-bg);
+}
+
+.help-panel--host .help-panel__back {
+  width: 40px;
+  height: 40px;
+  font-size: 2rem;
 }
 
 .help-panel__body {

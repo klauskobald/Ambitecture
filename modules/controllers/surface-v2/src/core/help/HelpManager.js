@@ -13,8 +13,8 @@ import { renderHelpText } from './renderHelpText.js'
  * @property {() => void} [onClose] invoked when the user dismisses the panel via its × control
  * @property {boolean} [force] open even when automatic help is toggled off (used by the manual ? button)
  * @property {boolean} [quiet] when the key has no topic, do nothing instead of showing the `no-help-available` fallback
- * @property {boolean} [passThrough] render the floating panel click-through (pointer-events: none) so it never
- *   intercepts taps meant for the UI underneath — used for automatic, transient contextual help
+ * @property {boolean} [_back] internal — back-navigation; do not push the current page onto the history stack
+ * @property {number} [_scrollTop] internal — restore the body scroll position to this value after render
  */
 
 const DEFAULT_FLOAT_WIDTH = 320
@@ -33,6 +33,16 @@ let teardown = []
 let hiding = false
 /** Bumped on every show/hide so an in-flight (awaiting) `show` can detect it was superseded. */
 let generation = 0
+
+/**
+ * Back-navigation stack. Each entry `{ key, scrollTop }` is the page you left.
+ * Emptied when the panel opens fresh; appended to when `show` runs while the panel
+ * is already open (link click, new auto-help). The Back button pops it.
+ * @type {Array<{ key: string, scrollTop: number }>}
+ */
+let history = []
+/** Topic key currently shown, captured so it can be pushed onto `history` on navigation. @type {string | null} */
+let currentKey = null
 
 /**
  * Master switch for *automatic* help. When off, programmatic `show` calls for
@@ -247,6 +257,17 @@ async function show (key, options = {}) {
 
   if (!topic.mandatory && !helpVisible && !options.force) return
 
+  // History: empty the stack on a fresh open; on navigation while already open,
+  // push the page being left (with its scroll) so Back can return to it.
+  const wasOpen = !!panelEl
+  if (!wasOpen) {
+    history = []
+  } else if (!options._back && currentKey != null) {
+    const prevBody = panelEl.querySelector('.help-panel__body')
+    const scrollTop = prevBody instanceof HTMLElement ? prevBody.scrollTop : 0
+    history.push({ key: currentKey, scrollTop })
+  }
+
   hide()
 
   ensureOpenIcon()
@@ -258,6 +279,7 @@ async function show (key, options = {}) {
 
   const panel = buildCard(topic)
   panelEl = panel
+  currentKey = key
 
   if (!currentTopicIsMandatory) {
     bindEscDismiss()
@@ -266,15 +288,7 @@ async function show (key, options = {}) {
   if (hostEl) {
     panel.classList.add('help-panel--host')
     hostEl.appendChild(panel)
-    return
-  }
-
-  // Click-through for automatic help so it never swallows taps for controls underneath.
-  // Interactive (draggable/resizable) only for manual/forced opens.
-  if (options.passThrough && !currentTopicIsMandatory) {
-    panel.classList.add('help-panel--passthrough')
-    document.body.appendChild(panel)
-    applyFloatGeometry(panel)
+    restoreBodyScroll(panel, options)
     return
   }
 
@@ -283,6 +297,24 @@ async function show (key, options = {}) {
   persistFloatGeometry(panel)
   makeDraggable(panel)
   observeFloatResize(panel)
+  restoreBodyScroll(panel, options)
+}
+
+/**
+ * @param {HTMLElement} panel
+ * @param {ShowOptions} options
+ */
+function restoreBodyScroll (panel, options) {
+  if (options._scrollTop == null) return
+  const body = panel.querySelector('.help-panel__body')
+  if (body instanceof HTMLElement) body.scrollTop = options._scrollTop
+}
+
+/** Back button: return to the previously shown topic, restoring its scroll position. */
+function goBack () {
+  const prev = history.pop()
+  if (!prev) return
+  void show(prev.key, { _back: true, _scrollTop: prev.scrollTop })
 }
 
 /** User-driven dismissal (× or Esc): close the panel and notify the caller. */
@@ -335,6 +367,16 @@ function buildCard (topic) {
     close.textContent = '×'
     close.addEventListener('click', () => dismiss())
     actions.appendChild(close)
+  }
+
+  if (history.length > 0) {
+    const back = document.createElement('button')
+    back.type = 'button'
+    back.className = 'help-panel__back'
+    back.setAttribute('aria-label', 'Back')
+    back.textContent = '←'
+    back.addEventListener('click', () => goBack())
+    header.appendChild(back)
   }
 
   header.appendChild(title)
@@ -390,7 +432,7 @@ function makeDraggable (panel) {
   /** @param {PointerEvent} e */
   const onDown = e => {
     if (e.button !== 0) return
-    if (e.target instanceof HTMLElement && e.target.closest('.help-panel__close, .help-toggle')) return
+    if (e.target instanceof HTMLElement && e.target.closest('.help-panel__back, .help-panel__close, .help-toggle')) return
     e.preventDefault()
     header.setPointerCapture(e.pointerId)
     const rect = panel.getBoundingClientRect()

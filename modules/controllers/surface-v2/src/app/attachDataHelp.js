@@ -25,6 +25,5 @@ function onPointerDown (e) {
   if (!(t instanceof Element)) return
   const el = t.closest('[data-help]')
   if (!(el instanceof HTMLElement) || !el.dataset.help) return
-  // passThrough: the panel must never intercept taps meant for the UI underneath.
-  void HelpManager.show(el.dataset.help, { quiet: true, passThrough: true })
+  void HelpManager.show(el.dataset.help, { quiet: true })
 }

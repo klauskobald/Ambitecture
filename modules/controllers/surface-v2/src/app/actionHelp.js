@@ -7,5 +7,5 @@ import { HelpManager } from '../core/help/HelpManager.js'
  * @param {string} key
  */
 export function showHelp (key) {
-  void HelpManager.show(key, { quiet: true, passThrough: true })
+  void HelpManager.show(key, { quiet: true })
 }

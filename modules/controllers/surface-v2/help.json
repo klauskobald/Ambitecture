@@ -1,0 +1,10 @@
+{
+    "heightSlider": {
+        "heading": "Height Slider",
+        "text": "The height slider is a control that allows you to adjust the height of the fixture."
+    },
+    "connectIntent": {
+        "heading": "Connect intents",
+        "text": "Tap an intent on the stage to connect it to this one. Tap empty space, or × here, to cancel."
+    }
+}

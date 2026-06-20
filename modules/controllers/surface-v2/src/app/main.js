@@ -18,6 +18,8 @@ import { AnimationPane } from '../layout/renderers/AnimationPane.js'
 import { SnapshotPane } from '../layout/renderers/SnapshotPane.js'
 import { PluginPane } from '../layout/renderers/PluginPane.js'
 import { initSceneAutoResetOnLoad } from '../perform/sceneAutoResetOnLoad.js'
+import { HelpManager } from '../core/help/HelpManager.js'
+import { findLayoutTagHost } from '../stage/layoutTagHost.js'
 
 async function main () {
   const appCfg = await loadAppConfig()
@@ -62,11 +64,14 @@ async function main () {
     }
   })
 
+  HelpManager.registerHost('edit-panel', () => findLayoutTagHost())
+
   initSceneAutoResetOnLoad()
   connectStageHub(appCfg)
   keyboardManager.start()
 
   window.LayoutManager = LayoutManager
+  window.HelpManager = HelpManager
 }
 
 main()

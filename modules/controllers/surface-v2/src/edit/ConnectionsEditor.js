@@ -5,6 +5,7 @@ import { intentName, intentGuid } from '../core/stores.js'
 import { SelectionManager } from '../viewport/selectionManager.js'
 import { ScalarDragSlider } from './components/ScalarDragSlider.js'
 import { getStageOverlay } from '../stage/stageOverlayHost.js'
+import { HelpManager } from '../core/help/HelpManager.js'
 
 const cryptoApi = globalThis.crypto
 
@@ -153,7 +154,13 @@ export class ConnectionsEditor {
 
     const paramHost = document.createElement('span')
     paramHost.className = 'connections-editor__param'
-    this._buildParamControl(paramHost, guid, String(connector.kind ?? ''), connector, isOtherInactive)
+    this._buildParamControl(
+      paramHost,
+      guid,
+      String(connector.kind ?? ''),
+      connector,
+      isOtherInactive
+    )
 
     const trash = document.createElement('button')
     trash.type = 'button'
@@ -180,13 +187,17 @@ export class ConnectionsEditor {
   _buildParamControl (host, connGuid, kind, connector, disabled = false) {
     host.replaceChildren()
     const type = (getConnectorTypes() ?? []).find(t => t.kind === kind)
-    const param = /** @type {Record<string, unknown> | undefined} */ (type?.params?.[0])
+    const param = /** @type {Record<string, unknown> | undefined} */ (
+      type?.params?.[0]
+    )
     if (!param || typeof param.dotKey !== 'string') return
     const dotKey = param.dotKey
     const range = /** @type {number[] | undefined} */ (param.range)
     const min = range?.[0] ?? 0
     const max = range?.[1] ?? 1
-    const params = /** @type {Record<string, unknown>} */ (connector.params ?? {})
+    const params = /** @type {Record<string, unknown>} */ (
+      connector.params ?? {}
+    )
     const initial =
       typeof params[dotKey] === 'number'
         ? /** @type {number} */ (params[dotKey])
@@ -206,7 +217,9 @@ export class ConnectionsEditor {
       max,
       step: Number(param.step ?? 0.01),
       value: initial,
-      onInput: (v) => { pending = v },
+      onInput: v => {
+        pending = v
+      },
       onCommit: () => this._setParam(connGuid, dotKey, pending)
     })
     slider.mount(host)
@@ -221,15 +234,19 @@ export class ConnectionsEditor {
     const overlay = getStageOverlay()
     if (!overlay) return
     const connected = new Set(
-      projectGraph.getConnectorsForIntent(this._sourceGuid).map(c =>
-        c.aGuid === this._sourceGuid ? String(c.bGuid) : String(c.aGuid)
-      )
+      projectGraph
+        .getConnectorsForIntent(this._sourceGuid)
+        .map(c =>
+          c.aGuid === this._sourceGuid ? String(c.bGuid) : String(c.aGuid)
+        )
     )
     const self = this._sourceGuid
     const candidates = () =>
       this._sceneIntentEntries().filter(([guid, intent]) => {
         if (guid === self || connected.has(guid)) return false
-        return /** @type {Record<string, unknown>} */ (intent).class !== 'master'
+        return (
+          /** @type {Record<string, unknown>} */ (intent).class !== 'master'
+        )
       })
 
     const manager = new ConnectPickManager({
@@ -262,6 +279,10 @@ export class ConnectionsEditor {
     this._picking = true
     if (this._connectBtn) this._connectBtn.textContent = 'Tap an intent…'
     this._setOverlayHidden(true)
+    void HelpManager.show('connectIntent', {
+      host: 'edit-panel',
+      onClose: () => this._finishPick()
+    })
     overlay.setSelectionManager(manager)
     overlay.markRenderActivity()
   }
@@ -271,6 +292,7 @@ export class ConnectionsEditor {
     const overlay = getStageOverlay()
     overlay?.setSelectionManager(null)
     overlay?.markRenderActivity()
+    HelpManager.hide()
     this._setOverlayHidden(false)
     if (this._connectBtn) this._connectBtn.textContent = '+ Connect'
   }
@@ -303,7 +325,10 @@ export class ConnectionsEditor {
   /** @param {string} targetGuid */
   _connect (targetGuid) {
     if (!targetGuid || targetGuid === this._sourceGuid) return
-    const guid = `connector-${cryptoApi?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`
+    const guid = `connector-${
+      cryptoApi?.randomUUID?.() ??
+      `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    }`
     const kind = (getConnectorTypes() ?? [])[0]?.kind ?? 'rod'
     const record = {
       guid,

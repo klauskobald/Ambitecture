@@ -1,0 +1,111 @@
+.help-panel {
+  position: fixed;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  min-height: 120px;
+  background: var(--color-bg-raised);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.6);
+  resize: both;
+  overflow: hidden;
+}
+
+.help-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--color-bg-leaf-header);
+  border-bottom: 1px solid var(--color-border);
+  cursor: move;
+  touch-action: none;
+  user-select: none;
+}
+
+.help-panel__title {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.help-panel__close {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  font-size: 1.2rem;
+  line-height: 1;
+  background: transparent;
+  color: var(--color-text-muted);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.help-panel__close:hover {
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+.help-panel__body {
+  flex: 1 1 auto;
+  padding: 12px;
+  overflow: auto;
+  line-height: 1.45;
+}
+
+/* Attached (host) mode: a full-host overlay card that completely covers and blurs the
+   host behind it. Larger, left-aligned help text. */
+.help-panel--host {
+  position: absolute;
+  inset: 0;
+  z-index: var(--overlay-z-index, 2);
+  width: auto;
+  height: auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: stretch;
+  gap: 18px;
+  padding: 32px;
+  background: rgba(10, 10, 10, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  resize: none;
+  text-align: left;
+}
+
+.help-panel--host .help-panel__header {
+  background: transparent;
+  border: none;
+  cursor: default;
+  padding: 0;
+}
+
+.help-panel--host .help-panel__title {
+  font-size: 1.9rem;
+  color: var(--color-accent);
+}
+
+.help-panel--host .help-panel__body {
+  flex: 0 0 auto;
+  padding: 0;
+  max-width: none;
+  font-size: 1.9rem;
+  line-height: 1.5;
+}
+
+.help-panel--host .help-panel__close {
+  width: 40px;
+  height: 40px;
+  font-size: 2rem;
+}

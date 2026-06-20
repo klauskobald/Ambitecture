@@ -4,7 +4,7 @@
         "text": "Ambitecture is a platform for creating and managing spatial audio and lighting systems.\nDeveloped by [Kobald](https://kobald.com).\n\nFor fixtures like DMX a matching [renderer](renderer) is required."
     },
     "no-help-available": {
-        "heading": "No help available",
+        "heading": "Ooops!",
         "text": "No help is available for this topic."
     },
     "renderer": {

@@ -228,6 +228,9 @@ async function show (key, options = {}) {
   const topic = getHelpTopic(content, key)
   if (!topic) {
     console.warn(`HelpManager: no help topic for "${key}"`)
+    if (key !== 'no-help-available') {
+      void show('no-help-available', options)
+    }
     return
   }
 

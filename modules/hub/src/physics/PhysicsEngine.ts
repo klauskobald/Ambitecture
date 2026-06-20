@@ -1,5 +1,6 @@
 import { PhysicsBody } from './PhysicsBody';
 import { vec3, type Vec3 } from './vec3';
+import { statsTool } from '../statsTool';
 import { ConnectorBase, type ConnectorRecord } from './connectors/ConnectorBase';
 // Side-effect imports register the connector kinds with ConnectorBase.
 import './connectors/RodConnector';
@@ -114,7 +115,9 @@ export class PhysicsEngine {
     this.timer = undefined;
     if (!this.running) return;
     const now = Date.now();
+    const startMs = performance.now();
     this.advance(now - this.lastWallMs);
+    statsTool.sample('Phys ms', performance.now() - startMs);
     this.lastWallMs = now;
     this.scheduleNextTick();
   }

@@ -182,7 +182,7 @@ export class ActionHandler implements MessageHandler {
       Logger.warn(`[action] action ${actionGuid} has no supported execute target`);
       return;
     }
-    Logger.info(`[action] triggered ${actionGuid}`);
+    // Logger.info(`[action] triggered ${actionGuid}`);
   }
 
   private handleInputCommand(ws: WebSocket, message: WsMessage, controllerGuid: string): void {

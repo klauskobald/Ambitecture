@@ -2,7 +2,7 @@ dataDir: ../../var
 
 # Connector physics solver (hub-side). Speeds are frame-rate independent of `fps`.
 physics:
-  fps: 50
+  fps: 30
   sleepVelocity: 0.02
   iterations: 8
   watchIntervalMs: 2000

@@ -117,7 +117,7 @@ export class PhysicsEngine {
     const now = Date.now();
     const startMs = performance.now();
     this.advance(now - this.lastWallMs);
-    statsTool.sample('Phys ms', performance.now() - startMs);
+    statsTool.sample('Phys', performance.now() - startMs, 1, 'ms');
     this.lastWallMs = now;
     this.scheduleNextTick();
   }
@@ -198,10 +198,19 @@ export class PhysicsEngine {
   }
 
   private isSettled(): boolean {
+    let movingBodies = 0;
+    let totalBodies = 0;
     for (const body of this.bodies.values()) {
-      if (body.pinned) return false;
-      if (vec3.length(body.velocity) >= this.config.sleepVelocity) return false;
+      if (body.pinned) {
+        continue;
+      }
+      totalBodies++;
+      if (vec3.length(body.velocity) >= this.config.sleepVelocity) {
+        movingBodies++
+      }
     }
-    return true;
+    statsTool.sample('Phys bodies', totalBodies, 1, '');
+    statsTool.sample('Phys moving', movingBodies, 1, '');
+    return movingBodies === 0;
   }
 }

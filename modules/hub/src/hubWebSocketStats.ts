@@ -31,7 +31,7 @@ function byteLengthOfSendData(data: unknown): number {
 export function attachHubWebSocketStats(ws: WebSocket): void {
   const originalSend = ws.send.bind(ws) as (data: unknown, ...args: unknown[]) => void;
   ws.send = ((data: unknown, ...rest: unknown[]) => {
-    statsTool.sample('Out kb', byteLengthOfSendData(data), 1 / 1024);
+    statsTool.sample('Out kb', byteLengthOfSendData(data), 1 / 1024, 's');
     originalSend(data, ...rest);
   }) as WebSocket['send'];
 }
@@ -65,7 +65,7 @@ export function recordInboundRoutedMessage(
   }
 
   if (role === 'controller') {
-    statsTool.sample('Controller', 1);
+    statsTool.sample('Controller', 1, 1, 's');
   }
 }
 
@@ -76,5 +76,5 @@ export function recordRendererEventDeliveries(eventsInPayload: number, recipient
   if (eventsInPayload <= 0 || recipientCount <= 0) {
     return;
   }
-  statsTool.sample('Renderers', eventsInPayload * recipientCount);
+  statsTool.sample('Renderers', eventsInPayload * recipientCount, 1, 's');
 }

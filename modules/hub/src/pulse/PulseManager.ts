@@ -324,7 +324,7 @@ export class PulseManager {
     }
     Logger.info(
       `[pulse] aligned sync BPM=${bpm} to ${running.length} running setup(s)`
-        + (restartFromSlotZero ? ' (slot 0)' : ''),
+      + (restartFromSlotZero ? ' (slot 0)' : ''),
     );
   }
 
@@ -381,7 +381,7 @@ export class PulseManager {
     if (logTiming) {
       Logger.info(
         `[pulse] aligned sync BPM=${bpm} nextTick in ${Math.max(0, nextTickAtMs - Date.now())}ms`
-          + (restartFromSlotZero ? ' (slot 0)' : ''),
+        + (restartFromSlotZero ? ' (slot 0)' : ''),
       );
     }
     this.scheduleTickAt(setupGuid, nextTickAtMs);
@@ -717,7 +717,7 @@ export class PulseManager {
     }
     this.onTriggerAction(actionGuid);
     const runner = this.runners.get(setupGuid);
-    Logger.debug(`[pulse] triggered action ${actionGuid} from slot ${runner?.currentSlotIdx ?? '?'}`);
+    // Logger.debug(`[pulse] triggered action ${actionGuid} from slot ${runner?.currentSlotIdx ?? '?'}`);
   }
 
   private broadcastPulseStatus(

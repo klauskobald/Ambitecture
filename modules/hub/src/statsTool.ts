@@ -9,6 +9,7 @@ interface KeyState {
   value: number;
   readout: number;
   multiplier: number;
+  units: string;
 }
 
 const defaultOptions: Required<StatsToolOptions> = {
@@ -50,13 +51,14 @@ class StatsTool {
     this.meterReleaseFactor = 1 - 1 / (1 + this.options.emaK);
   }
 
-  sample(key: string, value: number, multiplier: number = 1): void {
+  sample(key: string, value: number, multiplier: number = 1, units: string = ''): void {
     let state = this.perKey.get(key);
     if (state === undefined) {
-      state = { value: 0, multiplier, acc: 0, readout: 0 };
+      state = { value: 0, multiplier, acc: 0, readout: 0, units };
       this.perKey.set(key, state);
     }
     state.acc += value;
+    state.units = units;
   }
 
   private emitMeter(): void {
@@ -75,7 +77,7 @@ class StatsTool {
     }
     const snapshot: Record<string, number> = {};
     for (const [key, st] of this.perKey) {
-      snapshot[`${key}/s`] = Math.round(st.value * st.multiplier * this.meterReleaseFactor);
+      snapshot[`${key}${st.units ? "/" + st.units : ''}`] = Math.round(st.value * st.multiplier * this.meterReleaseFactor);
     }
     this.options.displayFn(snapshot);
   }

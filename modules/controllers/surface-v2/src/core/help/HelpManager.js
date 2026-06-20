@@ -11,11 +11,12 @@ import { renderHelpText } from './renderHelpText.js'
  * @typedef {object} ShowOptions
  * @property {string | HTMLElement} [host] registered host name or a raw element; switches to attached (non-floating) mode
  * @property {() => void} [onClose] invoked when the user dismisses the panel via its × control
+ * @property {boolean} [force] open even when automatic help is toggled off (used by the manual ? button)
  */
 
 const DEFAULT_FLOAT_WIDTH = 320
 const DEFAULT_FLOAT_HEIGHT = 200
-const TOGGLE_SIZE = 36
+const OPEN_ICON_SIZE = 36
 
 /** @type {Map<string, HTMLElement | (() => HTMLElement | null)>} */
 const hosts = new Map()
@@ -30,12 +31,17 @@ let hiding = false
 /** Bumped on every show/hide so an in-flight (awaiting) `show` can detect it was superseded. */
 let generation = 0
 
-/** @type {boolean} */
+/**
+ * Master switch for *automatic* help. When off, programmatic `show` calls for
+ * non-mandatory topics are skipped; manual opens (the ? button) and mandatory
+ * topics always show.
+ * @type {boolean}
+ */
 let helpVisible = loadHelpVisible()
 /** @type {boolean} */
 let currentTopicIsMandatory = false
 /** @type {HTMLElement | null} */
-let toggleIconEl = null
+let openIconEl = null
 
 /**
  * @typedef {object} HelpConduit
@@ -53,35 +59,35 @@ function setConduit (c) {
   conduit = c
 }
 
-// --- toggle icon (persistent, always in DOM) -----------------------------------
+// --- open icon (persistent ?, opens help; visible only while no panel is shown) -----
 
-function ensureToggleIcon () {
-  if (toggleIconEl) return
-  toggleIconEl = document.createElement('button')
-  toggleIconEl.type = 'button'
-  toggleIconEl.className = 'help-toggle-icon'
-  toggleIconEl.textContent = '❓'
-  toggleIconEl.setAttribute('aria-label', 'Toggle help visibility')
-  toggleIconEl.addEventListener('click', onToggleClick)
+function ensureOpenIcon () {
+  if (openIconEl) return
+  openIconEl = document.createElement('button')
+  openIconEl.type = 'button'
+  openIconEl.className = 'help-open-icon'
+  openIconEl.textContent = '❓'
+  openIconEl.setAttribute('aria-label', 'Open help')
+  openIconEl.title = 'Open help'
+  openIconEl.addEventListener('click', onOpenClick)
   makeIconDraggable()
-  updateToggleIconVisual()
-  document.body.appendChild(toggleIconEl)
-  positionToggleIconStandalone()
+  updateOpenIconVisual()
+  document.body.appendChild(openIconEl)
+  positionOpenIconStandalone()
 }
 
 /** @type {boolean} */
 let iconDidDrag = false
 
 function makeIconDraggable () {
-  if (!toggleIconEl) return
+  if (!openIconEl) return
 
   /** @param {PointerEvent} e */
   const onDown = e => {
     if (e.button !== 0) return
-    if (toggleIconEl.classList.contains('help-toggle-icon--in-panel')) return
     e.preventDefault()
-    toggleIconEl.setPointerCapture(e.pointerId)
-    const rect = toggleIconEl.getBoundingClientRect()
+    openIconEl.setPointerCapture(e.pointerId)
+    const rect = openIconEl.getBoundingClientRect()
     const offsetX = e.clientX - rect.left
     const offsetY = e.clientY - rect.top
     iconDidDrag = false
@@ -91,47 +97,49 @@ function makeIconDraggable () {
       const dx = ev.clientX - e.clientX
       const dy = ev.clientY - e.clientY
       if (Math.abs(dx) > 3 || Math.abs(dy) > 3) iconDidDrag = true
-      const w = toggleIconEl.offsetWidth
-      toggleIconEl.style.left = `${clampToViewport(ev.clientX - offsetX, w, window.innerWidth)}px`
-      toggleIconEl.style.top = `${clampToViewport(ev.clientY - offsetY, TOGGLE_SIZE, window.innerHeight)}px`
+      const w = openIconEl.offsetWidth
+      openIconEl.style.left = `${clampToViewport(ev.clientX - offsetX, w, window.innerWidth)}px`
+      openIconEl.style.top = `${clampToViewport(ev.clientY - offsetY, OPEN_ICON_SIZE, window.innerHeight)}px`
     }
     /** @param {PointerEvent} ev */
     const onUp = ev => {
-      toggleIconEl.releasePointerCapture(ev.pointerId)
-      toggleIconEl.removeEventListener('pointermove', onMove)
-      toggleIconEl.removeEventListener('pointerup', onUp)
-      toggleIconEl.removeEventListener('pointercancel', onUp)
+      openIconEl.releasePointerCapture(ev.pointerId)
+      openIconEl.removeEventListener('pointermove', onMove)
+      openIconEl.removeEventListener('pointerup', onUp)
+      openIconEl.removeEventListener('pointercancel', onUp)
       if (iconDidDrag) {
         const stored = loadHelpPanelGeometry()
         const w = stored ? stored.w : DEFAULT_FLOAT_WIDTH
         const h = stored ? stored.h : DEFAULT_FLOAT_HEIGHT
-        const iconRight = toggleIconEl.offsetLeft + toggleIconEl.offsetWidth
+        const iconRight = openIconEl.offsetLeft + openIconEl.offsetWidth
         saveHelpPanelGeometry({
           x: iconRight - w,
-          y: toggleIconEl.offsetTop,
+          y: openIconEl.offsetTop,
           w,
           h
         })
       }
     }
-    toggleIconEl.addEventListener('pointermove', onMove)
-    toggleIconEl.addEventListener('pointerup', onUp)
-    toggleIconEl.addEventListener('pointercancel', onUp)
+    openIconEl.addEventListener('pointermove', onMove)
+    openIconEl.addEventListener('pointerup', onUp)
+    openIconEl.addEventListener('pointercancel', onUp)
   }
 
-  toggleIconEl.addEventListener('pointerdown', onDown)
+  openIconEl.addEventListener('pointerdown', onDown)
 }
 
-function updateToggleIconVisual () {
-  if (!toggleIconEl) return
-  toggleIconEl.classList.toggle('help-toggle-icon--off', !helpVisible)
-  if (!toggleIconEl.classList.contains('help-toggle-icon--in-panel')) {
-    toggleIconEl.textContent = `❓ ${helpVisible ? 'on' : 'off'}`
-  }
+function updateOpenIconVisual () {
+  if (!openIconEl) return
+  openIconEl.classList.toggle('help-open-icon--off', !helpVisible)
 }
 
-function positionToggleIconStandalone () {
-  if (!toggleIconEl) return
+function setOpenIconHidden (hidden) {
+  if (!openIconEl) return
+  openIconEl.style.display = hidden ? 'none' : ''
+}
+
+function positionOpenIconStandalone () {
+  if (!openIconEl) return
   const stored = loadHelpPanelGeometry()
   const anchorX = stored
     ? stored.x + stored.w
@@ -139,49 +147,48 @@ function positionToggleIconStandalone () {
   const anchorY = stored
     ? stored.y
     : Math.round((window.innerHeight - DEFAULT_FLOAT_HEIGHT) / 2)
-  const iconW = toggleIconEl.offsetWidth
-  toggleIconEl.style.left = `${clampToViewport(anchorX - iconW, iconW, window.innerWidth)}px`
-  toggleIconEl.style.top = `${clampToViewport(anchorY, TOGGLE_SIZE, window.innerHeight)}px`
-  toggleIconEl.style.right = 'auto'
-  toggleIconEl.style.bottom = 'auto'
+  const iconW = openIconEl.offsetWidth
+  openIconEl.style.left = `${clampToViewport(anchorX - iconW, iconW, window.innerWidth)}px`
+  openIconEl.style.top = `${clampToViewport(anchorY, OPEN_ICON_SIZE, window.innerHeight)}px`
+  openIconEl.style.right = 'auto'
+  openIconEl.style.bottom = 'auto'
 }
 
-function attachToggleToPanel (panel) {
-  if (!toggleIconEl) return
-  toggleIconEl.classList.add('help-toggle-icon--in-panel')
-  toggleIconEl.textContent = '❓'
-  const actions = panel.querySelector('.help-panel__actions')
-  if (actions instanceof HTMLElement) {
-    actions.appendChild(toggleIconEl)
-  }
-}
-
-function detachToggleToStandalone () {
-  if (!toggleIconEl) return
-  toggleIconEl.classList.remove('help-toggle-icon--in-panel')
-  toggleIconEl.textContent = `❓ ${helpVisible ? 'on' : 'off'}`
-  document.body.appendChild(toggleIconEl)
-  positionToggleIconStandalone()
-}
-
-function onToggleClick () {
+/** The ? button always opens help, regardless of the automatic-help toggle. */
+function onOpenClick () {
   if (iconDidDrag) {
     iconDidDrag = false
     return
   }
-  helpVisible = !helpVisible
-  saveHelpVisible(helpVisible)
-  updateToggleIconVisual()
+  void show('index', { force: true })
+}
 
-  if (helpVisible) {
-    if (!panelEl) {
-      void show('index')
-    }
-  } else {
-    if (panelEl && !currentTopicIsMandatory) {
-      hide()
-    }
+// --- automatic-help toggle (lives inside the panel header) --------------------------
+
+/**
+ * Build the auto-help on/off switch that sits left of the × in the panel header.
+ * Flipping it never closes the open panel — it only governs whether future
+ * programmatic (non-mandatory) help is shown.
+ * @returns {HTMLElement}
+ */
+function buildAutoHelpToggle () {
+  const toggle = document.createElement('button')
+  toggle.type = 'button'
+  toggle.className = 'help-toggle'
+  toggle.title = 'Automatic help on/off'
+  const paint = () => {
+    toggle.classList.toggle('help-toggle--off', !helpVisible)
+    toggle.textContent = `Auto: ${helpVisible ? 'on' : 'off'}`
+    toggle.setAttribute('aria-pressed', helpVisible ? 'true' : 'false')
   }
+  toggle.addEventListener('click', () => {
+    helpVisible = !helpVisible
+    saveHelpVisible(helpVisible)
+    paint()
+    updateOpenIconVisual()
+  })
+  paint()
+  return toggle
 }
 
 // --- host registry ------------------------------------------------------------
@@ -215,8 +222,8 @@ function resolveHost (host) {
  * Show a help topic. With `options.host` the panel attaches into that host as a
  * full-host overlay card; otherwise it appears as a floating, movable + resizable panel.
  *
- * Non-mandatory topics are silently skipped when the user has toggled help off.
- * Mandatory topics always show regardless of toggle state.
+ * Non-mandatory topics are silently skipped when automatic help is toggled off,
+ * unless `options.force` is set (the manual ? button). Mandatory topics always show.
  * @param {string} key
  * @param {ShowOptions} [options]
  * @returns {Promise<void>}
@@ -234,11 +241,12 @@ async function show (key, options = {}) {
     return
   }
 
-  if (!topic.mandatory && !helpVisible) return
+  if (!topic.mandatory && !helpVisible && !options.force) return
 
   hide()
 
-  ensureToggleIcon()
+  ensureOpenIcon()
+  setOpenIconHidden(true)
 
   const hostEl = resolveHost(options.host)
   currentOnClose = options.onClose ?? null
@@ -254,14 +262,12 @@ async function show (key, options = {}) {
   if (hostEl) {
     panel.classList.add('help-panel--host')
     hostEl.appendChild(panel)
-    attachToggleToPanel(panel)
     return
   }
 
   document.body.appendChild(panel)
   applyFloatGeometry(panel)
   persistFloatGeometry(panel)
-  attachToggleToPanel(panel)
   makeDraggable(panel)
   observeFloatResize(panel)
 }
@@ -305,6 +311,8 @@ function buildCard (topic) {
 
   const actions = document.createElement('div')
   actions.className = 'help-panel__actions'
+
+  actions.appendChild(buildAutoHelpToggle())
 
   if (!topic.mandatory) {
     const close = document.createElement('button')
@@ -369,7 +377,7 @@ function makeDraggable (panel) {
   /** @param {PointerEvent} e */
   const onDown = e => {
     if (e.button !== 0) return
-    if (e.target instanceof HTMLElement && e.target.closest('.help-panel__close, .help-toggle-icon')) return
+    if (e.target instanceof HTMLElement && e.target.closest('.help-panel__close, .help-toggle')) return
     e.preventDefault()
     header.setPointerCapture(e.pointerId)
     const rect = panel.getBoundingClientRect()
@@ -440,16 +448,18 @@ function hide () {
   panelEl = null
   currentOnClose = null
   currentTopicIsMandatory = false
-  detachToggleToStandalone()
+  updateOpenIconVisual()
+  setOpenIconHidden(false)
+  positionOpenIconStandalone()
   hiding = false
 }
 
 // --- module init ---------------------------------------------------------------
 
 if (typeof document !== 'undefined' && document.readyState !== 'loading') {
-  ensureToggleIcon()
+  ensureOpenIcon()
 } else if (typeof document !== 'undefined') {
-  document.addEventListener('DOMContentLoaded', ensureToggleIcon, { once: true })
+  document.addEventListener('DOMContentLoaded', ensureOpenIcon, { once: true })
 }
 
 export const HelpManager = { registerHost, show, hide, setConduit }

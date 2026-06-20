@@ -118,9 +118,9 @@
   font-size: 2rem;
 }
 
-/* ---- toggle icon ---- */
+/* ---- open icon (floating ?, shown while no panel is open) ---- */
 
-.help-toggle-icon {
+.help-open-icon {
   position: fixed;
   z-index: 1001;
   height: 36px;
@@ -128,8 +128,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  font-size: 0.85rem;
+  font-size: 0.95rem;
   line-height: 1;
   white-space: nowrap;
   background: var(--color-bg-raised);
@@ -143,43 +142,57 @@
   touch-action: none;
 }
 
-.help-toggle-icon:hover {
+.help-open-icon:hover {
   background: var(--color-accent);
   color: var(--color-bg-raised);
 }
 
-.help-toggle-icon--off {
+/* Dimmed while automatic help is toggled off; clicking still opens help. */
+.help-open-icon--off {
   color: var(--color-text-muted);
   border-color: var(--color-border);
   background: var(--color-bg);
   opacity: 0.65;
 }
 
-.help-toggle-icon--off:hover {
+.help-open-icon--off:hover {
   opacity: 1;
   color: var(--color-accent);
   border-color: var(--color-accent);
   background: var(--color-bg-raised);
 }
 
-/* Inside a visible floater header: static position, part of the header flow */
-.help-toggle-icon--in-panel {
-  position: static;
-  z-index: auto;
+/* ---- automatic-help toggle (inside the panel header, left of ×) ---- */
+
+.help-toggle {
   flex: 0 0 auto;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  font-size: 0.95rem;
-  border-radius: 50%;
-  box-shadow: none;
-  gap: 0;
+  height: 22px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.72rem;
+  line-height: 1;
+  white-space: nowrap;
+  background: var(--color-accent);
+  color: var(--color-bg-raised);
+  border: 1px solid var(--color-accent);
+  border-radius: 11px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-.help-panel--host .help-toggle-icon--in-panel {
-  width: 40px;
-  height: 40px;
-  font-size: 1.5rem;
+.help-toggle--off {
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  border-color: var(--color-border);
+}
+
+.help-panel--host .help-toggle {
+  height: 32px;
+  padding: 0 14px;
+  font-size: 1rem;
+  border-radius: 16px;
 }
 
 /* ---- help text links ---- */

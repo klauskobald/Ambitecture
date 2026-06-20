@@ -1,16 +1,19 @@
 import { ProbeContext, registerProbeQuery } from './ProbeQueryRegistry';
 
-interface ConnectedModule {
-  name: string;
-  entity: string;
+interface ConnectedRenderer {
+  type: string;
+  guid: string;
 }
 
-function connectedRenderers(ctx: ProbeContext): ConnectedModule[] {
+function connectedRenderers(ctx: ProbeContext): ConnectedRenderer[] {
   return ctx.registry
     .getByRole('renderer')
-    .map(ws => ctx.registry.get(ws)?.guid ?? '')
-    .filter(guid => guid !== '')
-    .map(guid => ({ name: guid, entity: 'renderer' }));
+    .map(ws => ctx.registry.get(ws))
+    .filter((info): info is NonNullable<typeof info> => !!info && info.guid !== '')
+    .map(info => ({
+      type: typeof info.meta['type'] === 'string' ? (info.meta['type'] as string) : 'unknown',
+      guid: info.guid,
+    }));
 }
 
 export function registerBuiltinProbeQueries(): void {

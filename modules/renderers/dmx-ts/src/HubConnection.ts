@@ -132,6 +132,7 @@ export class HubConnection {
                 location: Config.geoLocation,
                 payload: {
                     role: 'renderer',
+                    type: 'dmx',
                     guid: Config.guid,
                     boundingBox: Config.boundingBox,
                     subscribe: { events: false, fixtureState: true },

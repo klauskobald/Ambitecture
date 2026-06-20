@@ -63,6 +63,7 @@ class HubConnection {
                 location: [geoLon, geoLat],
                 payload: {
                     role: 'renderer',
+                    type: 'simulator-2d',
                     guid: this.config.GUID,
                     subscribe: { events: true, fixtureState: true },
                 },

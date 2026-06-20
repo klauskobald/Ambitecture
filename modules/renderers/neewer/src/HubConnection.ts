@@ -141,6 +141,7 @@ export class HubConnection {
                 location: Config.geoLocation,
                 payload: {
                     role: 'renderer',
+                    type: 'neewer',
                     guid: Config.guid,
                     boundingBox: Config.boundingBox,
                     subscribe: { events: false, fixtureState: true },

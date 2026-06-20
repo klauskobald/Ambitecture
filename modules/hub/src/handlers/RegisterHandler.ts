@@ -15,6 +15,7 @@ import { parseSubscribe, toClientSubscribeState } from '../SubscribeProtocol';
 
 interface RegisterPayload {
   role: 'renderer' | 'controller';
+  type?: string;
   guid: string;
   location?: [number, number];
   boundingBox?: unknown;
@@ -66,7 +67,7 @@ export class RegisterHandler implements MessageHandler {
       return;
     }
 
-    const { role, guid, location, boundingBox, scope } = message.payload;
+    const { role, type, guid, location, boundingBox, scope } = message.payload;
 
     const parsedSubscribe = parseSubscribe(role, message.payload.subscribe);
     if (parsedSubscribe === null) {
@@ -77,6 +78,9 @@ export class RegisterHandler implements MessageHandler {
     const subscribe = toClientSubscribeState(role, parsedSubscribe);
 
     const meta: Record<string, unknown> = {};
+    if (typeof type === 'string' && type !== '') {
+      meta['type'] = type;
+    }
     if (boundingBox !== undefined) {
       meta['boundingBox'] = boundingBox;
     }

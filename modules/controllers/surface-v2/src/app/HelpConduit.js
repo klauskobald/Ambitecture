@@ -22,9 +22,24 @@ export class HelpConduit {
   callFunction (name, _args) {
     switch (name) {
       case 'getRendererList':
-        return this._probe.probe('connectedRenderers')
+        return this._getRendererList()
       default:
         return null
     }
+  }
+
+  /**
+   * Probe connected renderers (`{ type, guid }`) and shape them for the help
+   * `listView` plugin: `entity` is the renderer type, `name` joins type + guid
+   * so the panel shows e.g. "dmx (a1b2c3)".
+   * @returns {Promise<Array<{ name: string, entity: string }>>}
+   */
+  async _getRendererList () {
+    const renderers = await this._probe.probe('connectedRenderers')
+    if (!Array.isArray(renderers)) return []
+    return renderers
+      .map(r => /** @type {Record<string, unknown>} */ (r))
+      .filter(r => typeof r.type === 'string' && typeof r.guid === 'string')
+      .map(r => ({ entity: String(r.type), name: `${String(r.type)} (${String(r.guid)})` }))
   }
 }

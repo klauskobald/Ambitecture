@@ -88,7 +88,7 @@ export class HubConnection {
 
   _handleOpen() {
     this.onOpen();
-    const payload = { role: 'renderer', guid: this._config.GUID, subscribe: { events: false, fixtureState: true } };
+    const payload = { role: 'renderer', type: 'screen', guid: this._config.GUID, subscribe: { events: false, fixtureState: true } };
     const ok = this.send('register', payload);
     if (ok) this.onRegisterSent(payload);
   }

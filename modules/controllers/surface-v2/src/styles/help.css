@@ -214,3 +214,15 @@
 .help-panel--host .help-link--external {
   font-size: inherit;
 }
+
+/* ---- display plugin: listView ---- */
+
+.help-list {
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.help-list__item {
+  margin-bottom: 4px;
+}

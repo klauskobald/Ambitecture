@@ -37,6 +37,22 @@ let currentTopicIsMandatory = false
 /** @type {HTMLElement | null} */
 let toggleIconEl = null
 
+/**
+ * @typedef {object} HelpConduit
+ * @property {(name: string, args: string) => any} callFunction
+ */
+
+/** @type {HelpConduit | null} */
+let conduit = null
+
+/**
+ * Set the external communication channel.
+ * @param {HelpConduit} c
+ */
+function setConduit (c) {
+  conduit = c
+}
+
 // --- toggle icon (persistent, always in DOM) -----------------------------------
 
 function ensureToggleIcon () {
@@ -302,7 +318,7 @@ function buildCard (topic) {
 
   const body = document.createElement('div')
   body.className = 'help-panel__body'
-  const linkCtx = { showTopic: (key) => show(key) }
+  const linkCtx = { showTopic: (key) => show(key), conduit }
   body.appendChild(renderHelpText(topic.text, linkCtx))
 
   root.appendChild(header)
@@ -433,4 +449,4 @@ if (typeof document !== 'undefined' && document.readyState !== 'loading') {
   document.addEventListener('DOMContentLoaded', ensureToggleIcon, { once: true })
 }
 
-export const HelpManager = { registerHost, show, hide }
+export const HelpManager = { registerHost, show, hide, setConduit }

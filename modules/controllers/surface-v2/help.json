@@ -3,9 +3,13 @@
         "heading": "Ambitecture",
         "text": "Ambitecture is a platform for creating and managing spatial audio and lighting systems.\nDeveloped by [Kobald](https://kobald.com).\n\nFor fixtures like DMX a matching [renderer](renderer) is required."
     },
+    "no-help-available": {
+        "heading": "No help available",
+        "text": "No help is available for this topic."
+    },
     "renderer": {
         "heading": "Renderer",
-        "text": "A renderer is a module that converts Ambitecture intents into physical output."
+        "text": "A renderer is a module that converts Ambitecture intents into physical output.\nThese renderers are currently connected:\n${listView:getRendererList()}"
     },
     "heightSlider": {
         "heading": "Height Slider",

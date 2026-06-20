@@ -65,6 +65,16 @@ async function main () {
   })
 
   HelpManager.registerHost('edit-panel', () => findLayoutTagHost())
+  HelpManager.setConduit({
+    callFunction (name, _args) {
+      switch (name) {
+        case 'getRendererList':
+          return [{ name: 'dmx', entity: 'renderer' }]
+        default:
+          return null
+      }
+    }
+  })
 
   initSceneAutoResetOnLoad()
   connectStageHub(appCfg)

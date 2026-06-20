@@ -181,8 +181,10 @@ export class ReceiverNoteOnOff extends ReceiverBase {
 
     const envCfg = this.params.envelope;
     if (envCfg === null || !envCfg.enabled) {
+      // Match the envelope's env01=0 step (attack=0/release=0): velocity drops out but the offset floor remains.
+      const floor = (this.params.velocityOffset * this.params.velocityScale) / 127;
       this.signalAssignmentActivity();
-      this.fanOut(0);
+      this.fanOut(floor);
       return;
     }
 

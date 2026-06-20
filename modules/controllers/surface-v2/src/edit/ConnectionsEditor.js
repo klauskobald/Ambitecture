@@ -102,21 +102,34 @@ export class ConnectionsEditor {
       this._list.appendChild(empty)
       return
     }
+    const activeGuids = this._activeSceneIntentGuids()
     for (const connector of connectors) {
-      this._list.appendChild(this._buildRow(connector))
+      this._list.appendChild(this._buildRow(connector, activeGuids))
     }
   }
 
-  /** @param {Record<string, unknown>} connector */
-  _buildRow (connector) {
+  /** @returns {Set<string> | null} intent guids active in the current scene, or null when no scene is active. */
+  _activeSceneIntentGuids () {
+    const active = projectGraph.getActiveSceneName()
+    if (!active) return null
+    return new Set(projectGraph.getSceneIntents(active))
+  }
+
+  /** @param {Record<string, unknown>} connector @param {Set<string> | null} activeGuids */
+  _buildRow (connector, activeGuids) {
     const guid = String(connector.guid ?? '')
     const otherGuid =
       connector.aGuid === this._sourceGuid
         ? String(connector.bGuid ?? '')
         : String(connector.aGuid ?? '')
+    const isOtherInactive = activeGuids !== null && !activeGuids.has(otherGuid)
 
     const row = document.createElement('div')
     row.className = 'connections-editor__row'
+    if (isOtherInactive) {
+      row.classList.add('connections-editor__row--disabled')
+      row.title = 'This intent is deactivated in the current scene'
+    }
 
     const name = document.createElement('span')
     name.className = 'connections-editor__name'
@@ -133,20 +146,22 @@ export class ConnectionsEditor {
       const active = type.kind === connector.kind
       pill.classList.toggle('prop-pill--active', active)
       pill.classList.toggle('intent-toggle--enabled', active)
-      pill.addEventListener('click', () => this._setKind(guid, type.kind))
+      if (isOtherInactive) pill.disabled = true
+      else pill.addEventListener('click', () => this._setKind(guid, type.kind))
       kindPills.appendChild(pill)
     }
 
     const paramHost = document.createElement('span')
     paramHost.className = 'connections-editor__param'
-    this._buildParamControl(paramHost, guid, String(connector.kind ?? ''), connector)
+    this._buildParamControl(paramHost, guid, String(connector.kind ?? ''), connector, isOtherInactive)
 
     const trash = document.createElement('button')
     trash.type = 'button'
     trash.className = 'btn connections-editor__trash'
     trash.setAttribute('aria-label', 'Release connection')
     trash.textContent = '🗑'
-    trash.addEventListener('click', () => this._remove(guid))
+    if (isOtherInactive) trash.disabled = true
+    else trash.addEventListener('click', () => this._remove(guid))
 
     row.appendChild(name)
     row.appendChild(kindPills)
@@ -160,8 +175,9 @@ export class ConnectionsEditor {
    * @param {string} connGuid
    * @param {string} kind
    * @param {Record<string, unknown>} connector
+   * @param {boolean} [disabled]
    */
-  _buildParamControl (host, connGuid, kind, connector) {
+  _buildParamControl (host, connGuid, kind, connector, disabled = false) {
     host.replaceChildren()
     const type = (getConnectorTypes() ?? []).find(t => t.kind === kind)
     const param = /** @type {Record<string, unknown> | undefined} */ (type?.params?.[0])
@@ -175,6 +191,14 @@ export class ConnectionsEditor {
       typeof params[dotKey] === 'number'
         ? /** @type {number} */ (params[dotKey])
         : Number(param.defaultValue ?? 0)
+
+    if (disabled) {
+      const readonly = document.createElement('span')
+      readonly.className = 'connections-editor__param-readonly'
+      readonly.textContent = Number.isFinite(initial) ? initial.toFixed(2) : ''
+      host.appendChild(readonly)
+      return
+    }
 
     let pending = initial
     const slider = new ScalarDragSlider({

@@ -67,6 +67,22 @@
   opacity: 0.6;
 }
 
+/* The connected intent is deactivated in the current scene: the link is shown but locked. */
+.connections-editor__row--disabled {
+  opacity: 0.45;
+}
+
+.connections-editor__row--disabled .prop-pill,
+.connections-editor__row--disabled .connections-editor__trash {
+  cursor: default;
+}
+
+.connections-editor__param-readonly {
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
 /* Narrow pane: row splits into two lines — name/slider/trash, then the kind buttons below. */
 @container (max-width: 400px) {
   .connections-editor__row {

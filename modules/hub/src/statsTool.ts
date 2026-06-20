@@ -10,6 +10,7 @@ interface KeyState {
   readout: number;
   multiplier: number;
   units: string;
+  type: 'rate' | 'count';
 }
 
 const defaultOptions: Required<StatsToolOptions> = {
@@ -51,22 +52,36 @@ class StatsTool {
     this.meterReleaseFactor = 1 - 1 / (1 + this.options.emaK);
   }
 
-  sample(key: string, value: number, multiplier: number = 1, units: string = ''): void {
+  sample(key: string, value: number, multiplier: number = 1, units: string = '', type: 'rate' | 'count' = 'rate'): void {
     let state = this.perKey.get(key);
     if (state === undefined) {
-      state = { value: 0, multiplier, acc: 0, readout: 0, units };
+      state = { value: 0, multiplier, acc: 0, readout: 0, units, type };
       this.perKey.set(key, state);
     }
-    state.acc += value;
+    switch (type) {
+      case 'rate':
+        state.acc += value * multiplier;
+        break;
+      case 'count':
+        state.value = value;
+        break;
+    }
     state.units = units;
+    state.type = type;
   }
 
   private emitMeter(): void {
     for (const [key, state] of this.perKey) {
       if (state.acc > state.value) state.value = state.acc;
       state.readout = state.value;
-      state.value *= this.meterReleaseFactor;
-      state.acc = 0;
+      switch (state.type) {
+        case 'rate':
+          state.value *= this.meterReleaseFactor;
+          state.acc = 0;
+          break;
+        case 'count':
+          break;
+      }
       this.perKey.set(key, state);
     }
   }
@@ -77,7 +92,14 @@ class StatsTool {
     }
     const snapshot: Record<string, number> = {};
     for (const [key, st] of this.perKey) {
-      snapshot[`${key}${st.units ? "/" + st.units : ''}`] = Math.round(st.value * st.multiplier * this.meterReleaseFactor);
+      switch (st.type) {
+        case 'rate':
+          snapshot[`${key}${st.units ? "/" + st.units : ''}`] = Math.round(st.value * st.multiplier * this.meterReleaseFactor);
+          break;
+        case 'count':
+          snapshot[`${key}${st.units ? "/" + st.units : ''}`] = Math.round(st.value * st.multiplier);
+          break;
+      }
     }
     this.options.displayFn(snapshot);
   }

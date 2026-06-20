@@ -209,8 +209,8 @@ export class PhysicsEngine {
         movingBodies++
       }
     }
-    statsTool.sample('Phys bodies', totalBodies, 1, '');
-    statsTool.sample('Phys moving', movingBodies, 1, '');
+    statsTool.sample('Phys bodies', totalBodies, 1, '', 'count');
+    statsTool.sample('Phys moving', movingBodies, 1, '', 'count');
     return movingBodies === 0;
   }
 }

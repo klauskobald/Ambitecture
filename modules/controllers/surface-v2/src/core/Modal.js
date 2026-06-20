@@ -50,7 +50,18 @@ function _ensureOverlay () {
   _overlay.addEventListener('click', (e) => {
     if (e.target === _overlay) _dismiss(null)
   })
+  // Escape always closes whatever dialog is open, same as an overlay click.
+  window.addEventListener('keydown', _onGlobalKeydown, true)
   document.body.appendChild(_overlay)
+}
+
+/** @param {KeyboardEvent} e */
+function _onGlobalKeydown (e) {
+  if (e.key !== 'Escape') return
+  if (!_overlay?.classList.contains('is-open')) return
+  e.preventDefault()
+  e.stopImmediatePropagation()
+  _dismiss(null)
 }
 
 function _dismiss (value) {
@@ -636,11 +647,6 @@ export function sampleKey (message, noKeyLabel = 'No Key') {
 
     /** @param {KeyboardEvent} e */
     const onKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        _dismiss(null)
-        return
-      }
       if (e.repeat) return
       if (_isModifierOnlyKeydown(e)) return
       e.preventDefault()

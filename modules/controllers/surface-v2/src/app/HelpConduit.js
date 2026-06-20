@@ -40,6 +40,9 @@ export class HelpConduit {
     return renderers
       .map(r => /** @type {Record<string, unknown>} */ (r))
       .filter(r => typeof r.type === 'string' && typeof r.guid === 'string')
-      .map(r => ({ entity: String(r.type), name: `${String(r.type)} (${String(r.guid)})` }))
+      .map(r => ({
+        entity: String(r.type),
+        name: `${String(r.type).toUpperCase()} (${String(r.guid)})`
+      }))
   }
 }

@@ -3,9 +3,7 @@ import {
   loadHelpPanelGeometry,
   saveHelpPanelGeometry,
   loadHelpVisible,
-  saveHelpVisible,
-  loadIconAnchor,
-  saveIconAnchor
+  saveHelpVisible
 } from './helpPanelState.js'
 import { renderHelpText } from './renderHelpText.js'
 
@@ -51,8 +49,8 @@ function ensureToggleIcon () {
   toggleIconEl.addEventListener('click', onToggleClick)
   makeIconDraggable()
   updateToggleIconVisual()
-  positionToggleIconStandalone()
   document.body.appendChild(toggleIconEl)
+  positionToggleIconStandalone()
 }
 
 /** @type {boolean} */
@@ -88,7 +86,16 @@ function makeIconDraggable () {
       toggleIconEl.removeEventListener('pointerup', onUp)
       toggleIconEl.removeEventListener('pointercancel', onUp)
       if (iconDidDrag) {
-        saveIconAnchor({ x: toggleIconEl.offsetLeft + toggleIconEl.offsetWidth, y: toggleIconEl.offsetTop })
+        const stored = loadHelpPanelGeometry()
+        const w = stored ? stored.w : DEFAULT_FLOAT_WIDTH
+        const h = stored ? stored.h : DEFAULT_FLOAT_HEIGHT
+        const iconRight = toggleIconEl.offsetLeft + toggleIconEl.offsetWidth
+        saveHelpPanelGeometry({
+          x: iconRight - w,
+          y: toggleIconEl.offsetTop,
+          w,
+          h
+        })
       }
     }
     toggleIconEl.addEventListener('pointermove', onMove)
@@ -109,21 +116,16 @@ function updateToggleIconVisual () {
 
 function positionToggleIconStandalone () {
   if (!toggleIconEl) return
-  let anchor = loadIconAnchor()
-  if (!anchor) {
-    const stored = loadHelpPanelGeometry()
-    if (stored) {
-      anchor = { x: stored.x + stored.w, y: stored.y }
-    } else {
-      anchor = {
-        x: Math.round(window.innerWidth - 24),
-        y: Math.round((window.innerHeight - DEFAULT_FLOAT_HEIGHT) / 2)
-      }
-    }
-  }
-  const w = toggleIconEl.offsetWidth
-  toggleIconEl.style.left = `${clampToViewport(anchor.x - w, w, window.innerWidth)}px`
-  toggleIconEl.style.top = `${clampToViewport(anchor.y, TOGGLE_SIZE, window.innerHeight)}px`
+  const stored = loadHelpPanelGeometry()
+  const anchorX = stored
+    ? stored.x + stored.w
+    : Math.round((window.innerWidth + DEFAULT_FLOAT_WIDTH) / 2)
+  const anchorY = stored
+    ? stored.y
+    : Math.round((window.innerHeight - DEFAULT_FLOAT_HEIGHT) / 2)
+  const iconW = toggleIconEl.offsetWidth
+  toggleIconEl.style.left = `${clampToViewport(anchorX - iconW, iconW, window.innerWidth)}px`
+  toggleIconEl.style.top = `${clampToViewport(anchorY, TOGGLE_SIZE, window.innerHeight)}px`
   toggleIconEl.style.right = 'auto'
   toggleIconEl.style.bottom = 'auto'
 }
@@ -142,8 +144,8 @@ function detachToggleToStandalone () {
   if (!toggleIconEl) return
   toggleIconEl.classList.remove('help-toggle-icon--in-panel')
   toggleIconEl.textContent = `❓ ${helpVisible ? 'on' : 'off'}`
-  positionToggleIconStandalone()
   document.body.appendChild(toggleIconEl)
+  positionToggleIconStandalone()
 }
 
 function onToggleClick () {
@@ -239,6 +241,7 @@ async function show (key, options = {}) {
 
   document.body.appendChild(panel)
   applyFloatGeometry(panel)
+  persistFloatGeometry(panel)
   attachToggleToPanel(panel)
   makeDraggable(panel)
   observeFloatResize(panel)
@@ -401,10 +404,6 @@ function persistFloatGeometry (panel) {
     y: panel.offsetTop,
     w: panel.offsetWidth,
     h: panel.offsetHeight
-  })
-  saveIconAnchor({
-    x: panel.offsetLeft + panel.offsetWidth,
-    y: panel.offsetTop
   })
 }
 

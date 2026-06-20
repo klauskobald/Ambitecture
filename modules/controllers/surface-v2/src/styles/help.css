@@ -11,7 +11,7 @@
   border-radius: 8px;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.6);
   resize: both;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .help-panel__header {
@@ -60,6 +60,8 @@
 .help-panel__body {
   flex: 1 1 auto;
   padding: 12px;
+  margin-right: 6px;
+  margin-bottom: 6px;
   overflow: auto;
   line-height: 1.45;
 }

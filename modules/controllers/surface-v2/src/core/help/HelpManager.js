@@ -12,6 +12,7 @@ import { renderHelpText } from './renderHelpText.js'
  * @property {string | HTMLElement} [host] registered host name or a raw element; switches to attached (non-floating) mode
  * @property {() => void} [onClose] invoked when the user dismisses the panel via its × control
  * @property {boolean} [force] open even when automatic help is toggled off (used by the manual ? button)
+ * @property {boolean} [quiet] when the key has no topic, do nothing instead of showing the `no-help-available` fallback
  */
 
 const DEFAULT_FLOAT_WIDTH = 320
@@ -234,6 +235,7 @@ async function show (key, options = {}) {
   if (myGen !== generation) return // superseded by another show/hide while loading
   const topic = getHelpTopic(content, key)
   if (!topic) {
+    if (options.quiet) return
     console.warn(`HelpManager: no help topic for "${key}"`)
     if (key !== 'no-help-available') {
       void show('no-help-available', options)

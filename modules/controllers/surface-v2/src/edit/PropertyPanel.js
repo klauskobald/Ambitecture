@@ -150,7 +150,9 @@ export class PropertyPanel {
       context: { type: 'intent', guid },
       labelDefault: intentLabel
     })
-    pills.appendChild(this._inputAssignManager.getStatePill())
+    const assignPill = this._inputAssignManager.getStatePill()
+    if (assignPill instanceof HTMLElement) assignPill.dataset.help = 'intent.edit.inputAssign'
+    pills.appendChild(assignPill)
     this._performResetToggleByKey = this._buildPerformResetPills(guid, pills)
   }
 
@@ -195,6 +197,7 @@ export class PropertyPanel {
       const pill = document.createElement('button')
       pill.type = 'button'
       pill.className = 'prop-pill intent-toggle prop-pill--perform-reset-toggle'
+      pill.dataset.help = 'intent.edit.performReset'
       pill.textContent = this._labelForPerformResetKey(key)
       pill.title = 'Toggle perform reset'
       pill.addEventListener('click', () => {

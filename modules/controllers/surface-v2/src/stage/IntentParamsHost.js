@@ -69,6 +69,7 @@ export class IntentParamsHost {
     closeBtn.className = 'stage-edit-params-overlay__close'
     closeBtn.setAttribute('aria-label', 'Close')
     closeBtn.textContent = '×'
+    closeBtn.dataset.help = 'intent.edit.close'
     closeBtn.addEventListener('click', () => this.close())
 
     header.appendChild(this._title)
@@ -84,6 +85,7 @@ export class IntentParamsHost {
     this._copyBtn.type = 'button'
     this._copyBtn.className = 'btn stage-edit-params-overlay__action'
     this._copyBtn.textContent = 'Copy'
+    this._copyBtn.dataset.help = 'intent.edit.copy'
     this._copyBtn.addEventListener('click', () => void this._onFooterCopy())
 
     this._deleteBtn = document.createElement('button')
@@ -91,6 +93,7 @@ export class IntentParamsHost {
     this._deleteBtn.className =
       'btn stage-edit-params-overlay__action stage-edit-params-overlay__action--danger'
     this._deleteBtn.textContent = 'Delete'
+    this._deleteBtn.dataset.help = 'intent.edit.delete'
     this._deleteBtn.addEventListener('click', () => void this._onFooterDelete())
 
     this._footer.appendChild(this._copyBtn)

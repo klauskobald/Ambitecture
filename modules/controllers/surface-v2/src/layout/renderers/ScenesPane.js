@@ -44,16 +44,19 @@ export class ScenesPane {
     this._renameBtn = document.createElement('button')
     this._renameBtn.className = 'btn'
     this._renameBtn.textContent = 'Rename'
+    this._renameBtn.dataset.help = 'scene.rename'
     this._renameBtn.addEventListener('click', () => this._onRenameClick())
 
     this._copyBtn = document.createElement('button')
     this._copyBtn.className = 'btn'
     this._copyBtn.textContent = 'Copy'
+    this._copyBtn.dataset.help = 'scene.copy'
     this._copyBtn.addEventListener('click', () => this._onCopyClick())
 
     this._deleteBtn = document.createElement('button')
     this._deleteBtn.className = 'btn'
     this._deleteBtn.textContent = 'Delete'
+    this._deleteBtn.dataset.help = 'scene.delete'
     this._deleteBtn.addEventListener('click', () => this._onDeleteClick())
 
     this._actionsBody.appendChild(this._renameBtn)
@@ -121,6 +124,7 @@ export class ScenesPane {
     for (const name of projectGraph.getScenes()) {
       const li = document.createElement('li')
       li.className = 'scene-list-item'
+      li.dataset.help = 'scene.recall'
       if (name === activeScene) li.classList.add('scene-list-item--active')
       li.textContent = name
       li.addEventListener('click', () => {
@@ -182,6 +186,7 @@ export class ScenesPane {
       const enabled = sceneGuids.has(guid)
       const btn = document.createElement('button')
       btn.className = 'intent-toggle' + (enabled ? ' intent-toggle--enabled' : '')
+      btn.dataset.help = 'scene.intentToggle'
       btn.textContent = intentName(intent) || guid
       btn.addEventListener('click', () => {
         projectGraph.toggleSceneIntent(activeScene, guid)

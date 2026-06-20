@@ -40,6 +40,7 @@ export class StagePane {
     hudToggle.textContent = '\u2742'
     hudToggle.setAttribute('aria-label', 'Perform HUDs')
     hudToggle.title = 'Hide perform HUD knobs'
+    hudToggle.dataset.help = 'stage.perform.hudToggle'
     hudToggle.addEventListener('click', () => {
       this._hudsVisible = !this._hudsVisible
       this._applyHudLayerVisibility()

@@ -64,6 +64,7 @@ export class ControllerSurface {
     resetBtn.type = 'button'
     resetBtn.className = 'layout-stage-reset-btn'
     resetBtn.textContent = 'Reset scene'
+    resetBtn.dataset.help = 'stage.perform.resetScene'
     resetWrap.appendChild(resetBtn)
 
     stackEl.appendChild(canvas)

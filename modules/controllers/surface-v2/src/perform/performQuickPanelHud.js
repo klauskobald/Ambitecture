@@ -197,6 +197,7 @@ export class PerformQuickPanelHud {
 
       const row = document.createElement('div')
       row.className = 'quick-panel-hud__knobs'
+      row.dataset.help = 'stage.perform.knob'
 
       /** @type {ScalarRadialKnobSvg[]} */
       const knobs = []

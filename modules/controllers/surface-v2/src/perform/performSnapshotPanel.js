@@ -172,6 +172,7 @@ export function createPerformSnapshotPanel () {
     createBtn.type = 'button'
     createBtn.className = 'btn perform-animate-empty__create'
     createBtn.textContent = 'Create'
+    createBtn.dataset.help = 'snapshot.create'
     createBtn.addEventListener('click', () => {
       void onCreateClick()
     })
@@ -231,6 +232,7 @@ export function createPerformSnapshotPanel () {
       playBtn.type = 'button'
       playBtn.className = 'perform-animate-toggle perform-animate-toggle--play'
       playBtn.textContent = '▶'
+      playBtn.dataset.help = 'snapshot.play'
       playBtn.setAttribute('aria-label', `Recall snapshot ${name}`)
       playBtn.addEventListener('click', () => {
         sendActionTrigger(guid)
@@ -243,6 +245,7 @@ export function createPerformSnapshotPanel () {
       modifyBtn.type = 'button'
       modifyBtn.className = 'btn perform-snapshot-row__btn'
       modifyBtn.textContent = 'Modify'
+      modifyBtn.dataset.help = 'snapshot.modify'
       modifyBtn.addEventListener('click', async () => {
         const result = await openSnapshotModal(row)
         if (!result) return
@@ -272,6 +275,7 @@ export function createPerformSnapshotPanel () {
       deleteBtn.type = 'button'
       deleteBtn.className = 'btn perform-snapshot-row__btn'
       deleteBtn.textContent = 'Delete'
+      deleteBtn.dataset.help = 'snapshot.delete'
       deleteBtn.addEventListener('click', async () => {
         const ok = await modalConfirm(`Delete snapshot "${name}"?`, {
           yes: 'Delete',

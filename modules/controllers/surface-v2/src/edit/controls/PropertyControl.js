@@ -59,6 +59,11 @@ export class PropertyControl {
     const row = document.createElement('div')
     row.className = 'prop-row'
 
+    const dotKey = String(this._descriptor.dotKey ?? '')
+    const leaf = dotKey.split('.').pop() ?? ''
+    const helpLeaf = leaf === 'speed' ? 'followTime' : leaf
+    if (helpLeaf) row.dataset.help = `intent.edit.${helpLeaf}`
+
     const header = document.createElement('div')
     header.className = 'prop-row__header'
 
@@ -77,6 +82,7 @@ export class PropertyControl {
     if (!this._isMandatory) {
       this._toggleBtn = document.createElement('button')
       this._toggleBtn.className = 'prop-row__toggle intent-toggle'
+      this._toggleBtn.dataset.help = 'intent.edit.toggle'
       this._toggleBtn.textContent = 'OFF'
       this._toggleBtn.setAttribute('aria-checked', 'false')
       this._toggleBtn.addEventListener('click', () => this._onToggleClick())
@@ -91,6 +97,7 @@ export class PropertyControl {
       this._quickPanelBtn.textContent = '\u2742'
       this._quickPanelBtn.setAttribute('aria-label', 'Quick panel')
       this._quickPanelBtn.setAttribute('aria-checked', 'false')
+      this._quickPanelBtn.dataset.help = 'intent.edit.quickPanel'
       this._quickPanelBtn.title = 'Quick panel — show knobs in Perform'
       this._quickPanelBtn.addEventListener('click', () =>
         this._onQuickPanelClick()
@@ -101,6 +108,7 @@ export class PropertyControl {
     if (this._allowOverlay) {
       this._overlayBtn = document.createElement('button')
       this._overlayBtn.className = 'prop-row__toggle intent-toggle'
+      this._overlayBtn.dataset.help = 'intent.edit.overlay'
       this._overlayBtn.textContent = 'Shared'
       this._overlayBtn.setAttribute('aria-checked', 'false')
       this._overlayBtn.addEventListener('click', () => this._onOverlayClick())

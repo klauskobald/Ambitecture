@@ -20,6 +20,7 @@ import { PluginPane } from '../layout/renderers/PluginPane.js'
 import { initSceneAutoResetOnLoad } from '../perform/sceneAutoResetOnLoad.js'
 import { HelpManager } from '../core/help/HelpManager.js'
 import { HelpConduit } from './HelpConduit.js'
+import { attachDataHelp } from './attachDataHelp.js'
 import { findLayoutTagHost } from '../stage/layoutTagHost.js'
 
 async function main () {
@@ -67,6 +68,7 @@ async function main () {
 
   HelpManager.registerHost('edit-panel', () => findLayoutTagHost())
   HelpManager.setConduit(new HelpConduit())
+  attachDataHelp()
 
   initSceneAutoResetOnLoad()
   connectStageHub(appCfg)

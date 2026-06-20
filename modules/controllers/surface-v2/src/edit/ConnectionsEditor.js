@@ -63,6 +63,7 @@ export class ConnectionsEditor {
     this._connectBtn.type = 'button'
     this._connectBtn.className = 'btn connections-editor__connect'
     this._connectBtn.textContent = '+ Connect'
+    this._connectBtn.dataset.help = 'connections.index'
     this._connectBtn.addEventListener('click', () => this._togglePick())
     header.appendChild(title)
     header.appendChild(this._connectBtn)
@@ -144,6 +145,7 @@ export class ConnectionsEditor {
       pill.className = 'prop-pill intent-toggle'
       pill.textContent = type.name
       pill.dataset.value = type.kind
+      pill.dataset.help = 'connections.kind'
       const active = type.kind === connector.kind
       pill.classList.toggle('prop-pill--active', active)
       pill.classList.toggle('intent-toggle--enabled', active)
@@ -154,6 +156,7 @@ export class ConnectionsEditor {
 
     const paramHost = document.createElement('span')
     paramHost.className = 'connections-editor__param'
+    paramHost.dataset.help = 'connections.param'
     this._buildParamControl(
       paramHost,
       guid,
@@ -167,6 +170,7 @@ export class ConnectionsEditor {
     trash.className = 'btn connections-editor__trash'
     trash.setAttribute('aria-label', 'Release connection')
     trash.textContent = '🗑'
+    trash.dataset.help = 'connections.release'
     if (isOtherInactive) trash.disabled = true
     else trash.addEventListener('click', () => this._remove(guid))
 

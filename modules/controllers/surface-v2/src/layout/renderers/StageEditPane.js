@@ -33,6 +33,7 @@ import {
 } from '../../core/arraySorter.js'
 import { collectPerformButtonInputs } from '../../core/performButtonInputs.js'
 import { clientToWorldViaSimCanvas } from '../../viewport/spatialMath.js'
+import { showHelp } from '../../app/actionHelp.js'
 import { resolveDescriptorsForClass } from '../../core/systemCapabilities.js'
 import { cloneAndSetAtDotPath } from '../../core/dotPath.js'
 
@@ -111,6 +112,7 @@ export class StageEditPane {
     this._fixtureLockBtn = document.createElement('button')
     this._fixtureLockBtn.className = 'btn btn-mode-toggle'
     this._fixtureLockBtn.type = 'button'
+    this._fixtureLockBtn.dataset.help = 'stage.edit.fixtureLock'
     this._fixtureLockBtn.addEventListener('click', () =>
       this._toggleFixtureLock()
     )
@@ -122,6 +124,7 @@ export class StageEditPane {
       btn.className = 'btn btn-mode-toggle'
       btn.textContent = mode.label
       btn.dataset.modeId = mode.id
+      btn.dataset.help = `stage.edit.${mode.id}`
       btn.addEventListener('click', () => this._toggleMode(mode.id))
       bar.appendChild(btn)
       this._managers.set(mode.id, null)
@@ -131,6 +134,7 @@ export class StageEditPane {
     this._performSortBtn.type = 'button'
     this._performSortBtn.className = 'btn btn-mode-toggle'
     this._performSortBtn.textContent = 'Perform sort'
+    this._performSortBtn.dataset.help = 'stage.edit.performSort'
     this._performSortBtn.addEventListener(
       'click',
       () => void this._onPerformSortClick()
@@ -146,6 +150,7 @@ export class StageEditPane {
     this._physicsBtn.type = 'button'
     this._physicsBtn.className = 'btn btn-mode-toggle'
     this._physicsBtn.textContent = 'Physics'
+    this._physicsBtn.dataset.help = 'stage.edit.physics'
     this._refreshPhysicsButton()
     this._physicsBtn.addEventListener('click', () => this._togglePhysics())
     bar.appendChild(this._physicsBtn)
@@ -258,6 +263,7 @@ export class StageEditPane {
       return
     }
 
+    showHelp('stage.edit.createIntent')
     const choice = await pickChoice('New intent', [
       { value: 'light', label: 'Light' },
       { value: 'master', label: 'Master' },

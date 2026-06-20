@@ -12,3 +12,4 @@ claude-with-deepseek.sh
 **/config.json
 playwright-report/**
 graphify-out/**
+.playwright-mcp/**

@@ -179,3 +179,36 @@
   height: 40px;
   font-size: 1.5rem;
 }
+
+/* ---- help text links ---- */
+
+.help-link--internal {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: inherit;
+  color: var(--color-accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.help-link--internal:hover {
+  color: var(--color-text);
+}
+
+.help-link--external {
+  color: var(--color-accent);
+  text-underline-offset: 2px;
+}
+
+.help-link--external:hover {
+  color: var(--color-text);
+}
+
+/* In host (full-screen overlay) mode, links inherit the scaled body font-size */
+.help-panel--host .help-link--internal,
+.help-panel--host .help-link--external {
+  font-size: inherit;
+}

@@ -7,6 +7,7 @@ import {
   loadIconAnchor,
   saveIconAnchor
 } from './helpPanelState.js'
+import { renderHelpText } from './renderHelpText.js'
 
 /**
  * @typedef {object} ShowOptions
@@ -154,8 +155,14 @@ function onToggleClick () {
   saveHelpVisible(helpVisible)
   updateToggleIconVisual()
 
-  if (panelEl && !currentTopicIsMandatory) {
-    hide()
+  if (helpVisible) {
+    if (!panelEl) {
+      void show('index')
+    }
+  } else {
+    if (panelEl && !currentTopicIsMandatory) {
+      hide()
+    }
   }
 }
 
@@ -292,7 +299,8 @@ function buildCard (topic) {
 
   const body = document.createElement('div')
   body.className = 'help-panel__body'
-  body.textContent = topic.text
+  const linkCtx = { showTopic: (key) => show(key) }
+  body.appendChild(renderHelpText(topic.text, linkCtx))
 
   root.appendChild(header)
   root.appendChild(body)

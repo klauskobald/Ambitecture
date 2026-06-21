@@ -43,6 +43,9 @@ let onLayoutRebuild = null
 /** @type {Map<HTMLElement, LeafState>} */
 const leafStateByEl = new WeakMap()
 
+/** @type {HTMLElement[]} */
+let builtLeaves = []
+
 /**
  * @param {object} opts
  * @param {HTMLElement} opts.toolbar
@@ -88,6 +91,7 @@ export function select (layoutId) {
 
   activeLayoutId = layoutId
   saveActiveLayoutId(layoutId)
+  deactivateBuiltLeaves()
   stageEl.replaceChildren()
 
   for (let i = 0; i < def.children.length; i++) {
@@ -97,6 +101,24 @@ export function select (layoutId) {
 
   syncToolbarPressed(layoutId)
   onLayoutRebuild?.()
+}
+
+/**
+ * Tear down the panes that were active in the outgoing layout before its DOM
+ * is discarded, so pane renderers can release shared resources (overlay HUDs,
+ * detached stage, etc.). Without this, switching layouts orphans the active
+ * pane and leaks whatever it owns.
+ */
+function deactivateBuiltLeaves () {
+  for (const leaf of builtLeaves) {
+    const state = leafStateByEl.get(leaf)
+    if (!state || !state.activePaneId) continue
+    const active = state.cache.get(state.activePaneId)
+    if (!active) continue
+    invokePanePhase(active.instance, 'willBeDeactivated')
+    invokePanePhase(active.instance, 'deactivate')
+  }
+  builtLeaves = []
 }
 
 /**
@@ -222,6 +244,7 @@ function buildLeaf (node, nodePath) {
     bodyEl: body
   })
   leafStateByEl.set(leaf, state)
+  builtLeaves.push(leaf)
 
   for (const pane of node.panes) {
     const btn = document.createElement('button')

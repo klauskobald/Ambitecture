@@ -328,7 +328,7 @@ function restoreBodyScroll (panel, options) {
 
 /** Back button: return to the previously shown topic, restoring its scroll position. */
 function goBack () {
-  const last = history.pop()
+  history.pop()
   const prev = history.pop()
   if (!prev) return
   void show(prev.key, { _scrollTop: prev.scrollTop })

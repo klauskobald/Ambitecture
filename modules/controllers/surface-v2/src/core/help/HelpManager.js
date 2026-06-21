@@ -42,7 +42,6 @@ let generation = 0
  */
 let history = []
 /** Topic key currently shown, captured so it can be pushed onto `history` on navigation. @type {string | null} */
-let currentKey = null
 
 /**
  * Master switch for *automatic* help. When off, programmatic `show` calls for
@@ -111,8 +110,16 @@ function makeIconDraggable () {
       const dy = ev.clientY - e.clientY
       if (Math.abs(dx) > 3 || Math.abs(dy) > 3) iconDidDrag = true
       const w = openIconEl.offsetWidth
-      openIconEl.style.left = `${clampToViewport(ev.clientX - offsetX, w, window.innerWidth)}px`
-      openIconEl.style.top = `${clampToViewport(ev.clientY - offsetY, OPEN_ICON_SIZE, window.innerHeight)}px`
+      openIconEl.style.left = `${clampToViewport(
+        ev.clientX - offsetX,
+        w,
+        window.innerWidth
+      )}px`
+      openIconEl.style.top = `${clampToViewport(
+        ev.clientY - offsetY,
+        OPEN_ICON_SIZE,
+        window.innerHeight
+      )}px`
     }
     /** @param {PointerEvent} ev */
     const onUp = ev => {
@@ -161,8 +168,16 @@ function positionOpenIconStandalone () {
     ? stored.y
     : Math.round((window.innerHeight - DEFAULT_FLOAT_HEIGHT) / 2)
   const iconW = openIconEl.offsetWidth
-  openIconEl.style.left = `${clampToViewport(anchorX - iconW, iconW, window.innerWidth)}px`
-  openIconEl.style.top = `${clampToViewport(anchorY, OPEN_ICON_SIZE, window.innerHeight)}px`
+  openIconEl.style.left = `${clampToViewport(
+    anchorX - iconW,
+    iconW,
+    window.innerWidth
+  )}px`
+  openIconEl.style.top = `${clampToViewport(
+    anchorY,
+    OPEN_ICON_SIZE,
+    window.innerHeight
+  )}px`
   openIconEl.style.right = 'auto'
   openIconEl.style.bottom = 'auto'
 }
@@ -262,10 +277,12 @@ async function show (key, options = {}) {
   const wasOpen = !!panelEl
   if (!wasOpen) {
     history = []
-  } else if (!options._back && currentKey != null) {
+    history.push({ key, scrollTop: 0 })
+  }
+  if (history[history.length - 1]?.key !== key) {
     const prevBody = panelEl.querySelector('.help-panel__body')
     const scrollTop = prevBody instanceof HTMLElement ? prevBody.scrollTop : 0
-    history.push({ key: currentKey, scrollTop })
+    history.push({ key, scrollTop })
   }
 
   hide()
@@ -279,7 +296,6 @@ async function show (key, options = {}) {
 
   const panel = buildCard(topic)
   panelEl = panel
-  currentKey = key
 
   if (!currentTopicIsMandatory) {
     bindEscDismiss()
@@ -312,9 +328,10 @@ function restoreBodyScroll (panel, options) {
 
 /** Back button: return to the previously shown topic, restoring its scroll position. */
 function goBack () {
+  const last = history.pop()
   const prev = history.pop()
   if (!prev) return
-  void show(prev.key, { _back: true, _scrollTop: prev.scrollTop })
+  void show(prev.key, { _scrollTop: prev.scrollTop })
 }
 
 /** User-driven dismissal (× or Esc): close the panel and notify the caller. */
@@ -369,7 +386,7 @@ function buildCard (topic) {
     actions.appendChild(close)
   }
 
-  if (history.length > 0) {
+  if (history.length > 1) {
     const back = document.createElement('button')
     back.type = 'button'
     back.className = 'help-panel__back'
@@ -384,7 +401,7 @@ function buildCard (topic) {
 
   const body = document.createElement('div')
   body.className = 'help-panel__body'
-  const linkCtx = { showTopic: (key) => show(key), conduit }
+  const linkCtx = { showTopic: key => show(key), conduit }
   body.appendChild(renderHelpText(topic.text, linkCtx))
 
   root.appendChild(header)
@@ -402,14 +419,26 @@ function applyFloatGeometry (panel) {
   if (stored) {
     panel.style.width = `${stored.w}px`
     panel.style.height = `${stored.h}px`
-    panel.style.left = `${clampToViewport(stored.x, stored.w, window.innerWidth)}px`
-    panel.style.top = `${clampToViewport(stored.y, stored.h, window.innerHeight)}px`
+    panel.style.left = `${clampToViewport(
+      stored.x,
+      stored.w,
+      window.innerWidth
+    )}px`
+    panel.style.top = `${clampToViewport(
+      stored.y,
+      stored.h,
+      window.innerHeight
+    )}px`
     return
   }
   panel.style.width = `${DEFAULT_FLOAT_WIDTH}px`
   panel.style.height = `${DEFAULT_FLOAT_HEIGHT}px`
-  panel.style.left = `${Math.round((window.innerWidth - DEFAULT_FLOAT_WIDTH) / 2)}px`
-  panel.style.top = `${Math.round((window.innerHeight - DEFAULT_FLOAT_HEIGHT) / 2)}px`
+  panel.style.left = `${Math.round(
+    (window.innerWidth - DEFAULT_FLOAT_WIDTH) / 2
+  )}px`
+  panel.style.top = `${Math.round(
+    (window.innerHeight - DEFAULT_FLOAT_HEIGHT) / 2
+  )}px`
 }
 
 /**
@@ -432,7 +461,11 @@ function makeDraggable (panel) {
   /** @param {PointerEvent} e */
   const onDown = e => {
     if (e.button !== 0) return
-    if (e.target instanceof HTMLElement && e.target.closest('.help-panel__back, .help-panel__close, .help-toggle')) return
+    if (
+      e.target instanceof HTMLElement &&
+      e.target.closest('.help-panel__back, .help-panel__close, .help-toggle')
+    )
+      return
     e.preventDefault()
     header.setPointerCapture(e.pointerId)
     const rect = panel.getBoundingClientRect()
@@ -443,8 +476,16 @@ function makeDraggable (panel) {
     const onMove = ev => {
       const w = panel.offsetWidth
       const h = panel.offsetHeight
-      panel.style.left = `${clampToViewport(ev.clientX - offsetX, w, window.innerWidth)}px`
-      panel.style.top = `${clampToViewport(ev.clientY - offsetY, h, window.innerHeight)}px`
+      panel.style.left = `${clampToViewport(
+        ev.clientX - offsetX,
+        w,
+        window.innerWidth
+      )}px`
+      panel.style.top = `${clampToViewport(
+        ev.clientY - offsetY,
+        h,
+        window.innerHeight
+      )}px`
     }
     /** @param {PointerEvent} ev */
     const onUp = ev => {
@@ -470,7 +511,10 @@ function observeFloatResize (panel) {
   if (typeof ResizeObserver === 'undefined') return
   let first = true
   const ro = new ResizeObserver(() => {
-    if (first) { first = false; return }
+    if (first) {
+      first = false
+      return
+    }
     persistFloatGeometry(panel)
   })
   ro.observe(panel)

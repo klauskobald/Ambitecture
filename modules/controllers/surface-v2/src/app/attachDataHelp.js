@@ -19,10 +19,7 @@ import { HelpManager } from '../core/help/HelpManager.js'
  * behaviour is completely unaffected — we only observe.
  */
 export function attachDataHelp () {
-  document.addEventListener('pointerdown', onPointerDown, {
-    // capture: true,
-    // passive: true
-  })
+  document.addEventListener('pointerup', e => showhelp(e))
 }
 
 /**
@@ -53,13 +50,17 @@ function helpKeyFor (el) {
 }
 
 /** @param {PointerEvent} e */
-function onPointerDown (e) {
+function showhelp (e) {
   e.passThrough = true
   const t = e.target
   if (!(t instanceof Element)) return
-  const el = t.closest('[data-help], button[data-pane-id], button[data-layout-id]')
+  const el = t.closest(
+    '[data-help], button[data-pane-id], button[data-layout-id]'
+  )
   if (!(el instanceof HTMLElement)) return
   const key = helpKeyFor(el)
   if (!key) return
-  void HelpManager.show(key, { quiet: true })
+  setTimeout(() => {
+    void HelpManager.show(key, { quiet: true })
+  }, 300)
 }

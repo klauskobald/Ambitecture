@@ -225,7 +225,8 @@ export function createAssignList (opts) {
   function setAssignmentEngaged (assignmentGuid, engaged) {
     if (typeof assignmentGuid !== 'string' || !assignmentGuid) return
     const a = lookupAssignment(assignmentGuid)
-    const isToggle = a?.class === 'noteOnOffToggle'
+    const isToggle =
+      a?.class === 'noteOnOffToggle' || a?.class === 'controlToggle'
     if (isToggle) {
       if (engaged) latchedGuids.add(assignmentGuid)
       else latchedGuids.delete(assignmentGuid)

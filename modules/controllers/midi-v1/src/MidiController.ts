@@ -12,6 +12,7 @@ import {
 } from './GraphReplica';
 import { ReceiverBase } from './receivers/ReceiverBase';
 import { ReceiverControl } from './receivers/ReceiverControl';
+import { ReceiverControlToggle } from './receivers/ReceiverControlToggle';
 import { ReceiverNoteAndControl } from './receivers/ReceiverNoteAndControl';
 import { ReceiverNoteOnOff } from './receivers/ReceiverNoteOnOff';
 import { ReceiverNoteOnOffToggle } from './receivers/ReceiverNoteOnOffToggle';
@@ -170,6 +171,14 @@ export class MidiController {
     switch (assignment.class) {
       case 'control':
         return ReceiverControl.build(assignment, targets, this.logger, onActivity);
+      case 'controlToggle':
+        return ReceiverControlToggle.build(
+          assignment,
+          targets,
+          this.logger,
+          onActivity,
+          onEngaged,
+        );
       case 'noteAndControl':
         return ReceiverNoteAndControl.build(
           assignment,

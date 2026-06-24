@@ -39,6 +39,8 @@ class DmxMovingHeadMini extends LightBase {
 
     // RGBW extraction does not change the displayed color, so the simulator keeps the
     // resulting RGB and reflects master brightness the same way in both strobe states.
+    // `power.sleepOnBlackout` is intentionally ignored here — the simulator always tracks the
+    // target so the operator can see where a sleeping head would aim once it wakes.
     const { r, g, b } = color.toRGB()
     const f =
       Math.max(0, masterBrightness) *

@@ -30,6 +30,17 @@ export abstract class NeewerLightBase implements IFixtureClass {
         return FnCurve.evaluate(fnVal, level * trimVal);
     }
 
+    /**
+     * Effective `power.sleepOnBlackout`: per-instance override (`params.power.sleepOnBlackout`)
+     * falling back to the profile default (`fixtureProfile.params.power.sleepOnBlackout`). When on
+     * and the lamp's resolved output has settled at 0, the fixture class stops driving the BLE bus.
+     */
+    protected sleepOnBlackoutEnabled(fixture: ConfiguredFixture): boolean {
+        const instance = readPowerSleep(fixture.params);
+        if (instance !== undefined) return instance;
+        return readPowerSleep(fixture.fixtureProfile.params) ?? false;
+    }
+
     protected sendHsv(fixture: ConfiguredFixture, bus: NeewerBus, hue: number, sat: number, bri: number): void {
         bus.setHsv(fixture, this.curveHue(fixture, hue), sat, this.curveBrightness(fixture, bri));
     }
@@ -99,4 +110,12 @@ export abstract class NeewerLightBase implements IFixtureClass {
     protected sendPower(fixture: ConfiguredFixture, bus: NeewerBus, on: boolean): void {
         void bus.send(fixture, on ? NeewerProtocol.powerOn() : NeewerProtocol.powerOff());
     }
+}
+
+/** Read `power.sleepOnBlackout` from a `params`-shaped bag; undefined when the key is absent. */
+function readPowerSleep(params: Record<string, unknown> | undefined): boolean | undefined {
+    const power = params?.['power'];
+    if (!power || typeof power !== 'object' || Array.isArray(power)) return undefined;
+    const v = (power as Record<string, unknown>)['sleepOnBlackout'];
+    return typeof v === 'boolean' ? v : undefined;
 }

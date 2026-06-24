@@ -24,6 +24,13 @@ class NeewerBasic extends NeewerLightBase {
         const intensityScale = this.getIntensityGain(fixture, scale);
         const { h, s, v } = rgbToHsv01(r * intensityScale, g * intensityScale, b * intensityScale);
 
+        // Asleep on blackout: once the lamp has settled at 0 output, stop driving the BLE bus.
+        // The first dark frame still sends 0 (latch flips after), so the lamp actually turns off.
+        const asleep = scale === 0 && this.sleepOnBlackoutEnabled(fixture);
+        const skip = asleep && fixture.currentlyAsleep === true;
+        fixture.currentlyAsleep = scale === 0;
+        if (skip) return;
+
         this.sendHsvStrobed(fixture, bus, h, s, v, strobeValue);
     }
 }

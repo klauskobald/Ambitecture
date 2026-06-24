@@ -30,7 +30,15 @@ export class ScreenFixture extends FixtureBase {
   }
 
   applyIntentSnapshot(context, snapshot) {
-    this.algorithm.apply(snapshot, context);
+    const masterBrightness = snapshot.sample('master.brightness') ?? 1;
+    const masterBlackout = snapshot.sample('master.blackout') ?? false;
+    const resulting = Math.max(0, masterBrightness) * (masterBlackout ? 0 : 1);
+    // Asleep on blackout: once the pixel has settled at 0 output, stop refreshing the algorithm.
+    // The first dark frame still applies (latch flips after), so the pixel reaches black.
+    const asleep = resulting === 0 && this.sleepOnBlackoutEnabled();
+    const skip = asleep && this._settledDark === true;
+    this._settledDark = resulting === 0;
+    if (!skip) this.algorithm.apply(snapshot, context);
   }
 
   draw(ctx, w, h, nowSec) {

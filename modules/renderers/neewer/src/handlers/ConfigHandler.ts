@@ -30,6 +30,8 @@ export interface ConfiguredFixture {
     intensityFn?: string;
     target?: [number, number, number];
     rotation?: [number, number, number];
+    /** Settled-dark latch for `power.sleepOnBlackout`: true once output has reached 0. */
+    currentlyAsleep?: boolean;
     fixtureClass: IFixtureClass;
 }
 

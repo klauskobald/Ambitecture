@@ -16,6 +16,17 @@ export abstract class DmxFixtureBase implements IFixtureClass {
         dmxUniverse: DmxUniverse
     ): void;
 
+    /**
+     * Effective `power.sleepOnBlackout`: per-instance override (`params.power.sleepOnBlackout`)
+     * falling back to the profile default (`fixtureProfile.params.power.sleepOnBlackout`). When on
+     * and the fixture's resolved output is 0, the fixture class stops driving its sleepable hardware.
+     */
+    protected sleepOnBlackoutEnabled(fixture: ConfiguredFixture): boolean {
+        const instance = readPowerSleep(fixture.params);
+        if (instance !== undefined) return instance;
+        return readPowerSleep(fixture.fixtureProfile.params as Record<string, unknown>) ?? false;
+    }
+
     protected getDmxBaseChannel(fixture: ConfiguredFixture): number | null {
         const v = fixture.params['dmxBaseChannel'];
         if (typeof v === 'number' && Number.isFinite(v)) {
@@ -82,4 +93,12 @@ export abstract class DmxFixtureBase implements IFixtureClass {
         const clamped = Math.max(0, Math.min(1, normalized));
         return Math.round(min + (max - min) * clamped);
     }
+}
+
+/** Read `power.sleepOnBlackout` from a `params`-shaped bag; undefined when the key is absent. */
+function readPowerSleep(params: Record<string, unknown> | undefined): boolean | undefined {
+    const power = params?.['power'];
+    if (!power || typeof power !== 'object' || Array.isArray(power)) return undefined;
+    const v = (power as Record<string, unknown>)['sleepOnBlackout'];
+    return typeof v === 'boolean' ? v : undefined;
 }

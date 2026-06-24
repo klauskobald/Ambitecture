@@ -50,8 +50,12 @@ class DmxMovingHeadMini extends DmxFixtureBase {
             this.writeFunction(fixture, functionName, value, dmxUniverse);
         }
 
+        const resultingBrightness = Math.max(0, masterBrightness) * blackoutFactor;
+        const isAsleep = resultingBrightness === 0 && this.sleepOnBlackoutEnabled(fixture);
+
         const target = snapshot.sample<[number, number, number]>('target') ?? null;
-        this.applyAim(fixture, context, target, dmxUniverse);
+        // Asleep on blackout: hold the head still — skip pan/tilt/xy-speed so the motors rest in the dark.
+        if (!isAsleep) this.applyAim(fixture, context, target, dmxUniverse);
     }
 
     /**

@@ -23,7 +23,6 @@ fi
 
 VAR_NOT_UPDATED=()
 VAR_WOULD_UPLOAD=0
-local rel local_m remote_m
 
 while IFS= read -r rel; do
   [[ -z "$rel" ]] && continue
@@ -51,7 +50,6 @@ ok "var/ upload finished (${VAR_WOULD_UPLOAD} file(s) newer or new on Pi)"
 if [[ ${#VAR_NOT_UPDATED[@]} -gt 0 ]]; then
   echo
   warn "not updated (Pi same age or newer than local):"
-  local path
   for path in "${VAR_NOT_UPDATED[@]}"; do
     echo "    $path"
   done

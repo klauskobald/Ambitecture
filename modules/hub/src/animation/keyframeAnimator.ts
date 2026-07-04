@@ -256,6 +256,9 @@ export class KeyframeAnimator {
   private _intentAccess?: IntentAccessFn;
   private _mutateIntent?: MutateIntentFn;
   private _manualModeActive = false;
+  /** Frozen by {@link pause} (edit mode); wall time captured so {@link resume} rebases without a jump. */
+  private _paused = false;
+  private _pausedAtWall = 0;
 
   // ── edit mode (controller-driven keyframe stepping) ───────────────────────
   private editActive = false;
@@ -290,6 +293,18 @@ export class KeyframeAnimator {
     const currentLogicalMs = (now - this._runStartWall) / this.timescale;
     this.timescale = factor;
     this._runStartWall = now - currentLogicalMs * factor;
+    this.rescheduleFromLastFired();
+  }
+
+  /**
+   * Re-queue the cycle scheduler from the last fired step at the current `_runStartWall`/timescale.
+   * Shared by {@link setTimescale} and {@link resume}. No-op while paused so a timescale change
+   * during edit mode rebases position without secretly un-pausing.
+   */
+  private rescheduleFromLastFired(): void {
+    if (this._paused || !this._resumeFn) {
+      return;
+    }
     this.stripTimers();
     const { steps: stepsForResume } = this.parseSteps();
     const Lr = stepsForResume.length;
@@ -300,6 +315,29 @@ export class KeyframeAnimator {
     } else {
       this._resumeFn(this._lastFiredCycleIdx, Math.max(0, nextStepIdx));
     }
+  }
+
+  /** Freeze at the current position: clear pending timers, remember when, keep runner alive. */
+  pause(): void {
+    if (this._paused) {
+      return;
+    }
+    this._paused = true;
+    this._pausedAtWall = Date.now();
+    this.stripTimers();
+  }
+
+  /** Continue from the frozen position: shift `_runStartWall` by the paused span, then re-queue. */
+  resume(): void {
+    if (!this._paused) {
+      return;
+    }
+    this._paused = false;
+    if (this.cancelled || !this.inScene) {
+      return;
+    }
+    this._runStartWall += Date.now() - this._pausedAtWall;
+    this.rescheduleFromLastFired();
   }
 
   private wallFromAnimStart(logicalMsFromAnimStart: number): number {

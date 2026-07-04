@@ -12,6 +12,7 @@ import { GraphCommandHandler } from './handlers/GraphCommandHandler';
 import { SystemProbeHandler } from './handlers/SystemProbeHandler';
 import { registerBuiltinProbeQueries } from './probe/builtinProbeQueries';
 import { RuntimeCommandHandler } from './handlers/RuntimeCommandHandler';
+import { GlobalStateHandler } from './handlers/GlobalStateHandler';
 import { ActionHandler } from './handlers/ActionHandler';
 import { EventQueue } from './EventQueue';
 import { statsTool } from './statsTool';
@@ -380,6 +381,7 @@ router.register('register', new RegisterHandler(
 router.register('discovery:subscribe', new DiscoveryHandler(discoveryService));
 router.register('graph:command', new GraphCommandHandler(registry, graphStore, publishGraphMutation));
 router.register('runtime:command', new RuntimeCommandHandler(registry, runtimeUpdateDispatcher, rateLimitEventsPerSecond));
+router.register('globalState:set', new GlobalStateHandler(registry));
 const broadcastSnapshotRecalled = (guid: string): void => {
   if (!guid) return;
   const msg = JSON.stringify({ message: { type: 'snapshot:recalled', payload: { guid } } });

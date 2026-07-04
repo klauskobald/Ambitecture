@@ -7,6 +7,7 @@ import { getAnimatorClass, type AnimatorPlugin } from './animatorRegistry';
 import { Logger } from '../Logger';
 import type { RuntimeUpdate } from '../RuntimeProtocol';
 import type { BindingManager } from '../BindingManager';
+import { globalState } from '../GlobalState';
 import { cloneRecord, diffRecordsToPatch } from '../dotPath';
 import { resolveAnimationTargetIntents } from './resolveAnimationTargetIntents';
 /**
@@ -58,10 +59,30 @@ export class AnimationManager {
     private hubStatus: HubStatusDispatcher,
     private runtimeUpdateDispatcher: RuntimeUpdateDispatcher,
     private bindingManager?: BindingManager,
-  ) { }
+  ) {
+    globalState.subscribe(key => {
+      if (key === 'editmode') {
+        this.setEditPaused(globalState.getItem('editmode') === true);
+      }
+    });
+  }
 
   setInternalStatusListener(cb: (guid: string, payload: AnimationStatusPayload) => void): void {
     this.onInternalStatus = cb;
+  }
+
+  /**
+   * Freeze/resume every active runner on edit-mode change. Runners keep their position and continue
+   * from where they froze (no restart, no status broadcast) — the surface edits against a still look.
+   */
+  setEditPaused(paused: boolean): void {
+    for (const runner of this.runners.values()) {
+      if (paused) {
+        runner.plugin.pause();
+      } else {
+        runner.plugin.resume();
+      }
+    }
   }
 
   private timescaleBindingKey(animationGuid: string): string {

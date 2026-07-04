@@ -95,6 +95,19 @@ export function queuePhysicsEnabled (enabled) {
 }
 
 /**
+ * Set a hub-wide GlobalState key. Subsystems subscribed to that key react on the hub
+ * (e.g. `editmode` pauses/resumes animations and pulses). Transient — never persisted to YAML.
+ * @param {'editmode'} key
+ * @param {boolean} value
+ */
+export function sendGlobalStateSet (key, value) {
+  if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation) return
+  activeWs.send(
+    JSON.stringify({ message: { type: 'globalState:set', location: activeLocation, payload: { key, value } } })
+  )
+}
+
+/**
  * Durable patch of instance-level fixture fields (root params + nested `params`) by dot-path.
  * Distinct from {@link queueFixtureUpdate}, which streams only `position` for stage drags.
  * @param {string} guid

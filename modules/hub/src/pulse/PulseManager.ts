@@ -5,6 +5,7 @@ import { Logger } from '../Logger';
 import type { HubStatusDispatcher, HubStatusPulsePayload } from '../hubStatusTypes';
 import { parsePulseSyncProjectConfig } from './PulseSyncConfig';
 import { resolvePulseSetupSpeed } from './pulseSetupSpeed';
+import { globalState } from '../GlobalState';
 
 type ActivePulseRunner = {
   setup: PulseSetup;
@@ -31,10 +32,40 @@ export class PulseManager {
   private syncSharedLiveBpm: number | undefined;
   /** Timers cleared while sync BPM is at or below {@link PULSE_SYNC_PAUSE_BPM_THRESHOLD}. */
   private syncPausedForLowBpm = false;
+  /** Timers cleared while an operator surface is in edit mode (`globalState.editmode`). */
+  private editPaused = false;
   private onTriggerAction?: (actionGuid: string) => void;
   private hubStatus?: HubStatusDispatcher;
 
-  constructor(private projectManager: ProjectManager) { }
+  constructor(private projectManager: ProjectManager) {
+    globalState.subscribe(key => {
+      if (key === 'editmode') {
+        this.setEditPaused(globalState.getItem('editmode') === true);
+      }
+    });
+  }
+
+  /**
+   * Freeze/resume ticking for all running setups on edit-mode change. Runners stay `isRunning`
+   * (no `hub:status` stopped broadcast); resume reschedules from now, continuing the beat grid.
+   */
+  setEditPaused(paused: boolean): void {
+    if (paused === this.editPaused) {
+      return;
+    }
+    this.editPaused = paused;
+    if (paused) {
+      for (const guid of this.getRunningSetupGuids()) {
+        this.stopTimerFor(guid);
+      }
+      Logger.info('[pulse] edit mode — ticking paused; runners kept active');
+      return;
+    }
+    for (const guid of this.getRunningSetupGuids()) {
+      this.scheduleTickAt(guid, this.computeNextTickAtMsFromNow(guid));
+    }
+    Logger.info('[pulse] edit mode exited — ticking resumed');
+  }
 
   setHubStatusDispatcher(dispatcher: HubStatusDispatcher): void {
     this.hubStatus = dispatcher;
@@ -532,7 +563,7 @@ export class PulseManager {
    */
   private scheduleTickAt(setupGuid: string, nextTickAtMs: number): void {
     const runner = this.runners.get(setupGuid);
-    if (!runner || !runner.isRunning || this.syncPausedForLowBpm) {
+    if (!runner || !runner.isRunning || this.syncPausedForLowBpm || this.editPaused) {
       return;
     }
 

@@ -13,6 +13,10 @@ export interface AnimatorPlugin {
   executeCommand(args: Record<string, unknown>): void;
   cancel(reason: string): void;
   stripTimers(): void;
+  /** Freeze at the current position (clear timers, keep runner alive). Paired with {@link resume}. */
+  pause(): void;
+  /** Continue from the frozen position without a time jump. No-op if not paused. */
+  resume(): void;
   onSceneMembershipChanged(inScene: boolean): void;
   enterEditMode(deps: {
     intentAccess: IntentAccessFn;

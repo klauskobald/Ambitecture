@@ -328,6 +328,7 @@ Current controller/hub state sync uses a GUID-addressed graph/control protocol:
 - `system:probe` / `system:probe:result` — controller -> hub correlated read-only query (`{ requestId, query, args? }`) and its per-request reply to the requesting socket only (`{ requestId, query, ok, data? | error? }`). Dispatched through the hub probe query registry; extend by registering queries.
 - `binding:value` — hub -> controllers, value pushes for subscribed binding keys.
 - `animation:edit` — controller -> hub, `{ animationGuid, on }` to enter/exit live keyframe edit mode for an animation.
+- `globalState:set` — controller -> hub, `{ key, value }` to set a hub-wide **GlobalState** flag (allowlisted keys only; currently `editmode`). Transient — never saves YAML, never emits `graph:delta`. See [GlobalState](#globalstate).
 - `hub:status` — hub -> controllers, broadcast status updates (currently animation `started` / `paused` / `stopped` events). Open by `kind` for future status sources.
 - `lock:intent` — hub -> controllers with `subscribe.runtime: true`; indicates an intent is currently driven by an animation and should be uneditable until released.
 - `config` — hub -> renderer, still used for assigned zones/fixtures.
@@ -568,6 +569,14 @@ Intents (any class **except `master`**) can be physically linked so moving one d
 - **Controller side (`surface-v1/src/core/bindingRegistry.js`):** `subscribe(key, callback)` returns the latest cached value and registers for future `binding:value` pushes; `set(key, value)` sends `binding:set`. The first subscriber to a key triggers `binding:subscribe`; later subscribers piggyback on the existing subscription.
 - **Today's keys:** animation timescale (`${animationGuid}-timescale`), keyframe edit state (per animation GUID).
 - **Use bindings, not polling**, when controller UI needs to reflect or push hub-owned live values (animations, future global mutators, future scene crossfaders, etc.).
+
+### GlobalState
+
+`hub/src/GlobalState.ts` is a small, domain-free hub-wide key/value store with change notification, exported as a singleton (same pattern as `configResolver`). It is the reuse point for global runtime flags that several unrelated subsystems must react to, without inventing a new message type per flag.
+
+- **Store:** `setItem(key, value)` stores and emits the **changed key** to every subscriber (no-op, no event, when the value is unchanged); `getItem(key)` reads; `subscribe(listener)` returns an unsubscribe. Listeners receive only the key and read the value they care about via `getItem` — the store fans out nothing else (no controller/renderer broadcast today; add a relaying listener if that is ever needed).
+- **Keys are allowlisted** in `GLOBAL_STATE_KEYS` / `GlobalStateShape`. The `globalState:set` handler (`hub/src/handlers/GlobalStateHandler.ts`) validates role `controller` and payload shape before writing, so controllers cannot set arbitrary keys.
+- **`editmode` (first key):** `surface-v2` sends `globalState:set { key: 'editmode', value }` from its single mode writer (`stage/stageOverlayCoordinator.js` `setEditMode` / `setPerformMode`) via `outboundQueue.sendGlobalStateSet`. `AnimationManager` and `PulseManager` each subscribe and pause/resume themselves so the operator edits against a frozen look. **Freeze-and-continue**, not restart: `PulseManager.setEditPaused` reuses the low-BPM sync-pause mechanism (clear timers, keep `isRunning`, gate `scheduleTickAt`, reschedule on resume); `KeyframeAnimator.pause`/`resume` (on the `AnimatorPlugin` contract) strip timers on pause and rebase `_runStartWall` by the paused span on resume, reusing `setTimescale`'s wall-clock math. Physics is not driven by this flag — edit mode already disables it separately via the `physics`/`master` `runtime:command`. Renderers need no change: they only draw hub-resolved state, so freezing the hub's mutators freezes output.
 
 ### Function curves
 

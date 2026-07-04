@@ -1,5 +1,6 @@
 import { performPolicy, editPolicy } from '../viewport/interactionPolicies.js'
 import { getStageOverlay } from './stageOverlayHost.js'
+import { sendGlobalStateSet } from '../core/outboundQueue.js'
 
 /** @type {'perform' | 'edit'} */
 let mode = 'perform'
@@ -34,11 +35,13 @@ function applyOverlayPolicy () {
 export function setPerformMode () {
   mode = 'perform'
   applyOverlayPolicy()
+  sendGlobalStateSet('editmode', false)
 }
 
 export function setEditMode () {
   mode = 'edit'
   applyOverlayPolicy()
+  sendGlobalStateSet('editmode', true)
 }
 
 /** @returns {'perform' | 'edit'} */

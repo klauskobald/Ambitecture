@@ -21,6 +21,8 @@ import { intentGuid } from '../../core/stores.js'
 import { toCSSRGB } from '../../core/color.js'
 import { SelectionManager } from '../../viewport/selectionManager.js'
 import { warn as modalWarn, openModalCard, pickChoice } from '../../core/Modal.js'
+import { hubProbe } from '../../core/HubProbe.js'
+import { isPositionInsideAnyZone } from '../../viewport/spatialMath.js'
 import {
   sendGraphCommand,
   sendSaveProject,
@@ -185,7 +187,11 @@ export class StageEditPane {
       },
       detail => {
         getFixtureParamsHost().close()
-        void this._onDoubleTapEmptyStage(detail)
+        if (getEditFixturesUnlocked()) {
+          void this._onDoubleTapCreateFixture(detail)
+        } else {
+          void this._onDoubleTapEmptyStage(detail)
+        }
       },
       fixtureId => this._openFixtureEditor(fixtureId)
     )
@@ -317,6 +323,107 @@ export class StageEditPane {
 
     getStageOverlay()?.markRenderActivity()
     getParamsHost().openForIntentGuid(intentGuid)
+  }
+
+  /**
+   * Fixture twin of {@link _onDoubleTapEmptyStage}: double-tap on empty stage while fixtures are
+   * unlocked places a new fixture. Picks a profile from the hub, sends the create command, and
+   * opens the fixture editor once the created fixture arrives in the graph replica.
+   * @param {{ clientX: number, clientY: number }} detail
+   */
+  async _onDoubleTapCreateFixture (detail) {
+    const spatial = projectGraph.getSpatial()
+    const viewport = getViewport()
+    const simRect = viewport?.getSimCanvasRect() ?? null
+    if (!spatial || !simRect) return
+
+    const m = clientToWorldViaSimCanvas(
+      detail.clientX,
+      detail.clientY,
+      spatial,
+      simRect
+    )
+    if (!m) {
+      void modalWarn('Tap inside the simulator view to place a fixture.')
+      return
+    }
+
+    const position = /** @type {[number, number, number]} */ ([m.wx, 0, m.wz])
+    if (!isPositionInsideAnyZone(position, projectGraph.getZoneBoxes())) {
+      void modalWarn('Tap inside a zone to place a fixture.')
+      return
+    }
+
+    let profiles
+    try {
+      profiles = await hubProbe.probe('availableFixtureProfiles')
+    } catch (err) {
+      void modalWarn(`Could not load fixture list: ${err instanceof Error ? err.message : String(err)}`)
+      return
+    }
+    if (!Array.isArray(profiles) || profiles.length === 0) {
+      void modalWarn('No fixture profiles are available.')
+      return
+    }
+
+    const options = profiles.map(p => {
+      const profile = /** @type {Record<string, unknown>} */ (p)
+      return {
+        value: String(profile.key ?? ''),
+        label: `${String(profile.name ?? profile.key ?? '')} (${String(profile.class ?? '')})`
+      }
+    })
+    const key = await pickChoice('New fixture', options)
+    if (!key) return
+    const picked = /** @type {Record<string, unknown>} */ (
+      profiles.find(p => String(/** @type {Record<string, unknown>} */ (p).key ?? '') === key) ?? {}
+    )
+
+    const cryptoApi = globalThis.crypto
+    const suffix =
+      cryptoApi?.randomUUID?.() ??
+      `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const guid = `fixture-${suffix}`
+
+    sendGraphCommand({
+      op: 'upsert',
+      entityType: 'fixture',
+      guid,
+      value: {
+        name: String(picked.name ?? 'Fixture'),
+        fixture: key,
+        position,
+        range: 9999
+      },
+      persistence: 'runtimeAndDurable'
+    })
+
+    this._openFixtureEditorWhenReady(guid)
+  }
+
+  /**
+   * The created fixture arrives asynchronously via a `graph:delta` echo; open its editor as soon
+   * as the graph replica has it (or give up after a short timeout).
+   * @param {string} guid
+   */
+  _openFixtureEditorWhenReady (guid) {
+    const tryOpen = () => {
+      if (!projectGraph.getEffectiveFixture(guid)) return false
+      getParamsHost().close()
+      void getFixtureParamsHost().openForFixtureGuid(guid)
+      getStageOverlay()?.markRenderActivity()
+      return true
+    }
+    if (tryOpen()) return
+    /** @type {(() => void) | null} */
+    let unsub = null
+    const timer = setTimeout(() => unsub?.(), 5000)
+    unsub = projectGraph.subscribe(['fixtures'], () => {
+      if (tryOpen()) {
+        clearTimeout(timer)
+        unsub?.()
+      }
+    })
   }
 
   /**

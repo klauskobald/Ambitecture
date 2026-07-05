@@ -132,6 +132,25 @@ export function queueFixturePropertyUpdate (guid, patch, remove) {
 }
 
 /**
+ * Durable removal of a fixture instance from its zone.
+ * @param {string} guid
+ */
+export function queueFixtureRemove (guid) {
+  if (!activeWs || activeWs.readyState !== WebSocket.OPEN || !activeLocation) return
+  if (!guid) return
+  sendGraphCommands(
+    [{
+      op: 'remove',
+      entityType: 'fixture',
+      guid,
+      persistence: 'runtimeAndDurable'
+    }],
+    activeWs,
+    activeLocation
+  )
+}
+
+/**
  * @param {unknown[]} commands
  * @param {WebSocket} ws
  * @param {number[]} location

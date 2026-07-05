@@ -351,6 +351,14 @@ export class ProjectGraphStore {
 
   private applyFixtureCommand(command: GraphCommand): GraphMutationResult {
     if (command.op === 'remove') {
+      if (this.projectManager.removeFixtureByGuid(command.guid)) {
+        return this.fixtureMutationResult(this.makeDelta({
+          op: 'remove',
+          entityType: command.entityType,
+          guid: command.guid,
+          persistence: command.persistence ?? 'runtimeAndDurable',
+        }));
+      }
       return this.applyOpaqueCommand(command);
     }
     const position = command.patch?.['position'] ?? command.value?.['position'];
@@ -359,6 +367,10 @@ export class ProjectGraphStore {
     }
     const fixtureRef = this.findFixtureRef(command.guid);
     if (!fixtureRef) {
+      const profileKey = command.value?.['fixture'];
+      if (typeof profileKey === 'string') {
+        return this.applyFixtureCreate(command, profileKey, position as [number, number, number]);
+      }
       Logger.warn(`[graph] fixture ${command.guid} not found`);
       return emptyMutationResult(this.revision);
     }
@@ -377,6 +389,47 @@ export class ProjectGraphStore {
       ...(fixtureEntity !== undefined ? { value: fixtureEntity } : {}),
       persistence: command.persistence ?? 'runtimeAndDurable',
     });
+    return {
+      revision: this.revision,
+      controllerDeltas: [delta],
+      rendererEvents: [],
+      rendererConfigChangedFor: this.getAllRendererGuids(),
+      durableChanged: true,
+    };
+  }
+
+  /**
+   * Create a new fixture instance from a world-position `upsert`. The delta `value` carries
+   * `zoneName` so controller graph replicas can place it into the right zone.
+   */
+  private applyFixtureCreate(
+    command: GraphCommand,
+    profileKey: string,
+    worldPosition: [number, number, number],
+  ): GraphMutationResult {
+    const serialized = this.projectManager.addFixture({
+      guid: command.guid,
+      profileKey,
+      worldPosition,
+      ...(typeof command.parent?.guid === 'string' ? { zoneGuid: command.parent.guid } : {}),
+      ...(typeof command.value?.['name'] === 'string' ? { name: command.value['name'] as string } : {}),
+      ...(typeof command.value?.['range'] === 'number' ? { range: command.value['range'] as number } : {}),
+    });
+    if (!serialized) {
+      Logger.warn(`[graph] fixture ${command.guid} could not be placed in any zone`);
+      return emptyMutationResult(this.revision);
+    }
+    const zoneName = this.findFixtureRef(command.guid)?.zoneName ?? '';
+    return this.fixtureMutationResult(this.makeDelta({
+      op: 'upsert',
+      entityType: command.entityType,
+      guid: command.guid,
+      value: { ...serialized, zoneName },
+      persistence: command.persistence ?? 'runtimeAndDurable',
+    }));
+  }
+
+  private fixtureMutationResult(delta: GraphDelta): GraphMutationResult {
     return {
       revision: this.revision,
       controllerDeltas: [delta],

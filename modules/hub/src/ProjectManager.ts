@@ -775,6 +775,82 @@ export class ProjectManager {
     return null;
   }
 
+  /**
+   * Create a new fixture instance from a world position. Resolves the target zone (by guid, or
+   * by bounding-box containment of `worldPosition`), loads its profile, stores a zone-relative
+   * `location`, ensures a unique name within the zone, and persists. Returns the serialized
+   * instance (with `fixtureProfile`) or null when no zone owns the position.
+   */
+  addFixture(request: {
+    guid: string;
+    profileKey: string;
+    worldPosition: [number, number, number];
+    zoneGuid?: string;
+    name?: string;
+    range?: number;
+  }): Record<string, unknown> | null {
+    const zone = this.resolveZoneForFixture(request.zoneGuid, request.worldPosition);
+    if (!zone || !zone.boundingBox) return null;
+    const profile = this.ensureFixtureProfile(request.profileKey);
+    const location: [number, number, number] = [
+      request.worldPosition[0] - zone.boundingBox[0],
+      request.worldPosition[1] - zone.boundingBox[1],
+      request.worldPosition[2] - zone.boundingBox[2],
+    ];
+    const name = this.uniqueFixtureName(zone, request.name ?? profile.name);
+    const instance: FixtureInstance = {
+      guid: request.guid,
+      name,
+      fixture: request.profileKey,
+      location,
+      range: request.range ?? 9999,
+    };
+    zone.fixtures.push(instance);
+    this.project!.zones = this.runtimeZones.map((z) => ({
+      ...z,
+      fixtures: z.fixtures.map((fixture) => this.cloneFixtureInstance(fixture)),
+    }));
+    this._scheduleSave();
+    return this.serializeFixtureInstance(instance);
+  }
+
+  /** Remove a fixture instance by guid from its owning zone. Returns true when one was removed. */
+  removeFixtureByGuid(guid: string): boolean {
+    for (const zone of this.runtimeZones) {
+      const index = zone.fixtures.findIndex((fixture) => fixture.guid === guid);
+      if (index < 0) continue;
+      zone.fixtures.splice(index, 1);
+      this.project!.zones = this.runtimeZones.map((z) => ({
+        ...z,
+        fixtures: z.fixtures.map((fixture) => this.cloneFixtureInstance(fixture)),
+      }));
+      this._scheduleSave();
+      return true;
+    }
+    return false;
+  }
+
+  private resolveZoneForFixture(
+    zoneGuid: string | undefined,
+    worldPosition: [number, number, number],
+  ): Zone | undefined {
+    if (zoneGuid) {
+      const byGuid = this.runtimeZones.find((zone) => zone.guid === zoneGuid);
+      if (byGuid && byGuid.boundingBox) return byGuid;
+    }
+    return this.runtimeZones.find(
+      (zone) => zone.boundingBox !== undefined && this.isWithinBoundingBox(worldPosition, zone.boundingBox),
+    );
+  }
+
+  private uniqueFixtureName(zone: Zone, base: string): string {
+    const taken = new Set(zone.fixtures.map((fixture) => fixture.name));
+    if (!taken.has(base)) return base;
+    let n = 2;
+    while (taken.has(`${base} ${n}`)) n += 1;
+    return `${base} ${n}`;
+  }
+
   private updateFixture(update: FixtureMoveUpdate): boolean {
     const sourceZone = this.runtimeZones.find((zone) => zone.name === update.zoneName);
     const fallbackZone = this.runtimeZones.find((zone) =>
@@ -1273,11 +1349,40 @@ export class ProjectManager {
     }
     Logger.info(`[project] loading ${fixtureNames.size} unique fixture profile(s) for ${this.project!.zones.reduce((n, z) => n + z.fixtures.length, 0)} fixture instance(s)`);
     for (const name of fixtureNames) {
-      const filePath = this.resolvePath(this.fixturesPath, `${name}.yml`);
-      const profile = new Config(filePath).getAll() as FixtureProfile;
-      this.fixtureProfiles.set(name, profile);
-      Logger.info(`[project] loaded fixture profile "${name}" (class: ${profile.class})`);
+      this.ensureFixtureProfile(name);
     }
+  }
+
+  /** Load the `<key>.yml` fixture profile into the cache if absent. Returns the cached profile. */
+  private ensureFixtureProfile(key: string): FixtureProfile {
+    const cached = this.fixtureProfiles.get(key);
+    if (cached) return cached;
+    const filePath = this.resolvePath(this.fixturesPath, `${key}.yml`);
+    const profile = new Config(filePath).getAll() as FixtureProfile;
+    this.fixtureProfiles.set(key, profile);
+    Logger.info(`[project] loaded fixture profile "${key}" (class: ${profile.class})`);
+    return profile;
+  }
+
+  /**
+   * Every fixture profile available on disk under `fixturesPath`, for the operator's
+   * "new fixture" picker. `key` is the filename stem a `FixtureInstance.fixture` references.
+   * The raw directory listing is the one fs call with no `Config` equivalent; each file is
+   * still parsed through `Config`.
+   */
+  listAvailableFixtureProfiles(): Array<FixtureProfile & { key: string; instance?: unknown }> {
+    const dir = path.isAbsolute(this.fixturesPath)
+      ? this.fixturesPath
+      : path.resolve(process.cwd(), this.fixturesPath);
+    const entries = fs.readdirSync(dir);
+    const profiles: Array<FixtureProfile & { key: string; instance?: unknown }> = [];
+    for (const entry of entries) {
+      if (!entry.endsWith('.yml') && !entry.endsWith('.yaml')) continue;
+      const key = entry.replace(/\.ya?ml$/, '');
+      const profile = new Config(path.join(dir, entry)).getAll() as FixtureProfile & { instance?: unknown };
+      profiles.push({ ...profile, key });
+    }
+    return profiles;
   }
 
   private serializeFixtureInstance(fi: FixtureInstance): Record<string, unknown> {

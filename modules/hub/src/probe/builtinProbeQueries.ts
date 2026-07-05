@@ -16,6 +16,11 @@ function connectedRenderers(ctx: ProbeContext): ConnectedRenderer[] {
     }));
 }
 
+function availableFixtureProfiles(ctx: ProbeContext): unknown {
+  return ctx.projectManager.listAvailableFixtureProfiles();
+}
+
 export function registerBuiltinProbeQueries(): void {
   registerProbeQuery('connectedRenderers', connectedRenderers);
+  registerProbeQuery('availableFixtureProfiles', availableFixtureProfiles);
 }

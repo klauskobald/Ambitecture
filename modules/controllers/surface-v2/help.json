@@ -67,6 +67,10 @@
         "heading": "Add an intent",
         "text": "You added a new intent to the stage. Pick its type:\n\n• Light — emits color and brightness around a point\n• Master — a global dimmer / blackout over everything\n• Target — a magnet that aims movable fixtures\n\nThe new intent joins the current scene. Double-tap it to open its [editor](intent.edit). See [intents](intent.index) for what each type does."
     },
+    "stage.edit.createFixture": {
+        "heading": "Add a fixture",
+        "text": "With fixtures [unlocked](stage.edit.fixtureLock), double-tapping empty floor inside a zone places a new physical fixture there. Pick its profile from the list — each entry shows the profile's name and, in brackets, its class.\n\nThe fixture starts with just a name and position; its [editor](fixture.edit) opens right away so you can set the type-specific [parameters](fixture.edit.params), such as the DMX base channel. Double-tap outside every zone and nothing is placed — fixtures always belong to a zone."
+    },
     "fixture.edit": {
         "heading": "Fixture editor",
         "text": "Double-tap a fixture on the stage in [Edit](stage.edit) to open this panel and adjust that physical fixture — its name, where it sits, and the settings specific to its type. Changes save to the project as you make them, and edits apply to this one fixture only.\n\nLike intents, a fixture lives in [3D space](space.3d): its position has a height (Y) above the floor, set with the [height slider](heightSlider). Getting a fixture's height right matters — it decides whether a nearby light intent's radius actually reaches it, and where a moving head appears to be in the room.\n\nThe top fields are common to every fixture; below them a [Parameters](fixture.edit.params) section shows controls that belong only to this kind of fixture.\n\nFixtures come from profile files, not from this screen — and there is no editor yet to build a new fixture type from scratch. Ambitecture is open source, so a visual fixture builder is a great thing to contribute: see [the project](index)."
@@ -74,6 +78,10 @@
     "fixture.edit.params": {
         "heading": "Parameters",
         "text": "These controls are specific to this fixture's type. They come from the fixture's profile — a YAML file that describes what the fixture can do and which settings it exposes — so different fixtures show different parameters here (channels, ranges, options, and so on). Editing one changes only this fixture; the profile itself is a file you edit outside the app.\n\nNo profile for your hardware yet? Writing one — or building a proper in-app fixture editor — is a welcome open-source contribution. See [the project](index)."
+    },
+    "fixture.edit.delete": {
+        "heading": "Delete",
+        "text": "Permanently removes this fixture from the project and from its zone. You'll be asked to confirm first — there is no undo. Any renderer driving the fixture stops outputting to it. To move a fixture instead of removing it, unlock fixtures and drag it, or edit its position fields."
     },
     "intent.index": {
         "heading": "What is an intent?",

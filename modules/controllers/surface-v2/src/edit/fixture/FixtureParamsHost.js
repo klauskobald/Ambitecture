@@ -1,7 +1,8 @@
 import { PropertyPanel } from '../PropertyPanel.js'
 import { projectGraph } from '../../core/projectGraph.js'
 import { getCapabilities } from '../../core/systemCapabilities.js'
-import { queueFixturePropertyUpdate } from '../../core/outboundQueue.js'
+import { queueFixturePropertyUpdate, queueFixtureRemove } from '../../core/outboundQueue.js'
+import { confirm as modalConfirm } from '../../core/Modal.js'
 import { findLayoutTagHost } from '../../stage/layoutTagHost.js'
 import { getStageOverlay } from '../../stage/stageOverlayHost.js'
 import { loadFixtureEditor } from './loadFixtureEditor.js'
@@ -68,10 +69,35 @@ export class FixtureParamsHost {
     this._body = document.createElement('div')
     this._body.className = 'stage-edit-params-overlay__body'
 
+    const footer = document.createElement('div')
+    footer.className = 'stage-edit-params-overlay__footer'
+
+    const deleteBtn = document.createElement('button')
+    deleteBtn.type = 'button'
+    deleteBtn.className =
+      'btn stage-edit-params-overlay__action stage-edit-params-overlay__action--danger'
+    deleteBtn.textContent = 'Delete'
+    deleteBtn.dataset.help = 'fixture.edit.delete'
+    deleteBtn.addEventListener('click', () => void this._onFooterDelete())
+    footer.appendChild(deleteBtn)
+
     this._overlayEl.appendChild(header)
     this._overlayEl.appendChild(this._body)
+    this._overlayEl.appendChild(footer)
     host.appendChild(this._overlayEl)
     return true
+  }
+
+  async _onFooterDelete () {
+    const guid = this._currentGuid
+    if (!guid) return
+    const ok = await modalConfirm('Delete this fixture? You can not undo this.', {
+      yes: 'Delete',
+      no: 'Cancel'
+    })
+    if (!ok) return
+    queueFixtureRemove(guid)
+    this.close()
   }
 
   /** @param {string} guid */

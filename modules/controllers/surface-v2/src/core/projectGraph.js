@@ -1840,7 +1840,27 @@ class ProjectGraph {
    * @param {Record<string, unknown>} delta
    */
   _applyFixtureDelta (guid, op, delta) {
-    if (op === 'remove') return
+    if (op === 'remove') {
+      let removed = false
+      for (const zone of this._data.zones) {
+        if (!zone || typeof zone !== 'object' || Array.isArray(zone)) continue
+        const fixtures = /** @type {Record<string, unknown>} */ (zone).fixtures
+        if (!Array.isArray(fixtures)) continue
+        const idx = fixtures.findIndex(
+          fixture =>
+            fixture &&
+            typeof fixture === 'object' &&
+            !Array.isArray(fixture) &&
+            String(/** @type {Record<string, unknown>} */ (fixture).guid ?? '') === guid
+        )
+        if (idx >= 0) {
+          fixtures.splice(idx, 1)
+          removed = true
+        }
+      }
+      if (removed) this._fixtures = this._computeFixtures()
+      return
+    }
     const value =
       delta.value &&
       typeof delta.value === 'object' &&

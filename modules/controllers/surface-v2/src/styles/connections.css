@@ -57,6 +57,17 @@
   flex: 0 0 auto;
 }
 
+.connections-editor__scenes {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 6rem;
+  padding: 0.2rem 0.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+}
+
 .connections-editor__trash {
   flex: 0 0 auto;
   padding: 0.2rem 0.4rem;

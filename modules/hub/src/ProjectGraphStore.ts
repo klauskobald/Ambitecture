@@ -241,7 +241,7 @@ export class ProjectGraphStore {
       revision: this.revision,
       controllerDeltas: [delta],
       rendererEvents: [...removalEvents, ...activeEvents],
-      rendererConfigChangedFor: [],
+      rendererConfigChangedFor: this.getAllRendererGuids(),
       durableChanged: persistDurable,
     };
   }

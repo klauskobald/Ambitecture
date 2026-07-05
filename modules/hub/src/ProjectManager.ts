@@ -53,6 +53,8 @@ export interface ConnectorEntity {
   bGuid: string;
   restLength?: number;
   params: Record<string, number>;
+  /** Scenes this connector is active in. Empty/absent means active in every scene. */
+  inScenes?: string[];
 }
 
 export interface Scene {
@@ -954,6 +956,7 @@ export class ProjectManager {
       if (kind !== 'rod' && kind !== 'spring' && kind !== 'rope') continue;
       if (typeof aGuid !== 'string' || typeof bGuid !== 'string') continue;
       const params = raw['params'];
+      const inScenes = raw['inScenes'];
       out.push({
         guid,
         kind,
@@ -963,9 +966,25 @@ export class ProjectManager {
         params: params && typeof params === 'object' && !Array.isArray(params)
           ? (params as Record<string, number>)
           : {},
+        ...(Array.isArray(inScenes) && inScenes.every(s => typeof s === 'string')
+          ? { inScenes: inScenes as string[] }
+          : {}),
       });
     }
     return out;
+  }
+
+  /**
+   * Connectors active in the current scene: those with no `inScenes` scope, or whose scope
+   * includes the active scene guid. Empty `inScenes` means active in every scene.
+   */
+  getActiveConnectors(): ConnectorEntity[] {
+    const activeSceneGuid = this.project?.activeSceneGuid;
+    return this.getConnectors().filter(c =>
+      !c.inScenes || c.inScenes.length === 0 || (
+        typeof activeSceneGuid === 'string' && c.inScenes.includes(activeSceneGuid)
+      ),
+    );
   }
 
   getGraphEntities(): Record<string, Record<string, Record<string, unknown>>> {
@@ -1430,7 +1449,7 @@ export class ProjectManager {
     const result = {
       projectName: this.project.name,
       zones: zones.map((z) => this.serializeZone(z)),
-      connectors: this.getConnectors(),
+      connectors: this.getActiveConnectors(),
     };
     Logger.info(`[project] buildRendererConfig(${rendererGuid}): ${zones.length} zone(s), ${zones.reduce((n, z) => n + z.fixtures.length, 0)} fixture(s)`);
     return result;

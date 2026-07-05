@@ -4,6 +4,7 @@ import { getConnectorTypes } from '../core/systemCapabilities.js'
 import { intentName, intentGuid } from '../core/stores.js'
 import { SelectionManager } from '../viewport/selectionManager.js'
 import { ScalarDragSlider } from './components/ScalarDragSlider.js'
+import { openConnectorScenesPicker } from './connectorScenesPicker.js'
 import { getStageOverlay } from '../stage/stageOverlayHost.js'
 import { HelpManager } from '../core/help/HelpManager.js'
 
@@ -165,6 +166,14 @@ export class ConnectionsEditor {
       isOtherInactive
     )
 
+    const scenes = document.createElement('button')
+    scenes.type = 'button'
+    scenes.className = 'btn connections-editor__scenes'
+    scenes.setAttribute('aria-label', 'Scenes this connection is active in')
+    scenes.textContent = this._sceneScopeLabel(connector)
+    scenes.dataset.help = 'connections.scenes'
+    scenes.addEventListener('click', () => openConnectorScenesPicker(guid, connector))
+
     const trash = document.createElement('button')
     trash.type = 'button'
     trash.className = 'btn connections-editor__trash'
@@ -177,8 +186,20 @@ export class ConnectionsEditor {
     row.appendChild(name)
     row.appendChild(kindPills)
     row.appendChild(paramHost)
+    row.appendChild(scenes)
     row.appendChild(trash)
     return row
+  }
+
+  /** @param {Record<string, unknown>} connector @returns {string} button label for the connector's scene scope. */
+  _sceneScopeLabel (connector) {
+    const inScenes = Array.isArray(connector.inScenes)
+      ? /** @type {string[]} */ (connector.inScenes)
+      : []
+    if (inScenes.length === 0) return 'All'
+    if (inScenes.length > 1) return `${inScenes.length} scenes`
+    const scene = projectGraph.getScenesData().find(s => s.guid === inScenes[0])
+    return scene?.name || '1 scene'
   }
 
   /**

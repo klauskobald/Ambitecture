@@ -155,7 +155,7 @@ export class PhysicsIntentAdapter {
 
   private buildConnectors(bodies: Map<string, PhysicsBody>): ConnectorRecord[] {
     const records: ConnectorRecord[] = [];
-    for (const entity of this.projectManager.getConnectors()) {
+    for (const entity of this.projectManager.getActiveConnectors()) {
       const aId = entity.aGuid;
       const bId = entity.bGuid;
       const a = bodies.get(aId);

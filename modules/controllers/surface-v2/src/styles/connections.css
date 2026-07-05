@@ -57,6 +57,26 @@
   flex: 0 0 auto;
 }
 
+.connections-editor__status {
+  flex: 0 0 auto;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.7rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.connections-editor__status--inactive {
+  color: #1a1400;
+  background: #ffd24a;
+  border-color: #ffd24a;
+}
+
+.connections-editor__status--active {
+  color: #04121f;
+  background: #4aa8ff;
+  border-color: #4aa8ff;
+}
+
 .connections-editor__scenes {
   flex: 0 1 auto;
   min-width: 0;

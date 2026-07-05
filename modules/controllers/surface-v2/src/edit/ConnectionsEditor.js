@@ -166,13 +166,29 @@ export class ConnectionsEditor {
       isOtherInactive
     )
 
+    const isActiveHere = this._isActiveInCurrentScene(connector)
+    const status = document.createElement('button')
+    status.type = 'button'
+    status.classList.add('btn', 'connections-editor__status')
+    status.classList.toggle('connections-editor__status--active', isActiveHere)
+    status.classList.toggle('connections-editor__status--inactive', !isActiveHere)
+    status.textContent = isActiveHere ? 'active' : 'inactive ⚠'
+    status.title = isActiveHere
+      ? 'Active in the current scene — tap to disable it here'
+      : 'Not active in the current scene — tap to enable it here'
+    status.addEventListener('click', () =>
+      this._setSceneActive(guid, connector, !isActiveHere)
+    )
+
     const scenes = document.createElement('button')
     scenes.type = 'button'
     scenes.className = 'btn connections-editor__scenes'
     scenes.setAttribute('aria-label', 'Scenes this connection is active in')
     scenes.textContent = this._sceneScopeLabel(connector)
     scenes.dataset.help = 'connections.scenes'
-    scenes.addEventListener('click', () => openConnectorScenesPicker(guid, connector))
+    scenes.addEventListener('click', () =>
+      openConnectorScenesPicker(guid, connector)
+    )
 
     const trash = document.createElement('button')
     trash.type = 'button'
@@ -186,9 +202,60 @@ export class ConnectionsEditor {
     row.appendChild(name)
     row.appendChild(kindPills)
     row.appendChild(paramHost)
+    row.appendChild(status)
     row.appendChild(scenes)
     row.appendChild(trash)
     return row
+  }
+
+  /** @param {Record<string, unknown>} connector @returns {boolean} whether the connector is active in the current scene. */
+  _isActiveInCurrentScene (connector) {
+    const inScenes = Array.isArray(connector.inScenes)
+      ? /** @type {string[]} */ (connector.inScenes)
+      : []
+    if (inScenes.length === 0) return true
+    const active = projectGraph.getActiveSceneGuid()
+    return typeof active === 'string' && inScenes.includes(active)
+  }
+
+  /**
+   * Toggle whether the connector is active in the current scene. `inScenes` empty means "all scenes",
+   * so disabling from that state materializes the explicit all-but-current list; enabling that covers
+   * every scene collapses back to empty ("all").
+   * @param {string} connGuid @param {Record<string, unknown>} connector @param {boolean} makeActive
+   */
+  _setSceneActive (connGuid, connector, makeActive) {
+    const active = projectGraph.getActiveSceneGuid()
+    if (typeof active !== 'string' || active.length === 0) return
+    const allGuids = projectGraph
+      .getScenesData()
+      .map(s => s.guid)
+      .filter((g) => typeof g === 'string' && g.length > 0)
+    const current = Array.isArray(connector.inScenes)
+      ? /** @type {string[]} */ (connector.inScenes)
+      : []
+
+    let next
+    if (makeActive) {
+      if (current.includes(active)) return
+      next = [...current, active]
+      if (allGuids.length > 0 && allGuids.every(g => next.includes(g))) next = []
+    } else {
+      const base = current.length > 0 ? current : allGuids
+      next = base.filter(g => g !== active)
+      // Empty would mean "all scenes" again; a connector active in exactly this scene can only be
+      // fully removed via the trash button, so leave the scope untouched instead of wrapping to all.
+      if (next.length === 0) return
+    }
+
+    projectGraph.putConnectorRecord({ ...connector, inScenes: next })
+    sendGraphCommand({
+      op: 'patch',
+      entityType: 'connector',
+      guid: connGuid,
+      patch: { inScenes: next },
+      persistence: 'runtimeAndDurable'
+    })
   }
 
   /** @param {Record<string, unknown>} connector @returns {string} button label for the connector's scene scope. */

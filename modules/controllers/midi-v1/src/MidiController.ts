@@ -215,7 +215,14 @@ export class MidiController {
   private buildTarget(record: TargetRecord): TargetBase | null {
     switch (record.type) {
       case 'intent':
-        return new TargetIntent(record, this.logger, this.graph, c => this.sendRuntime(c));
+        return new TargetIntent(
+          record,
+          this.logger,
+          this.graph,
+          c => this.sendRuntime(c),
+          guid => this.graph.getIntentClass(guid),
+          () => this.systemCapabilities,
+        );
       default:
         this.logger.warn(`target ${record.guid}: unknown type "${record.type}"`);
         return null;

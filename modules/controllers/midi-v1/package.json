@@ -7,6 +7,7 @@
     "start": "ts-node src/index.ts",
     "dev": "node --watch --watch-path=src --require ts-node/register src/index.ts",
     "midi-smoke": "ts-node tests/midi-test.ts",
+    "test:adapter": "ts-node tests/intentValueAdapter.ts",
     "typecheck": "tsc --noEmit"
   },
   "author": "Klaus P Kobald Gmbh",

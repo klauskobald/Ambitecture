@@ -3,6 +3,7 @@ import { Logger } from '../Logger';
 import { TargetRecord, GraphReplica } from '../GraphReplica';
 import { FnCurve } from '../FnCurve';
 import { RuntimeCommand } from '../HubSocket';
+import { adaptIntentTargetValue } from '../intentValueAdapter';
 
 export type RuntimeCommandSender = (command: RuntimeCommand) => void;
 
@@ -14,6 +15,8 @@ export class TargetIntent extends TargetBase {
     logger: Logger,
     private readonly graph: GraphReplica,
     private readonly sender: RuntimeCommandSender,
+    private readonly getIntentClass: (guid: string) => string | undefined,
+    private readonly getSystemCapabilities: () => unknown,
   ) {
     super(target, logger);
   }
@@ -30,11 +33,18 @@ export class TargetIntent extends TargetBase {
       }
       return;
     }
-    const value = FnCurve.evaluate(this.target.function, normalized);
+    const curved = FnCurve.evaluate(this.target.function, normalized);
+    const intentClass = this.getIntentClass(this.target.guid) ?? '';
+    const adapted = adaptIntentTargetValue(
+      intentClass,
+      this.target.key,
+      curved,
+      this.getSystemCapabilities(),
+    );
     this.sender({
       entityType: 'intent',
       guid: this.target.guid,
-      patch: { [this.target.key]: value },
+      patch: { [this.target.key]: adapted },
     });
   }
 }

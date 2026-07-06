@@ -36,6 +36,19 @@ const CanvasDraw = {
         ctx.fillText(text, cx, cy + radius + 12);
     },
 
+    drawCenteredText(ctx, cx, cy, maxWidth, text, fillStyle) {
+        let fontSize = 10;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = `${fontSize}px monospace`;
+        while (fontSize > 4 && ctx.measureText(text).width > maxWidth * 0.9) {
+            fontSize -= 1;
+            ctx.font = `${fontSize}px monospace`;
+        }
+        ctx.fillStyle = fillStyle;
+        ctx.fillText(text, cx, cy);
+    },
+
     drawLine(ctx, ax, ay, bx, by, color, width) {
         ctx.beginPath();
         ctx.moveTo(ax, ay);

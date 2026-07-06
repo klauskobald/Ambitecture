@@ -97,6 +97,8 @@ export class FixtureParamsHost {
     })
     if (!ok) return
     queueFixtureRemove(guid)
+    // The hub excludes the sending controller from its own graph:delta, so remove locally too.
+    projectGraph.deleteFixture(guid)
     this.close()
   }
 

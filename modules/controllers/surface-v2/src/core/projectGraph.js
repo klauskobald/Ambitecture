@@ -809,6 +809,92 @@ class ProjectGraph {
     this._notify('intents:def')
   }
 
+  /**
+   * The renderer-assigned zone whose bounding box contains `position`, or null. Same assignment
+   * gate as {@link getZoneBoxes} so a placed fixture is one the operator can actually see.
+   * @param {[number, number, number]} position
+   * @returns {{ guid: string, name: string, boundingBox: number[], fixtures: unknown[] } | null}
+   */
+  getZoneAt (position) {
+    const zoneToRenderer = this._data.zoneToRenderer
+    for (const z of this._data.zones) {
+      if (z === null || typeof z !== 'object' || Array.isArray(z)) continue
+      const zone = /** @type {Record<string, unknown>} */ (z)
+      const name = String(zone.name ?? '')
+      const assigned = zoneToRenderer[name]
+      if (!Array.isArray(assigned) || !assigned.includes(this._rendererGuid)) continue
+      const bb = zone.boundingBox
+      if (!Array.isArray(bb) || bb.length < 6) continue
+      const inside =
+        position[0] >= Number(bb[0]) && position[0] <= Number(bb[3]) &&
+        position[1] >= Number(bb[1]) && position[1] <= Number(bb[4]) &&
+        position[2] >= Number(bb[2]) && position[2] <= Number(bb[5])
+      if (!inside) continue
+      const fixtures = Array.isArray(zone.fixtures) ? zone.fixtures : []
+      return { guid: String(zone.guid ?? ''), name, boundingBox: bb.map(Number), fixtures }
+    }
+    return null
+  }
+
+  /**
+   * Insert a fixture instance into a zone locally (optimistic UI — the hub excludes the sending
+   * controller from its own `graph:delta`, so creates must show up without waiting for an echo).
+   * @param {string} zoneName
+   * @param {Record<string, unknown>} record must include string `guid` and a zone-relative `location`
+   */
+  putFixtureRecord (zoneName, record) {
+    const guid = String(record.guid ?? '')
+    if (!guid) return
+    const zone = this._data.zones.find(z => {
+      if (!z || typeof z !== 'object' || Array.isArray(z)) return false
+      return String(/** @type {Record<string, unknown>} */ (z).name ?? '') === zoneName
+    })
+    if (!zone || typeof zone !== 'object' || Array.isArray(zone)) return
+    this._spliceFixtureFromZones(guid)
+    const fixtures = /** @type {Record<string, unknown>} */ (zone).fixtures
+    if (!Array.isArray(fixtures)) return
+    fixtures.push(record)
+    this._fixtures = this._computeFixtures()
+    this._notify('fixtures')
+  }
+
+  /**
+   * Remove a fixture instance by guid locally (optimistic UI, twin of {@link putFixtureRecord}).
+   * @param {string} guid
+   */
+  deleteFixture (guid) {
+    if (this._spliceFixtureFromZones(guid)) {
+      this._fixtures = this._computeFixtures()
+      this._notify('fixtures')
+    }
+  }
+
+  /**
+   * Splice a fixture out of every zone's `fixtures[]` by guid. Returns true when one was removed.
+   * @param {string} guid
+   * @returns {boolean}
+   */
+  _spliceFixtureFromZones (guid) {
+    let removed = false
+    for (const zone of this._data.zones) {
+      if (!zone || typeof zone !== 'object' || Array.isArray(zone)) continue
+      const fixtures = /** @type {Record<string, unknown>} */ (zone).fixtures
+      if (!Array.isArray(fixtures)) continue
+      const idx = fixtures.findIndex(
+        fixture =>
+          fixture &&
+          typeof fixture === 'object' &&
+          !Array.isArray(fixture) &&
+          String(/** @type {Record<string, unknown>} */ (fixture).guid ?? '') === guid
+      )
+      if (idx >= 0) {
+        fixtures.splice(idx, 1)
+        removed = true
+      }
+    }
+    return removed
+  }
+
   toggleSceneIntent (sceneName, guid) {
     const scene = this._data.scenes.find(s => s.name === sceneName)
     if (!scene) return
@@ -1841,24 +1927,7 @@ class ProjectGraph {
    */
   _applyFixtureDelta (guid, op, delta) {
     if (op === 'remove') {
-      let removed = false
-      for (const zone of this._data.zones) {
-        if (!zone || typeof zone !== 'object' || Array.isArray(zone)) continue
-        const fixtures = /** @type {Record<string, unknown>} */ (zone).fixtures
-        if (!Array.isArray(fixtures)) continue
-        const idx = fixtures.findIndex(
-          fixture =>
-            fixture &&
-            typeof fixture === 'object' &&
-            !Array.isArray(fixture) &&
-            String(/** @type {Record<string, unknown>} */ (fixture).guid ?? '') === guid
-        )
-        if (idx >= 0) {
-          fixtures.splice(idx, 1)
-          removed = true
-        }
-      }
-      if (removed) this._fixtures = this._computeFixtures()
+      if (this._spliceFixtureFromZones(guid)) this._fixtures = this._computeFixtures()
       return
     }
     const value =

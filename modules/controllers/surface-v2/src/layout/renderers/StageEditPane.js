@@ -22,7 +22,6 @@ import { toCSSRGB } from '../../core/color.js'
 import { SelectionManager } from '../../viewport/selectionManager.js'
 import { warn as modalWarn, openModalCard, pickChoice } from '../../core/Modal.js'
 import { hubProbe } from '../../core/HubProbe.js'
-import { isPositionInsideAnyZone } from '../../viewport/spatialMath.js'
 import {
   sendGraphCommand,
   sendSaveProject,
@@ -349,7 +348,8 @@ export class StageEditPane {
     }
 
     const position = /** @type {[number, number, number]} */ ([m.wx, 0, m.wz])
-    if (!isPositionInsideAnyZone(position, projectGraph.getZoneBoxes())) {
+    const zone = projectGraph.getZoneAt(position)
+    if (!zone) {
       void modalWarn('Tap inside a zone to place a fixture.')
       return
     }
@@ -384,46 +384,56 @@ export class StageEditPane {
       cryptoApi?.randomUUID?.() ??
       `${Date.now()}-${Math.random().toString(36).slice(2)}`
     const guid = `fixture-${suffix}`
+    const name = this._uniqueFixtureName(zone.fixtures, String(picked.name ?? 'Fixture'))
+    const location = /** @type {[number, number, number]} */ ([
+      position[0] - zone.boundingBox[0],
+      position[1] - zone.boundingBox[1],
+      position[2] - zone.boundingBox[2]
+    ])
+    const { key: _pickedKey, ...fixtureProfile } = picked
+
+    // The hub excludes the sending controller from its own graph:delta, so mirror the intent-create
+    // pattern: insert locally now, then send the durable command (which persists + rebuilds renderers
+    // + echoes to other controllers). The name is sent so the hub keeps the same one we deduped.
+    projectGraph.putFixtureRecord(zone.name, {
+      guid,
+      name,
+      fixture: key,
+      location,
+      range: 9999,
+      fixtureProfile
+    })
 
     sendGraphCommand({
       op: 'upsert',
       entityType: 'fixture',
       guid,
-      value: {
-        name: String(picked.name ?? 'Fixture'),
-        fixture: key,
-        position,
-        range: 9999
-      },
+      value: { name, fixture: key, position, range: 9999 },
       persistence: 'runtimeAndDurable'
     })
 
-    this._openFixtureEditorWhenReady(guid)
+    getParamsHost().close()
+    void getFixtureParamsHost().openForFixtureGuid(guid)
+    getStageOverlay()?.markRenderActivity()
   }
 
   /**
-   * The created fixture arrives asynchronously via a `graph:delta` echo; open its editor as soon
-   * as the graph replica has it (or give up after a short timeout).
-   * @param {string} guid
+   * A fixture name unique within the zone (mirrors the hub's dedup so optimistic and durable state
+   * agree). Appends " 2", " 3", … on collision.
+   * @param {unknown[]} fixtures
+   * @param {string} base
+   * @returns {string}
    */
-  _openFixtureEditorWhenReady (guid) {
-    const tryOpen = () => {
-      if (!projectGraph.getEffectiveFixture(guid)) return false
-      getParamsHost().close()
-      void getFixtureParamsHost().openForFixtureGuid(guid)
-      getStageOverlay()?.markRenderActivity()
-      return true
-    }
-    if (tryOpen()) return
-    /** @type {(() => void) | null} */
-    let unsub = null
-    const timer = setTimeout(() => unsub?.(), 5000)
-    unsub = projectGraph.subscribe(['fixtures'], () => {
-      if (tryOpen()) {
-        clearTimeout(timer)
-        unsub?.()
-      }
-    })
+  _uniqueFixtureName (fixtures, base) {
+    const taken = new Set(
+      fixtures
+        .filter(f => f && typeof f === 'object' && !Array.isArray(f))
+        .map(f => String(/** @type {Record<string, unknown>} */ (f).name ?? ''))
+    )
+    if (!taken.has(base)) return base
+    let n = 2
+    while (taken.has(`${base} ${n}`)) n += 1
+    return `${base} ${n}`
   }
 
   /**

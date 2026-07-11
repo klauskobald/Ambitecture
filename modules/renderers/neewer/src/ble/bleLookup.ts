@@ -47,3 +47,9 @@ export function findNobleId(match: BleMatch, peripherals: Iterable<DiscoveredPer
     }
     return undefined;
 }
+
+export function bleMatchEqual(a: BleMatch, b: BleMatch): boolean {
+    const addressA = a.address ? normalizeBleAddress(a.address) : '';
+    const addressB = b.address ? normalizeBleAddress(b.address) : '';
+    return a.id === b.id && addressA === addressB;
+}

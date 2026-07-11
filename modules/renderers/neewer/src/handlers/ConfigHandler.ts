@@ -210,7 +210,7 @@ export class ConfigHandler {
         const fixtureCount = this.zones.reduce((n, z) => n + z.fixtures.length, 0);
         Logger.info(`[config] ${fixtureCount} fixture(s) across ${this.zones.length} zone(s)`);
 
-        this.neewerBus.clearFixtures();
+        const fixtureEntries: Array<{ fixture: ConfiguredFixture; match: BleMatch }> = [];
         for (const zone of this.zones) {
             for (const fixture of zone.fixtures) {
                 const rawAddress = fixture.params['bluetoothAddress'];
@@ -235,9 +235,10 @@ export class ConfigHandler {
                     ...(hasMac ? { address: bluetoothAddress } : {}),
                     ...(bluetoothId !== undefined ? { id: bluetoothId } : {}),
                 };
-                this.neewerBus.registerFixture(fixture, match);
+                fixtureEntries.push({ fixture, match });
             }
         }
+        this.neewerBus.syncFixtures(fixtureEntries);
 
         if (this.onConfigApplied) {
             this.onConfigApplied();

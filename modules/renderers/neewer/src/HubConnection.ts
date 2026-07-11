@@ -39,6 +39,7 @@ export class HubConnection {
         this.neewerBus = new NeewerBus(this.bleBus, this.discovery, {
             connectRetryInitialMs: Config.connectRetryInitialMs,
             connectRetryMaxMs: Config.connectRetryMaxMs,
+            connectTimeoutMs: Config.connectTimeoutMs,
             writeMinIntervalMs: Config.writeMinIntervalMs,
             lerpFrames: Config.lerpFrames,
             deadband: {

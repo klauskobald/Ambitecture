@@ -25,6 +25,7 @@ export class DiscoveryService {
     private readonly bus: BleBus;
     private readonly scanRestartMs: number;
     private registry = new Map<string, RegistryEntry>();
+    private readonly connectedIds = new Set<string>();
     private listeners: Array<(p: DiscoveredPeripheral) => void> = [];
     private restartTimer: ReturnType<typeof setInterval> | null = null;
     private started = false;
@@ -65,6 +66,18 @@ export class DiscoveryService {
         return [...this.registry.values()].map((e) => e.peripheral);
     }
 
+    markConnected(id: string): void {
+        this.connectedIds.add(id);
+        const entry = this.registry.get(id);
+        if (entry !== undefined) {
+            entry.lastSeenAt = Date.now();
+        }
+    }
+
+    markDisconnected(id: string): void {
+        this.connectedIds.delete(id);
+    }
+
     private onDiscover(p: DiscoveredPeripheral): void {
         if (!looksLikeNeewer(p.name)) return;
 
@@ -88,6 +101,7 @@ export class DiscoveryService {
     private pruneStale(): void {
         const now = Date.now();
         for (const [id, entry] of this.registry) {
+            if (this.connectedIds.has(id)) continue;
             if (now - entry.lastSeenAt <= STALE_PERIPHERAL_MS) continue;
             this.registry.delete(id);
             void this.bus.resetPeripheral(id);

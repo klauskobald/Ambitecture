@@ -1,6 +1,6 @@
 import { Logger } from './Logger';
 import { BleBus, BleConnection, DiscoveredPeripheral } from './ble/BleBus';
-import { peripheralMatches, type BleMatch } from './ble/bleLookup';
+import { peripheralMatches, bleMatchEqual, type BleMatch } from './ble/bleLookup';
 import { DiscoveryService } from './ble/DiscoveryService';
 import { SERVICE_UUID, WRITE_UUID, NOTIFY_UUID, hsv } from './ble/NeewerProtocol';
 import type { ConfiguredFixture } from './handlers/ConfigHandler';
@@ -30,6 +30,7 @@ interface FixtureBinding {
 export interface NeewerBusOptions {
     connectRetryInitialMs: number;
     connectRetryMaxMs: number;
+    connectTimeoutMs: number;
     writeMinIntervalMs: number;
     lerpFrames: number;
     deadband: HsvDeadband;
@@ -57,8 +58,12 @@ export class NeewerBus {
         const key = this.bindingKey(fixture);
         const existing = this.bindings.get(key);
         if (existing) {
+            const matchChanged = !bleMatchEqual(existing.match, match);
             existing.fixture = fixture;
             existing.match = match;
+            if (matchChanged) {
+                void this.rebind(key);
+            }
             return;
         }
         this.bindings.set(key, {
@@ -77,6 +82,67 @@ export class NeewerBus {
         });
 
         if (this.discovery.resolveNobleId(match) !== undefined) {
+            void this.tryConnect(key);
+        }
+    }
+
+    syncFixtures(entries: Array<{ fixture: ConfiguredFixture; match: BleMatch }>): void {
+        const nextKeys = new Set(entries.map((entry) => this.bindingKey(entry.fixture)));
+        for (const key of [...this.bindings.keys()]) {
+            if (!nextKeys.has(key)) {
+                this.removeBinding(key);
+            }
+        }
+        for (const entry of entries) {
+            this.registerFixture(entry.fixture, entry.match);
+        }
+    }
+
+    private removeBinding(key: string): void {
+        const binding = this.bindings.get(key);
+        if (!binding) return;
+        this.clearReconnectTimer(key);
+        this.clearColorState(binding);
+        const nobleId = binding.connection?.id;
+        if (binding.connection) {
+            const connection = binding.connection;
+            binding.connection = null;
+            if (nobleId !== undefined) {
+                this.discovery.markDisconnected(nobleId);
+                void connection.disconnectAsync().catch(() => undefined);
+                void this.bus.resetPeripheral(nobleId);
+            }
+        }
+        this.bindings.delete(key);
+    }
+
+    private async rebind(key: string): Promise<void> {
+        const binding = this.bindings.get(key);
+        if (!binding) return;
+        this.clearReconnectTimer(key);
+        this.clearColorState(binding);
+        const nobleId = binding.connection?.id;
+        if (binding.connection) {
+            const connection = binding.connection;
+            binding.connection = null;
+            if (nobleId !== undefined) {
+                this.discovery.markDisconnected(nobleId);
+            }
+            try {
+                await connection.disconnectAsync();
+            } catch {
+                // link may already be dead
+            }
+            if (nobleId !== undefined) {
+                await this.bus.resetPeripheral(nobleId);
+            }
+        }
+        binding.connecting = false;
+        binding.nextRetryAt = 0;
+        binding.backoffMs = this.options.connectRetryInitialMs;
+        binding.lastSentHex = null;
+        binding.offlineLogged = false;
+        if (this.discovery.resolveNobleId(binding.match) !== undefined) {
             void this.tryConnect(key);
         }
     }
@@ -126,7 +192,7 @@ export class NeewerBus {
         if (!binding) return;
 
         if (!binding.connection || binding.connection.state !== 'connected') {
-            if (!binding.offlineLogged) {
+            if (!binding.connecting && !binding.offlineLogged) {
                 Logger.warn(`[neewer] "${fixture.name}" is offline — dropping writes until reconnect`);
                 binding.offlineLogged = true;
             }
@@ -147,6 +213,7 @@ export class NeewerBus {
             binding.lastSentAt = now;
         } catch (err) {
             Logger.warn(`[neewer] write failed on "${fixture.name}"`, err);
+            this.dropConnectionAfterWriteFailure(key);
         }
     }
 
@@ -156,7 +223,7 @@ export class NeewerBus {
 
         const fixture = binding.fixture;
         if (!binding.connection || binding.connection.state !== 'connected') {
-            if (!binding.offlineLogged) {
+            if (!binding.connecting && !binding.offlineLogged) {
                 Logger.warn(`[neewer] "${fixture.name}" is offline — dropping writes until reconnect`);
                 binding.offlineLogged = true;
             }
@@ -257,6 +324,7 @@ export class NeewerBus {
             return true;
         } catch (err) {
             Logger.warn(`[neewer] write failed on "${fixture.name}"`, err);
+            this.dropConnectionAfterWriteFailure(this.bindingKey(fixture));
             return false;
         }
     }
@@ -305,7 +373,7 @@ export class NeewerBus {
         binding.connecting = true;
         Logger.info(`[neewer] connecting "${binding.fixture.name}" id=${nobleId}`);
         try {
-            const connection = await this.bus.connect(nobleId, SERVICE_UUID, [WRITE_UUID, NOTIFY_UUID]);
+            const connection = await this.connectWithTimeout(nobleId);
             connection.onDisconnect(() => this.onDisconnected(key));
             try {
                 await connection.subscribeAsync(NOTIFY_UUID, (data) => {
@@ -317,6 +385,7 @@ export class NeewerBus {
             binding.connection = connection;
             binding.backoffMs = this.options.connectRetryInitialMs;
             binding.offlineLogged = false;
+            this.discovery.markConnected(nobleId);
             this.clearReconnectTimer(key);
             Logger.info(`[neewer] connected "${binding.fixture.name}"`);
             void this.trySendColor(key);
@@ -332,19 +401,54 @@ export class NeewerBus {
         }
     }
 
+    private connectWithTimeout(nobleId: string): Promise<BleConnection> {
+        const timeoutMs = this.options.connectTimeoutMs;
+        return new Promise<BleConnection>((resolve, reject) => {
+            const timer = setTimeout(() => {
+                reject(new Error(`connect timeout after ${timeoutMs}ms`));
+            }, timeoutMs);
+            void this.bus
+                .connect(nobleId, SERVICE_UUID, [WRITE_UUID, NOTIFY_UUID])
+                .then((connection) => {
+                    clearTimeout(timer);
+                    resolve(connection);
+                })
+                .catch((err: unknown) => {
+                    clearTimeout(timer);
+                    reject(err);
+                });
+        });
+    }
+
+    private dropConnectionAfterWriteFailure(key: string): void {
+        const binding = this.bindings.get(key);
+        if (!binding?.connection) return;
+        const connection = binding.connection;
+        const nobleId = connection.id;
+        binding.connection = null;
+        void connection.disconnectAsync().catch(() => undefined);
+        this.beginReconnect(key, nobleId, 'write failed — reconnecting');
+    }
+
     private onDisconnected(key: string): void {
         const binding = this.bindings.get(key);
+        if (!binding?.connection) return;
+        const nobleId = binding.connection.id;
+        this.beginReconnect(key, nobleId, 'disconnected');
+    }
+
+    private beginReconnect(key: string, nobleId: string, reason: string): void {
+        const binding = this.bindings.get(key);
         if (!binding) return;
-        const nobleId = binding.connection?.id;
-        Logger.warn(`[neewer] "${binding.fixture.name}" disconnected`);
+        Logger.warn(`[neewer] "${binding.fixture.name}" ${reason}`);
         binding.connection = null;
+        binding.connecting = false;
         binding.nextRetryAt = Date.now() + this.options.connectRetryInitialMs;
         binding.backoffMs = this.options.connectRetryInitialMs;
         binding.lastSentHex = null;
         this.clearColorState(binding);
-        if (nobleId !== undefined) {
-            void this.bus.resetPeripheral(nobleId);
-        }
+        this.discovery.markDisconnected(nobleId);
+        void this.bus.resetPeripheral(nobleId);
         this.scheduleReconnect(key);
     }
 

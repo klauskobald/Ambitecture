@@ -41,6 +41,11 @@ export class HubConnection {
             connectRetryMaxMs: Config.connectRetryMaxMs,
             writeMinIntervalMs: Config.writeMinIntervalMs,
             lerpFrames: Config.lerpFrames,
+            deadband: {
+                h: Config.deadbandH,
+                s: Config.deadbandS,
+                v: Config.deadbandV,
+            },
         });
 
         const configHandler = new ConfigHandler(this.neewerBus);

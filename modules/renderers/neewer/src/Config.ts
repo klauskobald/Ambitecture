@@ -20,6 +20,9 @@ export class Config {
     static get scanRestartMs(): number { return parseInt(process.env['NEEWER_SCAN_RESTART_MS'] ?? '30000', 10); }
     static get connectRetryInitialMs(): number { return parseInt(process.env['NEEWER_CONNECT_RETRY_MS'] ?? '2000', 10); }
     static get connectRetryMaxMs(): number { return parseInt(process.env['NEEWER_CONNECT_RETRY_MAX_MS'] ?? '30000', 10); }
-    static get writeMinIntervalMs(): number { return parseInt(process.env['NEEWER_WRITE_MIN_INTERVAL_MS'] ?? '30', 10); }
+    static get writeMinIntervalMs(): number { return parseInt(process.env['NEEWER_WRITE_MIN_INTERVAL_MS'] ?? '50', 10); }
     static get lerpFrames(): number { return parseInt(process.env['LERP_FRAMES'] ?? '3', 10); }
+    static get deadbandH(): number { return parseInt(process.env['NEEWER_DEADBAND_H'] ?? '1', 10); }
+    static get deadbandS(): number { return parseInt(process.env['NEEWER_DEADBAND_S'] ?? '2', 10); }
+    static get deadbandV(): number { return parseInt(process.env['NEEWER_DEADBAND_V'] ?? '2', 10); }
 }

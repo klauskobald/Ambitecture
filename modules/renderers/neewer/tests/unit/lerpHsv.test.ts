@@ -2,7 +2,13 @@
  * HSV lerp helpers for NeewerBus smoothing.
  * Run: `npm run test:lerp-hsv` from modules/renderers/neewer
  */
-import { lerpHsv, lerpHueShortest } from '../../src/lerpHsv';
+import {
+    computeChaseStep,
+    hsvWithinDeadband,
+    lerpHsv,
+    lerpHueShortest,
+    roundHsvForProtocol,
+} from '../../src/lerpHsv';
 
 function assert(cond: boolean, msg: string): void {
     if (!cond) throw new Error(msg);
@@ -36,5 +42,19 @@ assertNear(mid.v, 50, 0.001, 't=0.5 val');
 
 const wrapped = lerpHsv({ h: 350, s: 0, v: 100 }, { h: 10, s: 0, v: 100 }, 0.5);
 assertNear(wrapped.h, 0, 0.001, 'wrapped hue midpoint');
+
+assert(
+    roundHsvForProtocol(356.4, 18.6, 100.2).s === 19,
+    'protocol round saturation',
+);
+
+const db = { h: 1, s: 2, v: 2 };
+assert(
+    hsvWithinDeadband({ h: 356, s: 18, v: 100 }, { h: 356, s: 17, v: 100 }, db),
+    'deadband sat tolerance',
+);
+
+const chase = computeChaseStep({ h: 0, s: 0, v: 0 }, { h: 100, s: 100, v: 100 }, 4, db);
+assert(chase.colorToSend !== null && chase.continueChase, 'chase step continues toward far target');
 
 console.log('lerpHsv.test.ts: all passed');

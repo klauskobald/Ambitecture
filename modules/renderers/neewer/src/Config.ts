@@ -21,4 +21,5 @@ export class Config {
     static get connectRetryInitialMs(): number { return parseInt(process.env['NEEWER_CONNECT_RETRY_MS'] ?? '2000', 10); }
     static get connectRetryMaxMs(): number { return parseInt(process.env['NEEWER_CONNECT_RETRY_MAX_MS'] ?? '30000', 10); }
     static get writeMinIntervalMs(): number { return parseInt(process.env['NEEWER_WRITE_MIN_INTERVAL_MS'] ?? '30', 10); }
+    static get lerpFrames(): number { return parseInt(process.env['LERP_FRAMES'] ?? '3', 10); }
 }

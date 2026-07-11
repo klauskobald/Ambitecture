@@ -41,8 +41,8 @@ export abstract class NeewerLightBase implements IFixtureClass {
         return readPowerSleep(fixture.fixtureProfile.params) ?? false;
     }
 
-    protected sendHsv(fixture: ConfiguredFixture, bus: NeewerBus, hue: number, sat: number, bri: number): void {
-        bus.setHsv(fixture, this.curveHue(fixture, hue), sat, this.curveBrightness(fixture, bri));
+    protected sendHsv(fixture: ConfiguredFixture, bus: NeewerBus, hue: number, sat: number, bri: number, immediate = false): void {
+        bus.setHsv(fixture, this.curveHue(fixture, hue), sat, this.curveBrightness(fixture, bri), immediate ? { immediate: true } : undefined);
     }
 
     // Strobe is simulated by gating brightness on a timer (the lamp has no strobe channel).
@@ -66,7 +66,7 @@ export abstract class NeewerLightBase implements IFixtureClass {
             fixture.name,
             () => parseStrobeConfig(fixture.fixtureProfile.params['strobe'])
         );
-        scheduler.update(hue, sat, bri, strobeValue, (h, s, b) => this.sendHsv(fixture, bus, h, s, b));
+        scheduler.update(hue, sat, bri, strobeValue, (h, s, b) => this.sendHsv(fixture, bus, h, s, b, true));
     }
 
     protected sendCct(fixture: ConfiguredFixture, bus: NeewerBus, kelvin: number, bri: number): void {

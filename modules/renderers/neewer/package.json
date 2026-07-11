@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit",
     "test:neewer-hue": "ts-node tests/unit/neewerHue.test.ts",
     "test:strobe": "ts-node tests/unit/strobeScheduler.test.ts",
-    "test:ble-lookup": "ts-node tests/unit/bleLookup.test.ts"
+    "test:ble-lookup": "ts-node tests/unit/bleLookup.test.ts",
+    "test:lerp-hsv": "ts-node tests/unit/lerpHsv.test.ts",
+    "test": "npm run test:neewer-hue && npm run test:strobe && npm run test:ble-lookup && npm run test:lerp-hsv"
   },
   "dependencies": {
     "@stoprocent/noble": "^2.5.3",

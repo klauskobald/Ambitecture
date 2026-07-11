@@ -4,12 +4,7 @@ import { peripheralMatches, type BleMatch } from './ble/bleLookup';
 import { DiscoveryService } from './ble/DiscoveryService';
 import { SERVICE_UUID, WRITE_UUID, NOTIFY_UUID, hsv } from './ble/NeewerProtocol';
 import type { ConfiguredFixture } from './handlers/ConfigHandler';
-
-interface HsvColor {
-    h: number;
-    s: number;
-    v: number;
-}
+import { lerpHsv, type HsvColor } from './lerpHsv';
 
 interface FixtureBinding {
     fixture: ConfiguredFixture;
@@ -24,6 +19,9 @@ interface FixtureBinding {
     offlineLogged: boolean;
     desiredHsv: HsvColor | null;
     lastSentHsv: HsvColor | null;
+    lerpFrom: HsvColor | null;
+    lerpTo: HsvColor | null;
+    lerpStep: number;
     frameTimer: ReturnType<typeof setTimeout> | null;
 }
 
@@ -31,6 +29,11 @@ export interface NeewerBusOptions {
     connectRetryInitialMs: number;
     connectRetryMaxMs: number;
     writeMinIntervalMs: number;
+    lerpFrames: number;
+}
+
+export interface SetHsvOptions {
+    immediate?: boolean;
 }
 
 function hsvEqual(a: HsvColor, b: HsvColor): boolean {
@@ -71,6 +74,9 @@ export class NeewerBus {
             offlineLogged: false,
             desiredHsv: null,
             lastSentHsv: null,
+            lerpFrom: null,
+            lerpTo: null,
+            lerpStep: 0,
             frameTimer: null,
         });
 
@@ -90,12 +96,37 @@ export class NeewerBus {
         this.bindings.clear();
     }
 
-    setHsv(fixture: ConfiguredFixture, h: number, s: number, v: number): void {
+    setHsv(fixture: ConfiguredFixture, h: number, s: number, v: number, options?: SetHsvOptions): void {
         const key = this.bindingKey(fixture);
         const binding = this.bindings.get(key);
         if (!binding) return;
 
         binding.desiredHsv = { h, s, v };
+
+        const bypassLerp = options?.immediate === true || this.options.lerpFrames <= 0;
+        const bypassThrottle = options?.immediate === true;
+        if (bypassLerp) {
+            this.clearLerpState(binding);
+            if (bypassThrottle && binding.frameTimer !== null) {
+                clearTimeout(binding.frameTimer);
+                binding.frameTimer = null;
+            }
+            void this.trySendColor(key, bypassThrottle);
+            return;
+        }
+
+        if (binding.lastSentHsv !== null && hsvEqual(binding.desiredHsv, binding.lastSentHsv) && !this.isLerping(binding)) {
+            this.clearLerpState(binding);
+            return;
+        }
+
+        if (binding.lastSentHsv === null) {
+            this.clearLerpState(binding);
+            void this.trySendColor(key);
+            return;
+        }
+
+        this.beginLerp(binding);
         void this.trySendColor(key);
     }
 
@@ -129,7 +160,7 @@ export class NeewerBus {
         }
     }
 
-    private async trySendColor(key: string): Promise<void> {
+    private async trySendColor(key: string, bypassThrottle = false): Promise<void> {
         const binding = this.bindings.get(key);
         if (!binding || binding.desiredHsv === null) return;
 
@@ -146,13 +177,13 @@ export class NeewerBus {
         }
 
         const desired = binding.desiredHsv;
-        if (binding.lastSentHsv !== null && hsvEqual(desired, binding.lastSentHsv)) {
+        if (!this.isLerping(binding) && binding.lastSentHsv !== null && hsvEqual(desired, binding.lastSentHsv)) {
             return;
         }
 
         const now = Date.now();
         const elapsed = now - binding.lastSentAt;
-        if (elapsed < this.options.writeMinIntervalMs) {
+        if (!bypassThrottle && elapsed < this.options.writeMinIntervalMs) {
             if (binding.frameTimer === null) {
                 const delay = this.options.writeMinIntervalMs - elapsed;
                 binding.frameTimer = setTimeout(() => {
@@ -163,21 +194,84 @@ export class NeewerBus {
             return;
         }
 
-        const packet = hsv(desired.h, desired.s, desired.v);
+        let colorToSend: HsvColor;
+        let lerpContinues = false;
+        if (this.isLerping(binding)) {
+            binding.lerpStep++;
+            colorToSend = lerpHsv(binding.lerpFrom!, binding.lerpTo!, binding.lerpStep / this.options.lerpFrames);
+            if (binding.lerpStep >= this.options.lerpFrames) {
+                this.clearLerpState(binding);
+            } else {
+                lerpContinues = true;
+            }
+        } else {
+            colorToSend = desired;
+        }
+
+        const packet = hsv(colorToSend.h, colorToSend.s, colorToSend.v);
         const hex = packet.toString('hex');
         if (hex === binding.lastSentHex) {
-            binding.lastSentHsv = { ...desired };
+            binding.lastSentHsv = { ...colorToSend };
+            if (lerpContinues) {
+                this.scheduleNextColorFrame(key, binding);
+            }
             return;
         }
 
         try {
+            Logger.debug(
+                `[neewer] "${fixture.name}" hsv -> ${hex} h=${Math.round(colorToSend.h)} s=${Math.round(colorToSend.s)} v=${Math.round(colorToSend.v)}`,
+            );
             await binding.connection.writeAsync(WRITE_UUID, packet, true);
             binding.lastSentHex = hex;
             binding.lastSentAt = now;
-            binding.lastSentHsv = { ...desired };
+            binding.lastSentHsv = { ...colorToSend };
         } catch (err) {
             Logger.warn(`[neewer] write failed on "${fixture.name}"`, err);
+            return;
         }
+
+        if (lerpContinues) {
+            this.scheduleNextColorFrame(key, binding);
+        }
+    }
+
+    private scheduleNextColorFrame(key: string, binding: FixtureBinding): void {
+        if (binding.frameTimer !== null) return;
+        binding.frameTimer = setTimeout(() => {
+            binding.frameTimer = null;
+            void this.trySendColor(key);
+        }, this.options.writeMinIntervalMs);
+    }
+
+    private getDisplayedColor(binding: FixtureBinding): HsvColor {
+        if (binding.lerpFrom !== null && binding.lerpTo !== null && binding.lerpStep > 0) {
+            return lerpHsv(binding.lerpFrom, binding.lerpTo, binding.lerpStep / this.options.lerpFrames);
+        }
+        if (binding.lastSentHsv !== null) {
+            return binding.lastSentHsv;
+        }
+        return binding.desiredHsv!;
+    }
+
+    private beginLerp(binding: FixtureBinding): void {
+        binding.lerpFrom = this.getDisplayedColor(binding);
+        binding.lerpTo = { ...binding.desiredHsv! };
+        binding.lerpStep = 0;
+    }
+
+    private isLerping(binding: FixtureBinding): boolean {
+        return (
+            binding.lerpFrom !== null &&
+            binding.lerpTo !== null &&
+            binding.lerpStep < this.options.lerpFrames
+        );
+    }
+
+    private clearLerpState(binding: FixtureBinding): void {
+        binding.lerpFrom = null;
+        binding.lerpTo = null;
+        binding.lerpStep = 0;
     }
 
     private clearColorState(binding: FixtureBinding): void {
@@ -187,6 +281,7 @@ export class NeewerBus {
         }
         binding.desiredHsv = null;
         binding.lastSentHsv = null;
+        this.clearLerpState(binding);
     }
 
     private onPeripheralSeen(peripheral: DiscoveredPeripheral): void {

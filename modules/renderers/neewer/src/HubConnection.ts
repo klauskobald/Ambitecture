@@ -40,6 +40,7 @@ export class HubConnection {
             connectRetryInitialMs: Config.connectRetryInitialMs,
             connectRetryMaxMs: Config.connectRetryMaxMs,
             writeMinIntervalMs: Config.writeMinIntervalMs,
+            lerpFrames: Config.lerpFrames,
         });
 
         const configHandler = new ConfigHandler(this.neewerBus);

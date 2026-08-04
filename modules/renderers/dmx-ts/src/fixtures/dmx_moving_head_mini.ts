@@ -55,7 +55,14 @@ class DmxMovingHeadMini extends DmxFixtureBase {
 
         const target = snapshot.sample<[number, number, number]>('target') ?? null;
         // Asleep on blackout: hold the head still — skip pan/tilt/xy-speed so the motors rest in the dark.
-        if (!isAsleep) this.applyAim(fixture, context, target, dmxUniverse);
+        // Clear pose sticky state so wake does not inherit a stale over-top commitment from before sleep.
+        if (isAsleep) {
+            fixture.aimInCone = false;
+            fixture.aimOverTop = false;
+            delete fixture.currentAimHeadingDeg;
+            return;
+        }
+        this.applyAim(fixture, context, target, dmxUniverse);
     }
 
     /**
@@ -64,11 +71,11 @@ class DmxMovingHeadMini extends DmxFixtureBase {
      *
      * Each beam direction has two reachable (pan, tilt) poses: aim "front" (tilt below the up-centre) or
      * "over the top" (pan held, tilt swung past vertical to the back). We track the head's continuous
-     * world front-heading and, **outside** a near-vertical cone, snap it to whichever of `heading` /
-     * `heading+180` is closer — so once the beam has gone over the top it stays there instead of spinning
-     * pan 180°. **Inside** the cone the front-heading is frozen and tilt alone carries the beam through
-     * vertical (the in-plane formula stays continuous as the target crosses overhead). This trades a tiny
-     * pointing error very close to straight-up for smooth motion and use of the full tilt range.
+     * world front-heading. **Inside** a tight near-vertical cone the front-heading is frozen and tilt
+     * alone carries the beam through vertical. **On cone exit** we may commit to over-top when that
+     * pose is nearer (so a real overhead crossing keeps pan still). **Outside** the cone, over-top is
+     * only kept if already committed — azimuth jumps alone never flip into over-top (that used to
+     * leave pan 180° off with tilt clamped after scene changes / sleep wake).
      */
     private applyAim(
         fixture: ConfiguredFixture,
@@ -106,17 +113,42 @@ class DmxMovingHeadMini extends DmxFixtureBase {
         // Zenith from straight-up (0 = overhead, 90 = horizon). The cone is measured here.
         const zenithDeg = Math.atan2(horizontalDist, dy) * (180 / Math.PI);
         const prevFrontHeading = fixture.currentAimHeadingDeg ?? headingDeg;
+        const inCone = zenithDeg < OVER_TOP_CONE_DEG;
 
-        // Outside the cone we may re-commit the front-heading to the nearer of the two poses; inside it
-        // stays frozen so the fast azimuth swing around the zenith never spins pan.
         let frontHeading = prevFrontHeading;
-        if (zenithDeg >= OVER_TOP_CONE_DEG) {
+        if (inCone) {
+            // Freeze heading so the azimuth swing around zenith never spins pan.
+            fixture.aimInCone = true;
+        } else {
             const frontCandidate = nearestHeading(headingDeg, prevFrontHeading);
             const overTopCandidate = nearestHeading(headingDeg + 180, prevFrontHeading);
-            frontHeading =
-                Math.abs(frontCandidate - prevFrontHeading) <= Math.abs(overTopCandidate - prevFrontHeading)
-                    ? frontCandidate
-                    : overTopCandidate;
+            const frontDist = Math.abs(frontCandidate - prevFrontHeading);
+            const overDist = Math.abs(overTopCandidate - prevFrontHeading);
+            const preferOverTop = overDist < frontDist;
+
+            if (fixture.aimInCone) {
+                // Just left the cone — allow entering over-top after a real overhead crossing.
+                fixture.aimInCone = false;
+                if (preferOverTop) {
+                    frontHeading = overTopCandidate;
+                    fixture.aimOverTop = true;
+                } else {
+                    frontHeading = frontCandidate;
+                    fixture.aimOverTop = false;
+                }
+            } else if (fixture.aimOverTop) {
+                // Stay on over-top until front becomes nearer, then leave.
+                if (preferOverTop) {
+                    frontHeading = overTopCandidate;
+                } else {
+                    frontHeading = frontCandidate;
+                    fixture.aimOverTop = false;
+                }
+            } else {
+                // Never enter over-top from an azimuth jump alone.
+                frontHeading = frontCandidate;
+                fixture.aimOverTop = false;
+            }
         }
         fixture.currentAimHeadingDeg = frontHeading;
 

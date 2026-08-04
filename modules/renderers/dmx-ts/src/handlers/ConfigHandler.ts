@@ -47,6 +47,13 @@ export interface ConfiguredFixture {
     currentPanDeg?: number;
     /** Per-fixture continuous world front-heading (deg) for pan/tilt over-the-top branch selection. */
     currentAimHeadingDeg?: number;
+    /** True while the aim target sits inside the near-vertical over-top cone (pan frozen). */
+    aimInCone?: boolean;
+    /**
+     * True while the head is committed to the over-the-top pose (pan ≈ heading+180).
+     * Only set on cone exit when over-top is the nearer pose — never from a bare azimuth jump.
+     */
+    aimOverTop?: boolean;
     /** Resolved synchronously from `fixtureProfile.class` when config is applied. */
     fixtureClass: IFixtureClass;
 }

@@ -1,5 +1,5 @@
 {
-    "AMBITECTURE_HUB_URL": "http://localhost:2612",
+    "AMBITECTURE_HUB_URL": "http://klausmacbookm4.local:2612",
     "GEO_LOCATION": "0.000 0.000",
     "CONTROLLER_GUID": "controller-web-test-001",
     "SIMULATOR_RENDERER_GUID": "simulator-1234567890",
@@ -16,6 +16,17 @@
         "overlayFingerStrokeRgba": "rgba(255, 255, 255, 0.75)",
         "overlayLineWidthPx": 2,
         "overlayTrailFadeMs": 150,
+        "heightSliderOffsetPx": 34,
+        "heightSliderLengthPx": 28,
+        "heightSliderWidthPx": 2,
+        "heightSliderKnobRadiusPx": 4,
+        "heightSliderEngagedScale": 3,
+        "heightSliderHitPaddingPx": 14,
+        "heightSliderHoldMs": 500,
+        "heightSliderTrackRgba": "rgba(255, 255, 255, 0.25)",
+        "heightSliderColorRgba": "rgba(124, 198, 255, 0.95)",
+        "heightSliderLabelRgba": "rgba(210, 230, 255, 0.95)",
+        "heightSliderLabelFontPx": 11,
         "animateEditCellWidthPx": 120,
         "animateEditCellGapPx": 4,
         "animateEditCellPaddingPx": 4,
@@ -129,10 +140,6 @@
                                     "type": "leaf",
                                     "panes": [
                                         {
-                                            "class": "pulse",
-                                            "label": "Pulse"
-                                        },
-                                        {
                                             "class": "snapshot",
                                             "label": "Snapshot"
                                         }
@@ -141,6 +148,10 @@
                                 {
                                     "type": "leaf",
                                     "panes": [
+                                        {
+                                            "class": "pulse",
+                                            "label": "Pulse"
+                                        },
                                         {
                                             "class": "animation",
                                             "label": "Animate"

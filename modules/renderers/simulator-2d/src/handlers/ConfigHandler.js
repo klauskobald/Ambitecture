@@ -9,6 +9,7 @@ class ConfigHandler {
       dmx_light_static: DmxLightStatic,
       dmx_basic_static: DmxBasicStatic,
       dmx_moving_head_mini: DmxMovingHeadMini,
+      derby_3c: Derby3c,
       neewer_basic: NeewerBasic,
       screen: Screen
     }

@@ -71,7 +71,12 @@ export abstract class DmxFixtureBase implements IFixtureClass {
         const channel = this.getDmxMap(fixture).lookup(functionName);
         if (!channel) return;
         const dmxChannel = base + channel.offset;
-        const dmxValue = DmxFixtureBase.normalizedToDmxRange(normalizedValue, channel.rangeMin, channel.rangeMax);
+        const dmxValue = DmxFixtureBase.normalizedToDmxRange(
+            normalizedValue,
+            channel.rangeMin,
+            channel.rangeMax,
+            channel.reversed === true
+        );
         dmxUniverse.setChannel(dmxChannel, dmxValue);
     }
 
@@ -89,9 +94,15 @@ export abstract class DmxFixtureBase implements IFixtureClass {
         return dmxMap;
     }
 
-    protected static normalizedToDmxRange(normalized: number, min: number, max: number): number {
+    protected static normalizedToDmxRange(
+        normalized: number,
+        min: number,
+        max: number,
+        reversed = false
+    ): number {
         const clamped = Math.max(0, Math.min(1, normalized));
-        return Math.round(min + (max - min) * clamped);
+        const t = reversed ? 1 - clamped : clamped;
+        return Math.round(min + (max - min) * t);
     }
 }
 

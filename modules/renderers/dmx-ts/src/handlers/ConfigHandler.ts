@@ -14,6 +14,8 @@ export interface FixtureChannelDef {
     range: string;
     /** Physical span of a positional channel (pan/tilt) in degrees, for angle→DMX mapping. */
     degrees?: number;
+    /** When true, normalized 0 maps to rangeMax and 1 maps to rangeMin (e.g. reverse strobe). */
+    reversed?: boolean;
 }
 
 export interface FixtureProfile {

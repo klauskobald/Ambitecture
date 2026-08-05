@@ -8,7 +8,7 @@ import './viewers/noteOnOff.js'
 import './viewers/noteOnOffToggle.js'
 
 const filterParam = new URLSearchParams(window.location.search).get('filter')
-const filterIntentGuid =
+const filterGuid =
   typeof filterParam === 'string' && filterParam.trim() !== ''
     ? filterParam.trim()
     : null
@@ -47,7 +47,7 @@ let modalRef = null
 let listRef = null
 
 const session = createAssignSession({
-  filterIntentGuid,
+  filterGuid,
   onState: () => {
     listRef?.render()
   },
@@ -71,7 +71,7 @@ listRef = createAssignList({
   session,
   listEl,
   listWrap,
-  filterIntentGuid,
+  filterGuid,
   onEdit: row => modalRef?.openEdit(row),
   onCreate: () => modalRef?.openCreate()
 })

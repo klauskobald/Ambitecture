@@ -3,6 +3,7 @@
  */
 
 import { projectGraph } from '../core/projectGraph.js'
+import { setPerformIntentFilter } from '../core/performIntentFilter.js'
 import {
   sendSnapshotCapture,
   sendSnapshotMetadataPatch,
@@ -239,6 +240,7 @@ export function createPerformSnapshotPanel () {
       playBtn.setAttribute('aria-label', `Recall snapshot ${name}`)
       playBtn.addEventListener('click', () => {
         sendActionTrigger(guid)
+        setPerformIntentFilter(guid)
       })
       item.appendChild(playBtn)
 

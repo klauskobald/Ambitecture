@@ -1,10 +1,11 @@
 import { EnvAr } from '../envelope/env_ar';
 import { ReceiverBase } from './ReceiverBase';
 import { Logger } from '../Logger';
-import { AssignmentRecord, TargetRecord } from '../GraphReplica';
+import { AssignmentRecord } from '../GraphReplica';
 import { MidiCcEvent, MidiNoteEvent } from '../MidiManager';
 import { midiTools } from '../midiTools';
 import { TargetBase } from '../targets/TargetBase';
+import { formatTargetsLine } from '../formatTargetsLine';
 
 interface EnvArParsed {
   enabled: boolean;
@@ -58,20 +59,6 @@ function readParams(raw: Record<string, unknown>): NoteOnOffToggleParams | null 
   return { note, velocityMin, velocityMax, velocityOffset, velocityScale, envelope };
 }
 
-function formatIntentTargetsLine(
-  targets: TargetRecord[],
-  intentName: (guid: string) => string | undefined,
-): string[] {
-  const bits: string[] = [];
-  for (const t of targets) {
-    if (t.type !== 'intent') continue;
-    const n = intentName(t.guid);
-    const label = n !== undefined && n !== '' ? n : '?';
-    bits.push(`${label}.${t.key}`);
-  }
-  return bits;
-}
-
 export class ReceiverNoteOnOffToggle extends ReceiverBase {
   private latchedOn = false;
   private triggerVelocity = 0;
@@ -103,16 +90,21 @@ export class ReceiverNoteOnOffToggle extends ReceiverBase {
 
   static formatPluginListLine(
     a: AssignmentRecord,
-    intentName: (guid: string) => string | undefined,
+    resolveName: (guid: string) => string | undefined,
+    resolveExecuteType?: (guid: string) => string | undefined,
   ): string | null {
     if (a.class !== 'noteOnOffToggle') return null;
     const params = readParams(a.params);
     if (params === null) return null;
     const chLabel = midiTools.bracketLabel(a);
-    const targetBits = formatIntentTargetsLine(a.targets, guid => {
-      const n = intentName(guid);
-      return typeof n === 'string' ? n.replace(/ /g, '\u00A0') : n;
-    });
+    const targetBits = formatTargetsLine(
+      a.targets,
+      guid => {
+        const n = resolveName(guid);
+        return typeof n === 'string' ? n.replace(/ /g, '\u00A0') : n;
+      },
+      resolveExecuteType,
+    );
     const targetsJoined = targetBits.length > 0 ? targetBits.join(', ') : '—';
     const noteLabel = midiTools.noteAsString(params.note);
     return `[${chLabel}] ${noteLabel} toggle (${params.velocityMin}–${params.velocityMax}) ${params.velocityOffset > 0 ? '+' + params.velocityOffset : params.velocityOffset}${params.velocityScale > 1 ? '×' + params.velocityScale : ''}${params.velocityScale < 1 ? '/' + params.velocityScale : ''} ⮕ ${targetsJoined}`;

@@ -1,6 +1,6 @@
 /**
- * Perform intent filter chip (funnel icon + intent name) for layout leaf headers.
- * Shown while Animate or plugin (e.g. MIDI) panes are active and an intent filter is set.
+ * Perform intent filter chip (funnel icon + intent/snapshot name) for layout leaf headers.
+ * Shown while Animate or plugin (e.g. MIDI) panes are active and a filter is set.
  */
 
 import { projectGraph } from '../core/projectGraph.js'
@@ -23,7 +23,26 @@ let filterablePaneDepth = 0
 let unsubscribeFilter = null
 
 /** @type {(() => void) | null} */
-let unsubscribeIntents = null
+let unsubscribeGraph = null
+
+/**
+ * @param {string} guid
+ * @returns {string}
+ */
+function resolveFilterLabel (guid) {
+  const intent = /** @type {Record<string, unknown> | undefined} */ (
+    projectGraph.getIntents().get(guid)
+  )
+  if (typeof intent?.name === 'string' && intent.name) return intent.name
+  for (const snap of projectGraph.getSnapshotsList()) {
+    if (snap.guid === guid) {
+      const n = snap.name
+      if (typeof n === 'string' && n) return n
+      break
+    }
+  }
+  return guid
+}
 
 function ensureFilterChip () {
   if (filterChip) return
@@ -32,7 +51,7 @@ function ensureFilterChip () {
   chip.type = 'button'
   chip.className = 'perform-subnav-filter'
   chip.hidden = true
-  chip.setAttribute('aria-label', 'Clear intent filter')
+  chip.setAttribute('aria-label', 'Clear filter')
 
   const filterIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
   filterIcon.setAttribute('class', 'perform-subnav-filter__icon')
@@ -58,9 +77,12 @@ function ensureFilterChip () {
   unsubscribeFilter = subscribePerformIntentFilter(() => {
     renderFilterChipFromState()
   })
-  unsubscribeIntents = projectGraph.subscribe(['intents:def'], () => {
-    renderFilterChipFromState()
-  })
+  unsubscribeGraph = projectGraph.subscribe(
+    ['intents:def', 'snapshots'],
+    () => {
+      renderFilterChipFromState()
+    }
+  )
 }
 
 function renderFilterChipFromState () {
@@ -72,13 +94,9 @@ function renderFilterChipFromState () {
     return
   }
 
-  const intent = /** @type {Record<string, unknown> | undefined} */ (
-    projectGraph.getIntents().get(guid)
-  )
-  const name =
-    typeof intent?.name === 'string' && intent.name ? intent.name : guid
+  const name = resolveFilterLabel(guid)
   filterChipLabel.textContent = name
-  filterChip.setAttribute('aria-label', `Clear intent filter (${name})`)
+  filterChip.setAttribute('aria-label', `Clear filter (${name})`)
   filterChip.title = `Filtering by ${name} — tap to clear`
   filterChip.hidden = false
 }

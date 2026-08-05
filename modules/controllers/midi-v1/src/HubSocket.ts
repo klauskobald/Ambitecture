@@ -68,6 +68,15 @@ export class HubSocket {
     return this.send('graph:command', payload);
   }
 
+  /**
+   * Fire a named action by GUID. Hub ActionHandler resolves execute items
+   * (snapshot recall, scene activate, animation, intent). Optional `args`
+   * are shallow-merged with the action's execute.params on the hub.
+   */
+  sendActionTrigger(actionGuid: string, args?: Record<string, unknown>): boolean {
+    return this.send('action:trigger', args ? { actionGuid, args } : { actionGuid });
+  }
+
   private send(type: string, payload: unknown): boolean {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
     this.ws.send(JSON.stringify({ message: { type, payload } }));

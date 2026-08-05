@@ -2,8 +2,12 @@ import {
   getAssignmentClass,
   listAssignmentClasses
 } from './assignmentRegistry.js'
-import { NOTE_AND_CONTROL_CLASS } from './viewers/noteAndControl.js'
 import { createToggleButton } from './components/toggleButton.js'
+import {
+  filterClassesForTargetKind,
+  preferredCreateClassId,
+  resolveEditorTargetKind
+} from './targetHelpers.js'
 
 /**
  * @typedef {{
@@ -89,6 +93,8 @@ export function createAssignModal (opts) {
     return {
       getAssignment: () => /** @type {Record<string, unknown>} */ (editing),
       intents: opts.session.intents,
+      actions: opts.session.actions,
+      filterGuid: opts.session.filterGuid,
       systemCapabilities: opts.session.systemCapabilities,
       getIntentClass: guid => opts.session.getIntentClass(guid),
       learn,
@@ -221,7 +227,19 @@ export function createAssignModal (opts) {
 
     const sel = document.createElement('select')
     sel.className = 'modal__select modal__select--header'
-    const classes = listAssignmentClasses()
+    const ctx = opts.session.getEditorContext()
+    const kind = editing
+      ? resolveEditorTargetKind(
+          /** @type {Record<string, unknown>} */ (editing),
+          ctx
+        )
+      : 'intent'
+    const allClasses = listAssignmentClasses()
+    const classes = filterClassesForTargetKind(
+      allClasses,
+      kind,
+      editing && typeof editing.class === 'string' ? editing.class : null
+    )
     for (const { id, label } of classes) {
       const opt = document.createElement('option')
       opt.value = id
@@ -230,12 +248,12 @@ export function createAssignModal (opts) {
     }
 
     if (editing && !getAssignmentClass(String(editing.class ?? ''))) {
-      editing.class = NOTE_AND_CONTROL_CLASS
+      editing.class = preferredCreateClassId(ctx)
     }
     let cur =
       editing && typeof editing.class === 'string'
         ? editing.class
-        : NOTE_AND_CONTROL_CLASS
+        : preferredCreateClassId(ctx)
     if (!classes.some(c => c.id === cur) && classes[0]) cur = classes[0].id
     sel.value = cur
     if (editing) editing.class = cur
@@ -332,12 +350,14 @@ export function createAssignModal (opts) {
       opts.els.modal.hidden = false
     },
     openCreate () {
+      const ctx = opts.session.getEditorContext()
+      const preferred = preferredCreateClassId(ctx)
       const classes = listAssignmentClasses()
       const def =
-        getAssignmentClass(NOTE_AND_CONTROL_CLASS) ??
+        getAssignmentClass(preferred) ??
         (classes[0] ? getAssignmentClass(classes[0].id) : null)
       if (!def) return
-      const row = def.createDefault(opts.session.getEditorContext())
+      const row = def.createDefault(ctx)
       opts.session.pushAssignment(row)
       opts.refreshList()
       api.openEdit(row)

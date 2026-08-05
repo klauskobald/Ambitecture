@@ -11,9 +11,16 @@ export interface PluginIntentRow {
   name: string;
 }
 
+export interface PluginActionRow {
+  guid: string;
+  name: string;
+  executeType: string;
+}
+
 export interface PluginServerHandlers {
   getAssignments: () => AssignmentRecord[];
   getIntentsForPlugin: () => PluginIntentRow[];
+  getActionsForPlugin: () => PluginActionRow[];
   getSystemCapabilities: () => unknown | null;
   getIntentClasses: () => Record<string, string>;
   summarizeForPlugin: (a: AssignmentRecord) => string;
@@ -137,12 +144,14 @@ export class PluginServer {
     const summarize = this.handlers.summarizeForPlugin;
     const assignments = this.handlers.getAssignments().map(a => assignmentToWire(a, summarize(a)));
     const intents = this.handlers.getIntentsForPlugin();
+    const actions = this.handlers.getActionsForPlugin();
     const systemCapabilities = this.handlers.getSystemCapabilities();
     const intentClasses = this.handlers.getIntentClasses();
     return JSON.stringify({
       type: 'state',
       assignments,
       intents,
+      actions,
       systemCapabilities,
       intentClasses,
     });

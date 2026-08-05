@@ -1,10 +1,11 @@
 import { EnvAr } from '../envelope/env_ar';
 import { ReceiverBase } from './ReceiverBase';
 import { Logger } from '../Logger';
-import { AssignmentRecord, TargetRecord } from '../GraphReplica';
+import { AssignmentRecord } from '../GraphReplica';
 import { MidiCcEvent, MidiNoteEvent } from '../MidiManager';
 import { midiTools } from '../midiTools';
 import { TargetBase } from '../targets/TargetBase';
+import { formatTargetsLine } from '../formatTargetsLine';
 
 interface EnvArParsed {
   enabled: boolean;
@@ -58,20 +59,6 @@ function readParams(raw: Record<string, unknown>): NoteOnOffParams | null {
   return { note, velocityMin, velocityMax, velocityOffset, velocityScale, envelope };
 }
 
-function formatIntentTargetsLine(
-  targets: TargetRecord[],
-  intentName: (guid: string) => string | undefined,
-): string[] {
-  const bits: string[] = [];
-  for (const t of targets) {
-    if (t.type !== 'intent') continue;
-    const n = intentName(t.guid);
-    const label = n !== undefined && n !== '' ? n : '?';
-    bits.push(`${label}.${t.key}`);
-  }
-  return bits;
-}
-
 function envelopeSummary(env: EnvArParsed | null): string {
   if (env === null || !env.enabled) return 'env off';
   return `env_ar ${env.attackMs}/${env.releaseMs}ms`;
@@ -98,17 +85,22 @@ export class ReceiverNoteOnOff extends ReceiverBase {
 
   static formatPluginListLine(
     a: AssignmentRecord,
-    intentName: (guid: string) => string | undefined,
+    resolveName: (guid: string) => string | undefined,
+    resolveExecuteType?: (guid: string) => string | undefined,
   ): string | null {
     if (a.class !== 'noteOnOff') return null;
     const params = readParams(a.params);
     if (params === null) return null;
     const chLabel = midiTools.bracketLabel(a);
-    const targetBits = formatIntentTargetsLine(a.targets, guid => {
-      const n = intentName(guid);
-      // Replace ASCII spaces (U+0020) with hard space (U+00A0)
-      return typeof n === 'string' ? n.replace(/ /g, '\u00A0') : n;
-    });
+    const targetBits = formatTargetsLine(
+      a.targets,
+      guid => {
+        const n = resolveName(guid);
+        // Replace ASCII spaces (U+0020) with hard space (U+00A0)
+        return typeof n === 'string' ? n.replace(/ /g, '\u00A0') : n;
+      },
+      resolveExecuteType,
+    );
     const targetsJoined = targetBits.length > 0 ? targetBits.join(', ') : '—';
     const noteLabel = midiTools.noteAsString(params.note);
     // const envBit = envelopeSummary(params.envelope);

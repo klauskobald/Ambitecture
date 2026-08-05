@@ -2,17 +2,23 @@ const SAVE_DEBOUNCE_MS = 280
 
 /**
  * @typedef {{ guid: string, name: string }} IntentRow
+ * @typedef {{ guid: string, name: string, executeType: string }} ActionRow
  */
 
 /**
- * @typedef {{ filterIntentGuid: string | null, intents: IntentRow[] }} EditorContext
+ * @typedef {{
+ *   filterGuid: string | null,
+ *   intents: IntentRow[],
+ *   actions: ActionRow[]
+ * }} EditorContext
  */
 
 /**
  * @typedef {{
  *   assignments: unknown[],
  *   intents: IntentRow[],
- *   filterIntentGuid: string | null,
+ *   actions: ActionRow[],
+ *   filterGuid: string | null,
  *   systemCapabilities: unknown,
  *   intentClasses: Record<string, string>,
  *   getIntentClass: (guid: string) => string | null,
@@ -29,7 +35,7 @@ const SAVE_DEBOUNCE_MS = 280
 
 /**
  * @param {{
- *   filterIntentGuid: string | null,
+ *   filterGuid: string | null,
  *   onState: () => void,
  *   onOnline?: () => void,
  *   onOffline?: () => void,
@@ -44,6 +50,8 @@ export function createAssignSession (opts) {
   let assignments = []
   /** @type {IntentRow[]} */
   let intents = []
+  /** @type {ActionRow[]} */
+  let actions = []
   /** @type {unknown} */
   let systemCapabilities = null
   /** @type {Record<string, string>} */
@@ -122,6 +130,25 @@ export function createAssignSession (opts) {
                 return { guid, name }
               })
           : []
+        actions = Array.isArray(msg.actions)
+          ? msg.actions
+              .filter(
+                x =>
+                  x &&
+                  typeof x === 'object' &&
+                  typeof /** @type {Record<string, unknown>} */ (x).guid ===
+                    'string'
+              )
+              .map(x => {
+                const r = /** @type {Record<string, unknown>} */ (x)
+                const guid = /** @type {string} */ (r.guid)
+                const name =
+                  typeof r.name === 'string' && r.name ? r.name : guid
+                const executeType =
+                  typeof r.executeType === 'string' ? r.executeType : ''
+                return { guid, name, executeType }
+              })
+          : []
         if ('systemCapabilities' in msg) {
           systemCapabilities = msg.systemCapabilities
         }
@@ -170,6 +197,9 @@ export function createAssignSession (opts) {
     get intents () {
       return intents
     },
+    get actions () {
+      return actions
+    },
     get systemCapabilities () {
       return systemCapabilities
     },
@@ -181,11 +211,11 @@ export function createAssignSession (opts) {
       const c = intentClasses[guid]
       return typeof c === 'string' && c ? c : null
     },
-    get filterIntentGuid () {
-      return opts.filterIntentGuid
+    get filterGuid () {
+      return opts.filterGuid
     },
     getEditorContext () {
-      return { filterIntentGuid: opts.filterIntentGuid, intents }
+      return { filterGuid: opts.filterGuid, intents, actions }
     },
     scheduleSave,
     sendSave,

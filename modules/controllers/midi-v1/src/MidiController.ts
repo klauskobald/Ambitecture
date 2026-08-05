@@ -18,6 +18,7 @@ import { ReceiverNoteOnOff } from './receivers/ReceiverNoteOnOff';
 import { ReceiverNoteOnOffToggle } from './receivers/ReceiverNoteOnOffToggle';
 import { TargetBase } from './targets/TargetBase';
 import { TargetIntent } from './targets/TargetIntent';
+import { TargetAction } from './targets/TargetAction';
 import { PluginServer } from './PluginServer';
 import { summarizeAssignmentForPlugin } from './assignmentSummarize';
 
@@ -62,6 +63,7 @@ export class MidiController {
     this.pluginServer = new PluginServer(config.pluginServer, {
       getAssignments: () => this.graph.getAssignments(),
       getIntentsForPlugin: () => this.graph.listIntentsForPlugin(),
+      getActionsForPlugin: () => this.graph.listActionsForPlugin(),
       getSystemCapabilities: () => this.systemCapabilities,
       getIntentClasses: () => this.graph.getIntentClassesWire(),
       summarizeForPlugin: a => summarizeAssignmentForPlugin(a, this.graph),
@@ -106,6 +108,10 @@ export class MidiController {
       return;
     }
     this.graph.apply(message);
+    // Refresh plugin UI for action/intent meta changes that do not rebuild receivers.
+    if (message.type === 'graph:init' || message.type === 'graph:delta') {
+      this.pluginServer.pushState();
+    }
   }
 
   private rebuildReceivers(reason: AssignmentsChangedReason): void {
@@ -223,6 +229,13 @@ export class MidiController {
           guid => this.graph.getIntentClass(guid),
           () => this.systemCapabilities,
         );
+      case 'action':
+        return new TargetAction(
+          record,
+          this.logger,
+          this.graph,
+          guid => this.sendActionTrigger(guid),
+        );
       default:
         this.logger.warn(`target ${record.guid}: unknown type "${record.type}"`);
         return null;
@@ -232,6 +245,11 @@ export class MidiController {
   private sendRuntime(command: RuntimeCommand): void {
     const sent = this.socket.sendRuntimeCommand(command);
     if (!sent) this.logger.warn(`runtime:command dropped (socket not open) for ${command.entityType} ${command.guid}`);
+  }
+
+  private sendActionTrigger(actionGuid: string): void {
+    const sent = this.socket.sendActionTrigger(actionGuid);
+    if (!sent) this.logger.warn(`action:trigger dropped (socket not open) for ${actionGuid}`);
   }
 
   private dispatchNoteOn(e: MidiNoteEvent): void {

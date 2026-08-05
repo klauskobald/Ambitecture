@@ -5,7 +5,7 @@ import { getAssignmentClass } from './assignmentRegistry.js'
  *   session: import('./assignSession.js').AssignSessionApi,
  *   listEl: HTMLElement | null,
  *   listWrap: HTMLElement | null,
- *   filterIntentGuid: string | null,
+ *   filterGuid: string | null,
  *   onEdit: (row: Record<string, unknown>) => void,
  *   onCreate: () => void
  * }} opts
@@ -71,17 +71,17 @@ export function createAssignList (opts) {
    * @param {Record<string, unknown>} a
    * @returns {boolean}
    */
-  function assignmentMatchesIntentFilter (a) {
-    if (!opts.filterIntentGuid) return true
+  function assignmentMatchesFilter (a) {
+    if (!opts.filterGuid) return true
     const targets = a.targets
     if (!Array.isArray(targets)) return false
     for (const t of targets) {
       if (!t || typeof t !== 'object' || Array.isArray(t)) continue
       const rec = /** @type {Record<string, unknown>} */ (t)
       if (
-        rec.type === 'intent' &&
+        (rec.type === 'intent' || rec.type === 'action') &&
         typeof rec.guid === 'string' &&
-        rec.guid === opts.filterIntentGuid
+        rec.guid === opts.filterGuid
       )
         return true
     }
@@ -110,7 +110,7 @@ export function createAssignList (opts) {
       const a = /** @type {Record<string, unknown>} */ (raw)
       const guid = typeof a.guid === 'string' ? a.guid : ''
       if (!guid) continue
-      if (!assignmentMatchesIntentFilter(a)) continue
+      if (!assignmentMatchesFilter(a)) continue
       const li = document.createElement('li')
       li.className = 'list__item'
       if (engagedGuids.has(guid)) li.classList.add('list__item--engaged')
@@ -140,7 +140,7 @@ export function createAssignList (opts) {
       listEl.appendChild(li)
     }
 
-    const hasFilter = Boolean(opts.filterIntentGuid)
+    const hasFilter = Boolean(opts.filterGuid)
     if (!hasFilter && listFooter) {
       listFooter.remove()
       listFooter = null
@@ -165,12 +165,12 @@ export function createAssignList (opts) {
       emptyHint.className = 'list-empty'
       emptyHint.textContent = hasFilter
         ? 'No assignments yet — press Create to add one.'
-        : 'Select an intent to create a new assignment.'
+        : 'Select an intent or snapshot to create a new assignment.'
       opts.listWrap.insertBefore(emptyHint, listFooter ?? null)
     } else if (isEmpty && emptyHint) {
       emptyHint.textContent = hasFilter
         ? 'No assignments yet — press Create to add one.'
-        : 'Select an intent to create a new assignment.'
+        : 'Select an intent or snapshot to create a new assignment.'
     }
   }
 

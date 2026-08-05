@@ -19,6 +19,12 @@ export interface AssignmentRecord {
   targets: TargetRecord[];
 }
 
+export interface ActionPluginRow {
+  guid: string;
+  name: string;
+  executeType: string;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -29,11 +35,15 @@ function toTarget(raw: unknown): TargetRecord | null {
   const guid = raw['guid'];
   const key = raw['key'];
   const fn = raw['function'];
-  if (typeof type !== 'string' || typeof guid !== 'string' || typeof key !== 'string') return null;
+  if (typeof type !== 'string' || typeof guid !== 'string') return null;
+  let keyStr: string;
+  if (typeof key === 'string') keyStr = key;
+  else if (type === 'action') keyStr = 'trigger';
+  else return null;
   return {
     type,
     guid,
-    key,
+    key: keyStr,
     function: typeof fn === 'string' ? fn : 'linear',
   };
 }
@@ -76,10 +86,30 @@ function extractIntentClass(raw: Record<string, unknown> | null): string | undef
   return typeof c === 'string' && c.length > 0 ? c : undefined;
 }
 
+function extractActionFields(raw: Record<string, unknown> | null): {
+  name?: string;
+  executeType?: string;
+} {
+  if (!raw) return {};
+  const name = typeof raw['name'] === 'string' && raw['name'] ? raw['name'] : undefined;
+  const execute = isRecord(raw['execute']) ? raw['execute'] : null;
+  const executeType =
+    execute && typeof execute['type'] === 'string' && execute['type']
+      ? execute['type']
+      : undefined;
+  return {
+    ...(name !== undefined ? { name } : {}),
+    ...(executeType !== undefined ? { executeType } : {}),
+  };
+}
+
 export class GraphReplica {
   private intentGuids = new Set<string>();
   private intentNames = new Map<string, string>();
   private intentClasses = new Map<string, string>();
+  private actionGuids = new Set<string>();
+  private actionNames = new Map<string, string>();
+  private actionExecuteTypes = new Map<string, string>();
   private myAssignments: AssignmentRecord[] = [];
 
   constructor(
@@ -96,6 +126,18 @@ export class GraphReplica {
     return this.intentNames.get(guid);
   }
 
+  hasAction(guid: string): boolean {
+    return this.actionGuids.has(guid);
+  }
+
+  getActionName(guid: string): string | undefined {
+    return this.actionNames.get(guid);
+  }
+
+  getActionExecuteType(guid: string): string | undefined {
+    return this.actionExecuteTypes.get(guid);
+  }
+
   getAssignments(): AssignmentRecord[] {
     return this.myAssignments;
   }
@@ -108,6 +150,39 @@ export class GraphReplica {
       rows.push({ guid, name });
     }
     rows.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+    return rows;
+  }
+
+  /**
+   * Stable list for plugin action picker. Sorted: snapshots, scenes, then others;
+   * within each group by name.
+   */
+  listActionsForPlugin(): ActionPluginRow[] {
+    const rows: ActionPluginRow[] = [];
+    for (const guid of this.actionGuids) {
+      const name = this.actionNames.get(guid) ?? guid;
+      const executeType = this.actionExecuteTypes.get(guid) ?? '';
+      rows.push({ guid, name, executeType });
+    }
+    const rank = (t: string): number => {
+      switch (t) {
+        case 'snapshot':
+          return 0;
+        case 'scene':
+          return 1;
+        case 'animation':
+          return 2;
+        case 'intent':
+          return 3;
+        default:
+          return 4;
+      }
+    };
+    rows.sort((a, b) => {
+      const dr = rank(a.executeType) - rank(b.executeType);
+      if (dr !== 0) return dr;
+      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+    });
     return rows;
   }
 
@@ -159,6 +234,17 @@ export class GraphReplica {
       }
     }
 
+    const actionMap = isRecord(entities['action']) ? entities['action'] : {};
+    this.actionGuids = new Set(Object.keys(actionMap));
+    this.actionNames = new Map();
+    this.actionExecuteTypes = new Map();
+    for (const [aguid, raw] of Object.entries(actionMap)) {
+      if (!isRecord(raw)) continue;
+      const fields = extractActionFields(raw);
+      if (fields.name !== undefined) this.actionNames.set(aguid, fields.name);
+      if (fields.executeType !== undefined) this.actionExecuteTypes.set(aguid, fields.executeType);
+    }
+
     const controllers = isRecord(entities['controller']) ? entities['controller'] : {};
     const meRaw = controllers[this.ownGuid];
     const me = isRecord(meRaw) ? meRaw : null;
@@ -194,6 +280,27 @@ export class GraphReplica {
           const clsFromPatch = extractIntentClass(patch);
           if (clsFromVal !== undefined) this.intentClasses.set(guid, clsFromVal);
           else if (clsFromPatch !== undefined) this.intentClasses.set(guid, clsFromPatch);
+        }
+        continue;
+      }
+
+      if (entityType === 'action') {
+        if (op === 'remove') {
+          this.actionGuids.delete(guid);
+          this.actionNames.delete(guid);
+          this.actionExecuteTypes.delete(guid);
+        } else {
+          this.actionGuids.add(guid);
+          const val = isRecord(raw['value']) ? raw['value'] : null;
+          const patch = isRecord(raw['patch']) ? raw['patch'] : null;
+          const fromVal = extractActionFields(val);
+          const fromPatch = extractActionFields(patch);
+          if (fromVal.name !== undefined) this.actionNames.set(guid, fromVal.name);
+          else if (fromPatch.name !== undefined) this.actionNames.set(guid, fromPatch.name);
+          if (fromVal.executeType !== undefined) this.actionExecuteTypes.set(guid, fromVal.executeType);
+          else if (fromPatch.executeType !== undefined) {
+            this.actionExecuteTypes.set(guid, fromPatch.executeType);
+          }
         }
         continue;
       }

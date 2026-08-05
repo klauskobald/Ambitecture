@@ -43,7 +43,9 @@ class Derby3c extends DmxFixtureBase {
         const brightness = Math.max(0, masterBrightness) * blackoutFactor;
         this.writeFunction(fixture, 'brightness', this.getIntensityGain(fixture, brightness), dmxUniverse);
 
-        const isAsleep = brightness === 0 && this.sleepOnBlackoutEnabled(fixture);
+        // Not shining: dimmer off or RGB all zero — hold the spin motor still.
+        const isDark = brightness === 0 || (r === 0 && g === 0 && b === 0);
+        const isAsleep = isDark && this.sleepOnBlackoutEnabled(fixture);
         const target = snapshot.sample<[number, number, number]>('target') ?? null;
         if (!isAsleep) this.applyPan(fixture, context, target, dmxUniverse);
     }

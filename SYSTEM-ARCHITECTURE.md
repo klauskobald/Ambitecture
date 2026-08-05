@@ -720,7 +720,7 @@ The repository includes demo fixture/project data under `var/` that the hub can 
 
 `var/fixtures/rgb_basic.yml` is the same RGB layout **without** a separate brightness channel (`dmx_basic_static`). Renderers fold `light.brightness`, `master.brightness`, and `master.blackout` into the RGB DMX values (same path as the `screen` renderer `singlePixel` algorithm).
 
-`var/fixtures/derby_3c.yml` is an RGB derby (`derby_3c`) with brightness, RGB, reverse-mapped strobe (`strobe-on` uses `reversed: true` so creative rate 0→DMX max / 1→DMX min — hardware slowest at 255, fastest at 10), and a single spin motor on `pan` (approximate heading toward hub `target`; exact beam angle is uncalibrated). Simulator glyph is a single rotatable line (`derby_3c.svg`).
+`var/fixtures/derby_3c.yml` is an RGB derby (`derby_3c`) with brightness, RGB, reverse-mapped strobe (`strobe-on` uses `reversed: true` so creative rate 0→DMX max / 1→DMX min — hardware slowest at 255, fastest at 10), and a single spin motor on `pan` (approximate heading toward hub `target`; exact beam angle is uncalibrated). With `sleepOnBlackout`, pan is skipped when brightness is 0 **or** RGB is all zero (fixture not shining). Simulator glyph is a single rotatable line (`derby_3c.svg`).
 
 Fixture profile `params` is class-specific (for example `screen` uses `params.algorithm`, not `params.dmx`). Optional `icon` names an SVG filename for tooling; `simulator-2d` ships matching stroke glyphs under `assets/` for canvas overlay. A DMX channel def may set **`reversed: true`** so normalized 0 maps to `rangeMax` and 1 to `rangeMin` (`DmxFixtureBase.normalizedToDmxRange`).
 

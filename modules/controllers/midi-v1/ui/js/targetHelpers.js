@@ -107,6 +107,18 @@ export function defaultTargetsFromContext (context) {
 }
 
 /**
+ * Action targets never use AR envelope — clear enabled when entering that lifecycle.
+ * @param {Record<string, unknown>} a
+ */
+export function disableEnvelope (a) {
+  const p = a.params
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return
+  const e = /** @type {Record<string, unknown>} */ (p).envelope
+  if (!e || typeof e !== 'object' || Array.isArray(e)) return
+  /** @type {Record<string, unknown>} */ (e).enabled = false
+}
+
+/**
  * Keep at most one intent or action target.
  * @param {Record<string, unknown>} a
  * @param {'intent' | 'action' | null} [preferKind]

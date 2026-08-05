@@ -122,6 +122,9 @@ export class ReceiverNoteOnOffToggle extends ReceiverBase {
       logger.warn(`assignment ${assignment.guid} missing required noteOnOffToggle params`);
       return null;
     }
+    if (assignment.targets.some(t => t.type === 'action') && params.envelope !== null) {
+      params.envelope.enabled = false;
+    }
     return new ReceiverNoteOnOffToggle(
       assignment,
       targets,

@@ -10,6 +10,7 @@ import {
 import {
   ACTION_TARGET_KEY,
   DEFAULT_DOT_KEY,
+  disableEnvelope,
   ensureSingleTarget,
   formatActionOptionLabel,
   normalizeDotKey,
@@ -67,6 +68,7 @@ export function mountTargetEditor (host, api) {
 function mountActionTarget (host, api) {
   const a = api.getAssignment()
   ensureSingleTarget(a, 'action')
+  disableEnvelope(a)
 
   const row = document.createElement('div')
   row.className = 'modal__row modal__row--target-line'
@@ -96,6 +98,7 @@ function mountActionTarget (host, api) {
 
   function syncFromModel () {
     ensureSingleTarget(a, 'action')
+    disableEnvelope(a)
     const t0 = /** @type {unknown[]} */ (a.targets)[0]
     const guid =
       t0 && typeof t0 === 'object' && !Array.isArray(t0)

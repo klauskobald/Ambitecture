@@ -118,6 +118,9 @@ export class ReceiverNoteOnOff extends ReceiverBase {
       logger.warn(`assignment ${assignment.guid} missing required noteOnOff params`);
       return null;
     }
+    if (assignment.targets.some(t => t.type === 'action') && params.envelope !== null) {
+      params.envelope.enabled = false;
+    }
     return new ReceiverNoteOnOff(assignment, targets, logger, params, onAssignmentActivity);
   }
 

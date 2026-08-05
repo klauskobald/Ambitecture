@@ -5,6 +5,7 @@ import { mountTargetEditor } from '../mountTargetEditor.js'
 import {
   defaultTargetsFromContext,
   ensureSingleTarget,
+  filterIsAction,
   resolveEditorTargetKind
 } from '../targetHelpers.js'
 import { mountEnvArRow } from './env_ar.js'
@@ -118,7 +119,7 @@ export function createDefaultNoteOnOffToggle (context) {
       velocityScale: 1,
       envelope: {
         type: 'env_ar',
-        enabled: true,
+        enabled: !filterIsAction(context),
         attackMs: 0,
         releaseMs: 0
       }
@@ -277,14 +278,18 @@ function mountNoteOnOffToggleEditor (container, api) {
   row2.appendChild(scaleIn)
   frag.appendChild(row2)
 
-  const envUi = mountEnvArRow(frag, {
-    getParams: () => {
-      const asg = api.getAssignment()
-      ensureNoteOnOffToggleShape(asg, ctx)
-      return /** @type {Record<string, unknown>} */ (asg.params)
-    },
-    onChange: () => api.onChange()
-  })
+  /** @type {{ syncFromModel: () => void, teardown: () => void }} */
+  let envUi = { syncFromModel () {}, teardown () {} }
+  if (resolveEditorTargetKind(a, ctx) !== 'action') {
+    envUi = mountEnvArRow(frag, {
+      getParams: () => {
+        const asg = api.getAssignment()
+        ensureNoteOnOffToggleShape(asg, ctx)
+        return /** @type {Record<string, unknown>} */ (asg.params)
+      },
+      onChange: () => api.onChange()
+    })
+  }
 
   container.appendChild(frag)
 

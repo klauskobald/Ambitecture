@@ -217,9 +217,9 @@ systemCapabilities:
             step: 0.01
             defaultValue: 1
         defaultValue:
-          h: [0]
-          s: [1]
-          l: [ 1]
+          h: 0
+          s: 1
+          l: 1
         range:
           h: [0, 360]
           s: [0, 1]

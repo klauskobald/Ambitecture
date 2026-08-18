@@ -19,8 +19,10 @@ NODE_MAJOR=22
 LOCAL_VAR_DIR="$REPO_ROOT/var"
 REMOTE_VAR_RSPEC="${RASPBERRY_SSH}:${REMOTE_DIR}/var/"
 
+# Node modules on the Pi must use loopback. Avahi self-lookup of RASPBERRY_HOST
+# takes ~5s, which equals the renderer WS connect timeout, so nothing ever joins.
 ENV_OVERRIDES=(
-  "AMBITECTURE_HUB_URL=http://${RASPBERRY_HOST}:2612"
+  "AMBITECTURE_HUB_URL=http://127.0.0.1:2612"
   "PLUGIN_PUBLIC_HOST=${RASPBERRY_HOST}"
 )
 

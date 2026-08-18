@@ -402,12 +402,12 @@ Important scene rule:
 
 Color flows through the system in multiple formats, with CIE 1931 `xyY` as the internal truth on the hub:
 
-- **Hub** (`src/color.ts`): `Color.createFromObject()` accepts CIE xyY, hex strings, RGB components (0-255), and **HSL** (`{ h, s, l }`). All formats are converted to internal xyY on construction. HSL was added to support color picker output from controller UIs.
+- **Hub** (`src/color.ts`): `Color.createFromObject()` accepts CIE xyY, hex strings, RGB components (0-255), and **HSL** (`{ h, s, l }`, each channel a number or a 1-element YAML sequence). All formats are converted to internal xyY on construction. HSL was added to support color picker output from controller UIs.
 - **Controller** (`surface-v1/src/core/color.js`): Display-oriented mirror — detects the same format set and converts to CSS `rgb()` strings for rendering, and to HSL for palette initialization.
 - **Simulator-2D**: Maintains its own `color.js` with the same conversion math for in-browser preview.
 - **Renderer-bound normalization happens on the hub**, not on the renderer: `LightIntent.transformToNormalized` (in `hub/src/intents/`) converts `params.color` to `xyY` regardless of the input format before the event payload is built. Renderers therefore always receive `params.color` as `{ x, y, Y }`.
 
-The format detection logic is `{ h, s, l }` → HSL, `{ x, y, Y }` → CIE xyY, `{ rgb: "#..." }` → hex, `{ rgb: [r,g,b] }` → RGB array, `{ r, g, b }` → RGB components.
+The format detection logic is `{ h, s, l }` → HSL (channel values may be numbers or 1-element arrays), `{ x, y, Y }` → CIE xyY, `{ rgb: "#..." }` → hex, `{ rgb: [r,g,b] }` → RGB array, `{ r, g, b }` → RGB components.
 
 ### Interaction policies
 

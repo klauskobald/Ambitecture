@@ -37,8 +37,9 @@ export class Color {
       return new Color(rgbComponentsToXYY(obj.r, obj.g, obj.b));
     }
 
-    if (isHSLObject(obj)) {
-      return new Color(hslToXYY(obj.h, obj.s, obj.l));
+    const hsl = readHsl(obj);
+    if (hsl) {
+      return new Color(hslToXYY(hsl.h, hsl.s, hsl.l));
     }
 
     Logger.error('Unrecognized color format', input);
@@ -117,8 +118,18 @@ function rgbComponentsToXYY(r: number, g: number, b: number): XYY {
   );
 }
 
-function isHSLObject(obj: Record<string, unknown>): obj is { h: number; s: number; l: number } {
-  return typeof obj['h'] === 'number' && typeof obj['s'] === 'number' && typeof obj['l'] === 'number';
+function asNumber(value: unknown): number | undefined {
+  if (typeof value === 'number') return value;
+  if (Array.isArray(value) && typeof value[0] === 'number') return value[0];
+  return undefined;
+}
+
+function readHsl(obj: Record<string, unknown>): { h: number; s: number; l: number } | null {
+  const h = asNumber(obj['h']);
+  const s = asNumber(obj['s']);
+  const l = asNumber(obj['l']);
+  if (h === undefined || s === undefined || l === undefined) return null;
+  return { h, s, l };
 }
 
 function hslToXYY(h: number, s: number, l: number): XYY {
